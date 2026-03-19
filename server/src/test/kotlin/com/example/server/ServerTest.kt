@@ -1,0 +1,36 @@
+package com.example.server
+
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
+import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertContains
+
+class ServerTest {
+
+    @Test
+    fun `health endpoint returns HTTP 200`() = testApplication {
+        application {
+            configurePlugins()
+            configureRoutes()
+        }
+
+        val response = client.get("/health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `health endpoint response contains UP status`() = testApplication {
+        application {
+            configurePlugins()
+            configureRoutes()
+        }
+
+        val response = client.get("/health")
+        val body = response.bodyAsText()
+
+        assertContains(body, "UP")
+    }
+}
