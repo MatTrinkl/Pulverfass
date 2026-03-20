@@ -9,5 +9,5 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class HealthResponse(
     val status: String,
-    val message: String = "OK"
+    val message: String = "OK",
 )
