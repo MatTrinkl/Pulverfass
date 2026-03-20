@@ -4,7 +4,6 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class SharedTest {
-
     @Test
     fun `HealthResponse has correct default message`() {
         val response = HealthResponse(status = "UP")
