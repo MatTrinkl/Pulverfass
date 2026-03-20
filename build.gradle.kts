@@ -8,7 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ktlint) apply false
-    id("org.sonarqube") version "7.2.3.7755"
+    id("org.sonarqube") version "4.4.1.3373"
 }
 
 subprojects {
