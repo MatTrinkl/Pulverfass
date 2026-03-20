@@ -5,7 +5,6 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class ExampleUnitTest {
-
     @Test
     fun `app version matches shared constant`() {
         assertEquals("1.0.0", Constants.APP_VERSION)

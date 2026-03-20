@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 
 @RunWith(AndroidJUnit4::class)
 class ExampleInstrumentedTest {
-
     @Test
     fun usesCorrectPackageName() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
