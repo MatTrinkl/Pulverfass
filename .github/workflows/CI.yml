@@ -25,11 +25,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
+      - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '17'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -59,11 +59,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
+      - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '17'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -94,11 +94,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
+      - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '17'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -129,11 +129,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
+      - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '17'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -142,10 +142,10 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build Android debug APK
-        run: ./gradlew :android-app:assembleDebug --stacktrace
+        run: ./gradlew :android-app:app:assembleDebug --stacktrace
 
       - name: Run Android unit tests
-        run: ./gradlew :android-app:testDebugUnitTest --stacktrace
+        run: ./gradlew :android-app:app:testDebugUnitTest --stacktrace
 
       - name: Upload Android test reports
         if: always()
@@ -173,11 +173,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
+      - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '17'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
