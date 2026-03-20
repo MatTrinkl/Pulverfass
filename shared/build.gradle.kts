@@ -7,7 +7,7 @@ group = "com.example.shared"
 version = "1.0.0"
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(25)
 }
 
 dependencies {
