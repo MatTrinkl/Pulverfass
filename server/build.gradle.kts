@@ -11,11 +11,6 @@ kotlin {
     jvmToolchain(25)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_24
-    targetCompatibility = JavaVersion.VERSION_24
-}
-
 application {
     mainClass.set("com.example.server.ApplicationKt")
 }
