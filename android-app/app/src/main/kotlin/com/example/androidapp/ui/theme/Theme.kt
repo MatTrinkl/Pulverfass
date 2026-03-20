@@ -11,11 +11,11 @@ private val LightColorScheme = lightColorScheme()
 @Composable
 fun AndroidAppTheme(
     darkTheme: Boolean = false,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     MaterialTheme(
         colorScheme = colorScheme,
-        content = content
+        content = content,
     )
 }
