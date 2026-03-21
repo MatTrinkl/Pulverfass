@@ -12,4 +12,15 @@ plugins {
 
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    apply(plugin = "jacoco")
+
+    // Konfiguration für JVM-Module (shared & server)
+    tasks.withType<JacocoReport>().configureEach {
+        dependsOn(tasks.withType<Test>()) // Tests müssen vor dem Report laufen
+
+        reports {
+            xml.required.set(true) // XML für Sonar
+            html.required.set(true) // Optional für lokale Ansicht
+        }
+    }
 }
