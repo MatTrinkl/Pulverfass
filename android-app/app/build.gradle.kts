@@ -25,6 +25,9 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
             )
+            debug {
+                enableUnitTestCoverage = true // Aktiviert Jacoco für den Debug-Build
+            }
         }
     }
 
