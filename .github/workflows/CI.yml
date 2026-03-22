@@ -17,7 +17,7 @@ permissions:
 jobs:
   style:
     name: Kotlin style check
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
@@ -51,7 +51,7 @@ jobs:
 
   build-shared:
     name: Shared - build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
@@ -76,7 +76,7 @@ jobs:
 
   build-server:
     name: Server - build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
@@ -101,7 +101,7 @@ jobs:
 
   build-android:
     name: Android - build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
       ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
@@ -144,7 +144,7 @@ jobs:
 
   test-shared:
     name: Shared - test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: build-shared
 
     steps:
@@ -180,7 +180,7 @@ jobs:
 
   test-server:
     name: Server - test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: build-server
 
     steps:
@@ -216,7 +216,7 @@ jobs:
 
   test-android:
     name: Android - unit test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: build-android
     env:
       ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
@@ -270,7 +270,7 @@ jobs:
 
   sonarcloud:
     name: SonarCloud analysis
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs:
       - style
       - test-shared
