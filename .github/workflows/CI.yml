@@ -17,7 +17,7 @@ permissions:
 jobs:
   style:
     name: Kotlin style check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -51,7 +51,7 @@ jobs:
 
   shared:
     name: Shared - build and test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -86,7 +86,7 @@ jobs:
 
   server:
     name: Server - build and test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -121,7 +121,7 @@ jobs:
 
   android:
     name: Android - build and unit test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -159,7 +159,7 @@ jobs:
 
   sonarcloud:
     name: SonarCloud analysis
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs:
       - style
       - shared
