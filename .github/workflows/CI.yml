@@ -122,6 +122,9 @@ jobs:
   android:
     name: Android - build and unit test
     runs-on: self-hosted
+    env:
+      ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
+      ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
     steps:
       - name: Check out repository
@@ -137,6 +140,21 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
