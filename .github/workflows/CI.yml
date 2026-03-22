@@ -17,7 +17,7 @@ permissions:
 jobs:
   style:
     name: Kotlin style check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -51,7 +51,7 @@ jobs:
 
   build-shared:
     name: Shared - build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -76,7 +76,7 @@ jobs:
 
   build-server:
     name: Server - build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository
@@ -101,10 +101,10 @@ jobs:
 
   build-android:
     name: Android - build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
-      ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
-      ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_HOME: /opt/android-sdk
 
     steps:
       - name: Check out repository
@@ -124,7 +124,7 @@ jobs:
       - name: Cache Android SDK
         uses: actions/cache@v4
         with:
-          path: ${{ runner.tool_cache }}/android-sdk
+          path: /opt/android-sdk
           key: ${{ runner.os }}-android-sdk-35
           restore-keys: |
             ${{ runner.os }}-android-sdk-
@@ -144,7 +144,7 @@ jobs:
 
   test-shared:
     name: Shared - test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-shared
 
     steps:
@@ -180,7 +180,7 @@ jobs:
 
   test-server:
     name: Server - test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-server
 
     steps:
@@ -216,11 +216,11 @@ jobs:
 
   test-android:
     name: Android - unit test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-android
     env:
-      ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
-      ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_HOME: /opt/android-sdk
 
     steps:
       - name: Check out repository
@@ -240,7 +240,7 @@ jobs:
       - name: Cache Android SDK
         uses: actions/cache@v4
         with:
-          path: ${{ runner.tool_cache }}/android-sdk
+          path: /opt/android-sdk
           key: ${{ runner.os }}-android-sdk-35
           restore-keys: |
             ${{ runner.os }}-android-sdk-
@@ -270,7 +270,7 @@ jobs:
 
   sonarcloud:
     name: SonarCloud analysis
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs:
       - style
       - test-shared
