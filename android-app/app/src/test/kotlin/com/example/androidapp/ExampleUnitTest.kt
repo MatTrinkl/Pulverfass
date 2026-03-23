@@ -1,8 +1,8 @@
 package com.example.androidapp
 
 import com.example.shared.Constants
-import org.junit.Test
 import kotlin.test.assertEquals
+import org.junit.Test
 
 class ExampleUnitTest {
     @Test
