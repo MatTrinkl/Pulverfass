@@ -1,7 +1,7 @@
 package com.example.shared
 
-import org.junit.Test
 import kotlin.test.assertEquals
+import org.junit.Test
 
 class SharedTest {
     @Test

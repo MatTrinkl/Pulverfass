@@ -7,7 +7,4 @@ import kotlinx.serialization.Serializable
  * Shared between android-app and server.
  */
 @Serializable
-data class HealthResponse(
-    val status: String,
-    val message: String = "OK",
-)
+data class HealthResponse(val status: String, val message: String = "OK")
