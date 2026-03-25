@@ -24,4 +24,4 @@ rootProject.name = "SE2Risiko"
 
 include(":shared")
 include(":server")
-include(":android-app:app")
+include(":app")

@@ -140,7 +140,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build Android debug APK
-        run: ./gradlew :android-app:app:assembleDebug --stacktrace
+        run: ./gradlew :app:assembleDebug --stacktrace
 
   test-shared:
     name: Shared - test
@@ -256,7 +256,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run Android unit tests
-        run: ./gradlew :android-app:app:testDebugUnitTest --stacktrace
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Upload Android test reports
         if: always()
@@ -264,8 +264,8 @@ jobs:
         with:
           name: android-test-reports
           path: |
-            android-app/build/reports/tests/**
-            android-app/build/test-results/**
+            app/build/reports/tests/**
+            app/build/test-results/**
           if-no-files-found: ignore
 
   sonarcloud:

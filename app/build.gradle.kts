@@ -1,3 +1,5 @@
+import com.android.build.api.dsl.ApplicationExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-android {
+configure<ApplicationExtension> {
     namespace = "com.example.androidapp"
     compileSdk = 35
 
@@ -25,9 +27,9 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
             )
-            debug {
-                enableUnitTestCoverage = true // Aktiviert Jacoco für den Debug-Build
-            }
+        }
+        debug {
+            enableUnitTestCoverage = true // Aktiviert Jacoco für den Debug-Build
         }
     }
 
