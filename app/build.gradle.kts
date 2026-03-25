@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    jacoco
 }
 
 configure<ApplicationExtension> {
@@ -43,6 +44,31 @@ configure<ApplicationExtension> {
     }
 }
 
+// Jacoco Konfiguration für Android
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+
+    val fileFilter = listOf(
+        "**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*",
+        "**/*Test*.*", "android/**/*.*", "**/ui/theme/*.*"
+    )
+    val debugTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+    val mainSrc = "${project.projectDir}/src/main/kotlin"
+
+    sourceDirectories.setFrom(files(mainSrc))
+    classDirectories.setFrom(files(debugTree))
+    executionData.setFrom(fileTree("${project.layout.buildDirectory.get()}/outputs/unit_test_code_coverage/debugUnitTest") {
+        include("testDebugUnitTest.exec")
+    })
+}
+
 // Kotlin 2.3.20: kotlinOptions is removed; use the compilerOptions DSL instead.
 kotlin {
     compilerOptions {
@@ -62,6 +88,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
