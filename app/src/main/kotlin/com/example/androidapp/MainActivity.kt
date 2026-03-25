@@ -12,7 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.androidapp.ui.Screen
 import com.example.androidapp.ui.theme.AndroidAppTheme
 import com.example.shared.Constants
 
@@ -22,8 +26,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AndroidAppTheme {
+                val navController = rememberNavController()
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainScreen(modifier = Modifier.padding(innerPadding))
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Load.route,
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable(Screen.Load.route) {
+                            LoadScreen()
+                        }
+                        composable(Screen.Lobby.route) {
+                            LobbyScreen()
+                        }
+                        composable(Screen.Game.route) {
+                            GameScreen()
+                        }
+                    }
                 }
             }
         }
@@ -31,19 +50,23 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = "SE2Risiko v${Constants.APP_VERSION}")
+fun LoadScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val appName = stringResource(id = R.string.app_name)
+        Text(text = "Loading $appName v${Constants.APP_VERSION}")
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
-    AndroidAppTheme {
-        MainScreen()
+fun LobbyScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(text = "Game Lobby")
+    }
+}
+
+@Composable
+fun GameScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(text = "Game Map")
     }
 }
