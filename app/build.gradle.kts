@@ -70,7 +70,8 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     sourceDirectories.setFrom(files(mainSrc))
     classDirectories.setFrom(files(debugTree))
 
-    val coveragePath = "${project.layout.buildDirectory.get()}/outputs/unit_test_code_coverage/debugUnitTest"
+    val buildDir = project.layout.buildDirectory.get()
+    val coveragePath = "$buildDir/outputs/unit_test_code_coverage/debugUnitTest"
     executionData.setFrom(
         fileTree(coveragePath) {
             include("testDebugUnitTest.exec")
