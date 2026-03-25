@@ -99,8 +99,8 @@ jobs:
       - name: Build server
         run: ./gradlew :server:build --stacktrace
 
-  build-android:
-    name: Android - build
+  build-app:
+    name: App - build
     runs-on: self-hosted
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
@@ -139,7 +139,7 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build Android debug APK
+      - name: Build App debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
   test-shared:
@@ -214,10 +214,10 @@ jobs:
             server/build/test-results/**
           if-no-files-found: ignore
 
-  test-android:
-    name: Android - unit test
+  test-app:
+    name: App - test
     runs-on: self-hosted
-    needs: build-android
+    needs: build-app
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -255,14 +255,14 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Run Android unit tests
+      - name: Run App unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
-      - name: Upload Android test reports
+      - name: Upload App test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-test-reports
+          name: app-test-reports
           path: |
             app/build/reports/tests/**
             app/build/test-results/**
@@ -275,7 +275,7 @@ jobs:
       - style
       - test-shared
       - test-server
-      - test-android
+      - test-app
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
 
     steps:
