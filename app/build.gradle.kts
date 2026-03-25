@@ -54,8 +54,13 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     }
 
     val fileFilter = listOf(
-        "**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*",
-        "**/*Test*.*", "android/**/*.*", "**/ui/theme/*.*"
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+        "**/ui/theme/*.*",
     )
     val debugTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
         exclude(fileFilter)
@@ -64,9 +69,13 @@ tasks.register<JacocoReport>("jacocoTestReport") {
 
     sourceDirectories.setFrom(files(mainSrc))
     classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree("${project.layout.buildDirectory.get()}/outputs/unit_test_code_coverage/debugUnitTest") {
-        include("testDebugUnitTest.exec")
-    })
+
+    val coveragePath = "${project.layout.buildDirectory.get()}/outputs/unit_test_code_coverage/debugUnitTest"
+    executionData.setFrom(
+        fileTree(coveragePath) {
+            include("testDebugUnitTest.exec")
+        },
+    )
 }
 
 // Kotlin 2.3.20: kotlinOptions is removed; use the compilerOptions DSL instead.
