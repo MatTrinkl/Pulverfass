@@ -80,7 +80,9 @@ fun LobbyScreen(navController: NavController) {
                 onClick = {
                     if (playerName.isNotBlank()) {
                         val generatedCode = Random.nextInt(1000, 10000).toString()
-                        navController.navigate(Screen.WaitingRoom.route + "/$generatedCode/true/$playerName")
+                        navController.navigate(
+                            Screen.WaitingRoom.route + "/$generatedCode/true/$playerName",
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.4f),
@@ -102,7 +104,9 @@ fun LobbyScreen(navController: NavController) {
             Button(
                 onClick = {
                     if (playerName.isNotBlank() && lobbyCodeInput.length == 4) {
-                        navController.navigate(Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName")
+                        navController.navigate(
+                            Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName",
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.4f),

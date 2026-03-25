@@ -31,7 +31,7 @@ fun WaitingRoomScreen(
     navController: NavController,
     lobbyCode: String,
     isHost: Boolean,
-    playerName: String
+    playerName: String,
 ) {
     // Simulierte Player List
     val players = remember { mutableStateListOf(playerName) }
@@ -40,19 +40,25 @@ fun WaitingRoomScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
             style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = if (isHost) stringResource(id = R.string.you_are_host) else stringResource(id = R.string.waiting_for_host),
+            text = if (isHost) {
+                stringResource(
+                    id = R.string.you_are_host,
+                )
+            } else {
+                stringResource(id = R.string.waiting_for_host)
+            },
             style = MaterialTheme.typography.bodyLarge,
         )
 
@@ -61,13 +67,13 @@ fun WaitingRoomScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.7f)
-                .weight(1f)
+                .weight(1f),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "${stringResource(id = R.string.players)} (${players.size}/6)",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn {
@@ -76,7 +82,7 @@ fun WaitingRoomScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(text = player, style = MaterialTheme.typography.bodyLarge)
                             if (player == playerName && isHost) {
@@ -84,7 +90,7 @@ fun WaitingRoomScreen(
                                 Text(
                                     text = stringResource(id = R.string.host_tag),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.secondary,
                                 )
                             }
                         }
@@ -103,7 +109,7 @@ fun WaitingRoomScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(0.4f),
-                enabled = players.size >= 2
+                enabled = players.size >= 2,
             ) {
                 Text(stringResource(id = R.string.start_game))
             }
@@ -111,7 +117,7 @@ fun WaitingRoomScreen(
                 Text(
                     text = stringResource(id = R.string.need_players),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
         }
@@ -120,7 +126,7 @@ fun WaitingRoomScreen(
 
         Button(
             onClick = { navController.popBackStack() },
-            modifier = Modifier.fillMaxWidth(0.4f)
+            modifier = Modifier.fillMaxWidth(0.4f),
         ) {
             Text(stringResource(id = R.string.leave_lobby))
         }

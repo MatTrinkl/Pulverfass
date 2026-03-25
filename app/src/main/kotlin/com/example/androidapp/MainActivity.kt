@@ -53,16 +53,18 @@ class MainActivity : AppCompatActivity() {
                                 LobbyScreen(navController)
                             }
                             composable(
-                                route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
+                                route = Screen.WaitingRoom.route +
+                                    "/{lobbyCode}/{isHost}/{playerName}",
                                 arguments = listOf(
                                     navArgument("lobbyCode") { type = NavType.StringType },
                                     navArgument("isHost") { type = NavType.BoolType },
-                                    navArgument("playerName") { type = NavType.StringType }
-                                )
+                                    navArgument("playerName") { type = NavType.StringType },
+                                ),
                             ) { backStackEntry ->
-                                val lobbyCode = backStackEntry.arguments?.getString("lobbyCode") ?: ""
-                                val isHost = backStackEntry.arguments?.getBoolean("isHost") ?: false
-                                val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+                                val args = backStackEntry.arguments
+                                val lobbyCode = args?.getString("lobbyCode") ?: ""
+                                val isHost = args?.getBoolean("isHost") ?: false
+                                val playerName = args?.getString("playerName") ?: ""
                                 WaitingRoomScreen(navController, lobbyCode, isHost, playerName)
                             }
                             composable(Screen.Game.route) {
@@ -74,14 +76,15 @@ class MainActivity : AppCompatActivity() {
                         if (currentRoute == Screen.Lobby.route) {
                             Button(
                                 onClick = {
-                                    val currentLocale = AppCompatDelegate.getApplicationLocales()[0]?.language
+                                    val locales = AppCompatDelegate.getApplicationLocales()
+                                    val currentLocale = locales[0]?.language
                                     val nextLocale = if (currentLocale == "de") "en" else "de"
-                                    val appLocale: LocaleListCompat = LocaleListCompat.forLanguageTags(nextLocale)
+                                    val appLocale = LocaleListCompat.forLanguageTags(nextLocale)
                                     AppCompatDelegate.setApplicationLocales(appLocale)
                                 },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(16.dp)
+                                    .padding(16.dp),
                             ) {
                                 Text(text = stringResource(id = R.string.toggle_language))
                             }
