@@ -1,4 +1,4 @@
-package com.example.androidapp.ui.screens
+package at.aau.pulverfass.app.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.androidapp.R
-import com.example.androidapp.ui.navigation.Screen
+import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.ui.navigation.Screen
 import com.example.shared.Constants
 import kotlinx.coroutines.delay
 

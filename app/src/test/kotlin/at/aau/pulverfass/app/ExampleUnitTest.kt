@@ -1,4 +1,4 @@
-package com.example.androidapp
+package at.aau.pulverfass.app
 
 import com.example.shared.Constants
 import kotlin.test.assertEquals

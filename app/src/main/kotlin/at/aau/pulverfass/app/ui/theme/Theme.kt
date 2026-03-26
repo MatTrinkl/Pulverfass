@@ -1,4 +1,4 @@
-package com.example.androidapp.ui.theme
+package at.aau.pulverfass.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

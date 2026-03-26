@@ -1,4 +1,4 @@
-package com.example.androidapp
+package at.aau.pulverfass.app
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -23,12 +23,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.androidapp.ui.navigation.Screen
-import com.example.androidapp.ui.screens.GameScreen
-import com.example.androidapp.ui.screens.LoadScreen
-import com.example.androidapp.ui.screens.LobbyScreen
-import com.example.androidapp.ui.screens.WaitingRoomScreen
-import com.example.androidapp.ui.theme.AndroidAppTheme
+import at.aau.pulverfass.app.ui.navigation.Screen
+import at.aau.pulverfass.app.ui.screens.GameScreen
+import at.aau.pulverfass.app.ui.screens.LoadScreen
+import at.aau.pulverfass.app.ui.screens.LobbyScreen
+import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
+import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

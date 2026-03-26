@@ -1,4 +1,4 @@
-package com.example.androidapp
+package at.aau.pulverfass.app
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -11,6 +11,6 @@ class ExampleInstrumentedTest {
     @Test
     fun usesCorrectPackageName() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.androidapp", appContext.packageName)
+        assertEquals("at.aau.pulverfass.app", appContext.packageName)
     }
 }

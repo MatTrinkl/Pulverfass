@@ -1,4 +1,4 @@
-package com.example.androidapp.ui.navigation
+package at.aau.pulverfass.app.ui.navigation
 
 sealed class Screen(val route: String) {
     object Load : Screen("load")

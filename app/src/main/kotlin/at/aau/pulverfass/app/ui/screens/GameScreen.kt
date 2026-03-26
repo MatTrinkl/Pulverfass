@@ -1,4 +1,4 @@
-package com.example.androidapp.ui.screens
+package at.aau.pulverfass.app.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import com.example.androidapp.R
+import at.aau.pulverfass.app.R
 
 @Composable
 fun GameScreen() {
