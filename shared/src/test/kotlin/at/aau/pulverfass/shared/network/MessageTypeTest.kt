@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MessageTypeTest {
-
     @Test
     fun `should map all valid ids to correct MessageType`() {
         MessageType.entries.forEach { type ->
