@@ -1,21 +1,20 @@
 <resources>
     <string name="app_name">Pulverfass</string>
-    <string name="loading">Loading</string>
-    <string name="game_lobby">Game Lobby</string>
-    <string name="enter_player_name">Enter Player Name</string>
-    <string name="enter_lobby_code">Enter 4-Digit Lobby Code</string>
-    <string name="create_lobby">Create Lobby</string>
-    <string name="join_lobby">Join Lobby</string>
-    <string name="enter_waiting_room">Enter Waiting Room</string>
-    <string name="cancel">Cancel</string>
+    <string name="loading">Lädt</string>
+    <string name="game_lobby">Spiel-Lobby</string>
+    <string name="enter_player_name">Spielername eingeben</string>
+    <string name="enter_lobby_code">4-stelligen Lobby-Code eingeben</string>
+    <string name="create_lobby">Lobby erstellen</string>
+    <string name="join_lobby">Lobby beitreten</string>
+    <string name="enter_waiting_room">Warteraum betreten</string>
+    <string name="cancel">Abbrechen</string>
     <string name="lobby_id">Lobby</string>
-    <string name="you_are_host">You are the Host</string>
-    <string name="waiting_for_host">Waiting for Host to start...</string>
-    <string name="players">Players</string>
+    <string name="you_are_host">Du bist der Host</string>
+    <string name="waiting_for_host">Warte auf Host zum Starten…</string>
+    <string name="players">Spieler</string>
     <string name="host_tag">(Host)</string>
-    <string name="start_game">Start Game</string>
-    <string name="need_players">Need at least 2 players</string>
-    <string name="leave_lobby">Leave Lobby</string>
-    <string name="game_map_placeholder">Risk Game Map (Coming Soon)</string>
-    <string name="toggle_language">Switch to German</string>
+    <string name="start_game">Spiel starten</string>
+    <string name="need_players">Mindestens 2 Spieler benötigt</string>
+    <string name="leave_lobby">Lobby verlassen</string>
+    <string name="game_map_placeholder">Risiko-Weltkarte (Demnächst)</string>
 </resources>
