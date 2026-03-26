@@ -1,12 +1,12 @@
 package com.example.server
 
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.testing.testApplication
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
+import org.junit.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import org.junit.Test
 
 class ServerTest {
     @Test
