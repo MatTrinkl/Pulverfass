@@ -42,85 +42,26 @@ fun WaitingRoomScreen(
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = if (isHost) {
-                stringResource(
-                    id = R.string.you_are_host,
-                )
-            } else {
-                stringResource(id = R.string.waiting_for_host)
-            },
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        WaitingRoomHeader(lobbyCode, isHost)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Card(
+        PlayerListCard(
+            players = players,
+            playerName = playerName,
+            isHost = isHost,
             modifier = Modifier
                 .fillMaxWidth(0.7f)
-                .weight(1f),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "${stringResource(id = R.string.players)} (${players.size}/6)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyColumn {
-                    items(players) { player ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(text = player, style = MaterialTheme.typography.bodyLarge)
-                            if (player == playerName && isHost) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(id = R.string.host_tag),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+                .weight(1f)
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (isHost) {
-            Button(
-                onClick = {
-                    if (players.size >= 2) {
-                        navController.navigate(Screen.Game.route)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(0.4f),
-                enabled = players.size >= 2,
-            ) {
-                Text(stringResource(id = R.string.start_game))
-            }
-            if (players.size < 2) {
-                Text(
-                    text = stringResource(id = R.string.need_players),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
+        HostActions(
+            isHost = isHost,
+            playersCount = players.size,
+            onStartGame = { navController.navigate(Screen.Game.route) }
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -129,6 +70,101 @@ fun WaitingRoomScreen(
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
             Text(stringResource(id = R.string.leave_lobby))
+        }
+    }
+}
+
+@Composable
+private fun WaitingRoomHeader(lobbyCode: String, isHost: Boolean) {
+    Text(
+        text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
+        style = MaterialTheme.typography.displaySmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    val hostStatusText = if (isHost) {
+        stringResource(id = R.string.you_are_host)
+    } else {
+        stringResource(id = R.string.waiting_for_host)
+    }
+
+    Text(
+        text = hostStatusText,
+        style = MaterialTheme.typography.bodyLarge,
+    )
+}
+
+@Composable
+private fun PlayerListCard(
+    players: List<String>,
+    playerName: String,
+    isHost: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "${stringResource(id = R.string.players)} (${players.size}/6)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyColumn {
+                items(players) { player ->
+                    PlayerRow(
+                        player = player,
+                        isHostPlayer = isHost && player == playerName
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerRow(player: String, isHostPlayer: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = player, style = MaterialTheme.typography.bodyLarge)
+        if (isHostPlayer) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(id = R.string.host_tag),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HostActions(
+    isHost: Boolean,
+    playersCount: Int,
+    onStartGame: () -> Unit
+) {
+    if (isHost) {
+        val canStart = playersCount >= 2
+        Button(
+            onClick = onStartGame,
+            modifier = Modifier.fillMaxWidth(0.4f),
+            enabled = canStart,
+        ) {
+            Text(stringResource(id = R.string.start_game))
+        }
+        if (!canStart) {
+            Text(
+                text = stringResource(id = R.string.need_players),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }

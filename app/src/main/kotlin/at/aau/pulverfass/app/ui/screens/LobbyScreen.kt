@@ -58,74 +58,93 @@ fun LobbyScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(16.dp))
 
         if (isJoining) {
-            OutlinedTextField(
+            LobbyCodeInputField(
                 value = lobbyCodeInput,
-                onValueChange = {
-                    if (it.length <= 4 && it.all { char -> char.isDigit() }) {
-                        lobbyCodeInput = it
-                    }
-                },
-                label = { Text(stringResource(id = R.string.enter_lobby_code)) },
-                modifier = Modifier.fillMaxWidth(0.6f),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                onValueChange = { lobbyCodeInput = it }
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (!isJoining) {
-            Button(
-                onClick = {
-                    if (playerName.isNotBlank()) {
-                        val generatedCode = Random.nextInt(1000, 10000).toString()
-                        navController.navigate(
-                            Screen.WaitingRoom.route + "/$generatedCode/true/$playerName",
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(0.4f),
-                enabled = playerName.isNotBlank(),
-            ) {
-                Text(stringResource(id = R.string.create_lobby))
-            }
+        LobbyActions(
+            isJoining = isJoining,
+            playerName = playerName,
+            lobbyCodeInput = lobbyCodeInput,
+            onJoinToggled = { isJoining = it },
+            onLobbyCodeCleared = { lobbyCodeInput = "" },
+            onNavigate = { route -> navController.navigate(route) }
+        )
+    }
+}
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = { isJoining = true },
-                modifier = Modifier.fillMaxWidth(0.4f),
-                enabled = playerName.isNotBlank(),
-            ) {
-                Text(stringResource(id = R.string.join_lobby))
+@Composable
+private fun LobbyCodeInputField(value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = {
+            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                onValueChange(it)
             }
-        } else {
-            Button(
-                onClick = {
-                    if (playerName.isNotBlank() && lobbyCodeInput.length == 4) {
-                        navController.navigate(
-                            Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName",
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(0.4f),
-                enabled = playerName.isNotBlank() && lobbyCodeInput.length == 4,
-            ) {
-                Text(stringResource(id = R.string.enter_waiting_room))
-            }
+        },
+        label = { Text(stringResource(id = R.string.enter_lobby_code)) },
+        modifier = Modifier.fillMaxWidth(0.6f),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    )
+}
 
-            Spacer(modifier = Modifier.height(12.dp))
+@Composable
+private fun LobbyActions(
+    isJoining: Boolean,
+    playerName: String,
+    lobbyCodeInput: String,
+    onJoinToggled: (Boolean) -> Unit,
+    onLobbyCodeCleared: () -> Unit,
+    onNavigate: (String) -> Unit
+) {
+    if (!isJoining) {
+        Button(
+            onClick = {
+                val generatedCode = Random.nextInt(1000, 10000).toString()
+                onNavigate(Screen.WaitingRoom.route + "/$generatedCode/true/$playerName")
+            },
+            modifier = Modifier.fillMaxWidth(0.4f),
+            enabled = playerName.isNotBlank(),
+        ) {
+            Text(stringResource(id = R.string.create_lobby))
+        }
 
-            Button(
-                onClick = {
-                    isJoining = false
-                    lobbyCodeInput = ""
-                },
-                modifier = Modifier.fillMaxWidth(0.4f),
-            ) {
-                Text(stringResource(id = R.string.cancel))
-            }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = { onJoinToggled(true) },
+            modifier = Modifier.fillMaxWidth(0.4f),
+            enabled = playerName.isNotBlank(),
+        ) {
+            Text(stringResource(id = R.string.join_lobby))
+        }
+    } else {
+        Button(
+            onClick = {
+                onNavigate(Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName")
+            },
+            modifier = Modifier.fillMaxWidth(0.4f),
+            enabled = playerName.isNotBlank() && lobbyCodeInput.length == 4,
+        ) {
+            Text(stringResource(id = R.string.enter_waiting_room))
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = {
+                onJoinToggled(false)
+                onLobbyCodeCleared()
+            },
+            modifier = Modifier.fillMaxWidth(0.4f),
+        ) {
+            Text(stringResource(id = R.string.cancel))
         }
     }
 }
