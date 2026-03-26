@@ -15,6 +15,7 @@ max_line_length = 100
 ij_continuation_indent_size = 8
 ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
+ktlint_function_naming_ignore_when_annotated_with = Composable
 
 
 [*.xml]
