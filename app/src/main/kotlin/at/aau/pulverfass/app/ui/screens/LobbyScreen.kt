@@ -103,7 +103,7 @@ private fun LobbyActions(
     lobbyCodeInput: String,
     onJoinToggled: (Boolean) -> Unit,
     onLobbyCodeCleared: () -> Unit,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
 ) {
     if (!isJoining) {
         Button(

@@ -145,11 +145,7 @@ private fun PlayerRow(player: String, isHostPlayer: Boolean) {
 }
 
 @Composable
-private fun HostActions(
-    isHost: Boolean,
-    playersCount: Int,
-    onStartGame: () -> Unit,
-) {
+private fun HostActions(isHost: Boolean, playersCount: Int, onStartGame: () -> Unit) {
     if (isHost) {
         val canStart = playersCount >= 2
         Button(
