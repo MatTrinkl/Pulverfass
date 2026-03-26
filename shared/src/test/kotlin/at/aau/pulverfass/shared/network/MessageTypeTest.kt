@@ -18,9 +18,10 @@ class MessageTypeTest {
     fun `should throw exception for unknown id`() {
         val invalidId = 999
 
-        val exception = assertThrows(IllegalArgumentException::class.java) {
-            MessageType.fromId(invalidId)
-        }
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                MessageType.fromId(invalidId)
+            }
 
         assertEquals("Unknown MessageType id: 999", exception.message)
     }
@@ -29,9 +30,10 @@ class MessageTypeTest {
     fun `should throw exception for negative id`() {
         val invalidId = -1
 
-        val exception = assertThrows(IllegalArgumentException::class.java) {
-            MessageType.fromId(invalidId)
-        }
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                MessageType.fromId(invalidId)
+            }
 
         assertEquals("Unknown MessageType id: -1", exception.message)
     }

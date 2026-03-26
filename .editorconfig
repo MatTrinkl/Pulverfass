@@ -7,12 +7,15 @@ indent_style = space
 insert_final_newline = true
 trim_trailing_whitespace = true
 
+
 [*.{kt,kts}]
+ktlint_code_style = ktlint_official
 indent_size = 4
 max_line_length = 100
 ij_continuation_indent_size = 8
 ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
+
 
 [*.xml]
 indent_size = 4
