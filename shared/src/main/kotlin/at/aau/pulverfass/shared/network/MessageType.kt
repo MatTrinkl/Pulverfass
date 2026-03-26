@@ -11,7 +11,8 @@ enum class MessageType(val id: Int) {
     GAME_JOIN_RESPONSE(7),
     GAME_CREATE_REQUEST(8),
     GAME_CREATE_RESPONSE(9),
-    GAME_ENDED(10);
+    GAME_ENDED(10),
+    ;
 
     companion object {
         private val byId = entries.associateBy { it.id }
