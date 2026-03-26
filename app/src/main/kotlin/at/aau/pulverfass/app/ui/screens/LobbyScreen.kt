@@ -60,7 +60,7 @@ fun LobbyScreen(navController: NavController) {
         if (isJoining) {
             LobbyCodeInputField(
                 value = lobbyCodeInput,
-                onValueChange = { lobbyCodeInput = it }
+                onValueChange = { lobbyCodeInput = it },
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -73,7 +73,7 @@ fun LobbyScreen(navController: NavController) {
             lobbyCodeInput = lobbyCodeInput,
             onJoinToggled = { isJoining = it },
             onLobbyCodeCleared = { lobbyCodeInput = "" },
-            onNavigate = { route -> navController.navigate(route) }
+            onNavigate = { route -> navController.navigate(route) },
         )
     }
 }
@@ -90,7 +90,9 @@ private fun LobbyCodeInputField(value: String, onValueChange: (String) -> Unit) 
         label = { Text(stringResource(id = R.string.enter_lobby_code)) },
         modifier = Modifier.fillMaxWidth(0.6f),
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+        ),
     )
 }
 

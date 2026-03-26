@@ -52,7 +52,7 @@ fun WaitingRoomScreen(
             isHost = isHost,
             modifier = Modifier
                 .fillMaxWidth(0.7f)
-                .weight(1f)
+                .weight(1f),
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -60,7 +60,7 @@ fun WaitingRoomScreen(
         HostActions(
             isHost = isHost,
             playersCount = players.size,
-            onStartGame = { navController.navigate(Screen.Game.route) }
+            onStartGame = { navController.navigate(Screen.Game.route) },
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -102,7 +102,7 @@ private fun PlayerListCard(
     players: List<String>,
     playerName: String,
     isHost: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -116,7 +116,7 @@ private fun PlayerListCard(
                 items(players) { player ->
                     PlayerRow(
                         player = player,
-                        isHostPlayer = isHost && player == playerName
+                        isHostPlayer = isHost && player == playerName,
                     )
                 }
             }
@@ -148,7 +148,7 @@ private fun PlayerRow(player: String, isHostPlayer: Boolean) {
 private fun HostActions(
     isHost: Boolean,
     playersCount: Int,
-    onStartGame: () -> Unit
+    onStartGame: () -> Unit,
 ) {
     if (isHost) {
         val canStart = playersCount >= 2
