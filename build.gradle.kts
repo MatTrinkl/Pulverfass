@@ -15,7 +15,11 @@ subprojects {
     apply(plugin = "jacoco")
 
     tasks.withType<Test>().configureEach {
-        useJUnitPlatform()
+        if (!project.plugins.hasPlugin("com.android.application") &&
+            !project.plugins.hasPlugin("com.android.library")
+        ) {
+            useJUnitPlatform()
+        }
     }
 
     // Konfiguration für JVM-Module (shared & server)
