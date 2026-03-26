@@ -14,6 +14,10 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     apply(plugin = "jacoco")
 
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+    }
+
     // Konfiguration für JVM-Module (shared & server)
     tasks.withType<JacocoReport>().configureEach {
         dependsOn(tasks.withType<Test>()) // Tests müssen vor dem Report laufen

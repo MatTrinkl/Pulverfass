@@ -14,6 +14,7 @@ kotlin {
     jvmToolchain(25)
 }
 
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -27,7 +28,10 @@ java {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
-
-    testImplementation(libs.kotlin.test)
-    testImplementation(libs.junit)
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
