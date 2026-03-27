@@ -50,6 +50,6 @@ class MessageTypeTest {
     fun `should contain expected enum values`() {
         assertTrue(MessageType.entries.contains(MessageType.LOGIN_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.GAME_CREATE_RESPONSE))
-        assertTrue(MessageType.entries.contains(MessageType.GAME_ENDED))
+        assertTrue(MessageType.entries.contains(MessageType.GAME_ENDED_BROADCAST))
     }
 }
