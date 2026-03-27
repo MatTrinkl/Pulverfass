@@ -118,7 +118,7 @@ jobs:
         run: >
           ./gradlew
           :android-app:app:assembleDebug
-          :android-app:app:test
+          :android-app:app:testDebugUnitTest
           --stacktrace
 
       - name: Upload test reports
