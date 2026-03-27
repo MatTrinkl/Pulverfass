@@ -101,8 +101,7 @@ jobs:
           :shared:jacocoTestReport
           :server:test
           :server:jacocoTestReport
-          :android-app:app:testDebugUnitTest
-          :android-app:app:jacocoDebugUnitTestReport
+          :android-app:app:test
           --stacktrace
 
       - name: Upload test reports

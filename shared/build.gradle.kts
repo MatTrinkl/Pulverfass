@@ -1,6 +1,3 @@
-import org.gradle.api.tasks.testing.Test
-import org.gradle.testing.jacoco.tasks.JacocoReport
-
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
