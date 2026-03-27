@@ -16,7 +16,10 @@ object MessageTypeAsIdSerializer : KSerializer<MessageType> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("MessageType", PrimitiveKind.INT)
 
-    override fun serialize(encoder: Encoder, value: MessageType) {
+    override fun serialize(
+        encoder: Encoder,
+        value: MessageType,
+    ) {
         encoder.encodeInt(value.id)
     }
 
