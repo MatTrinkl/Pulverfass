@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
@@ -33,4 +36,18 @@ dependencies {
 }
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    finalizedBy(tasks.named("jacocoTestReport"))
+}
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+
+    executionData.setFrom(layout.buildDirectory.file("jacoco/test.exec"))
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    classDirectories.setFrom(
+        files(
+            layout.buildDirectory.dir("classes/kotlin/main"),
+            layout.buildDirectory.dir("classes/java/main"),
+        ),
+    )
 }
