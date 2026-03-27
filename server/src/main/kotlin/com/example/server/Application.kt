@@ -1,5 +1,5 @@
 package com.example.server
 
 fun main() {
-    //start server / application
+    // start server / application
 }
