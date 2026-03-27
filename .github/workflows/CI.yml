@@ -91,16 +91,33 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build modules and generate coverage reports
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build & test shared + server (JDK 25)
         run: >
           ./gradlew
           :shared:assemble
           :server:assemble
-          :android-app:app:assembleDebug
           :shared:test
           :shared:jacocoTestReport
           :server:test
           :server:jacocoTestReport
+          --stacktrace
+
+      - name: Set up Temurin JDK 17 (Android/AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build & test android-app (JDK 17)
+        run: >
+          ./gradlew
+          :android-app:app:assembleDebug
           :android-app:app:test
           --stacktrace
 
