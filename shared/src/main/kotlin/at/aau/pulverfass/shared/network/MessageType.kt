@@ -15,9 +15,8 @@ enum class MessageType(val id: Int) {
     ;
 
     companion object {
-        private val byId = entries.associateBy { it.id }
-
         fun fromId(id: Int): MessageType =
-            byId[id] ?: throw IllegalArgumentException("Unknown MessageType id: $id")
+            entries.firstOrNull { it.id == id }
+                ?: throw IllegalArgumentException("Unknown MessageType id: $id")
     }
 }

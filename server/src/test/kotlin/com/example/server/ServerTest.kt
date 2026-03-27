@@ -5,6 +5,6 @@ import kotlin.test.Test
 class ServerTest {
     @Test
     fun dummy() {
-        // TODO: replace with real tests
+        // replace with real tests
     }
 }
