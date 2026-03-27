@@ -1,3 +1,7 @@
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 // Root build file — only declares plugins used across sub-projects.
 // Actual configuration lives in each sub-project's own build.gradle.kts.
 plugins {
@@ -14,6 +18,10 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     apply(plugin = "jacoco")
 
+    extensions.configure<JacocoPluginExtension> {
+        toolVersion = "0.8.13"
+    }
+
     tasks.withType<Test>().configureEach {
         if (!project.plugins.hasPlugin("com.android.application") &&
             !project.plugins.hasPlugin("com.android.library")
@@ -22,13 +30,11 @@ subprojects {
         }
     }
 
-    // Konfiguration für JVM-Module (shared & server)
     tasks.withType<JacocoReport>().configureEach {
-        dependsOn(tasks.withType<Test>()) // Tests müssen vor dem Report laufen
-
         reports {
-            xml.required.set(true) // XML für Sonar
-            html.required.set(true) // Optional für lokale Ansicht
+            xml.required.set(true)
+            html.required.set(true)
+            csv.required.set(false)
         }
     }
 }

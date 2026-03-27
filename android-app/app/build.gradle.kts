@@ -1,3 +1,7 @@
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -70,4 +74,61 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+tasks.withType<Test>().configureEach {
+    extensions.configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+val jacocoCoverageExclusions =
+    listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+    )
+
+tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
+    group = "verification"
+    description = "Generates JaCoCo XML and HTML coverage reports for debug unit tests."
+
+    dependsOn("testDebugUnitTest")
+
+    val buildDirFile = layout.buildDirectory.get().asFile
+
+    classDirectories.setFrom(
+        files(
+            fileTree("$buildDirFile/tmp/kotlin-classes/debug") {
+                exclude(jacocoCoverageExclusions)
+            },
+            fileTree("$buildDirFile/intermediates/javac/debug/compileDebugJavaWithJavac/classes") {
+                exclude(jacocoCoverageExclusions)
+            },
+        ),
+    )
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    additionalSourceDirs.setFrom(files("src/main/kotlin", "src/main/java"))
+    executionData.setFrom(
+        fileTree(buildDirFile) {
+            include("jacoco/testDebugUnitTest.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/*.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/**/*.ec")
+        },
+    )
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+}
+
+tasks.named("testDebugUnitTest") {
+    finalizedBy("jacocoDebugUnitTestReport")
 }
