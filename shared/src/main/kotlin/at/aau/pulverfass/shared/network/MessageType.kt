@@ -1,5 +1,8 @@
 package at.aau.pulverfass.shared.network
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class MessageType(val id: Int) {
     UNKNOWN_ERROR(0),
     LOGIN_REQUEST(1),
