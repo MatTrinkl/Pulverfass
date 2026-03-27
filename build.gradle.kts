@@ -1,7 +1,3 @@
-import org.gradle.api.tasks.testing.Test
-import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
-import org.gradle.testing.jacoco.tasks.JacocoReport
-
 // Root build file — only declares plugins used across sub-projects.
 // Actual configuration lives in each sub-project's own build.gradle.kts.
 plugins {

@@ -1,7 +1,3 @@
-import org.gradle.api.tasks.testing.Test
-import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
-import org.gradle.testing.jacoco.tasks.JacocoReport
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -97,6 +93,11 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
     group = "verification"
     description = "Generates JaCoCo XML and HTML coverage reports for debug unit tests."
 
+    // Only depends on the task if it exists in this AGP setup
+    val unitTestTaskName = "testDebugUnitTest"
+    if (tasks.names.contains(unitTestTaskName)) {
+        dependsOn(unitTestTaskName)
+    }
     dependsOn("testDebugUnitTest")
 
     val buildDirFile = layout.buildDirectory.get().asFile
