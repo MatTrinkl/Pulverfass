@@ -1,5 +1,10 @@
 package com.example.server
 
-class ServerTest {
+import kotlin.test.Test
 
+class ServerTest {
+    @Test
+    fun dummy() {
+        // TODO: replace with real tests
+    }
 }
