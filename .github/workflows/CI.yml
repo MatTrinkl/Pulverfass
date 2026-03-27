@@ -148,6 +148,6 @@ jobs:
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
-        continue-on-error: true
+        continue-on-error: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
