@@ -41,10 +41,10 @@ enum class MessageType(val id: Int) {
     GAME_ENDED_BROADCAST(10),
 
     /** Der Server informiert alle Clients das ein neuer Spieler dem Spiel beigetreten ist. */
-    GAME_PLAYER_JOINED_BROADCAST(10),
+    GAME_PLAYER_JOINED_BROADCAST(11),
 
     /** Der Client sendet diese Nachricht in einem fix festgelegten Abstand, um dem Server zu zeigen, dass die Connection noch aufrecht ist. */
-    HEARTBEAT(10),
+    HEARTBEAT(12),
     ;
 
     companion object {
