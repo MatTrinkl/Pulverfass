@@ -49,62 +49,11 @@ jobs:
             **/build/reports/ktlint/**
           if-no-files-found: ignore
 
-  build-shared:
-    name: Shared - build
+  analyze:
+    name: Build, test, coverage and SonarCloud
     runs-on: self-hosted
     needs: style
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build shared
-        run: ./gradlew :shared:build --stacktrace
-
-  build-server:
-    name: Server - build
-    runs-on: self-hosted
-    needs: style
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build server
-        run: ./gradlew :server:build --stacktrace
-
-  build-app:
-    name: App - build
-    runs-on: self-hosted
-    needs: style
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -142,149 +91,43 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build App debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Build modules and generate coverage reports
+        run: >
+          ./gradlew
+          :shared:assemble
+          :server:assemble
+          :app:assembleDebug
+          :shared:test
+          :shared:jacocoTestReport
+          :server:test
+          :server:jacocoTestReport
+          :app:test
+          --stacktrace
 
-  test-shared:
-    name: Shared - test
-    runs-on: self-hosted
-    needs: build-shared
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Test shared
-        run: ./gradlew :shared:test --stacktrace
-
-      - name: Upload shared test reports
+      - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: shared-test-reports
+          name: test-reports
           path: |
             shared/build/reports/tests/**
             shared/build/test-results/**
-          if-no-files-found: ignore
-
-  test-server:
-    name: Server - test
-    runs-on: self-hosted
-    needs: build-server
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Test server
-        run: ./gradlew :server:test --stacktrace
-
-      - name: Upload server test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-test-reports
-          path: |
             server/build/reports/tests/**
             server/build/test-results/**
-          if-no-files-found: ignore
-
-  test-app:
-    name: App - test
-    runs-on: self-hosted
-    needs: build-app
-    env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/android-sdk
-          key: ${{ runner.os }}-android-sdk-35
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Run App unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
-
-      - name: Upload App test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-test-reports
-          path: |
             app/build/reports/tests/**
             app/build/test-results/**
           if-no-files-found: ignore
 
-  sonarcloud:
-    name: SonarCloud analysis
-    runs-on: self-hosted
-    needs:
-      - test-shared
-      - test-server
-      - test-app
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          fetch-depth: 0
+          name: coverage-reports
+          path: |
+            shared/build/reports/jacoco/test/jacocoTestReport.xml
+            server/build/reports/jacoco/test/jacocoTestReport.xml
+            app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
+          if-no-files-found: warn
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
