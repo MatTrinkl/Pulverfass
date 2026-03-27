@@ -12,6 +12,8 @@ logback = "1.4.14"
 junit = "4.13.2"
 junitExt = "1.2.1"
 espressoCore = "3.6.1"
+androidxTestCore = "1.6.1"
+robolectric = "4.13.2"
 
 [libraries]
 # AndroidX
@@ -31,7 +33,9 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 # Ktor
 ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktor" }
