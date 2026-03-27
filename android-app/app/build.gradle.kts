@@ -89,16 +89,16 @@ val jacocoCoverageExclusions =
         "android/**/*.*",
     )
 
+val unitTestTaskName = "testDebugUnitTest"
+
 tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
     group = "verification"
     description = "Generates JaCoCo XML and HTML coverage reports for debug unit tests."
 
-    // Only depends on the task if it exists in this AGP setup
-    val unitTestTaskName = "testDebugUnitTest"
-    if (tasks.names.contains(unitTestTaskName)) {
+    // Only hook into unit tests if that task exists
+    if (unitTestTaskName in tasks.names) {
         dependsOn(unitTestTaskName)
     }
-    dependsOn("testDebugUnitTest")
 
     val buildDirFile = layout.buildDirectory.get().asFile
 
@@ -112,8 +112,10 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
             },
         ),
     )
+
     sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
     additionalSourceDirs.setFrom(files("src/main/kotlin", "src/main/java"))
+
     executionData.setFrom(
         fileTree(buildDirFile) {
             include("jacoco/testDebugUnitTest.exec")
@@ -130,6 +132,7 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
     }
 }
 
-tasks.named("testDebugUnitTest") {
+// Only add finalizedBy if the task exists
+tasks.matching { it.name == unitTestTaskName }.configureEach {
     finalizedBy("jacocoDebugUnitTestReport")
 }
