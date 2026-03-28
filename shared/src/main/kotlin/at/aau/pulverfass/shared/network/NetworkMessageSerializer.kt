@@ -60,10 +60,10 @@ object NetworkMessageSerializer {
         type: MessageType,
         bytes: ByteArray,
     ): NetworkMessagePayload {
-        val json = bytes.decodeToString()
+        val jsonString = bytes.decodeToString()
 
         return when (type) {
-            MessageType.LOGIN_REQUEST -> Json.decodeFromString(LoginRequest.serializer(), json)
+            MessageType.LOGIN_REQUEST -> Json.decodeFromString(LoginRequest.serializer(), jsonString)
             else -> throw IllegalArgumentException("Unsupported payload type: $type")
         }
     }
