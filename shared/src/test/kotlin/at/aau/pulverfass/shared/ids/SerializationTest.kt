@@ -17,4 +17,37 @@ class SerializationTest {
 
         assertEquals(original, decoded)
     }
+
+    @Test
+    fun `entityId sollte korrekt serialisiert und deserialisiert werden`() {
+        val original = EntityId(100)
+
+        // Objekt wird in JSON umgewandelt
+        val encoded = json.encodeToString(EntityId.serializer(), original)
+        // JSON wird wieder in ein Objekt umgewandelt
+        val decoded = json.decodeFromString(EntityId.serializer(), encoded)
+
+        // Überprüfung: ursprüngliches Objekt und Ergebnis sind gleich
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `connectionId sollte korrekt serialisiert und deserialisiert werden`() {
+        val original = ConnectionId(7)
+
+        val encoded = json.encodeToString(ConnectionId.serializer(), original)
+        val decoded = json.decodeFromString(ConnectionId.serializer(), encoded)
+
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `gameId sollte korrekt serialisiert und deserialisiert werden`() {
+        val original = GameId(999)
+
+        val encoded = json.encodeToString(GameId.serializer(), original)
+        val decoded = json.decodeFromString(GameId.serializer(), encoded)
+
+        assertEquals(original, decoded)
+    }
 }
