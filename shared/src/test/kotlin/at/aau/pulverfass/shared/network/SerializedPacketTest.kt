@@ -65,4 +65,28 @@ class SerializedPacketTest {
 
         assertNotEquals(first, second)
     }
+
+    @Test
+    fun `should not be affected by mutation of constructor arguments after construction`() {
+        val header = byteArrayOf(1, 2)
+        val payload = byteArrayOf(3, 4)
+        val packet = SerializedPacket(headerBytes = header, payloadBytes = payload)
+
+        header[0] = 99.toByte()
+        payload[0] = 99.toByte()
+
+        assertEquals(listOf<Byte>(1, 2), packet.headerBytes.toList())
+        assertEquals(listOf<Byte>(3, 4), packet.payloadBytes.toList())
+    }
+
+    @Test
+    fun `should not be affected by mutation of returned accessor arrays`() {
+        val packet = SerializedPacket(headerBytes = byteArrayOf(1, 2), payloadBytes = byteArrayOf(3, 4))
+
+        packet.headerBytes[0] = 99.toByte()
+        packet.payloadBytes[0] = 99.toByte()
+
+        assertEquals(listOf<Byte>(1, 2), packet.headerBytes.toList())
+        assertEquals(listOf<Byte>(3, 4), packet.payloadBytes.toList())
+    }
 }

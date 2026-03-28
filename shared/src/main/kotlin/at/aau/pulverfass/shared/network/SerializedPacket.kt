@@ -6,10 +6,16 @@ package at.aau.pulverfass.shared.network
  * @property headerBytes Der serialisierte Header.
  * @property payloadBytes Der serialisierte Payload.
  */
-data class SerializedPacket(
-    val headerBytes: ByteArray,
-    val payloadBytes: ByteArray,
+class SerializedPacket(
+    headerBytes: ByteArray,
+    payloadBytes: ByteArray,
 ) {
+    private val _headerBytes: ByteArray = headerBytes.copyOf()
+    private val _payloadBytes: ByteArray = payloadBytes.copyOf()
+
+    val headerBytes: ByteArray get() = _headerBytes.copyOf()
+    val payloadBytes: ByteArray get() = _payloadBytes.copyOf()
+
     /**
      * Vergleicht zwei SerializedPacket Objekte.
      */
@@ -19,8 +25,8 @@ data class SerializedPacket(
 
         other as SerializedPacket
 
-        if (!headerBytes.contentEquals(other.headerBytes)) return false
-        if (!payloadBytes.contentEquals(other.payloadBytes)) return false
+        if (!_headerBytes.contentEquals(other._headerBytes)) return false
+        if (!_payloadBytes.contentEquals(other._payloadBytes)) return false
 
         return true
     }
@@ -29,8 +35,8 @@ data class SerializedPacket(
      * Gibt den HashCode dieses SerializedPacket zurück.
      */
     override fun hashCode(): Int {
-        var result = headerBytes.contentHashCode()
-        result = 31 * result + payloadBytes.contentHashCode()
+        var result = _headerBytes.contentHashCode()
+        result = 31 * result + _payloadBytes.contentHashCode()
         return result
     }
 }
