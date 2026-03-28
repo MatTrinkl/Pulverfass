@@ -19,7 +19,7 @@ class MessageTypeTest {
         val invalidId = 999
 
         val exception =
-            assertThrows(IllegalArgumentException::class.java) {
+            assertThrows(UnknownMessageTypeIdException::class.java) {
                 MessageType.fromId(invalidId)
             }
 
@@ -31,7 +31,7 @@ class MessageTypeTest {
         val invalidId = -1
 
         val exception =
-            assertThrows(IllegalArgumentException::class.java) {
+            assertThrows(UnknownMessageTypeIdException::class.java) {
                 MessageType.fromId(invalidId)
             }
 

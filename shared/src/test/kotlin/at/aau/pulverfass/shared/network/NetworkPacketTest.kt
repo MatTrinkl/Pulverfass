@@ -3,9 +3,14 @@ package at.aau.pulverfass.shared.network
 import at.aau.pulverfass.shared.networkmessage.LoginRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class NetworkPacketTest {
+    private data class UnknownPayload(
+        val value: String,
+    ) : NetworkMessagePayload
+
     @Test
     fun `should create network packet correctly`() {
         val payload = LoginRequest(username = "alice", password = "secret")
@@ -43,10 +48,42 @@ class NetworkPacketTest {
             )
         val second =
             NetworkPacket(
-                header = MessageHeader(MessageType.LOGOUT_REQUEST),
-                payload = LoginRequest(username = "alice", password = "secret"),
+                header = MessageHeader(MessageType.LOGIN_REQUEST),
+                payload = LoginRequest(username = "bob", password = "secret"),
             )
 
         assertNotEquals(first, second)
+    }
+
+    @Test
+    fun `should reject packet when header type does not match payload type`() {
+        val exception =
+            assertThrows(PayloadTypeMismatchException::class.java) {
+                NetworkPacket(
+                    header = MessageHeader(MessageType.LOGOUT_REQUEST),
+                    payload = LoginRequest(username = "alice", password = "secret"),
+                )
+            }
+
+        assertEquals(
+            "Header type LOGOUT_REQUEST does not match payload type LOGIN_REQUEST",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `should reject packet with unregistered payload class`() {
+        val exception =
+            assertThrows(UnsupportedPayloadClassException::class.java) {
+                NetworkPacket(
+                    header = MessageHeader(MessageType.LOGIN_REQUEST),
+                    payload = UnknownPayload("test"),
+                )
+            }
+
+        assertEquals(
+            "Unsupported payload class: ${UnknownPayload::class.java.name}",
+            exception.message,
+        )
     }
 }

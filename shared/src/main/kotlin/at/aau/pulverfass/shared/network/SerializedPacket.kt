@@ -10,6 +10,12 @@ class SerializedPacket(
     headerBytes: ByteArray,
     payloadBytes: ByteArray,
 ) {
+    init {
+        if (headerBytes.isEmpty()) {
+            throw InvalidSerializedPacketException("SerializedPacket headerBytes must not be empty")
+        }
+    }
+
     private val _headerBytes: ByteArray = headerBytes.copyOf()
     private val _payloadBytes: ByteArray = payloadBytes.copyOf()
 

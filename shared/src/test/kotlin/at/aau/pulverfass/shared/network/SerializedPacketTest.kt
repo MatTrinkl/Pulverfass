@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.network
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class SerializedPacketTest {
@@ -89,5 +90,15 @@ class SerializedPacketTest {
 
         assertEquals(listOf<Byte>(1, 2), packet.headerBytes.toList())
         assertEquals(listOf<Byte>(3, 4), packet.payloadBytes.toList())
+    }
+
+    @Test
+    fun `should reject empty header bytes`() {
+        val exception =
+            assertThrows(InvalidSerializedPacketException::class.java) {
+                SerializedPacket(headerBytes = byteArrayOf(), payloadBytes = byteArrayOf(1))
+            }
+
+        assertEquals("SerializedPacket headerBytes must not be empty", exception.message)
     }
 }

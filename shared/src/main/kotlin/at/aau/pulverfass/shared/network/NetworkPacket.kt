@@ -9,4 +9,11 @@ package at.aau.pulverfass.shared.network
 data class NetworkPacket<T : NetworkMessagePayload>(
     val header: MessageHeader,
     val payload: T,
-)
+) {
+    init {
+        val payloadType = NetworkPayloadRegistry.messageTypeFor(payload)
+        if (header.type != payloadType) {
+            throw PayloadTypeMismatchException(header.type, payloadType)
+        }
+    }
+}
