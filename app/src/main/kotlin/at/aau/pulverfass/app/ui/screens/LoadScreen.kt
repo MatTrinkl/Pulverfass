@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.navigation.Screen
-import com.example.shared.Constants
+import at.aau.pulverfass.shared.Constants
 import kotlinx.coroutines.delay
 
 @Composable
