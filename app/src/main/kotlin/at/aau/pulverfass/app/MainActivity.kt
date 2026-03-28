@@ -42,13 +42,14 @@ class MainActivity : AppCompatActivity() {
                                 LobbyScreen(navController)
                             }
                             composable(
-                                route = Screen.WaitingRoom.route +
-                                    "/{lobbyCode}/{isHost}/{playerName}",
-                                arguments = listOf(
-                                    navArgument("lobbyCode") { type = NavType.StringType },
-                                    navArgument("isHost") { type = NavType.BoolType },
-                                    navArgument("playerName") { type = NavType.StringType },
-                                ),
+                                route =
+                                    Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
+                                arguments =
+                                    listOf(
+                                        navArgument("lobbyCode") { type = NavType.StringType },
+                                        navArgument("isHost") { type = NavType.BoolType },
+                                        navArgument("playerName") { type = NavType.StringType },
+                                    ),
                             ) { backStackEntry ->
                                 val args = backStackEntry.arguments
                                 val lobbyCode = args?.getString("lobbyCode") ?: ""

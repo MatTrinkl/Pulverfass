@@ -37,9 +37,7 @@ fun WaitingRoomScreen(
     val players = remember { mutableStateListOf(playerName) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         WaitingRoomHeader(lobbyCode, isHost)
@@ -50,9 +48,7 @@ fun WaitingRoomScreen(
             players = players,
             playerName = playerName,
             isHost = isHost,
-            modifier = Modifier
-                .fillMaxWidth(0.7f)
-                .weight(1f),
+            modifier = Modifier.fillMaxWidth(0.7f).weight(1f),
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -75,7 +71,10 @@ fun WaitingRoomScreen(
 }
 
 @Composable
-private fun WaitingRoomHeader(lobbyCode: String, isHost: Boolean) {
+private fun WaitingRoomHeader(
+    lobbyCode: String,
+    isHost: Boolean,
+) {
     Text(
         text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
         style = MaterialTheme.typography.displaySmall,
@@ -85,11 +84,12 @@ private fun WaitingRoomHeader(lobbyCode: String, isHost: Boolean) {
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    val hostStatusText = if (isHost) {
-        stringResource(id = R.string.you_are_host)
-    } else {
-        stringResource(id = R.string.waiting_for_host)
-    }
+    val hostStatusText =
+        if (isHost) {
+            stringResource(id = R.string.you_are_host)
+        } else {
+            stringResource(id = R.string.waiting_for_host)
+        }
 
     Text(
         text = hostStatusText,
@@ -125,11 +125,12 @@ private fun PlayerListCard(
 }
 
 @Composable
-private fun PlayerRow(player: String, isHostPlayer: Boolean) {
+private fun PlayerRow(
+    player: String,
+    isHostPlayer: Boolean,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = player, style = MaterialTheme.typography.bodyLarge)
@@ -145,7 +146,11 @@ private fun PlayerRow(player: String, isHostPlayer: Boolean) {
 }
 
 @Composable
-private fun HostActions(isHost: Boolean, playersCount: Int, onStartGame: () -> Unit) {
+private fun HostActions(
+    isHost: Boolean,
+    playersCount: Int,
+    onStartGame: () -> Unit,
+) {
     if (isHost) {
         val canStart = playersCount >= 2
         Button(

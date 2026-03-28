@@ -34,9 +34,7 @@ fun LobbyScreen(navController: NavController) {
     var isJoining by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -79,7 +77,10 @@ fun LobbyScreen(navController: NavController) {
 }
 
 @Composable
-private fun LobbyCodeInputField(value: String, onValueChange: (String) -> Unit) {
+private fun LobbyCodeInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = {
@@ -90,9 +91,10 @@ private fun LobbyCodeInputField(value: String, onValueChange: (String) -> Unit) 
         label = { Text(stringResource(id = R.string.enter_lobby_code)) },
         modifier = Modifier.fillMaxWidth(0.6f),
         singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Number,
-        ),
+        keyboardOptions =
+            KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+            ),
     )
 }
 
