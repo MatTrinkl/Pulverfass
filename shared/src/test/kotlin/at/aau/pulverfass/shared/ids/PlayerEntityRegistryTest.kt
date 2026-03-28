@@ -1,10 +1,10 @@
 package at.aau.pulverfass.shared.ids
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlayerEntityRegistryTest {
-
     @Test
     fun `player should get assigned entities`() {
         val playerId = IdFactory.nextPlayerId()

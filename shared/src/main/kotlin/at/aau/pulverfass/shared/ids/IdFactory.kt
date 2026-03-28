@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicLong
 // Zentrale Stelle zur Erzeugung aller IDs.
 // Verhindert doppelte IDs und sorgt für Konsistenz.
 object IdFactory {
-
     private val counter = AtomicLong(0)
 
     fun nextPlayerId(): PlayerId {

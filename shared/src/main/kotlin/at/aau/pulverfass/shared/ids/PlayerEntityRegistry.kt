@@ -2,11 +2,13 @@ package at.aau.pulverfass.shared.ids
 
 // Speichert die Zuordnung zwischen Player und seinen Entities.
 object PlayerEntityRegistry {
-
     private val playerToEntities: MutableMap<PlayerId, MutableList<EntityId>> = mutableMapOf()
 
     // Fügt eine Entity zu einem Player hinzu
-    fun addEntity(playerId: PlayerId, entityId: EntityId) {
+    fun addEntity(
+        playerId: PlayerId,
+        entityId: EntityId,
+    ) {
         val entities = playerToEntities.getOrPut(playerId) { mutableListOf() }
         entities.add(entityId)
     }

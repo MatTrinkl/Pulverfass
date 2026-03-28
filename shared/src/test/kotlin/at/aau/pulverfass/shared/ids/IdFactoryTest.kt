@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
 class IdFactoryTest {
-
     @Test
     fun `ids should be unique`() {
         val id1 = IdFactory.nextPlayerId()
