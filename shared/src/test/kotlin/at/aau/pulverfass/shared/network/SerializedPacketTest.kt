@@ -81,7 +81,8 @@ class SerializedPacketTest {
 
     @Test
     fun `should not be affected by mutation of returned accessor arrays`() {
-        val packet = SerializedPacket(headerBytes = byteArrayOf(1, 2), payloadBytes = byteArrayOf(3, 4))
+        val packet =
+            SerializedPacket(headerBytes = byteArrayOf(1, 2), payloadBytes = byteArrayOf(3, 4))
 
         packet.headerBytes[0] = 99.toByte()
         packet.payloadBytes[0] = 99.toByte()
