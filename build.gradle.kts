@@ -14,13 +14,23 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     apply(plugin = "jacoco")
 
-    // Konfiguration für JVM-Module (shared & server)
-    tasks.withType<JacocoReport>().configureEach {
-        dependsOn(tasks.withType<Test>()) // Tests müssen vor dem Report laufen
+    extensions.configure<JacocoPluginExtension> {
+        toolVersion = "0.8.13"
+    }
 
+    tasks.withType<Test>().configureEach {
+        if (!project.plugins.hasPlugin("com.android.application") &&
+            !project.plugins.hasPlugin("com.android.library")
+        ) {
+            useJUnitPlatform()
+        }
+    }
+
+    tasks.withType<JacocoReport>().configureEach {
         reports {
-            xml.required.set(true) // XML für Sonar
-            html.required.set(true) // Optional für lokale Ansicht
+            xml.required.set(true)
+            html.required.set(true)
+            csv.required.set(false)
         }
     }
 }

@@ -50,7 +50,7 @@ jobs:
           if-no-files-found: ignore
 
   analyze:
-    name: Build, test, coverage & SonarCloud
+    name: Build, test, coverage and SonarCloud
     runs-on: self-hosted
     needs: style
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
@@ -108,6 +108,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+
       - name: Build & test app (JDK 17)
         run: >
           ./gradlew
@@ -137,7 +138,7 @@ jobs:
           path: |
             shared/build/reports/jacoco/test/jacocoTestReport.xml
             server/build/reports/jacoco/test/jacocoTestReport.xml
-            app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
+            android-app/app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
           if-no-files-found: warn
 
       - name: SonarCloud Scan

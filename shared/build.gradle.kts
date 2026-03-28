@@ -27,7 +27,24 @@ java {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    finalizedBy(tasks.named("jacocoTestReport"))
+}
 
-    testImplementation(libs.kotlin.test)
-    testImplementation(libs.junit)
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+
+    executionData.setFrom(layout.buildDirectory.file("jacoco/test.exec"))
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    classDirectories.setFrom(
+        files(
+            layout.buildDirectory.dir("classes/kotlin/main"),
+            layout.buildDirectory.dir("classes/java/main"),
+        ),
+    )
 }

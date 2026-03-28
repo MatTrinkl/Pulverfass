@@ -28,3 +28,20 @@ dependencies {
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.junit)
 }
+
+tasks.named<Test>("test") {
+    finalizedBy(tasks.named("jacocoTestReport"))
+}
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+
+    executionData.setFrom(layout.buildDirectory.file("jacoco/test.exec"))
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    classDirectories.setFrom(
+        files(
+            layout.buildDirectory.dir("classes/kotlin/main"),
+            layout.buildDirectory.dir("classes/java/main"),
+        ),
+    )
+}

@@ -1,11 +1,8 @@
-import com.android.build.api.dsl.ApplicationExtension
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    jacoco
 }
 
 configure<ApplicationExtension> {
@@ -39,44 +36,13 @@ configure<ApplicationExtension> {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     buildFeatures {
         compose = true
     }
-}
-
-// Jacoco Konfiguration für Android
-tasks.register<JacocoReport>("jacocoTestReport") {
-    dependsOn("testDebugUnitTest")
-
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*",
-        "**/ui/theme/*.*",
-    )
-    val debugTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
-    }
-    val mainSrc = "${project.projectDir}/src/main/kotlin"
-
-    sourceDirectories.setFrom(files(mainSrc))
-    classDirectories.setFrom(files(debugTree))
-
-    val buildDir = project.layout.buildDirectory.get()
-    val coveragePath = "$buildDir/outputs/unit_test_code_coverage/debugUnitTest"
-    executionData.setFrom(
-        fileTree(coveragePath) {
-            include("testDebugUnitTest.exec")
-        },
-    )
 }
 
 // Kotlin 2.3.20: kotlinOptions is removed; use the compilerOptions DSL instead.
@@ -103,6 +69,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -111,4 +81,70 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    debugImplementation(platform(libs.androidx.compose.bom))
+}
+
+tasks.withType<Test>().configureEach {
+    extensions.configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+val jacocoCoverageExclusions =
+    listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+    )
+
+val unitTestTaskName = "testDebugUnitTest"
+
+tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
+    group = "verification"
+    description = "Generates JaCoCo XML and HTML coverage reports for debug unit tests."
+
+    // Only hook into unit tests if that task exists
+    if (unitTestTaskName in tasks.names) {
+        dependsOn(unitTestTaskName)
+    }
+
+    val buildDirFile = layout.buildDirectory.get().asFile
+
+    classDirectories.setFrom(
+        files(
+            fileTree("$buildDirFile/tmp/kotlin-classes/debug") {
+                exclude(jacocoCoverageExclusions)
+            },
+            fileTree("$buildDirFile/intermediates/javac/debug/compileDebugJavaWithJavac/classes") {
+                exclude(jacocoCoverageExclusions)
+            },
+        ),
+    )
+
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    additionalSourceDirs.setFrom(files("src/main/kotlin", "src/main/java"))
+
+    executionData.setFrom(
+        fileTree(buildDirFile) {
+            include("jacoco/testDebugUnitTest.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/*.exec")
+            include("outputs/unit_test_code_coverage/debugUnitTest/**/*.ec")
+        },
+    )
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+}
+
+// Only add finalizedBy if the task exists
+tasks.matching { it.name == unitTestTaskName }.configureEach {
+    finalizedBy("jacocoDebugUnitTestReport")
 }
