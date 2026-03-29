@@ -53,10 +53,10 @@ enum class MessageType(val id: Int) {
          *
          * @param id numerische ID des Nachrichtentyps
          * @return entsprechender MessageType
-         * @throws IllegalArgumentException wenn ID unbekannt ist
+         * @throws UnknownMessageTypeIdException wenn ID unbekannt ist
          */
         fun fromId(id: Int): MessageType =
             entries.firstOrNull { it.id == id }
-                ?: throw IllegalArgumentException("Unknown MessageType id: $id")
+                ?: throw UnknownMessageTypeIdException(id)
     }
 }
