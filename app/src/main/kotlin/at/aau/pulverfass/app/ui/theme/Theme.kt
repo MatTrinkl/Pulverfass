@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 
 // farbschema für dunklen modus
 private val DarkColorScheme = darkColorScheme()
+
 // farbschema für hellen modus
 private val LightColorScheme = lightColorScheme()
 
@@ -17,6 +18,7 @@ fun AndroidAppTheme(
 ) {
     // wählt das farbschema basierend auf der einstellung aus
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+
     // setzt das übergeordnete material design theme für die app
     MaterialTheme(
         colorScheme = colorScheme,
