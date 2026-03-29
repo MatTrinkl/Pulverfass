@@ -27,10 +27,13 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.navigation.Screen
 import kotlin.random.Random
 
+// hauptbildschirm für spielersuche & lobbyerstellung
 @Composable
 fun LobbyScreen(navController: NavController) {
+    // speichert eingegebenen namen & lobbycode
     var playerName by remember { mutableStateOf("") }
     var lobbyCodeInput by remember { mutableStateOf("") }
+    // steuert ob das feld zum beitreten angezeigt wird
     var isJoining by remember { mutableStateOf(false) }
 
     Column(
@@ -84,6 +87,7 @@ private fun LobbyCodeInputField(
     OutlinedTextField(
         value = value,
         onValueChange = {
+            // prüft auf maximale länge & nur zahlen
             if (it.length <= 4 && it.all { char -> char.isDigit() }) {
                 onValueChange(it)
             }
@@ -110,6 +114,7 @@ private fun LobbyActions(
     if (!isJoining) {
         Button(
             onClick = {
+                // generiert zufälligen code & navigiert als host zum warteraum
                 val generatedCode = Random.nextInt(1000, 10000).toString()
                 onNavigate(Screen.WaitingRoom.route + "/$generatedCode/true/$playerName")
             },
@@ -131,6 +136,7 @@ private fun LobbyActions(
     } else {
         Button(
             onClick = {
+                // navigation zum warteraum als normaler spieler
                 onNavigate(Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName")
             },
             modifier = Modifier.fillMaxWidth(0.4f),
@@ -143,6 +149,7 @@ private fun LobbyActions(
 
         Button(
             onClick = {
+                // zurück zur auswahl zwischen erstellen & beitreten
                 onJoinToggled(false)
                 onLobbyCodeCleared()
             },

@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.ui.navigation
 
+// klasse für navigation
 sealed class Screen(val route: String) {
     object Load : Screen("load")
 

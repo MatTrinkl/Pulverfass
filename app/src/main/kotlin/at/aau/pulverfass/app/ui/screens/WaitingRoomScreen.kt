@@ -26,6 +26,7 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.navigation.Screen
 
+// bildschirm für den warteraum vor spielbeginn
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
@@ -33,7 +34,7 @@ fun WaitingRoomScreen(
     isHost: Boolean,
     playerName: String,
 ) {
-    // Simulierte Player List
+    // liste der spieler die aktuell in der lobby sind
     val players = remember { mutableStateListOf(playerName) }
 
     Column(
@@ -65,6 +66,7 @@ fun WaitingRoomScreen(
             onClick = { navController.popBackStack() },
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
+            // ermöglicht das verlassen der aktuellen lobby
             Text(stringResource(id = R.string.leave_lobby))
         }
     }
@@ -75,6 +77,7 @@ private fun WaitingRoomHeader(
     lobbyCode: String,
     isHost: Boolean,
 ) {
+    // zeigt die eindeutige lobby id an
     Text(
         text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
         style = MaterialTheme.typography.displaySmall,
@@ -84,6 +87,7 @@ private fun WaitingRoomHeader(
 
     Spacer(modifier = Modifier.height(8.dp))
 
+    // unterscheidet zwischen host & normalen spielern
     val hostStatusText =
         if (isHost) {
             stringResource(id = R.string.you_are_host)
@@ -104,6 +108,7 @@ private fun PlayerListCard(
     isHost: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // kartenansicht für die auflistung aller teilnehmer
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -129,6 +134,7 @@ private fun PlayerRow(
     player: String,
     isHostPlayer: Boolean,
 ) {
+    // zeigt einen einzelnen spieler in einer zeile an
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -136,6 +142,7 @@ private fun PlayerRow(
         Text(text = player, style = MaterialTheme.typography.bodyLarge)
         if (isHostPlayer) {
             Spacer(modifier = Modifier.width(8.dp))
+            // markiert den host in der liste
             Text(
                 text = stringResource(id = R.string.host_tag),
                 style = MaterialTheme.typography.labelSmall,
@@ -151,6 +158,7 @@ private fun HostActions(
     playersCount: Int,
     onStartGame: () -> Unit,
 ) {
+    // nur der host kann das spiel starten wenn genug spieler da sind
     if (isHost) {
         val canStart = playersCount >= 2
         Button(
@@ -161,6 +169,7 @@ private fun HostActions(
             Text(stringResource(id = R.string.start_game))
         }
         if (!canStart) {
+            // hinweis falls die mindestanzahl an spielern nicht erreicht ist
             Text(
                 text = stringResource(id = R.string.need_players),
                 style = MaterialTheme.typography.labelSmall,

@@ -21,16 +21,21 @@ import at.aau.pulverfass.app.ui.screens.LobbyScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 
+// haupteinstiegspunkt der android app
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // aktiviert die darstellung bis zum bildschirmrand
         enableEdgeToEdge()
         setContent {
+            // wendet das app design an
             AndroidAppTheme {
+                // verwaltet die navigation zwischen den bildschirmen
                 val navController = rememberNavController()
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
+                        // definiert alle verfügbaren routen & ziele
                         NavHost(
                             navController = navController,
                             startDestination = Screen.Load.route,
@@ -41,6 +46,7 @@ class MainActivity : AppCompatActivity() {
                             composable(Screen.Lobby.route) {
                                 LobbyScreen(navController)
                             }
+                            // warteraum mit übergabe von parametern wie lobbycode & name
                             composable(
                                 route =
                                     Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
