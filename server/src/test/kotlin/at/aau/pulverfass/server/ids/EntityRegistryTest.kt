@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
  * Überprüft das Registrieren, Abrufen, Entfernen und Nachschlagen von Entities.
  */
 class EntityRegistryTest {
-
     /**
      * Einfache Test-Entity für die Registry-Tests.
      */

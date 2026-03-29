@@ -10,9 +10,7 @@ class EntityAlreadyAssignedException(
     entityId: EntityId,
     currentOwner: PlayerId,
     newOwner: PlayerId,
-) : IllegalStateException(
-    "Entity $entityId ist bereits Player $currentOwner zugeordnet und kann nicht Player $newOwner zugewiesen werden.",
-)
+) : IllegalStateException("Entity $entityId gehoert bereits zu $currentOwner, nicht zu $newOwner.")
 
 /**
  * Wird geworfen, wenn eine Entity zu einer ID nicht gefunden wurde.

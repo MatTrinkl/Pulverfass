@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test
  * Überprüft, dass alle generierten IDs eindeutig sind.
  */
 class IdFactoryTest {
-
     @Test
     fun `player ids sollten eindeutig sein`() {
         val id1: PlayerId = IdFactory.nextPlayerId()

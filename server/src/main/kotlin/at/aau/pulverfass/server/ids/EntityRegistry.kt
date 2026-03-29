@@ -1,7 +1,6 @@
 package at.aau.pulverfass.server.ids
 
 import at.aau.pulverfass.shared.ids.EntityId
-import at.aau.pulverfass.server.ids.EntityNotFoundException
 
 /**
  * Zentrale Registry für alle serverseitigen Entities.

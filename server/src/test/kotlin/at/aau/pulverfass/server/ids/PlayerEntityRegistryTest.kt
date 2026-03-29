@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test
  * sowie das Verhalten bei Fehlerfällen.
  */
 class PlayerEntityRegistryTest {
-
     @BeforeEach
     fun setUp() {
         PlayerEntityRegistry.clear()
