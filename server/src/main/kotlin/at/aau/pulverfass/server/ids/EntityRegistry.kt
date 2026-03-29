@@ -35,4 +35,13 @@ object EntityRegistry {
      * Prüft, ob eine Entity mit der ID vorhanden ist.
      */
     fun contains(entityId: EntityId): Boolean = entities.containsKey(entityId)
+
+    /**
+     * Leert die Registry.
+     *
+     * Wird vor allem für Tests verwendet, damit jeder Test mit einem sauberen Zustand startet.
+     */
+    fun clear() {
+        entities.clear()
+    }
 }
