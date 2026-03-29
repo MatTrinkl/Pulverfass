@@ -108,11 +108,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build & test android-app (JDK 17)
+
+      - name: Build & test app (JDK 17)
         run: >
           ./gradlew
-          :android-app:app:assembleDebug
-          :android-app:app:testDebugUnitTest
+          :app:assembleDebug
+          :app:testDebugUnitTest
           --stacktrace
 
       - name: Upload test reports
@@ -125,8 +126,8 @@ jobs:
             shared/build/test-results/**
             server/build/reports/tests/**
             server/build/test-results/**
-            android-app/app/build/reports/tests/**
-            android-app/app/build/test-results/**
+            app/build/reports/tests/**
+            app/build/test-results/**
           if-no-files-found: ignore
 
       - name: Upload coverage reports
@@ -137,7 +138,7 @@ jobs:
           path: |
             shared/build/reports/jacoco/test/jacocoTestReport.xml
             server/build/reports/jacoco/test/jacocoTestReport.xml
-            android-app/app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
+            app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
           if-no-files-found: warn
 
       - name: SonarCloud Scan
