@@ -32,8 +32,15 @@ object PlayerEntityRegistry {
     /**
      * Gibt alle Entities eines Players zurück.
      */
-    fun getEntities(playerId: PlayerId): Set<EntityId> =
-        playerToEntities[playerId]?.toSet() ?: emptySet()
+    fun getEntities(playerId: PlayerId): Set<EntityId> {
+        val entities = playerToEntities[playerId]
+
+        if (entities == null) {
+            return emptySet()
+        }
+
+        return entities.toSet()
+    }
 
     /**
      * Gibt den Player zu einer Entity zurück.
@@ -55,5 +62,14 @@ object PlayerEntityRegistry {
         if (entities.isEmpty()) {
             playerToEntities.remove(playerId)
         }
+    }
+
+    /**
+     * Leert die Registry.
+     *
+     * Wird vor allem für Tests verwendet, damit jeder Test mit einem sauberen Zustand startet.
+     */
+    fun clear() {
+        playerToEntities.clear()
     }
 }
