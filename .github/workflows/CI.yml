@@ -138,7 +138,7 @@ jobs:
           path: |
             shared/build/reports/jacoco/test/jacocoTestReport.xml
             server/build/reports/jacoco/test/jacocoTestReport.xml
-            android-app/app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
+            app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
           if-no-files-found: warn
 
       - name: SonarCloud Scan
