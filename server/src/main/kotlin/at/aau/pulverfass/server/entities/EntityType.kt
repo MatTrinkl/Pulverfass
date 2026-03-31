@@ -1,4 +1,4 @@
-package at.aau.pulverfass.server.ids
+package at.aau.pulverfass.server.entities
 
 /**
  * Beschreibt die aktuell verwendeten Entity-Typen fuer Risiko.

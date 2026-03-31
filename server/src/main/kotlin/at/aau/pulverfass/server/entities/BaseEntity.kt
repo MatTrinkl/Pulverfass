@@ -1,4 +1,4 @@
-package at.aau.pulverfass.server.ids
+package at.aau.pulverfass.server.entities
 
 import at.aau.pulverfass.shared.ids.EntityId
 
