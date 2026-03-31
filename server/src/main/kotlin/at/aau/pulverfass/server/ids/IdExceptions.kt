@@ -3,7 +3,6 @@ package at.aau.pulverfass.server.ids
 import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
-
 /**
  * Wird geworfen, wenn eine EntityId doppelt registriert wird.
  */

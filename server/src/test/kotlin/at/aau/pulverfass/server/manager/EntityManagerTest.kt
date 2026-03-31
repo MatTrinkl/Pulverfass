@@ -118,20 +118,25 @@ class EntityManagerTest {
 
     @Test
     fun `getByType sollte nur entities des passenden typs liefern`() {
-        val player = PlayerEntity(
-            entityId = EntityId(6),
-            playerId = PlayerId(1),
-        )
-        val territory1 = TerritoryEntity(
-            entityId = EntityId(7),
-            ownerId = PlayerId(1),
-            troops = 3,
-        )
-        val territory2 = TerritoryEntity(
-            entityId = EntityId(8),
-            ownerId = null,
-            troops = 1,
-        )
+        val player =
+            PlayerEntity(
+                entityId = EntityId(6),
+                playerId = PlayerId(1),
+            )
+
+        val territory1 =
+            TerritoryEntity(
+                entityId = EntityId(7),
+                ownerId = PlayerId(1),
+                troops = 3,
+            )
+
+        val territory2 =
+            TerritoryEntity(
+                entityId = EntityId(8),
+                ownerId = null,
+                troops = 1,
+            )
 
         EntityManager.register(player)
         EntityManager.register(territory1)
@@ -146,10 +151,11 @@ class EntityManagerTest {
 
     @Test
     fun `getByType sollte leere liste liefern wenn kein typ vorhanden ist`() {
-        val player = PlayerEntity(
-            entityId = EntityId(9),
-            playerId = PlayerId(2),
-        )
+        val player =
+            PlayerEntity(
+                entityId = EntityId(9),
+                playerId = PlayerId(2),
+            )
 
         EntityManager.register(player)
 
@@ -160,15 +166,18 @@ class EntityManagerTest {
 
     @Test
     fun `all sollte alle registrierten entities liefern`() {
-        val player = PlayerEntity(
-            entityId = EntityId(10),
-            playerId = PlayerId(3),
-        )
-        val territory = TerritoryEntity(
-            entityId = EntityId(11),
-            ownerId = PlayerId(3),
-            troops = 5,
-        )
+        val player =
+            PlayerEntity(
+                entityId = EntityId(10),
+                playerId = PlayerId(3),
+            )
+
+        val territory =
+            TerritoryEntity(
+                entityId = EntityId(11),
+                ownerId = PlayerId(3),
+                troops = 5,
+            )
 
         EntityManager.register(player)
         EntityManager.register(territory)
@@ -182,15 +191,18 @@ class EntityManagerTest {
 
     @Test
     fun `clear sollte alle entities entfernen`() {
-        val player = PlayerEntity(
-            entityId = EntityId(12),
-            playerId = PlayerId(4),
-        )
-        val territory = TerritoryEntity(
-            entityId = EntityId(13),
-            ownerId = PlayerId(4),
-            troops = 2,
-        )
+        val player =
+            PlayerEntity(
+                entityId = EntityId(12),
+                playerId = PlayerId(4),
+            )
+
+        val territory =
+            TerritoryEntity(
+                entityId = EntityId(13),
+                ownerId = PlayerId(4),
+                troops = 2,
+            )
 
         EntityManager.register(player)
         EntityManager.register(territory)
