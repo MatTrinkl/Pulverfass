@@ -3,6 +3,14 @@ package at.aau.pulverfass.server.ids
 import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
+
+/**
+ * Wird geworfen, wenn eine EntityId doppelt registriert wird.
+ */
+class DuplicateEntityIdException(
+    entityId: EntityId,
+) : IllegalStateException("Eine Entity mit der ID $entityId ist bereits registriert.")
+
 /**
  * Wird geworfen, wenn eine Entity bereits einem anderen Player zugeordnet ist.
  */
