@@ -72,7 +72,12 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run unit tests
-        run: ./gradlew test --stacktrace
+        run: >
+          ./gradlew
+          :shared:test
+          :server:test
+          :e2e:test
+          --stacktrace
 
       - name: Upload unit test reports
         if: always()
