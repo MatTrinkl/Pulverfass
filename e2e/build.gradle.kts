@@ -16,3 +16,13 @@ tasks.register("placeholderE2eInfo") {
         println("E2E placeholder module: Real end-to-end tests will be added once dependencies are ready.")
     }
 }
+
+dependencies {
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}

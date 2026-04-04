@@ -14,8 +14,43 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  style:
+    name: Kotlin style check
+    runs-on: [self-hosted, linux, ubuntu]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run ktlint check
+        run: ./gradlew ktlintCheck --stacktrace
+
+      - name: Upload ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ktlint-reports
+          path: |
+            **/build/reports/ktlint/**
+          if-no-files-found: ignore
+
   unit-tests:
     name: Unit Tests
     runs-on: [self-hosted, linux, ubuntu]
@@ -49,6 +84,103 @@ jobs:
             **/build/test-results/**
           if-no-files-found: ignore
 
+  analyze:
+    name: Build, coverage and SonarCloud
+    runs-on: [self-hosted, linux, ubuntu]
+    needs: [style, unit-tests]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build & test shared + server (JDK 25)
+        run: >
+          ./gradlew
+          :shared:assemble
+          :server:assemble
+          :shared:test
+          :shared:jacocoTestReport
+          :server:test
+          :server:jacocoTestReport
+          --stacktrace
+
+      - name: Set up Temurin JDK 17 (Android/AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build & test app (JDK 17)
+        run: >
+          ./gradlew
+          :app:assembleDebug
+          :app:testDebugUnitTest
+          --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            shared/build/reports/tests/**
+            shared/build/test-results/**
+            server/build/reports/tests/**
+            server/build/test-results/**
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: ignore
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            shared/build/reports/jacoco/test/jacocoTestReport.xml
+            server/build/reports/jacoco/test/jacocoTestReport.xml
+            app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml
+          if-no-files-found: warn
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v3
+        continue-on-error: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
   e2e-tests:
     name: E2E Tests (placeholder)
     runs-on: [self-hosted, linux, ubuntu]
@@ -77,7 +209,7 @@ jobs:
 
       - name: Validate E2E placeholder module
         run: |
-          ./gradlew :e2e:assemble :e2e:placeholderE2eInfo --stacktrace | tee e2e-placeholder.log
+          ./gradlew :e2e:assemble :e2e:test :e2e:placeholderE2eInfo --stacktrace | tee e2e-placeholder.log
 
       - name: Upload E2E placeholder logs and reports
         if: always()
