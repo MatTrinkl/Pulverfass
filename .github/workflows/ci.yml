@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: [self-hosted, linux, ubuntu]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+          if-no-files-found: ignore
+
+  e2e-tests:
+    name: E2E Tests (placeholder)
+    runs-on: [self-hosted, linux, ubuntu]
+    needs: unit-tests
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
+    env:
+      E2E_WS_HOST: 127.0.0.1
+      E2E_WS_PORT: 8080
+      E2E_TEST_MODE: placeholder
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Validate E2E placeholder module
+        run: |
+          ./gradlew :e2e:assemble :e2e:placeholderE2eInfo --stacktrace | tee e2e-placeholder.log
+
+      - name: Upload E2E placeholder logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-placeholder-artifacts
+          path: |
+            e2e-placeholder.log
+            e2e/build/reports/**
+            e2e/build/test-results/**
+          if-no-files-found: ignore
