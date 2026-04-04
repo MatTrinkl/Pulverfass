@@ -1,7 +1,7 @@
 package com.example.e2e
 
 import org.junit.jupiter.api.Test
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class PlaceholderE2eModuleTest {
     @Test
