@@ -2,7 +2,7 @@
 
 Für die Workflows in `.github/workflows/ci.yml` wird ein Runner mit folgenden Eigenschaften benötigt:
 
-- Labels: `self-hosted`, `linux`, `ubuntu`
+- Label: `self-hosted`
 - Java: Temurin JDK 25 verfügbar (wird im Workflow via `actions/setup-java` gesetzt)
 - Gradle Wrapper-Ausführung erlaubt (`./gradlew`)
 - Netzwerkzugriff auf Maven Central / Gradle Plugin Portal / Google Maven (Dependency-Auflösung)
