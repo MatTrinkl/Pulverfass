@@ -26,11 +26,9 @@ object EntityManager {
      * Doppelte EntityIds sind nicht erlaubt.
      */
     fun register(entity: BaseEntity) {
-        if (contains(entity.entityId)) {
+        if (entities.putIfAbsent(entity.entityId, entity) != null) {
             throw DuplicateEntityIdException(entity.entityId)
         }
-
-        entities[entity.entityId] = entity
     }
 
     /**
