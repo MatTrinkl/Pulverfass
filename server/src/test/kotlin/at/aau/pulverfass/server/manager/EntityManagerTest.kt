@@ -128,14 +128,14 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(7),
                 ownerId = PlayerId(1),
-                troops = 3,
+                troopCount = 3,
             )
 
         val territory2 =
             TerritoryEntity(
                 entityId = EntityId(8),
                 ownerId = null,
-                troops = 1,
+                troopCount = 3,
             )
 
         EntityManager.register(player)
@@ -176,7 +176,7 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(11),
                 ownerId = PlayerId(3),
-                troops = 5,
+                troopCount = 3,
             )
 
         EntityManager.register(player)
@@ -201,7 +201,7 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(13),
                 ownerId = PlayerId(4),
-                troops = 2,
+                troopCount = 3,
             )
 
         EntityManager.register(player)
