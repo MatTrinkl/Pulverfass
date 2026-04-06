@@ -4,10 +4,10 @@ import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
 /**
- * Erste konkrete Entity fuer einen Spieler.
+ * Repräsentiert einen Spieler im Entity-System.
  *
- * Diese Klasse verbindet das neue Entity-System
- * mit der bereits vorhandenen PlayerId.
+ * @property entityId technische ID der Entity
+ * @property playerId fachliche ID des Spielers
  */
 data class PlayerEntity(
     override val entityId: EntityId,

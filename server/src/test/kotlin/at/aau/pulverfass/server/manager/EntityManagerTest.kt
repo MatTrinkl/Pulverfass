@@ -128,14 +128,14 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(7),
                 ownerId = PlayerId(1),
-                troops = 3,
+                troopCount = 3,
             )
 
         val territory2 =
             TerritoryEntity(
                 entityId = EntityId(8),
                 ownerId = null,
-                troops = 1,
+                troopCount = 3,
             )
 
         EntityManager.register(player)
@@ -165,6 +165,31 @@ class EntityManagerTest {
     }
 
     @Test
+    fun `allEntityIds sollte alle registrierten ids liefern`() {
+        val player =
+            PlayerEntity(
+                entityId = EntityId(20),
+                playerId = PlayerId(1),
+            )
+
+        val territory =
+            TerritoryEntity(
+                entityId = EntityId(21),
+                ownerId = PlayerId(1),
+                troopCount = 3,
+            )
+
+        EntityManager.register(player)
+        EntityManager.register(territory)
+
+        val result = EntityManager.allEntityIds()
+
+        assertEquals(2, result.size)
+        assertTrue(result.contains(EntityId(20)))
+        assertTrue(result.contains(EntityId(21)))
+    }
+
+    @Test
     fun `all sollte alle registrierten entities liefern`() {
         val player =
             PlayerEntity(
@@ -176,7 +201,7 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(11),
                 ownerId = PlayerId(3),
-                troops = 5,
+                troopCount = 3,
             )
 
         EntityManager.register(player)
@@ -201,7 +226,7 @@ class EntityManagerTest {
             TerritoryEntity(
                 entityId = EntityId(13),
                 ownerId = PlayerId(4),
-                troops = 2,
+                troopCount = 3,
             )
 
         EntityManager.register(player)

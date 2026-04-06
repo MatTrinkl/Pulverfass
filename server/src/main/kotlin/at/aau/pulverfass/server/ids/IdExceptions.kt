@@ -5,6 +5,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 
 /**
  * Wird geworfen, wenn eine EntityId doppelt registriert wird.
+ *
+ * @param entityId ID der Entity, die bereits registriert ist
  */
 class DuplicateEntityIdException(
     entityId: EntityId,
@@ -18,7 +20,11 @@ class DuplicatePlayerIdException(
 ) : IllegalStateException("Ein Player mit der ID $playerId ist bereits registriert.")
 
 /**
- * Wird geworfen, wenn eine Entity bereits einem anderen Player zugeordnet ist.
+ * Wird geworfen, wenn eine Entity bereits einem anderen Spieler zugeordnet ist.
+ *
+ * @param entityId ID der betroffenen Entity
+ * @param currentOwner aktueller Besitzer der Entity
+ * @param newOwner neuer Spieler, dem die Entity zugeordnet werden sollte
  */
 class EntityAlreadyAssignedException(
     entityId: EntityId,
@@ -27,7 +33,9 @@ class EntityAlreadyAssignedException(
 ) : IllegalStateException("Entity $entityId gehoert bereits zu $currentOwner, nicht zu $newOwner.")
 
 /**
- * Wird geworfen, wenn eine Entity zu einer ID nicht gefunden wurde.
+ * Wird geworfen, wenn zu einer EntityId keine Entity gefunden wird.
+ *
+ * @param entityId ID der gesuchten Entity
  */
 class EntityNotFoundException(
     entityId: EntityId,
