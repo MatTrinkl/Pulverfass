@@ -39,8 +39,7 @@ object PacketCodec {
         }
 
         val headerLength = packet.headerBytes.size
-        val buffer = ByteBuffer
-            .allocate(Int.SIZE_BYTES + headerLength + packet.payloadBytes.size)
+        val buffer = ByteBuffer.allocate(Int.SIZE_BYTES + headerLength + packet.payloadBytes.size)
             .order(ByteOrder.BIG_ENDIAN)
 
         buffer.putInt(headerLength)
