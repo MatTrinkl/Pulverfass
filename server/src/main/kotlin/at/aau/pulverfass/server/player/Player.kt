@@ -5,13 +5,12 @@ import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
 /**
- * Fachliches Modell eines Spielers.
+ * Repräsentiert einen Spieler im Spiel.
  *
- * Diese Klasse beschreibt den Spielerzustand auf Domänenebene
- * und ist bewusst getrennt von technischen Konzepten wie
- * konkreten Connection- oder Entity-Objekten.
- *
- * Optionale Verknüpfungen werden nur über IDs modelliert.
+ * @property playerId eindeutige ID des Spielers
+ * @property username optionaler Name des Spielers
+ * @property connectionId optionale Verbindung des Spielers
+ * @property entityId optionale zugeordnete Entity des Spielers
  */
 data class Player(
     val playerId: PlayerId,
