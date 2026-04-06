@@ -99,7 +99,7 @@ class TerritoryEntityTest {
     }
 
     @Test
-    fun `subtractTroops sollte exception werfen wenn mehr truppen entfernt werden als vorhanden sind`() {
+    fun `subtractTroops wirft exception wenn mehr truppen entfernt werden als vorhanden sind`() {
         val territory =
             TerritoryEntity(
                 entityId = EntityId(7),
