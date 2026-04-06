@@ -6,7 +6,11 @@ import at.aau.pulverfass.server.player.Player
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -22,7 +26,6 @@ import org.junit.jupiter.api.Test
  * - Fehlerfälle (Exceptions)
  */
 class PlayerManagerTest {
-
     @BeforeEach
     fun setUp() {
         // vor jedem Test wird der Manager geleert
@@ -101,24 +104,27 @@ class PlayerManagerTest {
     // ConnectionId Tests
     @Test
     fun `getByConnectionId sollte passenden player liefern`() {
-        val player = Player(
-            playerId = PlayerId(5),
-            username = "Luca",
-            connectionId = ConnectionId(10)
-        )
+        val player =
+            Player(
+                playerId = PlayerId(5),
+                username = "Luca",
+                connectionId = ConnectionId(10),
+            )
 
         PlayerManager.register(player)
 
-        assertEquals(player, PlayerManager.getByConnectionId(ConnectionId(10)))
+        val result = PlayerManager.getByConnectionId(ConnectionId(10))
+        assertEquals(player, result)
     }
 
     @Test
     fun `getByConnectionId sollte null liefern wenn kein player passt`() {
-        val player = Player(
-            playerId = PlayerId(6),
-            username = "Max",
-            connectionId = ConnectionId(10)
-        )
+        val player =
+            Player(
+                playerId = PlayerId(6),
+                username = "Max",
+                connectionId = ConnectionId(10),
+            )
 
         PlayerManager.register(player)
 
@@ -127,16 +133,18 @@ class PlayerManagerTest {
 
     @Test
     fun `getByConnectionId sollte mehrere player durchsuchen`() {
-        val first = Player(
-            playerId = PlayerId(7),
-            username = "A",
-            connectionId = ConnectionId(10)
-        )
-        val second = Player(
-            playerId = PlayerId(8),
-            username = "B",
-            connectionId = ConnectionId(20)
-        )
+        val first =
+            Player(
+                playerId = PlayerId(7),
+                username = "A",
+                connectionId = ConnectionId(10),
+            )
+        val second =
+            Player(
+                playerId = PlayerId(8),
+                username = "B",
+                connectionId = ConnectionId(20),
+            )
 
         PlayerManager.register(first)
         PlayerManager.register(second)
@@ -149,11 +157,12 @@ class PlayerManagerTest {
     // EntityId Tests
     @Test
     fun `getByEntityId sollte passenden player liefern`() {
-        val player = Player(
-            playerId = PlayerId(9),
-            username = "Nina",
-            entityId = EntityId(30)
-        )
+        val player =
+            Player(
+                playerId = PlayerId(9),
+                username = "Nina",
+                entityId = EntityId(30),
+            )
 
         PlayerManager.register(player)
 
@@ -162,11 +171,12 @@ class PlayerManagerTest {
 
     @Test
     fun `getByEntityId sollte null liefern wenn kein player passt`() {
-        val player = Player(
-            playerId = PlayerId(10),
-            username = "Tom",
-            entityId = EntityId(40)
-        )
+        val player =
+            Player(
+                playerId = PlayerId(10),
+                username = "Tom",
+                entityId = EntityId(40),
+            )
 
         PlayerManager.register(player)
 
@@ -175,16 +185,18 @@ class PlayerManagerTest {
 
     @Test
     fun `getByEntityId sollte mehrere player durchsuchen`() {
-        val first = Player(
-            playerId = PlayerId(11),
-            username = "A",
-            entityId = EntityId(50)
-        )
-        val second = Player(
-            playerId = PlayerId(12),
-            username = "B",
-            entityId = EntityId(60)
-        )
+        val first =
+            Player(
+                playerId = PlayerId(11),
+                username = "A",
+                entityId = EntityId(50),
+            )
+        val second =
+            Player(
+                playerId = PlayerId(12),
+                username = "B",
+                entityId = EntityId(60),
+            )
 
         PlayerManager.register(first)
         PlayerManager.register(second)
