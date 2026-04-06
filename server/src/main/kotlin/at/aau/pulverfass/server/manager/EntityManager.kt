@@ -7,15 +7,14 @@ import at.aau.pulverfass.server.ids.EntityNotFoundException
 import at.aau.pulverfass.shared.ids.EntityId
 
 /**
- * Zentrale Verwaltung fuer alle registrierten Entities.
+ * Zentrale Verwaltung für alle registrierten Entities.
  *
- * Der EntityManager ist fuer folgende Aufgaben zustaendig:
+ * Der EntityManager ist für folgende Aufgaben zuständig:
  * - neue Entities registrieren
  * - Entities per ID finden
  * - Entities entfernen
  * - Entities nach Typ filtern
  *
- * Die erste Version basiert bewusst nur auf einer einfachen Map.
  */
 object EntityManager {
     private val entities: MutableMap<EntityId, BaseEntity> = mutableMapOf()
@@ -32,14 +31,14 @@ object EntityManager {
     }
 
     /**
-     * Gibt eine Entity anhand ihrer ID zurueck.
+     * Gibt eine Entity anhand ihrer ID zurück.
      *
-     * Falls keine Entity gefunden wird, wird null zurueckgegeben.
+     * Falls keine Entity gefunden wird, wird null zurückgegeben.
      */
     fun get(entityId: EntityId): BaseEntity? = entities[entityId]
 
     /**
-     * Gibt eine Entity anhand ihrer ID zurueck.
+     * Gibt eine Entity anhand ihrer ID zurück.
      *
      * Falls keine Entity gefunden wird, wird eine Exception geworfen.
      */
@@ -49,30 +48,35 @@ object EntityManager {
     /**
      * Entfernt eine Entity anhand ihrer ID.
      *
-     * Falls keine Entity existiert, wird null zurueckgegeben.
+     * Falls keine Entity existiert, wird null zurückgegeben.
      */
     fun remove(entityId: EntityId): BaseEntity? = entities.remove(entityId)
 
     /**
-     * Prueft, ob eine Entity mit dieser ID existiert.
+     * Prüft, ob eine Entity mit dieser ID existiert.
      */
     fun contains(entityId: EntityId): Boolean = entities.containsKey(entityId)
 
     /**
-     * Gibt alle Entities eines bestimmten Typs zurueck.
+     * Gibt alle Entities eines bestimmten Typs zurück.
      */
     fun getByType(entityType: EntityType): List<BaseEntity> =
         entities.values.filter { it.entityType == entityType }
 
     /**
-     * Gibt alle registrierten Entities zurueck.
+     * Gibt alle registrierten Entity-IDs zurück.
+     */
+    fun allEntityIds(): Set<EntityId> = entities.keys.toSet()
+
+    /**
+     * Gibt alle registrierten Entities zurück.
      */
     fun all(): List<BaseEntity> = entities.values.toList()
 
     /**
      * Leert den kompletten Manager.
      *
-     * Vor allem fuer Tests hilfreich.
+     * Vor allem für Tests hilfreich.
      */
     fun clear() {
         entities.clear()
