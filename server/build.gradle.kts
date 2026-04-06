@@ -4,7 +4,7 @@ plugins {
     application
 }
 
-group = "com.example.server"
+group = "at.aau.pulverfass.server"
 version = "1.0.0"
 
 kotlin {
@@ -12,7 +12,7 @@ kotlin {
 }
 
 application {
-    mainClass.set("com.example.server.ApplicationKt")
+    mainClass.set("at.aau.pulverfass.server.ApplicationKt")
 }
 
 dependencies {
@@ -21,10 +21,12 @@ dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.logback.classic)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.junit)
 }
