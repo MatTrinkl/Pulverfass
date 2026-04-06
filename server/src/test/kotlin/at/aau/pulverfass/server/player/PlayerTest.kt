@@ -8,11 +8,11 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 /**
- * Tests fuer das fachliche Player-Modell.
+ * Tests für das fachliche Player-Modell.
  */
 class PlayerTest {
     @Test
-    fun `player sollte mit playerId erstellt werden koennen`() {
+    fun `player sollte mit playerId erstellt werden können`() {
         val player = Player(playerId = PlayerId(1))
 
         assertEquals(PlayerId(1), player.playerId)

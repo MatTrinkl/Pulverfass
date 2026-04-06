@@ -11,6 +11,13 @@ class DuplicateEntityIdException(
 ) : IllegalStateException("Eine Entity mit der ID $entityId ist bereits registriert.")
 
 /**
+ * Wird geworfen, wenn eine PlayerId doppelt registriert wird.
+ */
+class DuplicatePlayerIdException(
+    playerId: PlayerId,
+) : IllegalStateException("Ein Player mit der ID $playerId ist bereits registriert.")
+
+/**
  * Wird geworfen, wenn eine Entity bereits einem anderen Player zugeordnet ist.
  */
 class EntityAlreadyAssignedException(
@@ -25,3 +32,10 @@ class EntityAlreadyAssignedException(
 class EntityNotFoundException(
     entityId: EntityId,
 ) : NoSuchElementException("Keine Entity mit der ID $entityId gefunden.")
+
+/**
+ * Wird geworfen, wenn ein Player zu einer ID nicht gefunden wurde.
+ */
+class PlayerNotFoundException(
+    playerId: PlayerId,
+) : NoSuchElementException("Kein Player mit der ID $playerId gefunden.")
