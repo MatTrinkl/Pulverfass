@@ -31,12 +31,9 @@ data class TerritoryEntity(
         amount: Int,
         validateInput: Boolean = true,
     ) {
-        if (validateInput && amount <= 0) {
-            throw IllegalArgumentException(
-                "Es können nur positive Truppenwerte hinzugefügt werden.",
-            )
+        require(!(validateInput && amount <= 0)) {
+            "Es können nur positive Truppenwerte hinzugefügt werden."
         }
-
         troopCount += amount
     }
 
@@ -50,14 +47,12 @@ data class TerritoryEntity(
         amount: Int,
         validateInput: Boolean = true,
     ) {
-        if (validateInput && amount <= 0) {
-            throw IllegalArgumentException("Es können nur positive Truppenwerte entfernt werden.")
+        require(!(validateInput && amount <= 0)) {
+            "Es können nur positive Truppenwerte entfernt werden."
         }
 
-        if (validateInput && amount > troopCount) {
-            throw IllegalArgumentException(
-                "Es können nicht mehr Truppen entfernt werden als vorhanden sind.",
-            )
+        require(!(validateInput && amount > troopCount)) {
+            "Es können nicht mehr Truppen entfernt werden als vorhanden sind."
         }
 
         troopCount -= amount
