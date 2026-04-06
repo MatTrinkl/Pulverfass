@@ -42,11 +42,12 @@ internal object MessageCodec {
     fun <T : NetworkMessagePayload> encode(
         packet: NetworkPacket<T>,
         serializer: KSerializer<T>,
-    ): ByteArray = try {
-        PacketCodec.pack(serialize(packet, serializer))
-    } catch (exception: PacketCodecException) {
-        throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
-    }
+    ): ByteArray =
+        try {
+            PacketCodec.pack(serialize(packet, serializer))
+        } catch (exception: PacketCodecException) {
+            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
+        }
 
     /**
      * Dekodiert ein empfangenes ByteArray in ein fachliches [NetworkPacket].
@@ -72,10 +73,11 @@ internal object MessageCodec {
     internal fun <T : NetworkMessagePayload> serialize(
         packet: NetworkPacket<T>,
         serializer: KSerializer<T>,
-    ): SerializedPacket = SerializedPacket(
-        headerBytes = NetworkMessageSerializer.serializeHeader(packet.header),
-        payloadBytes = NetworkMessageSerializer.serializePayload(serializer, packet.payload),
-    )
+    ): SerializedPacket =
+        SerializedPacket(
+            headerBytes = NetworkMessageSerializer.serializeHeader(packet.header),
+            payloadBytes = NetworkMessageSerializer.serializePayload(serializer, packet.payload),
+        )
 
     /**
      * Deserialisiert ein bereits entpacktes [SerializedPacket] in ein fachliches [NetworkPacket].
@@ -90,9 +92,10 @@ internal object MessageCodec {
         )
     }
 
-    private fun unpack(bytes: ByteArray): SerializedPacket = try {
-        PacketCodec.unpack(bytes)
-    } catch (exception: PacketCodecException) {
-        throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
-    }
+    private fun unpack(bytes: ByteArray): SerializedPacket =
+        try {
+            PacketCodec.unpack(bytes)
+        } catch (exception: PacketCodecException) {
+            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
+        }
 }
