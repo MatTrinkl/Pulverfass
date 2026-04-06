@@ -14,6 +14,8 @@ class DuplicateEntityIdException(
 
 /**
  * Wird geworfen, wenn eine PlayerId doppelt registriert wird.
+ *
+ * @param playerId die doppelte ID
  */
 class DuplicatePlayerIdException(
     playerId: PlayerId,
@@ -42,7 +44,9 @@ class EntityNotFoundException(
 ) : NoSuchElementException("Keine Entity mit der ID $entityId gefunden.")
 
 /**
- * Wird geworfen, wenn ein Player zu einer ID nicht gefunden wurde.
+ * Wird geworfen, wenn ein Player nicht gefunden wird.
+ *
+ * @param playerId die gesuchte ID
  */
 class PlayerNotFoundException(
     playerId: PlayerId,
