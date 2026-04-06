@@ -1,6 +1,7 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
-import at.aau.pulverfass.shared.networkmessage.LoginRequest
+import at.aau.pulverfass.shared.network.UnsupportedPayloadClassException
+import at.aau.pulverfass.shared.network.UnsupportedPayloadTypeException
 import kotlinx.serialization.json.Json
 
 /**

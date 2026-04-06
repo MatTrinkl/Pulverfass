@@ -1,4 +1,4 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.codec
 
 /**
  * Das serialisierte Paket welches wirklich übertragen wird.
@@ -6,13 +6,13 @@ package at.aau.pulverfass.shared.network
  * @property headerBytes Der serialisierte Header.
  * @property payloadBytes Der serialisierte Payload.
  */
-class SerializedPacket(
+internal class SerializedPacket(
     headerBytes: ByteArray,
     payloadBytes: ByteArray,
 ) {
     init {
         if (headerBytes.isEmpty()) {
-            throw InvalidSerializedPacketException("SerializedPacket headerBytes must not be empty")
+            throw EmptyHeaderException()
         }
     }
 

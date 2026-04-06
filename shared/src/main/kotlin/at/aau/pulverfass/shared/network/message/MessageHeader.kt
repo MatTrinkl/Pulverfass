@@ -1,4 +1,4 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
 import kotlinx.serialization.Serializable
 
@@ -8,6 +8,6 @@ import kotlinx.serialization.Serializable
  * @property type Typ des Headers, welcher die Datenstruktur des zu deserialisierenden Objektes vorgibt.
  */
 @Serializable
-data class MessageHeader(
+internal data class MessageHeader(
     val type: MessageType,
 )

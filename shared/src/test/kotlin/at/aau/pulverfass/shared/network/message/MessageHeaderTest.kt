@@ -1,4 +1,4 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString

@@ -1,6 +1,7 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
-import at.aau.pulverfass.shared.networkmessage.LoginRequest
+import at.aau.pulverfass.shared.network.NetworkSerializationException
+import at.aau.pulverfass.shared.network.UnsupportedPayloadTypeException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue

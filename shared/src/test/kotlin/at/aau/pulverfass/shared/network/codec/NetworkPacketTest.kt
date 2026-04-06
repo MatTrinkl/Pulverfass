@@ -1,6 +1,11 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.networkmessage.LoginRequest
+import at.aau.pulverfass.shared.network.PayloadTypeMismatchException
+import at.aau.pulverfass.shared.network.UnsupportedPayloadClassException
+import at.aau.pulverfass.shared.network.message.LoginRequest
+import at.aau.pulverfass.shared.network.message.MessageHeader
+import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertThrows

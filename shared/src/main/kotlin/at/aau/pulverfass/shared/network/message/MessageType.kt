@@ -1,5 +1,6 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
+import at.aau.pulverfass.shared.network.UnknownMessageTypeIdException
 import kotlinx.serialization.Serializable
 
 /**

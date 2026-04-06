@@ -1,5 +1,7 @@
-package at.aau.pulverfass.shared.network
+package at.aau.pulverfass.shared.network.message
 
+import at.aau.pulverfass.shared.network.NetworkSerializationException
+import at.aau.pulverfass.shared.network.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -18,7 +20,7 @@ object NetworkMessageSerializer {
      * @return serialisierter Header als ByteArray
      * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
      */
-    fun serializeHeader(header: MessageHeader): ByteArray =
+    internal fun serializeHeader(header: MessageHeader): ByteArray =
         try {
             json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray()
         } catch (exception: SerializationException) {
@@ -32,7 +34,7 @@ object NetworkMessageSerializer {
      * @return der deserialisierte Header
      * @throws NetworkSerializationException wenn die Deserialisierung fehlschlägt
      */
-    fun deserializeHeader(bytes: ByteArray): MessageHeader =
+    internal fun deserializeHeader(bytes: ByteArray): MessageHeader =
         try {
             json.decodeFromString(MessageHeader.serializer(), bytes.decodeToString())
         } catch (exception: SerializationException) {

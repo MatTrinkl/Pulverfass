@@ -1,6 +1,5 @@
-package at.aau.pulverfass.shared.networkmessage
+package at.aau.pulverfass.shared.network.message
 
-import at.aau.pulverfass.shared.network.NetworkMessagePayload
 import kotlinx.serialization.Serializable
 
 /**
