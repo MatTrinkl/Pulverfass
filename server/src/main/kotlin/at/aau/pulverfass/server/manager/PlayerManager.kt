@@ -16,7 +16,6 @@ import at.aau.pulverfass.shared.ids.PlayerId
  * - Player entfernen
  * - Player optional über ConnectionId oder EntityId finden
  *
- * Die erste Version basiert bewusst nur auf einer einfachen Map.
  */
 object PlayerManager {
     private val players: MutableMap<PlayerId, Player> = mutableMapOf()
