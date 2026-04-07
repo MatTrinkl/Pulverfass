@@ -6,7 +6,7 @@ package at.aau.pulverfass.shared.network.codec
  * @property headerBytes Der serialisierte Header.
  * @property payloadBytes Der serialisierte Payload.
  */
-internal class SerializedPacket(
+class SerializedPacket(
     headerBytes: ByteArray,
     payloadBytes: ByteArray,
 ) {

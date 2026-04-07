@@ -33,7 +33,7 @@ object PacketCodec {
      * @return das vollständig gepackte ByteArray für den Transport
      * @throws IllegalArgumentException wenn der Header leer ist
      */
-    internal fun pack(packet: SerializedPacket): ByteArray {
+    fun pack(packet: SerializedPacket): ByteArray {
         if (packet.headerBytes.isEmpty()) {
             throw EmptyHeaderException()
         }
@@ -62,7 +62,7 @@ object PacketCodec {
      * @throws IllegalArgumentException wenn das ByteArray zu kurz ist, eine ungültige
      * Header-Länge enthält oder weniger Header-Bytes vorhanden sind als angegeben
      */
-    internal fun unpack(bytes: ByteArray): SerializedPacket {
+    fun unpack(bytes: ByteArray): SerializedPacket {
         if (bytes.size < Int.SIZE_BYTES) {
             throw PacketTooShortException()
         }

@@ -20,7 +20,7 @@ object NetworkMessageSerializer {
      * @return serialisierter Header als ByteArray
      * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
      */
-    internal fun serializeHeader(header: MessageHeader): ByteArray =
+    fun serializeHeader(header: MessageHeader): ByteArray =
         try {
             json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray()
         } catch (exception: SerializationException) {
@@ -34,7 +34,7 @@ object NetworkMessageSerializer {
      * @return der deserialisierte Header
      * @throws NetworkSerializationException wenn die Deserialisierung fehlschlägt
      */
-    internal fun deserializeHeader(bytes: ByteArray): MessageHeader =
+    fun deserializeHeader(bytes: ByteArray): MessageHeader =
         try {
             json.decodeFromString(MessageHeader.serializer(), bytes.decodeToString())
         } catch (exception: SerializationException) {

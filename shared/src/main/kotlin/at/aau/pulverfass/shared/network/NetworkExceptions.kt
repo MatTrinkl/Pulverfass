@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.network
 
 import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.ids.ConnectionId
 
 /**
  * Basisklasse für Fehler im Netzwerkprotokoll und der (De-)Serialisierung von Netzwerk-Nachrichten.
@@ -50,6 +51,16 @@ class InvalidSerializedPacketException(
  * Wird geworfen, wenn die JSON-Serialisierung oder -Deserialisierung einer Nachricht fehlschlägt.
  */
 class NetworkSerializationException(
+    message: String,
+    cause: Throwable,
+) : NetworkException(message, cause)
+
+/**
+ * Wird geworfen, wenn empfangene Transport-Bytes nicht bis zum technischen
+ * Nachrichtenkopf dekodiert werden können.
+ */
+class PacketReceiveException(
+    val connectionId: ConnectionId,
     message: String,
     cause: Throwable,
 ) : NetworkException(message, cause)

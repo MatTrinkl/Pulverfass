@@ -8,6 +8,6 @@ import kotlinx.serialization.Serializable
  * @property type Typ des Headers, welcher die Datenstruktur des zu deserialisierenden Objektes vorgibt.
  */
 @Serializable
-internal data class MessageHeader(
+data class MessageHeader(
     val type: MessageType,
 )
