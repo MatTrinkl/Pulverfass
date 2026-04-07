@@ -33,11 +33,7 @@ object PlayerEntityRegistry {
      * Gibt alle Entities eines Players zurück.
      */
     fun getEntities(playerId: PlayerId): Set<EntityId> {
-        val entities = playerToEntities[playerId]
-
-        if (entities == null) {
-            return emptySet()
-        }
+        val entities = playerToEntities[playerId] ?: return emptySet()
 
         return entities.toSet()
     }
