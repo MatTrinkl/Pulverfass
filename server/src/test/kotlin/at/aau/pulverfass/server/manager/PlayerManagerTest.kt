@@ -206,7 +206,21 @@ class PlayerManagerTest {
         assertEquals(second, result)
     }
 
-    // Sammlung
+    @Test
+    fun `allPlayerIds sollte alle registrierten ids liefern`() {
+        val first = Player(PlayerId(1), "A")
+        val second = Player(PlayerId(2), "B")
+
+        PlayerManager.register(first)
+        PlayerManager.register(second)
+
+        val result = PlayerManager.allPlayerIds()
+
+        assertEquals(2, result.size)
+        assertTrue(result.contains(PlayerId(1)))
+        assertTrue(result.contains(PlayerId(2)))
+    }
+
     @Test
     fun `all sollte alle registrierten player liefern`() {
         val first = Player(PlayerId(13), "A")

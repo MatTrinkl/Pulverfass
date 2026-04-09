@@ -75,6 +75,11 @@ object PlayerManager {
         players.values.firstOrNull { it.entityId == entityId }
 
     /**
+     * Gibt alle registrierten PlayerIds zurück.
+     */
+    fun allPlayerIds(): List<PlayerId> = players.keys.toList()
+
+    /**
      * Gibt alle registrierten Player zurück.
      */
     fun all(): List<Player> = players.values.toList()
