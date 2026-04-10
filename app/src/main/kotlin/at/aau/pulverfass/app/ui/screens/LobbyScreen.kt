@@ -13,31 +13,43 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
-import kotlin.random.Random
 
-// hauptbildschirm für spielersuche & lobbyerstellung
+/**
+ * Lobby-Einstiegspunkt fuer die Android-App.
+ *
+ * Der Screen bindet die UI an den LobbyController und nutzt damit die neue
+ * technische WebSocket-Pipeline aus den Shared/Server-inspirierten Modulen.
+ */
 @Composable
 fun LobbyScreen(navController: NavController) {
-    // speichert eingegebenen namen & lobbycode
-    var playerName by remember { mutableStateOf("") }
-    var lobbyCodeInput by remember { mutableStateOf("") }
-    // steuert ob das feld zum beitreten angezeigt wird
-    var isJoining by remember { mutableStateOf(false) }
+    val controller = remember { LobbyController() }
+    val state by controller.state.collectAsState()
+
+    DisposableEffect(Unit) {
+        onDispose {
+            controller.close()
+        }
+    }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -49,32 +61,97 @@ fun LobbyScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
-            value = playerName,
-            onValueChange = { playerName = it },
-            label = { Text(stringResource(id = R.string.enter_player_name)) },
-            modifier = Modifier.fillMaxWidth(0.6f),
+            value = state.serverUrl,
+            onValueChange = controller::updateServerUrl,
+            label = { Text(stringResource(id = R.string.server_url)) },
+            modifier = Modifier.fillMaxWidth(0.8f),
             singleLine = true,
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                ),
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (isJoining) {
+        OutlinedTextField(
+            value = state.playerName,
+            onValueChange = controller::updatePlayerName,
+            label = { Text(stringResource(id = R.string.enter_player_name)) },
+            modifier = Modifier.fillMaxWidth(0.6f),
+            singleLine = true,
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Words,
+                ),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (state.isJoining) {
             LobbyCodeInputField(
-                value = lobbyCodeInput,
-                onValueChange = { lobbyCodeInput = it },
+                value = state.lobbyCode,
+                onValueChange = controller::updateLobbyCode,
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "${stringResource(id = R.string.connection_status)}: ${state.statusText}",
+            style = MaterialTheme.typography.labelLarge,
+        )
+
+        state.lastMessageType?.let { lastType ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${stringResource(id = R.string.last_message_type)}: $lastType",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+
+        state.errorText?.let { errorText ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = errorText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ConnectionActions(
+            isConnected = state.isConnected,
+            isConnecting = state.isConnecting,
+            onConnect = controller::connect,
+            onDisconnect = controller::disconnect,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         LobbyActions(
-            isJoining = isJoining,
-            playerName = playerName,
-            lobbyCodeInput = lobbyCodeInput,
-            onJoinToggled = { isJoining = it },
-            onLobbyCodeCleared = { lobbyCodeInput = "" },
-            onNavigate = { route -> navController.navigate(route) },
+            isJoining = state.isJoining,
+            isConnected = state.isConnected,
+            playerName = state.playerName,
+            lobbyCode = state.lobbyCode,
+            onJoinToggled = controller::setJoining,
+            onLobbyCodeCleared = { controller.updateLobbyCode("") },
+            onCreateLobby = {
+                controller.createLobby { generatedCode ->
+                    navController.navigate(
+                        Screen.WaitingRoom.route +
+                            "/$generatedCode/true/${state.playerName}",
+                    )
+                }
+            },
+            onJoinLobby = {
+                controller.joinLobby { lobbyCode ->
+                    navController.navigate(
+                        Screen.WaitingRoom.route +
+                            "/$lobbyCode/false/${state.playerName}",
+                    )
+                }
+            },
         )
     }
 }
@@ -87,7 +164,7 @@ private fun LobbyCodeInputField(
     OutlinedTextField(
         value = value,
         onValueChange = {
-            // prüft auf maximale länge & nur zahlen
+            // Nur vierstellige, numerische Lobbycodes akzeptieren.
             if (it.length <= 4 && it.all { char -> char.isDigit() }) {
                 onValueChange(it)
             }
@@ -103,23 +180,52 @@ private fun LobbyCodeInputField(
 }
 
 @Composable
+private fun ConnectionActions(
+    isConnected: Boolean,
+    isConnecting: Boolean,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    if (!isConnected) {
+        Button(
+            onClick = onConnect,
+            modifier = Modifier.fillMaxWidth(0.4f),
+            enabled = !isConnecting,
+        ) {
+            Text(
+                if (isConnecting) {
+                    stringResource(id = R.string.connecting)
+                } else {
+                    stringResource(id = R.string.connect_server)
+                },
+            )
+        }
+    } else {
+        Button(
+            onClick = onDisconnect,
+            modifier = Modifier.fillMaxWidth(0.4f),
+        ) {
+            Text(stringResource(id = R.string.disconnect_server))
+        }
+    }
+}
+
+@Composable
 private fun LobbyActions(
     isJoining: Boolean,
+    isConnected: Boolean,
     playerName: String,
-    lobbyCodeInput: String,
+    lobbyCode: String,
     onJoinToggled: (Boolean) -> Unit,
     onLobbyCodeCleared: () -> Unit,
-    onNavigate: (String) -> Unit,
+    onCreateLobby: () -> Unit,
+    onJoinLobby: () -> Unit,
 ) {
     if (!isJoining) {
         Button(
-            onClick = {
-                // generiert zufälligen code & navigiert als host zum warteraum
-                val generatedCode = Random.nextInt(1000, 10000).toString()
-                onNavigate(Screen.WaitingRoom.route + "/$generatedCode/true/$playerName")
-            },
+            onClick = onCreateLobby,
             modifier = Modifier.fillMaxWidth(0.4f),
-            enabled = playerName.isNotBlank(),
+            enabled = playerName.isNotBlank() && isConnected,
         ) {
             Text(stringResource(id = R.string.create_lobby))
         }
@@ -129,18 +235,15 @@ private fun LobbyActions(
         Button(
             onClick = { onJoinToggled(true) },
             modifier = Modifier.fillMaxWidth(0.4f),
-            enabled = playerName.isNotBlank(),
+            enabled = playerName.isNotBlank() && isConnected,
         ) {
             Text(stringResource(id = R.string.join_lobby))
         }
     } else {
         Button(
-            onClick = {
-                // navigation zum warteraum als normaler spieler
-                onNavigate(Screen.WaitingRoom.route + "/$lobbyCodeInput/false/$playerName")
-            },
+            onClick = onJoinLobby,
             modifier = Modifier.fillMaxWidth(0.4f),
-            enabled = playerName.isNotBlank() && lobbyCodeInput.length == 4,
+            enabled = playerName.isNotBlank() && lobbyCode.length == 4 && isConnected,
         ) {
             Text(stringResource(id = R.string.enter_waiting_room))
         }
@@ -149,7 +252,7 @@ private fun LobbyActions(
 
         Button(
             onClick = {
-                // zurück zur auswahl zwischen erstellen & beitreten
+                // Zurueck zur Auswahl zwischen Erstellen und Beitreten.
                 onJoinToggled(false)
                 onLobbyCodeCleared()
             },

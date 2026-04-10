@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Pulverfass</string>
-    <string name="loading">Lädt</string>
+    <string name="loading">Laedt</string>
     <string name="game_lobby">Spiel-Lobby</string>
     <string name="enter_player_name">Spielername eingeben</string>
     <string name="enter_lobby_code">4-stelligen Lobby-Code eingeben</string>
@@ -10,11 +10,17 @@
     <string name="cancel">Abbrechen</string>
     <string name="lobby_id">Lobby</string>
     <string name="you_are_host">Du bist der Host</string>
-    <string name="waiting_for_host">Warte auf Host zum Starten…</string>
+    <string name="waiting_for_host">Warte auf Host zum Starten...</string>
     <string name="players">Spieler</string>
     <string name="host_tag">(Host)</string>
     <string name="start_game">Spiel starten</string>
-    <string name="need_players">Mindestens 2 Spieler benötigt</string>
+    <string name="need_players">Mindestens 2 Spieler benoetigt</string>
     <string name="leave_lobby">Lobby verlassen</string>
-    <string name="game_map_placeholder">Risiko-Weltkarte (Demnächst)</string>
+    <string name="game_map_placeholder">Risiko-Weltkarte (Demnaechst)</string>
+    <string name="server_url">Server URL</string>
+    <string name="connection_status">Status</string>
+    <string name="last_message_type">Letzte Message</string>
+    <string name="connect_server">Mit Server verbinden</string>
+    <string name="disconnect_server">Server trennen</string>
+    <string name="connecting">Verbinde...</string>
 </resources>

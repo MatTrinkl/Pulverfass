@@ -16,7 +16,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import org.slf4j.LoggerFactory
 
-private const val DEFAULT_HOST = "0.0.0.0"
+private const val DEFAULT_HOST = "localhost"
 private const val DEFAULT_PORT = 8080
 private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
 
