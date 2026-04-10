@@ -31,11 +31,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Technische Transport-Schicht fuer WebSocket-Verbindungen auf Android.
+ * Technische Transport-Schicht für WebSocket-Verbindungen auf Android.
  *
  * Die Klasse kapselt den Ktor-WebSocket-Client, emittiert reine technische
  * Transportevents und erlaubt das Senden roher ByteArrays an die aktive
- * Verbindung. Fachliche Nachrichtenauswertung gehoert nicht in diese Schicht.
+ * Verbindung. Fachliche Nachrichtenauswertung gehört nicht in diese Schicht.
  */
 class AndroidWebSocketTransport(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
