@@ -5,7 +5,6 @@ import at.aau.pulverfass.shared.network.codec.SerializedPacket
 import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
-import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import at.aau.pulverfass.shared.network.transport.Connected
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -41,7 +40,10 @@ class ServerNetworkIntegrationTest {
             val payload = byteArrayOf(10, 11)
             val sentPacket =
                 SerializedPacket(
-                    headerBytes = NetworkMessageSerializer.serializeHeader(MessageHeader(MessageType.HEARTBEAT)),
+                    headerBytes =
+                        NetworkMessageSerializer.serializeHeader(
+                            MessageHeader(MessageType.HEARTBEAT),
+                        ),
                     payloadBytes = payload,
                 )
 
@@ -79,7 +81,10 @@ class ServerNetworkIntegrationTest {
                 }
             val packet =
                 SerializedPacket(
-                    headerBytes = NetworkMessageSerializer.serializeHeader(MessageHeader(MessageType.LOGIN_REQUEST)),
+                    headerBytes =
+                        NetworkMessageSerializer.serializeHeader(
+                            MessageHeader(MessageType.LOGIN_REQUEST),
+                        ),
                     payloadBytes = byteArrayOf(1, 2, 3, 4),
                 )
 

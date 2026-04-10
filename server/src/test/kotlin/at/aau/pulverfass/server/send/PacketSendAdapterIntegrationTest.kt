@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.network.codec.SerializedPacket
 import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
+import at.aau.pulverfass.shared.network.send.PacketSendAdapter
 import at.aau.pulverfass.shared.network.transport.Connected
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -29,7 +30,7 @@ class PacketSendAdapterIntegrationTest {
     fun `server sends serialized packet as binary frame to connected client`() =
         testApplication {
             val transport = ServerWebSocketTransport()
-            val adapter = PacketSendAdapter(transport)
+            val adapter = PacketSendAdapter(PacketSender(transport)::send)
 
             application {
                 module(transport)
@@ -41,7 +42,10 @@ class PacketSendAdapterIntegrationTest {
                 }
             val packet =
                 SerializedPacket(
-                    headerBytes = NetworkMessageSerializer.serializeHeader(MessageHeader(MessageType.HEARTBEAT)),
+                    headerBytes =
+                        NetworkMessageSerializer.serializeHeader(
+                            MessageHeader(MessageType.HEARTBEAT),
+                        ),
                     payloadBytes = byteArrayOf(1, 2, 3),
                 )
 
@@ -74,7 +78,7 @@ class PacketSendAdapterIntegrationTest {
     fun `client receives valid packed packet with readable header`() =
         testApplication {
             val transport = ServerWebSocketTransport()
-            val adapter = PacketSendAdapter(transport)
+            val adapter = PacketSendAdapter(PacketSender(transport)::send)
 
             application {
                 module(transport)

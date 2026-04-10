@@ -98,7 +98,8 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
                 is Frame.Binary -> network.onBinaryMessage(connectionId, frame.data.copyOf())
                 is Frame.Text -> {
                     logger.warn(
-                        "Rejecting text websocket frame on connection {} because only binary frames are supported",
+                        "Rejecting text websocket frame on connection {} " +
+                            "because only binary frames are supported",
                         connectionId.value,
                     )
                     close(

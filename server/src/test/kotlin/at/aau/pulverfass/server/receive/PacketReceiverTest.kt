@@ -142,7 +142,10 @@ class PacketReceiverTest {
                 header = header,
                 packet =
                     at.aau.pulverfass.shared.network.codec.SerializedPacket(
-                        headerBytes = Json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray(),
+                        headerBytes =
+                            Json
+                                .encodeToString(MessageHeader.serializer(), header)
+                                .encodeToByteArray(),
                         payloadBytes = byteArrayOf(4, 5),
                     ),
             )
@@ -156,7 +159,10 @@ class PacketReceiverTest {
         header: MessageHeader,
         payloadBytes: ByteArray,
     ): ByteArray {
-        val headerBytes = Json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray()
+        val headerBytes =
+            Json
+                .encodeToString(MessageHeader.serializer(), header)
+                .encodeToByteArray()
         val buffer =
             ByteBuffer.allocate(Int.SIZE_BYTES + headerBytes.size + payloadBytes.size)
                 .order(ByteOrder.BIG_ENDIAN)

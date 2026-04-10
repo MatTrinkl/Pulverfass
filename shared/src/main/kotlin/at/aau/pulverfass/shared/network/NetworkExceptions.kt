@@ -1,7 +1,7 @@
 package at.aau.pulverfass.shared.network
 
-import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.network.message.MessageType
 
 /**
  * Basisklasse für Fehler im Netzwerkprotokoll und der (De-)Serialisierung von Netzwerk-Nachrichten.

@@ -1,9 +1,10 @@
 package at.aau.pulverfass.server
 
 import at.aau.pulverfass.server.receive.PacketReceiver
-import at.aau.pulverfass.server.send.PacketSendAdapter
+import at.aau.pulverfass.server.send.PacketSender
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.network.send.PacketSendAdapter
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 
@@ -18,7 +19,8 @@ class ServerNetwork(
     val transport: ServerWebSocketTransport = ServerWebSocketTransport(),
     val packetReceiver: PacketReceiver = PacketReceiver(),
 ) {
-    val packetSender: PacketSendAdapter = PacketSendAdapter(transport)
+    private val sender: PacketSender = PacketSender(transport)
+    val packetSender: PacketSendAdapter = PacketSendAdapter(sender::send)
 
     suspend fun onConnected(
         connectionId: ConnectionId,
