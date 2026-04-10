@@ -29,7 +29,7 @@ import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 
 /**
- * Lobby-Einstiegspunkt fuer die Android-App.
+ * Lobby-Einstiegspunkt für die Android-App.
  *
  * Der Screen bindet die UI an den LobbyController und nutzt damit die neue
  * technische WebSocket-Pipeline aus den Shared/Server-inspirierten Modulen.
@@ -252,7 +252,7 @@ private fun LobbyActions(
 
         Button(
             onClick = {
-                // Zurueck zur Auswahl zwischen Erstellen und Beitreten.
+                // Zurück zur Auswahl zwischen Erstellen und Beitreten.
                 onJoinToggled(false)
                 onLobbyCodeCleared()
             },

@@ -5,7 +5,7 @@ import at.aau.pulverfass.app.network.transport.AndroidWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 
 /**
- * Android-seitiger Raw-Byte-Sender fuer ausgehende Netzwerkpakete.
+ * Android-seitiger Raw-Byte-Sender für ausgehende Netzwerkpakete.
  */
 class PacketSender(
     private val transport: AndroidWebSocketTransport,

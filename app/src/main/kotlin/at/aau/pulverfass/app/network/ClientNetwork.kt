@@ -14,8 +14,8 @@ import kotlinx.coroutines.launch
 /**
  * Android-seitige Komposition der technischen Netzwerkschichten.
  *
- * Die Klasse buendelt WebSocket-Transport, Header-Dekodierung eingehender
- * Pakete und den technischen Sendepfad fuer ausgehende Pakete.
+ * Die Klasse bündelt WebSocket-Transport, Header-Dekodierung eingehender
+ * Pakete und den technischen Sendepfad für ausgehende Pakete.
  */
 class ClientNetwork(
     scope: CoroutineScope,
@@ -70,7 +70,7 @@ class ClientNetwork(
     /**
      * Sendet eine technische Lobby-Nachricht als JSON-String.
      *
-     * Diese Methode ist bewusst als Vorlage gehalten, bis fuer alle
+     * Diese Methode ist bewusst als Vorlage gehalten, bis für alle
      * Lobby-MessageTypes konkrete Shared-Payload-Klassen existieren.
      */
     suspend fun sendJsonMessage(

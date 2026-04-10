@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 /**
- * UI-zentrierte Lobby-Schicht fuer die Android-App.
+ * UI-zentrierte Lobby-Schicht für die Android-App.
  *
  * Der Controller verbindet den LobbyScreen mit der neuen technischen
  * WebSocket-Pipeline und kapselt Statusverwaltung, Fehlerbehandlung und
@@ -156,7 +156,7 @@ class LobbyController(
      * Sendet einen technischen Create-Request und liefert einen lokalen Lobbycode.
      *
      * Die Payload-Struktur ist absichtlich minimal gehalten, bis konkrete
-     * Shared-Payload-Klassen fuer GAME_CREATE_REQUEST vorliegen.
+     * Shared-Payload-Klassen für GAME_CREATE_REQUEST vorliegen.
      */
     fun createLobby(onLobbyReady: (String) -> Unit) {
         val snapshot = state.value
@@ -189,10 +189,10 @@ class LobbyController(
     }
 
     /**
-     * Sendet einen technischen Join-Request fuer den angegebenen Lobbycode.
+     * Sendet einen technischen Join-Request für den angegebenen Lobbycode.
      *
      * Die Payload-Struktur ist absichtlich minimal gehalten, bis konkrete
-     * Shared-Payload-Klassen fuer GAME_JOIN_REQUEST vorliegen.
+     * Shared-Payload-Klassen für GAME_JOIN_REQUEST vorliegen.
      */
     fun joinLobby(onLobbyReady: (String) -> Unit) {
         val snapshot = state.value

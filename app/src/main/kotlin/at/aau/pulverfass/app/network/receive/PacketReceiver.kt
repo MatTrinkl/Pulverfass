@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Android-seitige technische Zwischenschicht zwischen WebSocket-Transport und
- * spaeterer Nachrichtenverarbeitung.
+ * späterer Nachrichtenverarbeitung.
  *
  * Die Klasse nimmt rohe Binary-Transportevents entgegen, dekodiert diese bis
- * zum MessageHeader und emittiert neutrale ReceivedPacket-Objekte fuer hoehere
+ * zum MessageHeader und emittiert neutrale ReceivedPacket-Objekte für höhere
  * Schichten.
  */
 class PacketReceiver(
