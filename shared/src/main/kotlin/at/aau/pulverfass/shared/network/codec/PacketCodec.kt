@@ -78,10 +78,10 @@ object PacketCodec {
         }
 
         val headerBytes = ByteArray(headerLength)
-        buffer.get(headerBytes)
+        buffer[headerBytes]
 
         val payloadBytes = ByteArray(buffer.remaining())
-        buffer.get(payloadBytes)
+        buffer[payloadBytes]
 
         return SerializedPacket(
             headerBytes = headerBytes,
