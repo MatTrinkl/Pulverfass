@@ -267,7 +267,7 @@ class PlayerEntityManagerTest {
     }
 
     @Test
-    fun `requirePlayerByEntityId sollte TypeMismatchException werfen wenn entity keine PlayerEntity ist`() {
+    fun `requirePlayerByEntityId sollte TypeMismatch werfen wenn entity keine PlayerEntity ist`() {
         val entityId = EntityId(61)
 
         EntityManager.register(
@@ -361,11 +361,10 @@ class PlayerEntityManagerTest {
         assertFalse(PlayerManager.contains(playerId))
     }
 
-
     private class TestEntity(
         override val entityId: EntityId,
     ) : BaseEntity(
-        entityId = entityId,
-        entityType = EntityType.TERRITORY,
-    )
+            entityId = entityId,
+            entityType = EntityType.TERRITORY,
+        )
 }
