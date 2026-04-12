@@ -342,6 +342,26 @@ class PlayerEntityManagerTest {
         assertNull(removed)
     }
 
+    @Test
+    fun `removeByPlayerId sollte player auch ohne entityId entfernen`() {
+        val playerId = PlayerId(901)
+
+        val player =
+            Player(
+                playerId = playerId,
+                username = "OhneEntity",
+                entityId = null,
+            )
+
+        PlayerManager.register(player)
+
+        val removed = PlayerEntityManager.removeByPlayerId(playerId)
+
+        assertEquals(player, removed)
+        assertFalse(PlayerManager.contains(playerId))
+    }
+
+
     private class TestEntity(
         override val entityId: EntityId,
     ) : BaseEntity(
