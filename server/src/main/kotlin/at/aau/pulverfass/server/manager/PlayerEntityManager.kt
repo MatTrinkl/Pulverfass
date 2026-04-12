@@ -63,13 +63,26 @@ object PlayerEntityManager {
                 playerId = playerId,
             )
 
+        var playerRegistered = false
+        var entityRegistered = false
+
         try {
             PlayerManager.register(player)
+            playerRegistered = true
+
             EntityManager.register(playerEntity)
+            entityRegistered = true
+
             return player
         } catch (exception: Exception) {
-            PlayerManager.remove(playerId)
-            EntityManager.remove(entityId)
+            if (entityRegistered) {
+                EntityManager.remove(entityId)
+            }
+
+            if (playerRegistered) {
+                PlayerManager.remove(playerId)
+            }
+
             throw exception
         }
     }
