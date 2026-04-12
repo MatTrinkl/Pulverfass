@@ -19,4 +19,4 @@ class PlayerEntityTypeMismatchException(
  */
 class PlayerEntityBindingNotFoundException(
     playerId: PlayerId,
-) : NoSuchElementException("Kein Entity-Binding fuer den Player mit der ID $playerId gefunden.")
+) : NoSuchElementException("Kein Entity-Binding für den Player mit der ID $playerId gefunden.")
