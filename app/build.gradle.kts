@@ -84,6 +84,9 @@ dependencies {
     testImplementation(libs.androidx.ui.test.junit4)
     testImplementation(libs.robolectric)
     testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.ktor.server.core)
+    testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.ktor.server.websockets)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
