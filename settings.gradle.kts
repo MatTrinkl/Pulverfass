@@ -23,7 +23,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SE2Risiko"
+rootProject.name = "Pulverfass"
 
 include(":shared")
 include(":server")
