@@ -134,24 +134,27 @@ fun LobbyScreen(navController: NavController) {
             isConnected = state.isConnected,
             playerName = state.playerName,
             lobbyCode = state.lobbyCode,
-            onJoinToggled = controller::setJoining,
-            onLobbyCodeCleared = { controller.updateLobbyCode("") },
-            onCreateLobby = {
-                controller.createLobby { generatedCode ->
-                    navController.navigate(
-                        Screen.WaitingRoom.route +
-                            "/$generatedCode/true/${state.playerName}",
-                    )
-                }
-            },
-            onJoinLobby = {
-                controller.joinLobby { lobbyCode ->
-                    navController.navigate(
-                        Screen.WaitingRoom.route +
-                            "/$lobbyCode/false/${state.playerName}",
-                    )
-                }
-            },
+            handlers =
+                LobbyActionHandlers(
+                    onJoinToggled = controller::setJoining,
+                    onLobbyCodeCleared = { controller.updateLobbyCode("") },
+                    onCreateLobby = {
+                        controller.createLobby { generatedCode ->
+                            navController.navigate(
+                                Screen.WaitingRoom.route +
+                                    "/$generatedCode/true/${state.playerName}",
+                            )
+                        }
+                    },
+                    onJoinLobby = {
+                        controller.joinLobby { lobbyCode ->
+                            navController.navigate(
+                                Screen.WaitingRoom.route +
+                                    "/$lobbyCode/false/${state.playerName}",
+                            )
+                        }
+                    },
+                ),
         )
     }
 }
@@ -216,14 +219,11 @@ private fun LobbyActions(
     isConnected: Boolean,
     playerName: String,
     lobbyCode: String,
-    onJoinToggled: (Boolean) -> Unit,
-    onLobbyCodeCleared: () -> Unit,
-    onCreateLobby: () -> Unit,
-    onJoinLobby: () -> Unit,
+    handlers: LobbyActionHandlers,
 ) {
     if (!isJoining) {
         Button(
-            onClick = onCreateLobby,
+            onClick = handlers.onCreateLobby,
             modifier = Modifier.fillMaxWidth(0.4f),
             enabled = playerName.isNotBlank() && isConnected,
         ) {
@@ -233,7 +233,7 @@ private fun LobbyActions(
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = { onJoinToggled(true) },
+            onClick = { handlers.onJoinToggled(true) },
             modifier = Modifier.fillMaxWidth(0.4f),
             enabled = playerName.isNotBlank() && isConnected,
         ) {
@@ -241,7 +241,7 @@ private fun LobbyActions(
         }
     } else {
         Button(
-            onClick = onJoinLobby,
+            onClick = handlers.onJoinLobby,
             modifier = Modifier.fillMaxWidth(0.4f),
             enabled = playerName.isNotBlank() && lobbyCode.length == 4 && isConnected,
         ) {
@@ -253,8 +253,8 @@ private fun LobbyActions(
         Button(
             onClick = {
                 // Zurück zur Auswahl zwischen Erstellen und Beitreten.
-                onJoinToggled(false)
-                onLobbyCodeCleared()
+                handlers.onJoinToggled(false)
+                handlers.onLobbyCodeCleared()
             },
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
@@ -262,3 +262,10 @@ private fun LobbyActions(
         }
     }
 }
+
+private data class LobbyActionHandlers(
+    val onJoinToggled: (Boolean) -> Unit,
+    val onLobbyCodeCleared: () -> Unit,
+    val onCreateLobby: () -> Unit,
+    val onJoinLobby: () -> Unit,
+)
