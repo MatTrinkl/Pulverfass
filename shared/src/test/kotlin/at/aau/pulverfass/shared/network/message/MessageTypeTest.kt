@@ -1,6 +1,6 @@
 package at.aau.pulverfass.shared.network.message
 
-import at.aau.pulverfass.shared.network.UnknownMessageTypeIdException
+import at.aau.pulverfass.shared.network.exception.UnknownMessageTypeIdException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue

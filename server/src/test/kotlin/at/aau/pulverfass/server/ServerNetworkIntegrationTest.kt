@@ -1,11 +1,9 @@
 package at.aau.pulverfass.server
 
-import at.aau.pulverfass.shared.network.codec.PacketCodec
-import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
-import at.aau.pulverfass.shared.network.transport.Connected
+import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.network.Network
+import at.aau.pulverfass.shared.network.codec.MessageCodec
+import at.aau.pulverfass.shared.network.message.LoginRequest
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
@@ -18,14 +16,13 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class ServerNetworkIntegrationTest {
     @Test
-    fun `server network forwards inbound binary frame to packet receiver`() =
+    fun `server network emits decoded payload for inbound binary frame`() =
         testApplication {
             val network = ServerNetwork()
 
@@ -37,37 +34,30 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val payload = byteArrayOf(10, 11)
-            val sentPacket =
-                SerializedPacket(
-                    headerBytes =
-                        NetworkMessageSerializer.serializeHeader(
-                            MessageHeader(MessageType.HEARTBEAT),
-                        ),
-                    payloadBytes = payload,
-                )
+            val payload = LoginRequest(username = "alice", password = "secret")
 
             coroutineScope {
-                val decodedPacketDeferred =
+                val receivedDeferred =
                     async {
                         withTimeout(5_000) {
-                            network.packetReceiver.packets.first()
+                            network.events
+                                .filterIsInstance<Network.Event.MessageReceived<ConnectionId>>()
+                                .first()
                         }
                     }
 
                 val session = client.webSocketSession("/ws")
-                session.send(Frame.Binary(fin = true, data = PacketCodec.pack(sentPacket)))
+                session.send(Frame.Binary(fin = true, data = MessageCodec.encode(payload)))
 
-                val decodedPacket = decodedPacketDeferred.await()
-                assertEquals(MessageType.HEARTBEAT, decodedPacket.header.type)
-                assertContentEquals(payload, decodedPacket.packet.payloadBytes)
+                val event = receivedDeferred.await()
+                assertEquals(payload, event.payload)
 
                 session.close()
             }
         }
 
     @Test
-    fun `server network packet sender sends packed packet to connected client`() =
+    fun `server network send wraps payload into binary frame for connected client`() =
         testApplication {
             val network = ServerNetwork()
 
@@ -79,54 +69,44 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val packet =
-                SerializedPacket(
-                    headerBytes =
-                        NetworkMessageSerializer.serializeHeader(
-                            MessageHeader(MessageType.LOGIN_REQUEST),
-                        ),
-                    payloadBytes = byteArrayOf(1, 2, 3, 4),
-                )
+            val payload = LoginRequest(username = "bob", password = "topsecret")
 
             coroutineScope {
                 val connectedDeferred =
                     async {
                         withTimeout(5_000) {
-                            network.transport.events.filterIsInstance<Connected>().first()
+                            network.events
+                                .filterIsInstance<Network.Event.Connected<ConnectionId>>()
+                                .first()
                         }
                     }
 
                 val session = client.webSocketSession("/ws")
                 val connected = connectedDeferred.await()
 
-                network.packetSender.send(connected.connectionId, packet)
+                network.send(connected.connectionId, payload)
 
                 val frame =
                     withTimeout(5_000) {
                         session.incoming.receive()
                     }
 
-                assertTrue(frame is Frame.Binary)
-
-                val receivedPacket = PacketCodec.unpack(frame.readBytes())
-                val header = NetworkMessageSerializer.deserializeHeader(receivedPacket.headerBytes)
-
-                assertEquals(MessageType.LOGIN_REQUEST, header.type)
-                assertContentEquals(packet.payloadBytes, receivedPacket.payloadBytes)
+                val binaryFrame = assertIs<Frame.Binary>(frame)
+                assertEquals(payload, MessageCodec.decodePayload(binaryFrame.readBytes()))
 
                 session.close()
             }
         }
 
     @Test
-    fun `server network createServer injects usable packet sender and receiver`() {
+    fun `server network createServer injects usable high level network`() {
         val network = ServerNetwork()
         val server = createServer(host = "127.0.0.1", port = 0, network = network)
 
         try {
             server.start(wait = false)
-            assertNotNull(network.packetSender)
-            assertNotNull(network.packetReceiver.packets)
+            assertNotNull(network.events)
+            assertNotNull(network)
         } finally {
             server.stop(1_000, 1_000)
         }

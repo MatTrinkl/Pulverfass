@@ -3,10 +3,10 @@ package at.aau.pulverfass.shared.network.message
 import kotlinx.serialization.Serializable
 
 /**
- * Diese Klasse wird bei einem Login Request vom Client an den Server gesendet.
+ * Login-Anfrage eines Clients an den Server.
  *
- * @property username Der Username des Clients.
- * @property password Das Passwort des Clients.
+ * @property username gewünschter Benutzername des Clients
+ * @property password Passwort des Clients
  */
 @Serializable
 data class LoginRequest(

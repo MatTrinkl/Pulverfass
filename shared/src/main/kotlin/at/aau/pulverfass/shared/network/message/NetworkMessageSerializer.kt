@@ -1,22 +1,25 @@
 package at.aau.pulverfass.shared.network.message
 
-import at.aau.pulverfass.shared.network.NetworkSerializationException
-import at.aau.pulverfass.shared.network.UnsupportedPayloadTypeException
+import at.aau.pulverfass.shared.network.exception.NetworkSerializationException
+import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
+import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
- * Kapselt die Serialisierung und Deserialisierung von Headern und Payloads
- * unseres Netzwerkprotokolls.
+ * Interner Serializer für Header und Payloads des Netzwerkprotokolls.
+ *
+ * Die Klasse kapselt ausschließlich die JSON-Ebene. Das eigentliche Framing in
+ * Wire-Bytes erfolgt separat über den Packet-Codec.
  */
-object NetworkMessageSerializer {
+internal object NetworkMessageSerializer {
     private val json = Json
 
     /**
-     * Serialisiert den [MessageHeader] in ein UTF-8 kodiertes ByteArray.
+     * Serialisiert einen [MessageHeader] in UTF-8-kodierte Bytes.
      *
-     * @param header der zu serialisierende Header
+     * @param header zu serialisierender Header
      * @return serialisierter Header als ByteArray
      * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
      */
@@ -28,10 +31,10 @@ object NetworkMessageSerializer {
         }
 
     /**
-     * Deserialisiert ein ByteArray in einen [MessageHeader].
+     * Deserialisiert UTF-8-kodierte Bytes in einen [MessageHeader].
      *
      * @param bytes serialisierte Header-Daten
-     * @return der deserialisierte Header
+     * @return deserialisierter Header
      * @throws NetworkSerializationException wenn die Deserialisierung fehlschlägt
      */
     fun deserializeHeader(bytes: ByteArray): MessageHeader =
@@ -42,11 +45,11 @@ object NetworkMessageSerializer {
         }
 
     /**
-     * Serialisiert einen Payload mit dem dazu passenden [KSerializer].
+     * Serialisiert eine Payload mit dem explizit übergebenen Serializer.
      *
-     * @param serializer Serializer für den konkreten Payload-Typ
-     * @param payload der zu serialisierende Payload
-     * @return serialisierter Payload als ByteArray
+     * @param serializer Serializer des konkreten Payload-Typs
+     * @param payload zu serialisierende Payload
+     * @return serialisierte Payload als ByteArray
      * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
      */
     fun <T : NetworkMessagePayload> serializePayload(
@@ -63,16 +66,35 @@ object NetworkMessageSerializer {
         }
 
     /**
-     * Deserialisiert den Payload anhand des uebergebenen [MessageType]s in die
-     * passende Implementierung von [NetworkMessagePayload].
+     * Serialisiert eine registrierte Payload anhand ihrer Laufzeitklasse.
      *
-     * @param type Typ der empfangenen Nachricht
+     * @param payload registrierte Payload-Instanz
+     * @return serialisierte Payload als ByteArray
+     * @throws UnsupportedPayloadClassException wenn die Payload-Klasse nicht
+     * im Protokoll registriert ist
+     * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
+     */
+    fun serializePayload(payload: NetworkMessagePayload): ByteArray =
+        try {
+            NetworkPayloadRegistry.serializePayload(payload).encodeToByteArray()
+        } catch (exception: UnsupportedPayloadClassException) {
+            throw exception
+        } catch (exception: SerializationException) {
+            throw NetworkSerializationException(
+                "Failed to serialize payload of type ${payload.javaClass.name}",
+                exception,
+            )
+        }
+
+    /**
+     * Deserialisiert eine Payload anhand ihres [MessageType]s.
+     *
+     * @param type Nachrichtentyp der Payload
      * @param bytes serialisierte Payload-Daten
-     * @return die deserialisierte Payload-Instanz
-     * @throws UnsupportedPayloadTypeException wenn fuer den [MessageType] noch
-     * keine Deserialisierung implementiert ist
-     * @throws NetworkSerializationException wenn die Payload nicht in das
-     * erwartete Format des [MessageType]s deserialisiert werden kann
+     * @return passende Payload-Instanz
+     * @throws UnsupportedPayloadTypeException wenn für den Typ keine Deserialisierung
+     * registriert ist
+     * @throws NetworkSerializationException wenn die Deserialisierung fehlschlägt
      */
     fun deserializePayload(
         type: MessageType,

@@ -3,9 +3,12 @@ package at.aau.pulverfass.shared.network.message
 import kotlinx.serialization.Serializable
 
 /**
- * Definiert den Header für eine zu übertragende Nachricht in unserer Serverstruktur.
+ * Technischer Nachrichtenkopf des Protokolls.
  *
- * @property type Typ des Headers, welcher die Datenstruktur des zu deserialisierenden Objektes vorgibt.
+ * Der Header enthält aktuell nur den [MessageType] und legt damit fest, wie die
+ * Payload zu interpretieren ist.
+ *
+ * @property type Protokolltyp der Nachricht
  */
 @Serializable
 data class MessageHeader(

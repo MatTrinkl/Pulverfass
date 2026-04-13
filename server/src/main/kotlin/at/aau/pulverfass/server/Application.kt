@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server
 
 import at.aau.pulverfass.server.ids.IdFactory
+import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.engine.ApplicationEngine
@@ -29,8 +30,12 @@ fun main() {
 /**
  * Erzeugt eine startbare Serverinstanz für das Servermodul.
  *
- * Der Transport wird injizierbar gehalten, damit WebSocket-Lebenszyklus und
- * Transport-Events in Tests gezielt überprüft werden können.
+ * Für die Integration soll ausschließlich [ServerNetwork] injiziert werden.
+ * Dadurch bleibt die High-Level-Netzwerk-API der einzige öffentliche Einstieg.
+ *
+ * @param host Hostadresse des eingebetteten Servers
+ * @param port Zielport des eingebetteten Servers
+ * @param network serverseitige Netzwerkkomposition für `/ws`
  */
 fun createServer(
     host: String = DEFAULT_HOST,
@@ -45,18 +50,25 @@ fun createServer(
         module(network)
     }
 
-fun createServer(
+/**
+ * Test-Hilfsmethode für Low-Level-Transporttests.
+ *
+ * Die Transportvariante bleibt bewusst intern, damit Produktionscode nicht am
+ * High-Level-Network vorbei integriert wird.
+ */
+internal fun createServer(
     host: String,
     port: Int,
-    transport: at.aau.pulverfass.server.transport.ServerWebSocketTransport,
+    transport: ServerWebSocketTransport,
 ): ApplicationEngine = createServer(host, port, ServerNetwork(transport = transport))
 
 /**
- * Konfiguriert die Ktor-Anwendung mit WebSocket-Unterstützung.
+ * Konfiguriert die Ktor-Anwendung mit WebSocket-Unterstützung auf `/ws`.
  *
- * Der Endpunkt `/ws` bindet keine Fachlogik an, sondern delegiert technische
- * Verbindungsereignisse und rohe Binärframes an die Transport-Schicht.
- * Text Frames werden gemäß [WebSocketPolicy] aktiv abgelehnt.
+ * Der Endpunkt delegiert den kompletten Verbindungslebenszyklus an
+ * [ServerNetwork]. Text Frames werden gemäß [WebSocketPolicy] aktiv abgelehnt.
+ *
+ * @param network serverseitige Netzwerkkomposition für die WebSocket-Route
  */
 fun Application.module(network: ServerNetwork = ServerNetwork()) {
     install(WebSockets) {
@@ -73,17 +85,19 @@ fun Application.module(network: ServerNetwork = ServerNetwork()) {
     }
 }
 
-fun Application.module(transport: at.aau.pulverfass.server.transport.ServerWebSocketTransport) {
+/**
+ * Test-Hilfsmethode für direkte Transporttests ohne High-Level-Eventpfad.
+ */
+internal fun Application.module(transport: ServerWebSocketTransport) {
     module(ServerNetwork(transport = transport))
 }
 
 /**
  * Behandelt den Lebenszyklus einer einzelnen WebSocket-Verbindung.
  *
- * Für jede Verbindung wird eine neue [at.aau.pulverfass.shared.ids.ConnectionId]
- * vergeben. Binärframes werden als rohe Bytes an die Transport-Schicht
- * weitergereicht, Textframes dagegen aktiv mit dokumentiertem Close-Reason
- * abgelehnt.
+ * Für jede Verbindung wird serverseitig eine neue `ConnectionId` vergeben.
+ * Binary Frames werden an [ServerNetwork] weitergereicht, Text Frames dagegen
+ * aktiv mit dokumentiertem Close-Reason abgelehnt.
  */
 private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
     network: ServerNetwork,

@@ -1,7 +1,7 @@
 package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.network.PayloadTypeMismatchException
-import at.aau.pulverfass.shared.network.UnsupportedPayloadClassException
+import at.aau.pulverfass.shared.network.exception.PayloadTypeMismatchException
+import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.message.LoginRequest
 import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.MessageType

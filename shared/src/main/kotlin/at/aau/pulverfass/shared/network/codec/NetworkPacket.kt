@@ -1,6 +1,6 @@
 package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.network.PayloadTypeMismatchException
+import at.aau.pulverfass.shared.network.exception.PayloadTypeMismatchException
 import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.message.NetworkPayloadRegistry
