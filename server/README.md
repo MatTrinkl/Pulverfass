@@ -24,3 +24,26 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstuetzung bereit.
 - Lokal starten: `./gradlew :server:run`
 - Fuer programmatischen Start/Stop steht `createServer(host, port)` zur Verfuegung.
 - Sauberes Stoppen erfolgt ueber `ApplicationEngine.stop(gracePeriodMillis, timeoutMillis)`.
+
+## Lobby Runtime (sequentielle Event-Loops)
+
+- Der Server enthaelt mit `LobbyManager` eine zentrale Verwaltung fuer mehrere Lobbys.
+- Jede Lobby wird als eigene `LobbyRuntime` gekapselt.
+- `LobbyRuntime` buendelt LobbyId (`LobbyCode`), gekapselten `GameState`, Event-Loop, Lifecycle und optionale Hooks.
+- Innerhalb einer Lobby laufen Events strikt sequentiell (FIFO).
+- Mehrere Lobbys koennen parallel verarbeitet werden (Coroutine-basiert, kein Thread-per-Lobby-Modell).
+- Read-Zugriff erfolgt ueber `LobbyStateReader.currentState()` als Snapshot.
+
+### API (nach außen relevant)
+
+- `createLobby(lobbyCode, initialState)` erstellt und startet eine Lobby.
+- `getLobby(lobbyCode)` liefert die Runtime einer Lobby.
+- `submit(event, context)` reiht ein Event fuer eine bereits laufende Lobby ein.
+- `removeLobby(lobbyCode)` beendet eine Lobby kontrolliert.
+- `shutdownAll()` beendet alle laufenden Lobby-Loops kontrolliert.
+
+### Queue- und Backpressure-Verhalten
+
+- Jede `LobbyRuntime` nutzt intern einen `Channel` mit konfigurierbarer Kapazitaet (`queueCapacity`).
+- Ist die Queue voll, suspendiert `submit(...)` bis wieder Platz frei ist.
+- Dadurch entsteht kontrolliertes Backpressure statt unkontrolliertem Parallelzugriff auf den `GameState`.

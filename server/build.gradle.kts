@@ -18,6 +18,7 @@ application {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(libs.kotlinx.coroutines.core)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
