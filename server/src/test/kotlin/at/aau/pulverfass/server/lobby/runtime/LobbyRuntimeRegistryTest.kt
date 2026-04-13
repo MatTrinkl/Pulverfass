@@ -14,6 +14,7 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -73,10 +74,13 @@ class LobbyRuntimeRegistryTest {
             val registry = LobbyRuntimeRegistry(scope = scope, reducerFactory = { reducer })
 
             try {
-                registry.startLobby(blockedLobby)
+                val blockedRuntime = registry.startLobby(blockedLobby)
                 registry.startLobby(freeLobby)
 
-                registry.submit(SystemTick(blockedLobby, tick = 0))
+                val blockedSubmit =
+                    scope.async {
+                        blockedRuntime.submit(SystemTick(blockedLobby, tick = 0))
+                    }
                 assertTrue(
                     enteredBlockedReducer.await(2, TimeUnit.SECONDS),
                     "Blocked reducer did not start in time.",
@@ -86,6 +90,7 @@ class LobbyRuntimeRegistryTest {
                 waitUntilProcessed(registry, freeLobby, expectedCount = 1)
 
                 releaseBlockedReducer.countDown()
+                withTimeout(5_000) { blockedSubmit.await() }
                 waitUntilProcessed(registry, blockedLobby, expectedCount = 1)
             } finally {
                 releaseBlockedReducer.countDown()

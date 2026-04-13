@@ -12,10 +12,10 @@ import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Verwaltet mehrere Lobby-Event-Loops innerhalb eines gemeinsamen CoroutineScope.
+ * Verwaltet mehrere Lobby-Runtimes innerhalb eines gemeinsamen CoroutineScope.
  *
- * Jede Lobby besitzt genau einen Loop und verarbeitet Events sequentiell. Über
- * mehrere Lobbys hinweg ist Parallelität möglich.
+ * Jede Lobby besitzt genau eine Runtime und verarbeitet Events intern
+ * sequentiell. Über mehrere Lobbys hinweg ist Parallelität möglich.
  */
 class LobbyRuntimeRegistry(
     private val scope: CoroutineScope,
@@ -26,13 +26,17 @@ class LobbyRuntimeRegistry(
     private val runtimes = ConcurrentHashMap<LobbyCode, LobbyRuntime>()
     private val lifecycleLock = Any()
 
+    /**
+     * Erstellt oder liefert die Runtime einer Lobby und startet sie bei Bedarf.
+     */
     fun startLobby(
         lobbyCode: LobbyCode,
         initialState: GameState = GameState.initial(lobbyCode),
     ): LobbyRuntime =
         synchronized(lifecycleLock) {
             require(initialState.lobbyCode == lobbyCode) {
-                "Initial state lobbyCode '${initialState.lobbyCode.value}' passt nicht zu Lobby '${lobbyCode.value}'."
+                "Initial state lobbyCode '${initialState.lobbyCode.value}' " +
+                    "passt nicht zu Lobby '${lobbyCode.value}'."
             }
             runtimes[lobbyCode]?.let { existing -> return@synchronized existing }
 
@@ -50,26 +54,45 @@ class LobbyRuntimeRegistry(
             runtime
         }
 
+    /**
+     * Reicht ein Event an die passende laufende Runtime weiter.
+     */
     suspend fun submit(
         event: LobbyEvent,
         context: EventContext? = null,
     ) {
-        val runtime = runtimes[event.lobbyCode]
-            ?: throw IllegalStateException("Lobby '${event.lobbyCode.value}' is not running.")
+        val runtime =
+            runtimes[event.lobbyCode]
+                ?: throw IllegalStateException("Lobby '${event.lobbyCode.value}' is not running.")
         runtime.submit(event, context)
     }
 
+    /**
+     * Liefert die aktive Runtime einer Lobby, falls vorhanden.
+     */
     fun runtime(lobbyCode: LobbyCode): LobbyRuntime? = runtimes[lobbyCode]
 
+    /**
+     * Liefert eine reine Read-Sicht auf die aktive Runtime.
+     */
     fun reader(lobbyCode: LobbyCode): LobbyStateReader? = runtimes[lobbyCode]
 
+    /**
+     * Liefert den aktuellen Snapshot einer Lobby oder `null`, falls nicht aktiv.
+     */
     fun currentState(lobbyCode: LobbyCode): GameState? = runtimes[lobbyCode]?.currentState()
 
+    /**
+     * Stoppt eine einzelne Lobby-Runtime kontrolliert.
+     */
     suspend fun stopLobby(lobbyCode: LobbyCode) {
         val runtime = synchronized(lifecycleLock) { runtimes.remove(lobbyCode) }
         runtime?.shutdown()
     }
 
+    /**
+     * Stoppt alle aktiven Lobby-Runtimes kontrolliert.
+     */
     suspend fun shutdown() {
         val activeRuntimes =
             synchronized(lifecycleLock) {

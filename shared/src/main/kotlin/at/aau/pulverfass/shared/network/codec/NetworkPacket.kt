@@ -6,7 +6,10 @@ import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.message.NetworkPayloadRegistry
 
 /**
- * Diese Klasse ist das Netzwerkpaket selbst welches deserialisiert, übertragen und serialisiert wird.
+ * Repräsentiert ein bereits fachlich deserialisiertes Netzwerkpaket.
+ *
+ * Das Modell wird zwischen Protokollschichten übertragen und später wieder
+ * serialisiert. Header-Typ und Payload-Typ müssen dabei konsistent sein.
  *
  * @property header Definiert welchen MessageType dieses Paket hat.
  * @property payload Der eigentliche Inhalt des Paketes.

@@ -47,3 +47,41 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstuetzung bereit.
 - Jede `LobbyRuntime` nutzt intern einen `Channel` mit konfigurierbarer Kapazitaet (`queueCapacity`).
 - Ist die Queue voll, suspendiert `submit(...)` bis wieder Platz frei ist.
 - Dadurch entsteht kontrolliertes Backpressure statt unkontrolliertem Parallelzugriff auf den `GameState`.
+
+## Netzwerk-zu-Domain-Mapping (Lobby)
+
+- `DecodedNetworkRequest` ist das neutrale Inputmodell fuer bereits dekodierte Requests (`ConnectionId`, `MessageHeader`, `NetworkMessagePayload`, `EventContext`).
+- `NetworkToLobbyEventMapper` trennt Netzwerkmodell und Lobby-Domain.
+- `DefaultNetworkToLobbyEventMapper` mappt aktuell:
+  - `GAME_JOIN_REQUEST` + `GameJoinRequest` + `EventContext.playerId` -> `PlayerJoined`
+- Definierte Fehlerfaelle:
+  - Header/Payload-Mismatch
+  - fehlender `playerId`-Kontext
+  - nicht unterstuetzte Lobby-Payloads
+
+## MainServer Routing-Layer
+
+- `MainServerRouter` verbindet Mapping-Schicht und `LobbyManager`.
+- Input ist ein bereits technisch dekodierter `DecodedNetworkRequest`.
+- Ablauf:
+  - Request wird über `NetworkToLobbyEventMapper` in Domain-Events übersetzt
+  - Routingdaten werden validiert (nicht-leere Events, konsistente Lobby-Zuordnung)
+  - Ziel-Lobby wird über `LobbyManager` aufgelöst
+  - Events werden mit `EventContext` an die `LobbyRuntime` weitergereicht
+- Definierte Routing-Fehler:
+  - unbekannte Lobby
+  - leeres Mapping-Ergebnis
+  - Event-Lobby passt nicht zur gerouteten Lobby
+- Das transportunabhängige Ergebnis-/Fehlermodell:
+  - `LobbyRoutingResult.Success`
+  - `LobbyRoutingResult.Failure(LobbyRoutingError)`
+  - Fehlerarten: `LobbyNotFound`, `InvalidRoutingData`, `InvalidEvent`, `InvalidStateTransition`
+
+### Server-Einbettung
+
+- `MainServerLobbyRoutingService` bindet `ServerNetwork` an den Router:
+  - liest `ReceivedPacket` aus `PacketReceiver`
+  - dekodiert die Payload
+  - erzeugt `DecodedNetworkRequest`
+  - ruft `MainServerRouter.handle(...)` auf
+- Damit bleibt der Transportpfad von Lobby-Domainlogik getrennt.

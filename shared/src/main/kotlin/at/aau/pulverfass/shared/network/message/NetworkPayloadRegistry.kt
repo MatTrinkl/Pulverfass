@@ -12,6 +12,7 @@ internal object NetworkPayloadRegistry {
     private val payloadTypeByClass =
         mapOf<Class<out NetworkMessagePayload>, MessageType>(
             LoginRequest::class.java to MessageType.LOGIN_REQUEST,
+            GameJoinRequest::class.java to MessageType.GAME_JOIN_REQUEST,
         )
 
     private val payloadSerializerByClass =
@@ -19,12 +20,18 @@ internal object NetworkPayloadRegistry {
             LoginRequest::class.java to { payload ->
                 Json.encodeToString(LoginRequest.serializer(), payload as LoginRequest)
             },
+            GameJoinRequest::class.java to { payload ->
+                Json.encodeToString(GameJoinRequest.serializer(), payload as GameJoinRequest)
+            },
         )
 
     private val payloadDeserializerByType =
         mapOf<MessageType, (String) -> NetworkMessagePayload>(
             MessageType.LOGIN_REQUEST to { json ->
                 Json.decodeFromString(LoginRequest.serializer(), json)
+            },
+            MessageType.GAME_JOIN_REQUEST to { json ->
+                Json.decodeFromString(GameJoinRequest.serializer(), json)
             },
         )
 

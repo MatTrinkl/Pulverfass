@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -106,10 +107,13 @@ class LobbyManagerTest {
             val manager = LobbyManager(scope = scope, reducerFactory = { reducer })
 
             try {
-                manager.createLobby(blockedLobby)
+                val blockedRuntime = manager.createLobby(blockedLobby)
                 manager.createLobby(freeLobby)
 
-                manager.submit(SystemTick(blockedLobby, tick = 0))
+                val blockedSubmit =
+                    scope.async {
+                        blockedRuntime.submit(SystemTick(blockedLobby, tick = 0))
+                    }
                 assertTrue(
                     enteredBlockedReducer.await(2, TimeUnit.SECONDS),
                     "Blocked reducer did not start in time.",
@@ -119,6 +123,7 @@ class LobbyManagerTest {
                 waitUntilProcessed(manager, freeLobby, expectedCount = 1)
 
                 releaseBlockedReducer.countDown()
+                withTimeout(5_000) { blockedSubmit.await() }
                 waitUntilProcessed(manager, blockedLobby, expectedCount = 1)
             } finally {
                 releaseBlockedReducer.countDown()
@@ -133,7 +138,10 @@ class LobbyManagerTest {
         expectedCount: Long,
     ) {
         withTimeout(5_000) {
-            while ((manager.getLobby(lobbyCode)?.currentState()?.processedEventCount ?: 0L) < expectedCount) {
+            while (
+                (manager.getLobby(lobbyCode)?.currentState()?.processedEventCount ?: 0L) <
+                expectedCount
+            ) {
                 delay(5)
             }
         }

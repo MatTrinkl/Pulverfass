@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.DefaultLobbyStateProcessor
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.LobbyStateReader
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -31,7 +32,8 @@ internal class LobbyEventLoop(
 ) : LobbyStateReader {
     init {
         require(initialState.lobbyCode == lobbyCode) {
-            "Initial state lobbyCode '${initialState.lobbyCode.value}' passt nicht zu Loop '${lobbyCode.value}'."
+            "Initial state lobbyCode '${initialState.lobbyCode.value}' " +
+                "passt nicht zu Loop '${lobbyCode.value}'."
         }
     }
 
@@ -40,6 +42,12 @@ internal class LobbyEventLoop(
     private val lifecycleLock = Any()
     private var loopJob: Job? = null
 
+    /**
+     * Startet den asynchronen Event-Loop.
+     *
+     * Der Loop darf nur einmal gestartet werden. Weitere Aufrufe sind ein
+     * Lifecycle-Fehler und werden explizit abgelehnt.
+     */
     fun start() {
         synchronized(lifecycleLock) {
             check(loopJob == null) {
@@ -48,7 +56,12 @@ internal class LobbyEventLoop(
             loopJob =
                 scope.launch {
                     for (queued in events) {
-                        stateProcessor.apply(queued.event, queued.context)
+                        try {
+                            stateProcessor.apply(queued.event, queued.context)
+                            queued.processed.complete(Unit)
+                        } catch (cause: Throwable) {
+                            queued.processed.completeExceptionally(cause)
+                        }
                     }
                 }
         }
@@ -56,6 +69,15 @@ internal class LobbyEventLoop(
 
     override fun currentState(): GameState = stateProcessor.currentState()
 
+    /**
+     * Reiht ein Event zur Verarbeitung ein und wartet auf dessen Abschluss.
+     *
+     * Die Methode liefert erst zurück, wenn das Event im internen FIFO-Loop
+     * verarbeitet wurde. Fehler aus Reducer/State-Verarbeitung werden direkt an
+     * den Aufrufer propagiert.
+     *
+     * @throws IllegalStateException wenn der Loop nicht läuft
+     */
     suspend fun submit(
         event: LobbyEvent,
         context: EventContext? = null,
@@ -67,9 +89,17 @@ internal class LobbyEventLoop(
         check(activeJob?.isActive == true) {
             "Lobby event loop for '${lobbyCode.value}' is not running."
         }
-        events.send(QueuedLobbyEvent(event, context))
+        val processed = CompletableDeferred<Unit>()
+        events.send(QueuedLobbyEvent(event, context, processed))
+        processed.await()
     }
 
+    /**
+     * Beendet den Event-Loop kontrolliert.
+     *
+     * Bereits eingequeue-te Events werden vor dem vollständigen Stop weiterhin
+     * abgearbeitet. Mehrfache Stop-Aufrufe sind erlaubt und idempotent.
+     */
     suspend fun shutdown() {
         val activeJob =
             synchronized(lifecycleLock) {
@@ -83,7 +113,11 @@ internal class LobbyEventLoop(
     }
 }
 
+/**
+ * Interne Queue-Nachricht inklusive technischer Completion-Signalisierung.
+ */
 private data class QueuedLobbyEvent(
     val event: LobbyEvent,
     val context: EventContext?,
+    val processed: CompletableDeferred<Unit>,
 )

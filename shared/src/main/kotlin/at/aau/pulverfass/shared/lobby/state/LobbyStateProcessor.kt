@@ -16,6 +16,15 @@ import kotlin.concurrent.write
  * den [LobbyEventReducer].
  */
 interface LobbyStateProcessor : LobbyStateReader {
+    /**
+     * Wendet ein Lobby-Event kontrolliert auf den internen Zustand an.
+     *
+     * @param event fachliches Lobby-Event
+     * @param context optionale technische Metadaten zur Eventverarbeitung
+     * @return Snapshot des aktualisierten Zustands
+     * @throws at.aau.pulverfass.shared.lobby.reducer.LobbyEventReductionException
+     * wenn das Event für den aktuellen Zustand ungültig ist
+     */
     fun apply(
         event: LobbyEvent,
         context: EventContext? = null,
@@ -52,6 +61,10 @@ class DefaultLobbyStateProcessor(
         }
 }
 
+/**
+ * Erstellt eine defensive Snapshot-Kopie, damit aufrufende Schichten nie mit
+ * internen Listenreferenzen arbeiten.
+ */
 private fun GameState.snapshot(): GameState =
     copy(
         players = players.toList(),

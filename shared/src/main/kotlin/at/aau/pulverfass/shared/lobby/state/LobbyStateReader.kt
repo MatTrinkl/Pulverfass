@@ -7,5 +7,11 @@ package at.aau.pulverfass.shared.lobby.state
  * internen State nicht über geteilte Referenzen verändern können.
  */
 interface LobbyStateReader {
+    /**
+     * Liefert den aktuell verfügbaren Lobbyzustand als read-only Snapshot.
+     *
+     * Aufrufende dürfen das Ergebnis nur lesend verwenden. Mutationen am
+     * Runtime-State sind ausschließlich über den Eventpfad vorgesehen.
+     */
     fun currentState(): GameState
 }

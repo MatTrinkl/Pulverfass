@@ -40,13 +40,19 @@ class LobbyManager(
     private val lobbies = ConcurrentHashMap<LobbyCode, LobbyRuntime>()
     private val lifecycleLock = Any()
 
+    /**
+     * Erstellt eine neue Lobby-Runtime und startet deren Lifecycle.
+     *
+     * @throws IllegalStateException wenn die Lobby bereits existiert
+     */
     fun createLobby(
         lobbyCode: LobbyCode,
         initialState: GameState = GameState.initial(lobbyCode),
     ): LobbyRuntime =
         synchronized(lifecycleLock) {
             require(initialState.lobbyCode == lobbyCode) {
-                "Initial state lobbyCode '${initialState.lobbyCode.value}' passt nicht zu Lobby '${lobbyCode.value}'."
+                "Initial state lobbyCode '${initialState.lobbyCode.value}' " +
+                    "passt nicht zu Lobby '${lobbyCode.value}'."
             }
             check(lobbies[lobbyCode] == null) {
                 "Lobby '${lobbyCode.value}' exists already."
@@ -58,22 +64,37 @@ class LobbyManager(
             runtime
         }
 
+    /**
+     * Liefert eine aktive Lobby-Runtime per Lobbycode.
+     */
     fun getLobby(lobbyCode: LobbyCode): LobbyRuntime? = lobbies[lobbyCode]
 
+    /**
+     * Leitet ein Event an die zugehörige laufende Lobby weiter.
+     *
+     * @throws IllegalStateException wenn keine Runtime für die Lobby aktiv ist
+     */
     suspend fun submit(
         event: LobbyEvent,
         context: EventContext? = null,
     ) {
-        val runtime = lobbies[event.lobbyCode]
-            ?: throw IllegalStateException("Lobby '${event.lobbyCode.value}' is not running.")
+        val runtime =
+            lobbies[event.lobbyCode]
+                ?: throw IllegalStateException("Lobby '${event.lobbyCode.value}' is not running.")
         runtime.submit(event, context)
     }
 
+    /**
+     * Entfernt und stoppt eine einzelne Lobby-Runtime.
+     */
     suspend fun removeLobby(lobbyCode: LobbyCode) {
         val runtime = synchronized(lifecycleLock) { lobbies.remove(lobbyCode) }
         runtime?.shutdown()
     }
 
+    /**
+     * Stoppt alle aktiven Lobbys kontrolliert und leert die Verwaltung.
+     */
     suspend fun shutdownAll() {
         val activeRuntimes =
             synchronized(lifecycleLock) {

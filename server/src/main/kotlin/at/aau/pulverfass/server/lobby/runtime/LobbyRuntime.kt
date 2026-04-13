@@ -36,6 +36,9 @@ class LobbyRuntime(
     private val lifecycleLock = Any()
     private var started = false
 
+    /**
+     * Aktiviert die Runtime und startet den internen Event-Loop.
+     */
     fun start() {
         synchronized(lifecycleLock) {
             check(!started) {
@@ -49,6 +52,12 @@ class LobbyRuntime(
 
     override fun currentState(): GameState = eventLoop.currentState()
 
+    /**
+     * Reicht ein Event in die Runtime ein.
+     *
+     * Die Verarbeitung erfolgt strikt sequentiell im internen Loop. Hook-Aufrufe
+     * für Enqueue/Accept/Reject bilden den zentralen Observability-Einstieg.
+     */
     suspend fun submit(
         event: LobbyEvent,
         context: EventContext? = null,
@@ -63,6 +72,11 @@ class LobbyRuntime(
         }
     }
 
+    /**
+     * Beendet die Runtime kontrolliert.
+     *
+     * Mehrfache Aufrufe sind erlaubt und wirken nur beim ersten Aufruf.
+     */
     suspend fun shutdown() {
         val shouldStop =
             synchronized(lifecycleLock) {
@@ -86,9 +100,14 @@ class LobbyRuntime(
  * Erweiterungspunkt für Logging/Metrics ohne Kopplung an konkrete Frameworks.
  */
 data class LobbyRuntimeHooks(
+    /** Wird direkt nach erfolgreichem Start ausgelöst. */
     val onStarted: (LobbyCode) -> Unit = {},
+    /** Wird nach abgeschlossenem Shutdown ausgelöst. */
     val onStopped: (LobbyCode) -> Unit = {},
+    /** Wird unmittelbar vor dem technischen Enqueue ausgelöst. */
     val onEventEnqueued: (LobbyCode, LobbyEvent, EventContext?) -> Unit = { _, _, _ -> },
+    /** Wird nach erfolgreicher Eventverarbeitung ausgelöst. */
     val onEventAccepted: (LobbyCode, LobbyEvent) -> Unit = { _, _ -> },
+    /** Wird bei Verarbeitungsfehlern ausgelöst. */
     val onEventRejected: (LobbyCode, LobbyEvent, Throwable) -> Unit = { _, _, _ -> },
 )
