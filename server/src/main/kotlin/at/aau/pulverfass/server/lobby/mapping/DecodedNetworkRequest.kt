@@ -29,8 +29,11 @@ data class DecodedNetworkRequest(
         get() = receivedPacket.header
 
     init {
-        require(context.connectionId == null || context.connectionId == connectionId) {
-            "EventContext.connectionId muss null oder gleich request.connectionId sein."
+        val contextConnectionId = context.connectionId
+        if (contextConnectionId != null && contextConnectionId != connectionId) {
+            throw IllegalArgumentException(
+                "EventContext.connectionId muss null oder gleich request.connectionId sein.",
+            )
         }
     }
 }

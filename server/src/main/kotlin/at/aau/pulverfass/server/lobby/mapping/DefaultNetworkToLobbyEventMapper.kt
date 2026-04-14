@@ -34,9 +34,7 @@ class DefaultNetworkToLobbyEventMapper : NetworkToLobbyEventMapper {
         if (request.header.type != MessageType.GAME_JOIN_REQUEST) {
             throw PayloadHeaderMismatchMappingException(
                 messageType = request.header.type,
-                payloadTypeName =
-                    payload::class.qualifiedName
-                        ?: payload::class.simpleName.orEmpty(),
+                payloadTypeName = payload.javaClass.name,
             )
         }
 

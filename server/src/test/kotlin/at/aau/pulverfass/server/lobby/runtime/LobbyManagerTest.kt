@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -146,6 +147,162 @@ class LobbyManagerTest {
             }
         }
     }
+
+    @Test
+    fun `ungueltiger initial state wird bei create lobby abgelehnt`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager = LobbyManager(scope)
+
+            try {
+                val exception =
+                    assertFailsWith<IllegalArgumentException> {
+                        manager.createLobby(
+                            lobbyCode = LobbyCode("LM12"),
+                            initialState = GameState.initial(LobbyCode("NO34")),
+                        )
+                    }
+
+                assertTrue(exception.message!!.contains("passt nicht zu Lobby"))
+            } finally {
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `remove unbekannter lobby code ist harmlos`(): Unit =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager = LobbyManager(scope)
+
+            try {
+                manager.removeLobby(LobbyCode("PQ56"))
+                assertNull(manager.getLobby(LobbyCode("PQ56")))
+            } finally {
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `submit auf unbekannter lobby schlaegt fehl`(): Unit =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager = LobbyManager(scope)
+
+            try {
+                assertFailsWith<IllegalStateException> {
+                    manager.submit(SystemTick(LobbyCode("RS78"), 1))
+                }
+            } finally {
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `manager submit deckt suspendierenden pfad isoliert ab`() =
+        runBlocking {
+            val blockedLobby = LobbyCode("SU12")
+            val enteredBlockedReducer = CountDownLatch(1)
+            val releaseBlockedReducer = CountDownLatch(1)
+            val reducer =
+                ManagerBlockingReducer(
+                    blockedLobby = blockedLobby,
+                    enteredLatch = enteredBlockedReducer,
+                    releaseLatch = releaseBlockedReducer,
+                )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager =
+                LobbyManager(
+                    scope = scope,
+                    reducerFactory = { reducer },
+                    queueCapacity = 0,
+                )
+
+            try {
+                manager.createLobby(blockedLobby)
+                val submitJob =
+                    scope.async {
+                        manager.submit(SystemTick(blockedLobby, tick = 0))
+                    }
+
+                assertTrue(enteredBlockedReducer.await(2, TimeUnit.SECONDS))
+                delay(20)
+                assertFalse(submitJob.isCompleted)
+
+                releaseBlockedReducer.countDown()
+                withTimeout(5_000) {
+                    submitJob.await()
+                }
+            } finally {
+                releaseBlockedReducer.countDown()
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `manager submit und remove lobby decken suspendierende pfade ab`() =
+        runBlocking {
+            val blockedLobby = LobbyCode("ST90")
+            val enteredBlockedReducer = CountDownLatch(1)
+            val releaseBlockedReducer = CountDownLatch(1)
+            val reducer =
+                ManagerBlockingReducer(
+                    blockedLobby = blockedLobby,
+                    enteredLatch = enteredBlockedReducer,
+                    releaseLatch = releaseBlockedReducer,
+                )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager =
+                LobbyManager(
+                    scope = scope,
+                    reducerFactory = { reducer },
+                    queueCapacity = 0,
+                )
+
+            try {
+                manager.createLobby(blockedLobby)
+                val submitJob =
+                    scope.async {
+                        manager.submit(SystemTick(blockedLobby, tick = 0))
+                    }
+                assertTrue(enteredBlockedReducer.await(2, TimeUnit.SECONDS))
+                withTimeout(5_000) {
+                    while (submitJob.isCompleted) {
+                        delay(5)
+                    }
+                }
+                delay(20)
+                assertFalse(submitJob.isCompleted)
+
+                val removeJob =
+                    scope.async {
+                        manager.removeLobby(blockedLobby)
+                    }
+                withTimeout(5_000) {
+                    while (removeJob.isCompleted) {
+                        delay(5)
+                    }
+                }
+                delay(20)
+                assertFalse(removeJob.isCompleted)
+
+                releaseBlockedReducer.countDown()
+                withTimeout(5_000) {
+                    submitJob.await()
+                    removeJob.await()
+                }
+
+                assertNull(manager.getLobby(blockedLobby))
+            } finally {
+                releaseBlockedReducer.countDown()
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
 }
 
 private class ManagerBlockingReducer(

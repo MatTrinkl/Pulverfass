@@ -50,6 +50,29 @@ class PacketSendAdapterTest {
         assertArrayEquals(byteArrayOf(7, 8), packet.payloadBytes)
     }
 
+    @Test
+    fun `send with header and payload bytes creates and sends packed packet`() =
+        runSuspend {
+            var capturedBytes: ByteArray? = null
+            val adapter =
+                PacketSendAdapter { _, bytes ->
+                    capturedBytes = bytes
+                }
+
+            adapter.send(
+                connectionId = ConnectionId(5),
+                header = MessageHeader(MessageType.LOGIN_REQUEST),
+                payloadBytes = byteArrayOf(9, 1),
+            )
+
+            val packet = PacketCodec.unpack(checkNotNull(capturedBytes))
+            assertEquals(
+                MessageType.LOGIN_REQUEST,
+                NetworkMessageSerializer.deserializeHeader(packet.headerBytes).type,
+            )
+            assertArrayEquals(byteArrayOf(9, 1), packet.payloadBytes)
+        }
+
     private fun runSuspend(block: suspend () -> Unit) {
         var failure: Throwable? = null
 

@@ -6,7 +6,6 @@ import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
-import kotlin.concurrent.write
 
 /**
  * Kombiniert kontrollierte Event-Anwendung mit Snapshot-Reads.
@@ -53,12 +52,17 @@ class DefaultLobbyStateProcessor(
     override fun apply(
         event: LobbyEvent,
         context: EventContext?,
-    ): GameState =
-        lock.write {
+    ): GameState {
+        lock.writeLock().lock()
+
+        return try {
             val updated = reducer.apply(state, event, context)
             state = updated
             updated.snapshot()
+        } finally {
+            lock.writeLock().unlock()
         }
+    }
 }
 
 /**

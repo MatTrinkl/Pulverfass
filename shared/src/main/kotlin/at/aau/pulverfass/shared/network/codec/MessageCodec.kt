@@ -26,19 +26,15 @@ object MessageCodec {
      * Paketstruktur entsteht
      */
     fun encode(payload: NetworkMessagePayload): ByteArray =
-        try {
-            PacketCodec.pack(
-                SerializedPacket(
-                    headerBytes =
-                        NetworkMessageSerializer.serializeHeader(
-                            MessageHeader(NetworkPayloadRegistry.messageTypeFor(payload)),
-                        ),
-                    payloadBytes = NetworkMessageSerializer.serializePayload(payload),
-                ),
-            )
-        } catch (exception: PacketCodecException) {
-            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
-        }
+        PacketCodec.pack(
+            SerializedPacket(
+                headerBytes =
+                    NetworkMessageSerializer.serializeHeader(
+                        MessageHeader(NetworkPayloadRegistry.messageTypeFor(payload)),
+                    ),
+                payloadBytes = NetworkMessageSerializer.serializePayload(payload),
+            ),
+        )
 
     /**
      * Kodiert ein bereits zusammengesetztes [NetworkPacket].
@@ -49,12 +45,7 @@ object MessageCodec {
     internal fun <T : NetworkMessagePayload> encode(
         packet: NetworkPacket<T>,
         serializer: KSerializer<T>,
-    ): ByteArray =
-        try {
-            PacketCodec.pack(serialize(packet, serializer))
-        } catch (exception: PacketCodecException) {
-            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
-        }
+    ): ByteArray = PacketCodec.pack(serialize(packet, serializer))
 
     /**
      * Dekodiert transportierte Bytes direkt in eine fachliche Payload.
@@ -106,6 +97,6 @@ object MessageCodec {
         try {
             PacketCodec.unpack(bytes)
         } catch (exception: PacketCodecException) {
-            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
+            throw InvalidSerializedPacketException(exception.message.toString())
         }
 }

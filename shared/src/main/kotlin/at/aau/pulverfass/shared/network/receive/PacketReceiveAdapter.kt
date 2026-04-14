@@ -2,7 +2,6 @@ package at.aau.pulverfass.shared.network.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.network.codec.PacketCodec
-import at.aau.pulverfass.shared.network.codec.PacketCodecException
 import at.aau.pulverfass.shared.network.exception.NetworkException
 import at.aau.pulverfass.shared.network.exception.PacketReceiveException
 import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
@@ -36,12 +35,6 @@ class PacketReceiveAdapter {
                 packet = packet,
             )
         } catch (cause: NetworkException) {
-            throw PacketReceiveException(
-                connectionId = connectionId,
-                message = "Failed to decode received packet for connection $connectionId",
-                cause = cause,
-            )
-        } catch (cause: PacketCodecException) {
             throw PacketReceiveException(
                 connectionId = connectionId,
                 message = "Failed to decode received packet for connection $connectionId",

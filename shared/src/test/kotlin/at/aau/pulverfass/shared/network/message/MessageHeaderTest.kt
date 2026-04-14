@@ -2,12 +2,14 @@ package at.aau.pulverfass.shared.network.message
 
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.lang.reflect.InvocationTargetException
 
 class MessageHeaderTest {
     private val json = Json
@@ -74,5 +76,41 @@ class MessageHeaderTest {
 
         assertTrue(jsonString.contains("type"))
         assertTrue(jsonString.contains("GAME_CREATE_RESPONSE"))
+    }
+
+    @Test
+    fun `should reject null message type at constructor boundary`() {
+        val constructor =
+            MessageHeader::class.java.declaredConstructors.first { it.parameterCount == 1 }
+        val valid = constructor.newInstance(MessageType.HEARTBEAT) as MessageHeader
+
+        assertEquals(MessageType.HEARTBEAT, valid.type)
+
+        assertThrows(InvocationTargetException::class.java) {
+            constructor.newInstance(*arrayOf<Any?>(null))
+        }
+    }
+
+    @Test
+    fun `should reject missing message type during deserialization`() {
+        assertThrows(SerializationException::class.java) {
+            json.decodeFromString<MessageHeader>("{}")
+        }
+    }
+
+    @Test
+    fun `should reject unexpected field during deserialization`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            MessageHeaderSerializer.deserialize(SerializerTestDecoder(intArrayOf(99)))
+        }
+    }
+
+    @Test
+    fun `should reject missing field in serializer directly`() {
+        assertThrows(kotlinx.serialization.MissingFieldException::class.java) {
+            MessageHeaderSerializer.deserialize(
+                SerializerTestDecoder(intArrayOf(CompositeDecoder.DECODE_DONE)),
+            )
+        }
     }
 }

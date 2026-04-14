@@ -78,18 +78,17 @@ class LobbyManager(
         event: LobbyEvent,
         context: EventContext? = null,
     ) {
-        val runtime =
-            lobbies[event.lobbyCode]
-                ?: throw IllegalStateException("Lobby '${event.lobbyCode.value}' is not running.")
-        runtime.submit(event, context)
+        return requireRuntime(event.lobbyCode).submit(event, context)
     }
 
     /**
      * Entfernt und stoppt eine einzelne Lobby-Runtime.
      */
     suspend fun removeLobby(lobbyCode: LobbyCode) {
-        val runtime = synchronized(lifecycleLock) { lobbies.remove(lobbyCode) }
-        runtime?.shutdown()
+        val runtime = removeRuntime(lobbyCode)
+        if (runtime != null) {
+            runtime.shutdown()
+        }
     }
 
     /**
@@ -104,4 +103,13 @@ class LobbyManager(
             }
         activeRuntimes.forEach { runtime -> runtime.shutdown() }
     }
+
+    private fun requireRuntime(lobbyCode: LobbyCode): LobbyRuntime =
+        lobbies[lobbyCode]
+            ?: throw IllegalStateException(
+                "Lobby '${lobbyCode.value}' is not running.",
+            )
+
+    private fun removeRuntime(lobbyCode: LobbyCode): LobbyRuntime? =
+        synchronized(lifecycleLock) { lobbies.remove(lobbyCode) }
 }

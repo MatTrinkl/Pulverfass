@@ -32,13 +32,17 @@ class LobbyRuntimeRegistry(
     fun startLobby(
         lobbyCode: LobbyCode,
         initialState: GameState = GameState.initial(lobbyCode),
-    ): LobbyRuntime =
-        synchronized(lifecycleLock) {
-            require(initialState.lobbyCode == lobbyCode) {
-                "Initial state lobbyCode '${initialState.lobbyCode.value}' " +
-                    "passt nicht zu Lobby '${lobbyCode.value}'."
+    ): LobbyRuntime {
+        require(initialState.lobbyCode == lobbyCode) {
+            "Initial state lobbyCode '${initialState.lobbyCode.value}' passt nicht zu " +
+                "Lobby '${lobbyCode.value}'."
+        }
+
+        return synchronized(lifecycleLock) {
+            val existing = runtimes[lobbyCode]
+            if (existing != null) {
+                return@synchronized existing
             }
-            runtimes[lobbyCode]?.let { existing -> return@synchronized existing }
 
             val runtime =
                 LobbyRuntime(
@@ -53,6 +57,7 @@ class LobbyRuntimeRegistry(
             runtimes[lobbyCode] = runtime
             runtime
         }
+    }
 
     /**
      * Reicht ein Event an die passende laufende Runtime weiter.
@@ -86,8 +91,10 @@ class LobbyRuntimeRegistry(
      * Stoppt eine einzelne Lobby-Runtime kontrolliert.
      */
     suspend fun stopLobby(lobbyCode: LobbyCode) {
-        val runtime = synchronized(lifecycleLock) { runtimes.remove(lobbyCode) }
-        runtime?.shutdown()
+        val runtime = removeRuntime(lobbyCode)
+        if (runtime != null) {
+            runtime.shutdown()
+        }
     }
 
     /**
@@ -102,4 +109,7 @@ class LobbyRuntimeRegistry(
             }
         activeRuntimes.forEach { runtime -> runtime.shutdown() }
     }
+
+    private fun removeRuntime(lobbyCode: LobbyCode): LobbyRuntime? =
+        synchronized(lifecycleLock) { runtimes.remove(lobbyCode) }
 }

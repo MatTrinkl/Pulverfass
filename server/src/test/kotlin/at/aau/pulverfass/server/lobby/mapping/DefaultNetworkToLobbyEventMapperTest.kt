@@ -96,6 +96,32 @@ class DefaultNetworkToLobbyEventMapperTest {
         assertTrue(exception.message?.contains("nicht unterstützt") == true)
     }
 
+    @Test
+    fun `fehlender player context wird klar abgelehnt`() {
+        val request =
+            DecodedNetworkRequest(
+                receivedPacket =
+                    receivedPacket(
+                        ConnectionId(4),
+                        MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                    ),
+                payload = GameJoinRequest(LobbyCode("EF56")),
+                context =
+                    EventContext(
+                        connectionId = ConnectionId(4),
+                        occurredAtEpochMillis = 1000,
+                    ),
+            )
+
+        val exception =
+            assertFailsWith<MissingPlayerContextMappingException> {
+                mapper.map(request)
+            }
+
+        assertTrue(exception.message?.contains("GAME_JOIN_REQUEST") == true)
+        assertTrue(exception.message?.contains("EventContext.playerId") == true)
+    }
+
     private fun receivedPacket(
         connectionId: ConnectionId,
         header: MessageHeader,

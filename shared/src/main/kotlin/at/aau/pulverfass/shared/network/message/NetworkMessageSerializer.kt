@@ -24,11 +24,7 @@ internal object NetworkMessageSerializer {
      * @throws NetworkSerializationException wenn die Serialisierung fehlschlägt
      */
     fun serializeHeader(header: MessageHeader): ByteArray =
-        try {
-            json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray()
-        } catch (exception: SerializationException) {
-            throw NetworkSerializationException("Failed to serialize message header", exception)
-        }
+        json.encodeToString(MessageHeader.serializer(), header).encodeToByteArray()
 
     /**
      * Deserialisiert UTF-8-kodierte Bytes in einen [MessageHeader].
@@ -79,11 +75,6 @@ internal object NetworkMessageSerializer {
             NetworkPayloadRegistry.serializePayload(payload).encodeToByteArray()
         } catch (exception: UnsupportedPayloadClassException) {
             throw exception
-        } catch (exception: SerializationException) {
-            throw NetworkSerializationException(
-                "Failed to serialize payload of type ${payload.javaClass.name}",
-                exception,
-            )
         }
 
     /**

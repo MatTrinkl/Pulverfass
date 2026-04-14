@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.SystemTick
+import at.aau.pulverfass.shared.lobby.reducer.InvalidLobbyEventException
 import at.aau.pulverfass.shared.lobby.state.GameState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -133,4 +134,37 @@ class LobbyRuntimeTest {
             }
         }
     }
+
+    @Test
+    fun `runtime meldet ablehnung ueber hooks und verhindert doppelten start`(): Unit =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyCode = LobbyCode("GH78")
+            var rejected = 0
+            val runtime =
+                LobbyRuntime(
+                    lobbyCode = lobbyCode,
+                    scope = scope,
+                    hooks =
+                        LobbyRuntimeHooks(
+                            onEventRejected = { _, _, _ -> rejected++ },
+                        ),
+                )
+
+            try {
+                assertEquals(lobbyCode, runtime.lobbyCode)
+                runtime.start()
+                assertFailsWith<IllegalStateException> { runtime.start() }
+                runtime.submit(PlayerJoined(lobbyCode, PlayerId(1)))
+
+                assertFailsWith<InvalidLobbyEventException> {
+                    runtime.submit(PlayerJoined(lobbyCode, PlayerId(1)))
+                }
+                assertEquals(1, rejected)
+            } finally {
+                runtime.shutdown()
+                runtime.shutdown()
+                scope.cancel()
+            }
+        }
 }

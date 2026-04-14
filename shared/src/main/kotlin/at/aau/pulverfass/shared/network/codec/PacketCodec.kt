@@ -20,13 +20,8 @@ object PacketCodec {
      *
      * @param packet bereits serialisiertes Paket
      * @return vollständig gepacktes ByteArray für den Transport
-     * @throws IllegalArgumentException wenn der Header leer ist
      */
     fun pack(packet: SerializedPacket): ByteArray {
-        if (packet.headerBytes.isEmpty()) {
-            throw EmptyHeaderException()
-        }
-
         val headerLength = packet.headerBytes.size
         val buffer =
             ByteBuffer.allocate(Int.SIZE_BYTES + headerLength + packet.payloadBytes.size)

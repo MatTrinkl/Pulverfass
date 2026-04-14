@@ -39,14 +39,24 @@ internal object NetworkPayloadRegistry {
         payloadTypeByClass[payload.javaClass]
             ?: throw UnsupportedPayloadClassException(payload.javaClass.name)
 
-    fun serializePayload(payload: NetworkMessagePayload): String =
-        payloadSerializerByClass[payload.javaClass]?.invoke(payload)
-            ?: throw UnsupportedPayloadClassException(payload.javaClass.name)
+    fun serializePayload(payload: NetworkMessagePayload): String {
+        val serializer = payloadSerializerByClass[payload.javaClass]
+        if (serializer == null) {
+            throw UnsupportedPayloadClassException(payload.javaClass.name)
+        }
+
+        return serializer(payload)
+    }
 
     fun deserializePayload(
         type: MessageType,
         json: String,
-    ): NetworkMessagePayload =
-        payloadDeserializerByType[type]?.invoke(json)
-            ?: throw UnsupportedPayloadTypeException(type)
+    ): NetworkMessagePayload {
+        val deserializer = payloadDeserializerByType[type]
+        if (deserializer == null) {
+            throw UnsupportedPayloadTypeException(type)
+        }
+
+        return deserializer(json)
+    }
 }

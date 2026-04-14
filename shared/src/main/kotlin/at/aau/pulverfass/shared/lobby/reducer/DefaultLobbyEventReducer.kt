@@ -142,12 +142,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     "'${state.activePlayer}'.",
             )
         }
-        if (state.turnOrder.isEmpty()) {
-            throw InvalidLobbyEventException(
-                "TurnEnded kann ohne Zugreihenfolge nicht verarbeitet werden.",
-            )
-        }
-
         return state.copy(
             activePlayer = nextPlayerAfter(playerId, state.turnOrder),
             turnNumber = state.turnNumber + 1,
@@ -158,10 +152,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         playerId: PlayerId,
         order: List<PlayerId>,
     ): PlayerId? {
-        if (order.isEmpty()) {
-            return null
-        }
-
         val currentIndex = order.indexOf(playerId)
         if (currentIndex == -1) {
             return order.firstOrNull()

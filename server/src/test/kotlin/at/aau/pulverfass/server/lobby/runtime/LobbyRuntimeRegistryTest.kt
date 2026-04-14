@@ -24,10 +24,27 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LobbyRuntimeRegistryTest {
+    @Test
+    fun `start lobby lehnt unpassenden initial state direkt ab`() {
+        val registry = LobbyRuntimeRegistry(CoroutineScope(SupervisorJob() + Dispatchers.Default))
+
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                registry.startLobby(
+                    lobbyCode = LobbyCode("NO34"),
+                    initialState = GameState.initial(LobbyCode("PQ56")),
+                )
+            }
+
+        assertTrue(exception.message!!.contains("passt nicht zu Lobby"))
+    }
+
     @Test
     fun `events innerhalb einer lobby werden strikt in reihenfolge verarbeitet`() =
         runBlocking {
@@ -162,6 +179,123 @@ class LobbyRuntimeRegistryTest {
             }
         }
     }
+
+    @Test
+    fun `registry exposes runtime reader and null snapshots consistently`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val registry = LobbyRuntimeRegistry(scope)
+            val lobbyCode = LobbyCode("LM12")
+
+            try {
+                assertNull(registry.runtime(lobbyCode))
+                assertNull(registry.reader(lobbyCode))
+                assertNull(registry.currentState(lobbyCode))
+
+                val runtime = registry.startLobby(lobbyCode)
+                assertEquals(runtime, registry.runtime(lobbyCode))
+                assertEquals(runtime, registry.reader(lobbyCode))
+                assertNotNull(registry.currentState(lobbyCode))
+
+                assertEquals(runtime, registry.startLobby(lobbyCode))
+
+                registry.stopLobby(lobbyCode)
+                registry.stopLobby(lobbyCode)
+
+                assertNull(registry.runtime(lobbyCode))
+                assertNull(registry.reader(lobbyCode))
+                assertNull(registry.currentState(lobbyCode))
+            } finally {
+                registry.shutdown()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `registry validates initial state and missing lobby submissions`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val registry = LobbyRuntimeRegistry(scope)
+
+            try {
+                val exception =
+                    assertFailsWith<IllegalArgumentException> {
+                        registry.startLobby(
+                            lobbyCode = LobbyCode("NO34"),
+                            initialState = GameState.initial(LobbyCode("PQ56")),
+                        )
+                    }
+                assertTrue(exception.message!!.contains("passt nicht zu Lobby"))
+
+                assertFailsWith<IllegalStateException> {
+                    registry.submit(SystemTick(LobbyCode("RS78"), 1))
+                }
+            } finally {
+                registry.shutdown()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `registry stop lobby deckt suspendierenden pfad ab`() =
+        runBlocking {
+            val blockedLobby = LobbyCode("TU12")
+            val enteredBlockedReducer = CountDownLatch(1)
+            val releaseBlockedReducer = CountDownLatch(1)
+            val reducer =
+                BlockingReducer(
+                    blockedLobby = blockedLobby,
+                    enteredLatch = enteredBlockedReducer,
+                    releaseLatch = releaseBlockedReducer,
+                )
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val registry =
+                LobbyRuntimeRegistry(
+                    scope = scope,
+                    reducerFactory = { reducer },
+                    queueCapacity = 0,
+                )
+
+            try {
+                registry.startLobby(blockedLobby)
+                val submitJob =
+                    scope.async {
+                        registry.submit(SystemTick(blockedLobby, tick = 0))
+                    }
+                assertTrue(enteredBlockedReducer.await(2, TimeUnit.SECONDS))
+                withTimeout(5_000) {
+                    while (submitJob.isCompleted) {
+                        delay(5)
+                    }
+                }
+                delay(20)
+                assertFalse(submitJob.isCompleted)
+
+                val stopJob =
+                    scope.async {
+                        registry.stopLobby(blockedLobby)
+                    }
+                withTimeout(5_000) {
+                    while (stopJob.isCompleted) {
+                        delay(5)
+                    }
+                }
+                delay(20)
+                assertFalse(stopJob.isCompleted)
+
+                releaseBlockedReducer.countDown()
+                withTimeout(5_000) {
+                    submitJob.await()
+                    stopJob.await()
+                }
+
+                assertNull(registry.runtime(blockedLobby))
+            } finally {
+                releaseBlockedReducer.countDown()
+                registry.shutdown()
+                scope.cancel()
+            }
+        }
 }
 
 private class BlockingReducer(
