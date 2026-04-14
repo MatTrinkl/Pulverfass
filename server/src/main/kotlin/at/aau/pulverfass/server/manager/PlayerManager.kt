@@ -89,7 +89,7 @@ object PlayerManager {
     /**
      * Gibt alle registrierten PlayerIds zurück.
      */
-    fun allPlayerIds(): List<PlayerId> = players.keys.toList()
+    fun allPlayerIds(): Set<PlayerId> = players.keys.toSet()
 
     /**
      * Gibt alle registrierten Player zurück.
