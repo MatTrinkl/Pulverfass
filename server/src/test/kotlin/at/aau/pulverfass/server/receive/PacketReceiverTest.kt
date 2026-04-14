@@ -29,11 +29,7 @@ class PacketReceiverTest {
             val receiver = PacketReceiver()
             val connectionId = ConnectionId(1)
             val payload = byteArrayOf(1, 2, 3)
-            val event =
-                BinaryMessageReceived(
-                    connectionId = connectionId,
-                    bytes = encodePacket(MessageHeader(MessageType.LOGIN_REQUEST), payload),
-                )
+            val bytes = encodePacket(MessageHeader(MessageType.LOGIN_REQUEST), payload)
 
             coroutineScope {
                 val packetDeferred =
@@ -43,7 +39,7 @@ class PacketReceiverTest {
                         }
                     }
 
-                val result = receiver.decode(event)
+                val result = receiver.decode(connectionId, bytes)
                 val emittedPacket = packetDeferred.await()
 
                 assertNotNull(result)
@@ -59,7 +55,7 @@ class PacketReceiverTest {
         runBlocking {
             val receiver = PacketReceiver()
             val connectionId = ConnectionId(2)
-            val event = BinaryMessageReceived(connectionId, byteArrayOf(1, 2, 3))
+            val bytes = byteArrayOf(1, 2, 3)
 
             coroutineScope {
                 val errorDeferred =
@@ -69,7 +65,7 @@ class PacketReceiverTest {
                         }
                     }
 
-                val result = receiver.decode(event)
+                val result = receiver.decode(connectionId, bytes)
                 val error = errorDeferred.await()
 
                 assertNull(result)

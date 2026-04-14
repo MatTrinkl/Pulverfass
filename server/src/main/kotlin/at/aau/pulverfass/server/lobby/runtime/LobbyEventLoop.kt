@@ -27,9 +27,11 @@ internal class LobbyEventLoop(
     val lobbyCode: LobbyCode,
     initialState: GameState = GameState.initial(lobbyCode),
     private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
+    private val stateProcessor: DefaultLobbyStateProcessor =
+        DefaultLobbyStateProcessor(initialState, reducer),
     private val scope: CoroutineScope,
     queueCapacity: Int = Channel.BUFFERED,
-) : LobbyStateReader {
+) : LobbyStateReader by stateProcessor {
     init {
         require(initialState.lobbyCode == lobbyCode) {
             "Initial state lobbyCode '${initialState.lobbyCode.value}' " +
@@ -37,7 +39,6 @@ internal class LobbyEventLoop(
         }
     }
 
-    private val stateProcessor = DefaultLobbyStateProcessor(initialState, reducer)
     private val events = Channel<QueuedLobbyEvent>(capacity = queueCapacity)
     private val lifecycleLock = Any()
     private var loopJob: Job? = null
@@ -66,8 +67,6 @@ internal class LobbyEventLoop(
                 }
         }
     }
-
-    override fun currentState(): GameState = stateProcessor.currentState()
 
     /**
      * Reiht ein Event zur Verarbeitung ein und wartet auf dessen Abschluss.

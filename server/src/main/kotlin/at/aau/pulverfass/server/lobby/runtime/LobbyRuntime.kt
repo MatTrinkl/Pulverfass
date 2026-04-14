@@ -16,22 +16,30 @@ import kotlinx.coroutines.channels.Channel
  * Diese Runtime bündelt Lobby-Identität, State-Verarbeitung und Event-Loop.
  * Externe Schichten reichen Events ausschließlich über [submit] ein.
  */
-class LobbyRuntime(
+class LobbyRuntime private constructor(
     val lobbyCode: LobbyCode,
-    initialState: GameState = GameState.initial(lobbyCode),
-    reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
-    scope: CoroutineScope,
-    queueCapacity: Int = Channel.BUFFERED,
+    private val eventLoop: LobbyEventLoop,
     private val hooks: LobbyRuntimeHooks = LobbyRuntimeHooks(),
-) : LobbyStateReader {
-    private val eventLoop =
-        LobbyEventLoop(
-            lobbyCode = lobbyCode,
-            initialState = initialState,
-            reducer = reducer,
-            scope = scope,
-            queueCapacity = queueCapacity,
-        )
+) : LobbyStateReader by eventLoop {
+    constructor(
+        lobbyCode: LobbyCode,
+        initialState: GameState = GameState.initial(lobbyCode),
+        reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
+        scope: CoroutineScope,
+        queueCapacity: Int = Channel.BUFFERED,
+        hooks: LobbyRuntimeHooks = LobbyRuntimeHooks(),
+    ) : this(
+        lobbyCode = lobbyCode,
+        eventLoop =
+            LobbyEventLoop(
+                lobbyCode = lobbyCode,
+                initialState = initialState,
+                reducer = reducer,
+                scope = scope,
+                queueCapacity = queueCapacity,
+            ),
+        hooks = hooks,
+    )
 
     private val lifecycleLock = Any()
     private var started = false
@@ -49,8 +57,6 @@ class LobbyRuntime(
         }
         hooks.onStarted(lobbyCode)
     }
-
-    override fun currentState(): GameState = eventLoop.currentState()
 
     /**
      * Reicht ein Event in die Runtime ein.

@@ -6,7 +6,6 @@ import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.network.codec.MessageCodec
-import at.aau.pulverfass.shared.network.codec.PacketCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -44,10 +43,7 @@ class MainServerLobbyRoutingService(
                 scope.launch {
                     network.packetReceiver.packets.collect { packet ->
                         runCatching {
-                            val payload =
-                                MessageCodec.decodePayload(
-                                    PacketCodec.pack(packet.packet),
-                                )
+                            val payload = MessageCodec.decodePayload(packet)
                             val request =
                                 DecodedNetworkRequest(
                                     receivedPacket = packet,

@@ -8,7 +8,6 @@ import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.exception.NetworkException
 import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -65,11 +64,21 @@ class ServerNetwork(
         connectionId: ConnectionId,
         bytes: ByteArray,
     ) {
-        val event = BinaryMessageReceived(connectionId, bytes)
-
         transport.onBinaryMessage(connectionId, bytes)
 
-        val receivedPacket = packetReceiver.decode(event) ?: return
+        val receivedPacket = packetReceiver.decode(connectionId, bytes)
+        if (receivedPacket == null) {
+            val cause = IllegalArgumentException(
+                "Failed to decode packet for connection ${connectionId.value}",
+            )
+            logger.warn(
+                "Failed to decode packet for connection {}",
+                connectionId.value,
+                cause,
+            )
+            _events.emit(Network.Event.Error(connectionId, cause))
+            return
+        }
 
         try {
             val payload = MessageCodec.decodePayload(bytes)

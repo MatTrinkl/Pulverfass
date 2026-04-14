@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.network.message.GameJoinRequest
 import at.aau.pulverfass.shared.network.message.LoginRequest
 import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -45,6 +46,23 @@ class MessageCodecTest {
 
         assertEquals(packet.header, result.header)
         assertEquals(packet.payload, result.payload)
+    }
+
+    @Test
+    fun `should decode payload directly from received packet without reframing`() {
+        val payload = LoginRequest(username = "alice", password = "secret")
+        val encoded = MessageCodec.encode(payload)
+        val unpacked = PacketCodec.unpack(encoded)
+        val receivedPacket =
+            ReceivedPacket(
+                connectionId = at.aau.pulverfass.shared.ids.ConnectionId(1),
+                header = MessageHeader(MessageType.LOGIN_REQUEST),
+                packet = unpacked,
+            )
+
+        val result = MessageCodec.decodePayload(receivedPacket)
+
+        assertEquals(payload, result)
     }
 
     @Test

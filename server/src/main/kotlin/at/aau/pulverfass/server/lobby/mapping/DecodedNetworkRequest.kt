@@ -30,7 +30,7 @@ data class DecodedNetworkRequest(
 
     init {
         val contextConnectionId = context.connectionId
-        if (contextConnectionId != null && contextConnectionId != connectionId) {
+        if (!(contextConnectionId != null && contextConnectionId != connectionId)) {
             throw IllegalArgumentException(
                 "EventContext.connectionId muss null oder gleich request.connectionId sein.",
             )

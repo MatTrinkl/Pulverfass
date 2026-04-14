@@ -5,6 +5,7 @@ import at.aau.pulverfass.shared.network.message.MessageHeader
 import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
 import at.aau.pulverfass.shared.network.message.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.serialization.KSerializer
 
 /**
@@ -55,6 +56,23 @@ object MessageCodec {
      * @throws InvalidSerializedPacketException wenn das Wire-Format ungültig ist
      */
     fun decodePayload(bytes: ByteArray): NetworkMessagePayload = decode(bytes).payload
+
+    /**
+     * Dekodiert ein bereits bis zum Header gelesenes Paket direkt in eine
+     * fachliche Payload, ohne das Wire-Format erneut zusammenzubauen.
+     *
+     * Diese Variante vermeidet unnötiges Re-Framing in Hot Paths, in denen
+     * der Header bereits vorliegt und nur die Payload noch fachlich
+     * deserialisiert werden muss.
+     *
+     * @param packet bereits entpacktes technisches Paketmodell
+     * @return dekodierte Payload
+     */
+    fun decodePayload(packet: ReceivedPacket): NetworkMessagePayload =
+        NetworkMessageSerializer.deserializePayload(
+            packet.header.type,
+            packet.packet.payloadBytes,
+        )
 
     /**
      * Dekodiert transportierte Bytes intern in ein [NetworkPacket].

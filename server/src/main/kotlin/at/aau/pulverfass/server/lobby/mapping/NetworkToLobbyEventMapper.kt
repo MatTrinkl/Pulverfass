@@ -7,7 +7,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 /**
  * Übersetzt technisch dekodierte Netzwerkrequests in Lobby-Domain-Events.
  */
-interface NetworkToLobbyEventMapper {
+fun interface NetworkToLobbyEventMapper {
     /**
      * Übersetzt einen dekodierten Netzwerkrequest in Lobby-Domain-Events.
      *

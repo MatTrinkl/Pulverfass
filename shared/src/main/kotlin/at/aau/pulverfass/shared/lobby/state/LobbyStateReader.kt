@@ -6,7 +6,7 @@ package at.aau.pulverfass.shared.lobby.state
  * Die Rückgabe erfolgt als Snapshot-Kopie, damit aufrufende Schichten den
  * internen State nicht über geteilte Referenzen verändern können.
  */
-interface LobbyStateReader {
+fun interface LobbyStateReader {
     /**
      * Liefert den aktuell verfügbaren Lobbyzustand als read-only Snapshot.
      *
