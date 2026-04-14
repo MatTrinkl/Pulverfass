@@ -120,7 +120,7 @@ class DefaultLobbyEventReducerTest {
             }
 
         assertEquals(
-            "Reducer fÃ¼r Lobby '$expectedLobbyCode' kann kein Event fÃ¼r " +
+            "Reducer f\u00FCr Lobby '$expectedLobbyCode' kann kein Event f\u00FCr " +
                 "'$actualLobbyCode' verarbeiten.",
             exception.message,
         )

@@ -132,7 +132,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Carol").assertExists()
         composeTestRule.onNodeWithText("(Host)").assertExists()
         composeTestRule.onNodeWithText("Spiel starten").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Mindestens 2 Spieler benötigt").assertExists()
+        composeTestRule.onNodeWithText("Mindestens 2 Spieler", substring = true).assertExists()
     }
 
     @Test
