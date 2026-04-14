@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server.manager
 
+import at.aau.pulverfass.server.ids.DuplicateConnectionIdException
+import at.aau.pulverfass.server.ids.DuplicatePlayerEntityIdException
 import at.aau.pulverfass.server.ids.DuplicatePlayerIdException
 import at.aau.pulverfass.server.ids.PlayerNotFoundException
 import at.aau.pulverfass.server.player.Player
@@ -26,9 +28,19 @@ object PlayerManager {
      * Doppelte PlayerIds sind nicht erlaubt.
      */
     fun register(player: Player) {
-        if (players.putIfAbsent(player.playerId, player) != null) {
+        if (players.containsKey(player.playerId)) {
             throw DuplicatePlayerIdException(player.playerId)
         }
+
+        if (player.connectionId != null && getByConnectionId(player.connectionId) != null) {
+            throw DuplicateConnectionIdException(player.connectionId)
+        }
+
+        if (player.entityId != null && getByEntityId(player.entityId) != null) {
+            throw DuplicatePlayerEntityIdException(player.entityId)
+        }
+
+        players[player.playerId] = player
     }
 
     /**
