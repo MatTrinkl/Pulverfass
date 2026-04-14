@@ -68,9 +68,10 @@ class ServerNetwork(
 
         val receivedPacket = packetReceiver.decode(connectionId, bytes)
         if (receivedPacket == null) {
-            val cause = IllegalArgumentException(
-                "Failed to decode packet for connection ${connectionId.value}",
-            )
+            val cause =
+                IllegalArgumentException(
+                    "Failed to decode packet for connection ${connectionId.value}",
+                )
             logger.warn(
                 "Failed to decode packet for connection {}",
                 connectionId.value,
