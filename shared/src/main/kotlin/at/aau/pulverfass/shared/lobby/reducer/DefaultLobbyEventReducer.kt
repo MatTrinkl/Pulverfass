@@ -1,7 +1,6 @@
 package at.aau.pulverfass.shared.lobby.reducer
 
 import at.aau.pulverfass.shared.event.EventContext
-import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
@@ -65,7 +64,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                         event.targetPlayerId,
                         event.requesterPlayerId,
                     )
-                is GameStarted -> onGameStarted(state, event.lobbyCode)
+                is GameStarted -> onGameStarted(state)
                 is SystemTick -> state
                 is TimeoutTriggered -> state
                 is TurnEnded -> onTurnEnded(state, event.playerId)
@@ -227,10 +226,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             .firstOrNull { it !in excluded }
     }
 
-    private fun onGameStarted(
-        state: GameState,
-        lobbyCode: LobbyCode,
-    ): GameState {
+    private fun onGameStarted(state: GameState): GameState {
         if (state.players.size < 2) {
             throw InvalidLobbyEventException(
                 "Spiel kann nicht mit weniger als 2 Spielern gestartet werden, " +

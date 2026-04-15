@@ -17,6 +17,9 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = CreateLobbyRequestSerializer::class)
 data object CreateLobbyRequest : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [CreateLobbyRequest].
+ */
 object CreateLobbyRequestSerializer : KSerializer<CreateLobbyRequest> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.CreateLobbyRequest")

@@ -9,6 +9,9 @@ sealed class MainServerRoutingException(
     message: String,
 ) : IllegalArgumentException(message)
 
+/**
+ * Signalisiert, dass für einen gerouteten Request keine passende Lobby-Instanz existiert.
+ */
 class UnknownLobbyRoutingException(
     lobbyCode: LobbyCode,
 ) : MainServerRoutingException(

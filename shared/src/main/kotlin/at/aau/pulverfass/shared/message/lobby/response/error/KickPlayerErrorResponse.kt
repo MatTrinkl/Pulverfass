@@ -20,6 +20,9 @@ data class KickPlayerErrorResponse(
     val reason: String,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [KickPlayerErrorResponse].
+ */
 object KickPlayerErrorResponseSerializer : KSerializer<KickPlayerErrorResponse> {
     override val descriptor =
         buildClassSerialDescriptor(

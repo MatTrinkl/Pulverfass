@@ -25,6 +25,9 @@ data class JoinLobbyRequest(
     val playerDisplayName: String,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [JoinLobbyRequest].
+ */
 object JoinLobbyRequestSerializer : KSerializer<JoinLobbyRequest> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.JoinLobbyRequest") {

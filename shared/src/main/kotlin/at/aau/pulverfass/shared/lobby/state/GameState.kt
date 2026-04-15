@@ -87,6 +87,9 @@ data class GameState(
      * Liefert einen initialen State für eine einzelne Lobby.
      */
     companion object {
+        /**
+         * Erstellt den minimalen Anfangszustand für die Lobby mit [lobbyCode].
+         */
         fun initial(lobbyCode: LobbyCode): GameState =
             GameState(
                 lobbyCode = lobbyCode,

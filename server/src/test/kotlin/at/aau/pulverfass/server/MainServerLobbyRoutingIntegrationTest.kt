@@ -8,14 +8,22 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
@@ -549,6 +557,288 @@ class MainServerLobbyRoutingIntegrationTest {
             }
         }
 
+    @Test
+    fun `full websocket lobby lifecycle create join kick leave and start game`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            val hostId = PlayerId(1)
+            val joinerAId = PlayerId(2)
+            val leavePlayerId = PlayerId(3)
+            val kickedPlayerId = PlayerId(4)
+
+            try {
+                coroutineScope {
+                    val hostSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = hostId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val joinerASessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = joinerAId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val leavePlayerSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = leavePlayerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val kickedPlayerSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = kickedPlayerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    hostSessionAndConnection.first.send(
+                        Frame.Binary(fin = true, data = MessageCodec.encode(CreateLobbyRequest)),
+                    )
+                    val createResponse =
+                        assertIs<CreateLobbyResponse>(
+                            receivePayload(hostSessionAndConnection.first),
+                        )
+                    val lobbyCode = createResponse.lobbyCode
+
+                    // Der Lifecycle-Test setzt explizit Owner + Pre-Game-State fuer Kick/Start.
+                    lobbyManager.removeLobby(lobbyCode)
+                    lobbyManager.createLobby(
+                        lobbyCode = lobbyCode,
+                        initialState =
+                            createPreGameState(
+                                lobbyCode = lobbyCode,
+                                ownerId = hostId,
+                                players = listOf(hostId),
+                                displayNames = mapOf(hostId to "Host"),
+                            ),
+                    )
+
+                    joinerASessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "JoinerA")),
+                        ),
+                    )
+                    assertEquals(
+                        JoinLobbyResponse(lobbyCode),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+
+                    leavePlayerSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Leaver")),
+                        ),
+                    )
+                    assertEquals(
+                        JoinLobbyResponse(lobbyCode),
+                        receivePayload(leavePlayerSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        receivePayload(leavePlayerSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+
+                    kickedPlayerSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "KickMe")),
+                        ),
+                    )
+                    assertEquals(
+                        JoinLobbyResponse(lobbyCode),
+                        receivePayload(kickedPlayerSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        receivePayload(kickedPlayerSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        receivePayload(leavePlayerSessionAndConnection.first),
+                    )
+
+                    hostSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    KickPlayerRequest(
+                                        lobbyCode = lobbyCode,
+                                        targetPlayerId = kickedPlayerId,
+                                        requesterPlayerId = hostId,
+                                    ),
+                                ),
+                        ),
+                    )
+                    assertEquals(
+                        KickPlayerResponse(),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerKickedLobbyEvent(
+                            lobbyCode = lobbyCode,
+                            targetPlayerId = kickedPlayerId,
+                            requesterPlayerId = hostId,
+                        ),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerKickedLobbyEvent(
+                            lobbyCode = lobbyCode,
+                            targetPlayerId = kickedPlayerId,
+                            requesterPlayerId = hostId,
+                        ),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerKickedLobbyEvent(
+                            lobbyCode = lobbyCode,
+                            targetPlayerId = kickedPlayerId,
+                            requesterPlayerId = hostId,
+                        ),
+                        receivePayload(leavePlayerSessionAndConnection.first),
+                    )
+                    assertNull(receivePayloadOrNull(kickedPlayerSessionAndConnection.first))
+
+                    leavePlayerSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+                    assertEquals(
+                        receivePayload(leavePlayerSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertNull(receivePayloadOrNull(leavePlayerSessionAndConnection.first))
+
+                    waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 5)
+
+                    lobbyManager.removeLobby(lobbyCode)
+                    lobbyManager.createLobby(
+                        lobbyCode = lobbyCode,
+                        initialState =
+                            createPreGameState(
+                                lobbyCode = lobbyCode,
+                                ownerId = hostId,
+                                players = listOf(hostId, joinerAId),
+                                displayNames =
+                                    mapOf(
+                                        hostId to "Host",
+                                        joinerAId to "JoinerA",
+                                    ),
+                            ),
+                    )
+
+                    hostSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(StartGameRequest(lobbyCode = lobbyCode)),
+                        ),
+                    )
+                    assertEquals(
+                        StartGameResponse(),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(hostSessionAndConnection.first),
+                    )
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(joinerASessionAndConnection.first),
+                    )
+                    assertNull(receivePayloadOrNull(leavePlayerSessionAndConnection.first))
+                    assertNull(receivePayloadOrNull(kickedPlayerSessionAndConnection.first))
+
+                    assertEquals(
+                        listOf(hostId, joinerAId),
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
+                    )
+
+                    hostSessionAndConnection.first.close()
+                    joinerASessionAndConnection.first.close()
+                    leavePlayerSessionAndConnection.first.close()
+                    kickedPlayerSessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,
@@ -615,4 +905,20 @@ class MainServerLobbyRoutingIntegrationTest {
         assertTrue(value is T)
         return value as T
     }
+
+    private fun createPreGameState(
+        lobbyCode: LobbyCode,
+        ownerId: PlayerId,
+        players: List<PlayerId>,
+        displayNames: Map<PlayerId, String>,
+    ): GameState =
+        GameState(
+            lobbyCode = lobbyCode,
+            lobbyOwner = ownerId,
+            players = players,
+            playerDisplayNames = displayNames,
+            activePlayer = players.firstOrNull(),
+            turnOrder = players,
+            status = GameStatus.WAITING_FOR_PLAYERS,
+        )
 }

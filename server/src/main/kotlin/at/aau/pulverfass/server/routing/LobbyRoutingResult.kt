@@ -44,6 +44,9 @@ sealed interface LobbyRoutingError {
     val reason: String
     val cause: Throwable?
 
+    /**
+     * Fehlerfall, wenn für den Request keine Lobby unter [lobbyCode] aufgelöst werden konnte.
+     */
     data class LobbyNotFound(
         val lobbyCode: LobbyCode,
         override val context: LobbyRoutingContext,
@@ -52,18 +55,27 @@ sealed interface LobbyRoutingError {
         override val cause: Throwable? = null
     }
 
+    /**
+     * Fehlerfall bei technisch oder fachlich ungültigen Routing-Eingabedaten.
+     */
     data class InvalidRoutingData(
         override val reason: String,
         override val context: LobbyRoutingContext,
         override val cause: Throwable? = null,
     ) : LobbyRoutingError
 
+    /**
+     * Fehlerfall, wenn ein Request zwar gemappt wurde, aber als Domain-Event ungültig ist.
+     */
     data class InvalidEvent(
         override val reason: String,
         override val context: LobbyRoutingContext,
         override val cause: Throwable? = null,
     ) : LobbyRoutingError
 
+    /**
+     * Fehlerfall, wenn ein gültiges Event einen unzulässigen State-Übergang auslösen würde.
+     */
     data class InvalidStateTransition(
         override val reason: String,
         override val context: LobbyRoutingContext,

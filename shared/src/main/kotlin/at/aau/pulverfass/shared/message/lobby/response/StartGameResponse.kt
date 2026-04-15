@@ -18,6 +18,9 @@ data class StartGameResponse(
     val success: Boolean = true,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [StartGameResponse].
+ */
 object StartGameResponseSerializer : KSerializer<StartGameResponse> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.StartGameResponse") {

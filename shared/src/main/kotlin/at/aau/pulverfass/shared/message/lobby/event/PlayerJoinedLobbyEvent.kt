@@ -26,6 +26,9 @@ data class PlayerJoinedLobbyEvent(
     val playerDisplayName: String,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [PlayerJoinedLobbyEvent].
+ */
 object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
     override val descriptor =
         buildClassSerialDescriptor(

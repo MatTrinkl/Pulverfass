@@ -23,6 +23,9 @@ data class StartGameRequest(
     val lobbyCode: LobbyCode,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [StartGameRequest].
+ */
 object StartGameRequestSerializer : KSerializer<StartGameRequest> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.StartGameRequest") {

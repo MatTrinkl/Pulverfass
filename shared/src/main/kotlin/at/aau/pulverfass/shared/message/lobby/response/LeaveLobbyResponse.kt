@@ -21,6 +21,9 @@ data class LeaveLobbyResponse(
     val lobbyCode: LobbyCode,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [LeaveLobbyResponse].
+ */
 @OptIn(ExperimentalSerializationApi::class)
 object LeaveLobbyResponseSerializer : KSerializer<LeaveLobbyResponse> {
     override val descriptor =

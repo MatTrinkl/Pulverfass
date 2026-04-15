@@ -9,6 +9,10 @@ sealed class NetworkToLobbyEventMappingException(
     message: String,
 ) : IllegalArgumentException(message)
 
+/**
+ * Signalisiert, dass der empfangene [MessageType] aktuell nicht in ein Domain-Event
+ * des Lobby-Layers übersetzt werden kann.
+ */
 class UnsupportedLobbyMappingPayloadException(
     messageType: MessageType,
 ) : NetworkToLobbyEventMappingException(

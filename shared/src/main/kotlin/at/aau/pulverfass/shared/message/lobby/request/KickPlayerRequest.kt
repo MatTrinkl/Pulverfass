@@ -28,6 +28,9 @@ data class KickPlayerRequest(
     val requesterPlayerId: PlayerId,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [KickPlayerRequest].
+ */
 object KickPlayerRequestSerializer : KSerializer<KickPlayerRequest> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.KickPlayerRequest") {

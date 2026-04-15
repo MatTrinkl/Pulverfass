@@ -18,6 +18,9 @@ data class KickPlayerResponse(
     val success: Boolean = true,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [KickPlayerResponse].
+ */
 object KickPlayerResponseSerializer : KSerializer<KickPlayerResponse> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.KickPlayerResponse") {

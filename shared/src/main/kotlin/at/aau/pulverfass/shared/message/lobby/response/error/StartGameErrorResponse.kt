@@ -20,6 +20,9 @@ data class StartGameErrorResponse(
     val reason: String,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [StartGameErrorResponse].
+ */
 object StartGameErrorResponseSerializer : KSerializer<StartGameErrorResponse> {
     override val descriptor =
         buildClassSerialDescriptor(

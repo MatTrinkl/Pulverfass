@@ -20,6 +20,9 @@ data class CreateLobbyErrorResponse(
     val reason: String,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [CreateLobbyErrorResponse].
+ */
 object CreateLobbyErrorResponseSerializer : KSerializer<CreateLobbyErrorResponse> {
     override val descriptor =
         buildClassSerialDescriptor(

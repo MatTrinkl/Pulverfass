@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResp
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -65,78 +66,90 @@ class MainServerLobbyRoutingService(
             routingJob =
                 scope.launch {
                     network.packetReceiver.packets.collect { packet ->
-                        runCatching {
-                            val payload = MessageCodec.decodePayload(packet)
-                            val request =
-                                DecodedNetworkRequest(
-                                    receivedPacket = packet,
-                                    payload = payload,
-                                    context =
-                                        EventContext(
-                                            connectionId = packet.connectionId,
-                                            playerId = playerIdResolver(packet.connectionId),
-                                            occurredAtEpochMillis = nowEpochMillis(),
-                                        ),
-                                )
-                            if (payload is CreateLobbyRequest) {
-                                try {
-                                    handleCreateLobbyRequest(packet.connectionId)
-                                    hooks.onRouted(packet.connectionId)
-                                } catch (cause: Throwable) {
-                                    dispatchCreateErrorResponse(
-                                        connectionId = packet.connectionId,
-                                        reason =
-                                            cause.message
-                                                ?: "Lobby konnte nicht erstellt werden.",
-                                    )
-                                    hooks.onRoutingError(
-                                        packet.connectionId,
-                                        LobbyRoutingError.InvalidRoutingData(
-                                            reason =
-                                                cause.message
-                                                    ?: "Lobby konnte nicht erstellt werden.",
-                                            context =
-                                                LobbyRoutingContext(
-                                                    connectionId = packet.connectionId,
-                                                    messageType = packet.header.type,
-                                                ),
-                                            cause = cause,
-                                        ),
-                                    )
-                                }
-                                return@collect
-                            }
-                            when (val result = router.route(request)) {
-                                is LobbyRoutingResult.Success -> {
-                                    dispatchNetworkMessages(request)
-                                    hooks.onRouted(packet.connectionId)
-                                }
-                                is LobbyRoutingResult.Failure -> {
-                                    dispatchErrorResponse(request, result.error.reason)
-                                    hooks.onRoutingError(packet.connectionId, result.error)
-                                }
-                            }
-                        }.onFailure { cause ->
-                            logger.warn(
-                                "Failed to route packet for connection {}",
-                                packet.connectionId.value,
-                                cause,
-                            )
-                            hooks.onRoutingError(
-                                packet.connectionId,
-                                LobbyRoutingError.InvalidRoutingData(
-                                    reason = cause.message ?: "Technischer Routingfehler.",
-                                    context =
-                                        LobbyRoutingContext(
-                                            connectionId = packet.connectionId,
-                                            messageType = packet.header.type,
-                                        ),
-                                    cause = cause,
-                                ),
-                            )
-                        }
+                        routePacket(packet)
                     }
                 }
+        }
+    }
+
+    private suspend fun routePacket(packet: ReceivedPacket) {
+        runCatching {
+            val request = decodeRequest(packet)
+            if (request.payload is CreateLobbyRequest) {
+                routeCreateLobbyRequest(packet)
+                return
+            }
+            routeDecodedRequest(request)
+        }.onFailure { cause ->
+            logger.warn(
+                "Failed to route packet for connection {}",
+                packet.connectionId.value,
+                cause,
+            )
+            hooks.onRoutingError(
+                packet.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = cause.message ?: "Technischer Routingfehler.",
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = packet.connectionId,
+                            messageType = packet.header.type,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private fun decodeRequest(packet: ReceivedPacket): DecodedNetworkRequest {
+        val payload = MessageCodec.decodePayload(packet)
+        return DecodedNetworkRequest(
+            receivedPacket = packet,
+            payload = payload,
+            context =
+                EventContext(
+                    connectionId = packet.connectionId,
+                    playerId = playerIdResolver(packet.connectionId),
+                    occurredAtEpochMillis = nowEpochMillis(),
+                ),
+        )
+    }
+
+    private suspend fun routeCreateLobbyRequest(packet: ReceivedPacket) {
+        runCatching {
+            handleCreateLobbyRequest(packet.connectionId)
+            hooks.onRouted(packet.connectionId)
+        }.onFailure { cause ->
+            dispatchCreateErrorResponse(
+                connectionId = packet.connectionId,
+                reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
+            )
+            hooks.onRoutingError(
+                packet.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = packet.connectionId,
+                            messageType = packet.header.type,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeDecodedRequest(request: DecodedNetworkRequest) {
+        when (val result = router.route(request)) {
+            is LobbyRoutingResult.Success -> {
+                dispatchNetworkMessages(request)
+                hooks.onRouted(request.connectionId)
+            }
+
+            is LobbyRoutingResult.Failure -> {
+                dispatchErrorResponse(request, result.error.reason)
+                hooks.onRoutingError(request.connectionId, result.error)
+            }
         }
     }
 
@@ -300,6 +313,9 @@ class MainServerLobbyRoutingService(
     }
 }
 
+/**
+ * Optionale Lifecycle-Hooks für Beobachtbarkeit und Tests des Routing-Flows.
+ */
 data class MainServerLobbyRoutingServiceHooks(
     /** Wird bei erfolgreichem Routing eines Pakets ausgelöst. */
     val onRouted: (ConnectionId) -> Unit = {},

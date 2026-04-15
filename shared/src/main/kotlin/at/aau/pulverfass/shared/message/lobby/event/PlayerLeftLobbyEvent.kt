@@ -24,6 +24,9 @@ data class PlayerLeftLobbyEvent(
     val playerId: PlayerId,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [PlayerLeftLobbyEvent].
+ */
 @OptIn(ExperimentalSerializationApi::class)
 object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
     override val descriptor =

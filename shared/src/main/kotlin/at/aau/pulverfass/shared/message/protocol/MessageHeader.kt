@@ -21,6 +21,9 @@ data class MessageHeader(
     val type: MessageType,
 )
 
+/**
+ * Serialisiert und deserialisiert [MessageHeader] gemäß dem Netzwerkprotokoll.
+ */
 object MessageHeaderSerializer : KSerializer<MessageHeader> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.MessageHeader") {

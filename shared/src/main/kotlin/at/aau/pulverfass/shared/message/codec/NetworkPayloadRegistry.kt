@@ -191,10 +191,16 @@ internal object NetworkPayloadRegistry {
             },
         )
 
+    /**
+     * Liefert den zu [payload] gehörigen [MessageType].
+     */
     fun messageTypeFor(payload: NetworkMessagePayload): MessageType =
         payloadTypeByClass[payload.javaClass]
             ?: throw UnsupportedPayloadClassException(payload.javaClass.name)
 
+    /**
+     * Serialisiert [payload] als JSON-String gemäß der registrierten Payload-Klasse.
+     */
     fun serializePayload(payload: NetworkMessagePayload): String {
         val serializer = payloadSerializerByClass[payload.javaClass]
         if (serializer == null) {
@@ -204,6 +210,9 @@ internal object NetworkPayloadRegistry {
         return serializer(payload)
     }
 
+    /**
+     * Deserialisiert [json] anhand des angegebenen [type] in ein konkretes Payload-Objekt.
+     */
     fun deserializePayload(
         type: MessageType,
         json: String,

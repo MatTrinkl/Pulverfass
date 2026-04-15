@@ -21,6 +21,9 @@ data class CreateLobbyResponse(
     val lobbyCode: LobbyCode,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [CreateLobbyResponse].
+ */
 object CreateLobbyResponseSerializer : KSerializer<CreateLobbyResponse> {
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.CreateLobbyResponse") {

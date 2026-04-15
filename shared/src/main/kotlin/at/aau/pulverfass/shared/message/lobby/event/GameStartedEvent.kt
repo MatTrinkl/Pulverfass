@@ -21,6 +21,9 @@ data class GameStartedEvent(
     val lobbyCode: LobbyCode,
 ) : NetworkMessagePayload
 
+/**
+ * Technischer Serializer für [GameStartedEvent].
+ */
 object GameStartedEventSerializer : KSerializer<GameStartedEvent> {
     override val descriptor =
         buildClassSerialDescriptor(
