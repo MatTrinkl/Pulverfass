@@ -3,11 +3,8 @@ package at.aau.pulverfass.app.network
 import at.aau.pulverfass.app.network.receive.PacketReceiver
 import at.aau.pulverfass.app.network.send.PacketSender
 import at.aau.pulverfass.app.network.transport.AndroidWebSocketTransport
-import at.aau.pulverfass.shared.network.message.LoginRequest
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
-import at.aau.pulverfass.shared.network.send.PacketSendAdapter
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.network.codec.MessageCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -23,7 +20,6 @@ class ClientNetwork(
     val packetReceiver: PacketReceiver = PacketReceiver(),
 ) {
     private val sender: PacketSender = PacketSender(transport)
-    private val packetSender: PacketSendAdapter = PacketSendAdapter(sender::send)
 
     init {
         scope.launch {
@@ -41,47 +37,9 @@ class ClientNetwork(
         transport.disconnect(reason)
     }
 
-    /**
-     * Sendet den technischen Login-Request mit dem in Shared definierten
-     * Payload-Vertrag.
-     */
-    suspend fun sendLoginRequest(
-        username: String,
-        password: String,
-    ) {
-        val payload =
-            LoginRequest(
-                username = username,
-                password = password,
-            )
-        val payloadBytes =
-            NetworkMessageSerializer.serializePayload(
-                serializer = LoginRequest.serializer(),
-                payload = payload,
-            )
-
-        packetSender.send(
-            connectionId = CLIENT_CONNECTION_ID,
-            header = MessageHeader(MessageType.LOGIN_REQUEST),
-            payloadBytes = payloadBytes,
-        )
-    }
-
-    /**
-     * Sendet eine technische Lobby-Nachricht als JSON-String.
-     *
-     * Diese Methode ist bewusst als Vorlage gehalten, bis für alle
-     * Lobby-MessageTypes konkrete Shared-Payload-Klassen existieren.
-     */
-    suspend fun sendJsonMessage(
-        messageType: MessageType,
-        payloadJson: String,
-    ) {
-        packetSender.send(
-            connectionId = CLIENT_CONNECTION_ID,
-            header = MessageHeader(messageType),
-            payloadBytes = payloadJson.encodeToByteArray(),
-        )
+    suspend fun sendPayload(payload: NetworkMessagePayload) {
+        val bytes = MessageCodec.encode(payload)
+        sender.send(CLIENT_CONNECTION_ID, bytes)
     }
 
     fun close() {
