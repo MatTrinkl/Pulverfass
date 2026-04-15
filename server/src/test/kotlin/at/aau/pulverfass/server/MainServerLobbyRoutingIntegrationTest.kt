@@ -771,6 +771,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
