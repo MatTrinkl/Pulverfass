@@ -1,7 +1,17 @@
 package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.app.network.ClientNetwork
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.transport.Connected
 import at.aau.pulverfass.shared.network.transport.Disconnected
 import at.aau.pulverfass.shared.network.transport.TransportError
@@ -13,21 +23,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /**
  * UI-zentrierte Lobby-Schicht für die Android-App.
  *
- * Der Controller verbindet den LobbyScreen mit der neuen technischen
- * WebSocket-Pipeline und kapselt Statusverwaltung, Fehlerbehandlung und
- * technische Requests.
+ * Der Controller verbindet den LobbyScreen mit der technischen
+ * WebSocket-Pipeline und kapselt Statusverwaltung, Fehlerbehandlung
+ * sowie Create/Join-Flow inklusive Lobby-Playerliste.
  */
 class LobbyController(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val network: ClientNetwork = ClientNetwork(scope),
+    private val config: LobbyControllerConfig = LobbyControllerConfig(),
 ) {
-    private val _state = MutableStateFlow(LobbyUiState())
+    private enum class PendingLobbyAction {
+        CREATE,
+        JOIN,
+    }
+
+    private val _state =
+        MutableStateFlow(
+            LobbyUiState(
+                serverUrl = config.defaultServerUrl,
+                statusText = config.statusNotConnected,
+            ),
+        )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
+
+    private val playersById = linkedMapOf<Long, String>()
+    private var pendingCreateCallback: ((String) -> Unit)? = null
+    private var pendingJoinCallback: ((String) -> Unit)? = null
+    private var pendingLobbyAction: PendingLobbyAction? = null
 
     init {
         scope.launch {
@@ -38,10 +64,11 @@ class LobbyController(
                             it.copy(
                                 isConnected = true,
                                 isConnecting = false,
-                                statusText = "Verbunden",
+                                statusText = config.statusConnected,
                                 errorText = null,
                             )
                         }
+                        executePendingLobbyActionIfAny()
                     }
 
                     is Disconnected -> {
@@ -49,9 +76,10 @@ class LobbyController(
                             it.copy(
                                 isConnected = false,
                                 isConnecting = false,
-                                statusText = "Getrennt",
+                                statusText = config.statusDisconnected,
                             )
                         }
+                        clearPendingLobbyAction()
                     }
 
                     is TransportError -> {
@@ -59,12 +87,11 @@ class LobbyController(
                             it.copy(
                                 isConnected = false,
                                 isConnecting = false,
-                                statusText = "Verbindungsfehler",
-                                errorText =
-                                    event.cause.message
-                                        ?: "Unbekannter Transportfehler",
+                                statusText = config.statusConnectionError,
+                                errorText = event.cause.message ?: config.errorTransportUnknown,
                             )
                         }
+                        clearPendingLobbyAction()
                     }
 
                     else -> Unit
@@ -74,10 +101,14 @@ class LobbyController(
 
         scope.launch {
             network.packetReceiver.packets.collect { packet ->
-                _state.update {
-                    it.copy(
-                        lastMessageType = packet.header.type.name,
-                    )
+                _state.update { it.copy(lastMessageType = packet.header.type.name) }
+
+                runCatching {
+                    MessageCodec.decodePayload(packet)
+                }.onSuccess { payload ->
+                    handlePayload(payload)
+                }.onFailure { error ->
+                    _state.update { it.copy(errorText = error.message ?: config.errorPacketDecode) }
                 }
             }
         }
@@ -85,11 +116,7 @@ class LobbyController(
         scope.launch {
             network.packetReceiver.errors.collect { error ->
                 _state.update {
-                    it.copy(
-                        errorText =
-                            error.message
-                                ?: "Paket konnte nicht dekodiert werden",
-                    )
+                    it.copy(errorText = error.message ?: config.errorPacketDecode)
                 }
             }
         }
@@ -104,7 +131,7 @@ class LobbyController(
     }
 
     fun updateLobbyCode(lobbyCode: String) {
-        _state.update { it.copy(lobbyCode = lobbyCode) }
+        _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
     }
 
     fun setJoining(isJoining: Boolean) {
@@ -114,7 +141,10 @@ class LobbyController(
     fun connect() {
         val snapshot = state.value
         if (snapshot.playerName.isBlank()) {
-            _state.update { it.copy(errorText = "Bitte zuerst einen Spielernamen eingeben") }
+            _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
+            return
+        }
+        if (snapshot.isConnected || snapshot.isConnecting) {
             return
         }
 
@@ -122,123 +152,262 @@ class LobbyController(
             _state.update {
                 it.copy(
                     isConnecting = true,
-                    statusText = "Verbinde...",
+                    statusText = config.statusConnecting,
                     errorText = null,
                 )
             }
 
             runCatching {
                 network.connect(snapshot.serverUrl)
-                network.sendLoginRequest(
-                    username = snapshot.playerName,
-                    password = "android-template",
-                )
             }.onFailure { error ->
                 _state.update {
                     it.copy(
                         isConnected = false,
                         isConnecting = false,
-                        statusText = "Verbindung fehlgeschlagen",
-                        errorText = error.message ?: "Unbekannter Fehler",
+                        statusText = config.statusConnectionFailed,
+                        errorText = error.message ?: config.errorUnknown,
                     )
                 }
+                clearPendingLobbyAction()
             }
         }
     }
 
     fun disconnect() {
         scope.launch {
-            runCatching { network.disconnect("Client disconnected") }
+            runCatching { network.disconnect(config.disconnectReason) }
         }
     }
 
-    /**
-     * Sendet einen technischen Create-Request und liefert einen lokalen Lobbycode.
-     *
-     * Die Payload-Struktur ist absichtlich minimal gehalten, bis konkrete
-     * Shared-Payload-Klassen für GAME_CREATE_REQUEST vorliegen.
-     */
     fun createLobby(onLobbyReady: (String) -> Unit) {
         val snapshot = state.value
-        if (!snapshot.isConnected) {
-            _state.update { it.copy(errorText = "Bitte zuerst mit dem Server verbinden") }
+        if (snapshot.playerName.isBlank()) {
+            _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
 
-        val generatedCode = Random.nextInt(1000, 10000).toString()
-
-        scope.launch {
-            runCatching {
-                network.sendJsonMessage(
-                    messageType = MessageType.GAME_CREATE_REQUEST,
-                    payloadJson =
-                        """
-                        {"playerName":"${snapshot.playerName}","clientLobbyCode":"$generatedCode"}
-                        """.trimIndent(),
-                )
-            }.onSuccess {
-                onLobbyReady(generatedCode)
-            }.onFailure { error ->
-                _state.update {
-                    it.copy(
-                        errorText = error.message ?: "Create request fehlgeschlagen",
-                    )
-                }
-            }
+        pendingCreateCallback = onLobbyReady
+        pendingJoinCallback = null
+        resetLobbyMembers()
+        if (!snapshot.isConnected) {
+            pendingLobbyAction = PendingLobbyAction.CREATE
+            connect()
+            return
         }
+
+        submitCreateLobbyRequest()
     }
 
-    /**
-     * Sendet einen technischen Join-Request für den angegebenen Lobbycode.
-     *
-     * Die Payload-Struktur ist absichtlich minimal gehalten, bis konkrete
-     * Shared-Payload-Klassen für GAME_JOIN_REQUEST vorliegen.
-     */
     fun joinLobby(onLobbyReady: (String) -> Unit) {
         val snapshot = state.value
-        if (!snapshot.isConnected) {
-            _state.update { it.copy(errorText = "Bitte zuerst mit dem Server verbinden") }
+        if (snapshot.playerName.isBlank()) {
+            _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
-        if (snapshot.lobbyCode.length != 4) {
-            _state.update { it.copy(errorText = "Lobbycode muss 4-stellig sein") }
+        if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+            _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
             return
         }
 
-        scope.launch {
-            runCatching {
-                network.sendJsonMessage(
-                    messageType = MessageType.GAME_JOIN_REQUEST,
-                    payloadJson =
-                        """
-                        {"playerName":"${snapshot.playerName}","lobbyCode":"${snapshot.lobbyCode}"}
-                        """.trimIndent(),
-                )
-            }.onSuccess {
-                onLobbyReady(snapshot.lobbyCode)
-            }.onFailure { error ->
-                _state.update {
-                    it.copy(
-                        errorText = error.message ?: "Join request fehlgeschlagen",
-                    )
-                }
-            }
+        pendingJoinCallback = onLobbyReady
+        pendingCreateCallback = null
+        resetLobbyMembers()
+        if (!snapshot.isConnected) {
+            pendingLobbyAction = PendingLobbyAction.JOIN
+            connect()
+            return
         }
+
+        submitJoinLobbyRequest(snapshot)
     }
 
     fun close() {
         network.close()
     }
-}
 
-data class LobbyUiState(
-    val serverUrl: String = "ws://10.0.2.2:8080/ws",
-    val playerName: String = "",
-    val lobbyCode: String = "",
-    val isJoining: Boolean = false,
-    val isConnecting: Boolean = false,
-    val isConnected: Boolean = false,
-    val statusText: String = "Nicht verbunden",
-    val errorText: String? = null,
-    val lastMessageType: String? = null,
-)
+    fun leaveLobby() {
+        val lobbyCode = state.value.activeLobbyCode ?: return
+        scope.launch {
+            runCatching {
+                network.sendPayload(
+                    LeaveLobbyRequest(
+                        lobbyCode = parseLobbyCode(lobbyCode),
+                    ),
+                )
+            }
+        }
+        _state.update {
+            it.copy(
+                activeLobbyCode = null,
+                isHost = false,
+                playerNames = emptyList(),
+            )
+        }
+        playersById.clear()
+    }
+
+    private fun handlePayload(payload: Any) {
+        when (payload) {
+            is CreateLobbyResponse -> handleCreateLobbyResponse(payload)
+            is CreateLobbyErrorResponse -> {
+                pendingCreateCallback = null
+                _state.update { it.copy(errorText = payload.reason) }
+            }
+            is JoinLobbyResponse -> handleJoinLobbyResponse(payload)
+            is JoinLobbyErrorResponse -> {
+                pendingJoinCallback = null
+                _state.update { it.copy(errorText = payload.reason) }
+            }
+            is PlayerJoinedLobbyEvent -> {
+                playersById[payload.playerId.value] = payload.playerDisplayName
+                publishPlayerNames()
+            }
+            is PlayerLeftLobbyEvent -> {
+                playersById.remove(payload.playerId.value)
+                publishPlayerNames()
+            }
+            is PlayerKickedLobbyEvent -> {
+                playersById.remove(payload.targetPlayerId.value)
+                publishPlayerNames()
+            }
+        }
+    }
+
+    private fun executePendingLobbyActionIfAny() {
+        when (pendingLobbyAction) {
+            PendingLobbyAction.CREATE -> {
+                pendingLobbyAction = null
+                submitCreateLobbyRequest()
+            }
+            PendingLobbyAction.JOIN -> {
+                val snapshot = state.value
+                if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+                    pendingLobbyAction = null
+                    pendingJoinCallback = null
+                    _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
+                    return
+                }
+                pendingLobbyAction = null
+                submitJoinLobbyRequest(snapshot)
+            }
+            null -> Unit
+        }
+    }
+
+    private fun submitCreateLobbyRequest() {
+        scope.launch {
+            runCatching {
+                network.sendPayload(CreateLobbyRequest)
+            }.onFailure { error ->
+                pendingCreateCallback = null
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorCreateFailed)
+                }
+            }
+        }
+    }
+
+    private fun submitJoinLobbyRequest(snapshot: LobbyUiState = state.value) {
+        scope.launch {
+            runCatching {
+                network.sendPayload(
+                    JoinLobbyRequest(
+                        lobbyCode = parseLobbyCode(snapshot.lobbyCode),
+                        playerDisplayName = snapshot.playerName,
+                    ),
+                )
+            }.onFailure { error ->
+                pendingJoinCallback = null
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorJoinFailed)
+                }
+            }
+        }
+    }
+
+    private fun handleCreateLobbyResponse(payload: CreateLobbyResponse) {
+        val lobbyCode = payload.lobbyCode.value
+
+        _state.update {
+            it.copy(
+                lobbyCode = lobbyCode,
+                activeLobbyCode = lobbyCode,
+                isHost = true,
+                errorText = null,
+            )
+        }
+
+        scope.launch {
+            runCatching {
+                network.sendPayload(
+                    JoinLobbyRequest(
+                        lobbyCode = payload.lobbyCode,
+                        playerDisplayName = state.value.playerName,
+                    ),
+                )
+            }.onFailure { error ->
+                pendingCreateCallback = null
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorJoinFailed)
+                }
+            }
+        }
+    }
+
+    private fun handleJoinLobbyResponse(payload: JoinLobbyResponse) {
+        val joinedCode = payload.lobbyCode.value
+        _state.update {
+            it.copy(
+                activeLobbyCode = joinedCode,
+                lobbyCode = joinedCode,
+                playerNames = ensureOwnPlayerName(it.playerNames, it.playerName),
+                errorText = null,
+            )
+        }
+
+        val createCallback = pendingCreateCallback
+        if (createCallback != null) {
+            pendingCreateCallback = null
+            createCallback(joinedCode)
+            return
+        }
+
+        val joinCallback = pendingJoinCallback
+        if (joinCallback != null) {
+            pendingJoinCallback = null
+            _state.update { it.copy(isHost = false) }
+            joinCallback(joinedCode)
+        }
+    }
+
+    private fun parseLobbyCode(value: String) =
+        at.aau.pulverfass.shared.ids.LobbyCode(value.uppercase())
+
+    private fun resetLobbyMembers() {
+        playersById.clear()
+        publishPlayerNames()
+    }
+
+    private fun clearPendingLobbyAction() {
+        pendingLobbyAction = null
+        pendingCreateCallback = null
+        pendingJoinCallback = null
+    }
+
+    private fun publishPlayerNames() {
+        _state.update { it.copy(playerNames = playersById.values.toList()) }
+    }
+
+    private fun ensureOwnPlayerName(
+        currentNames: List<String>,
+        ownName: String,
+    ): List<String> {
+        if (ownName.isBlank()) {
+            return currentNames
+        }
+        if (currentNames.contains(ownName)) {
+            return currentNames
+        }
+        return currentNames + ownName
+    }
+}
