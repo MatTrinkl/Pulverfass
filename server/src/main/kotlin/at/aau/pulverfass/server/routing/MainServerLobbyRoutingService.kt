@@ -182,7 +182,23 @@ class MainServerLobbyRoutingService(
         network.send(request.connectionId, JoinLobbyResponse(payload.lobbyCode))
 
         val playerId = request.context.playerId ?: return
-        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
+        val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
+        val members = lobbyState.players
+
+        members
+            .filter { existingPlayerId -> existingPlayerId != playerId }
+            .forEach { existingPlayerId ->
+                val existingName = lobbyState.playerDisplayNames[existingPlayerId] ?: return@forEach
+                network.send(
+                    request.connectionId,
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = payload.lobbyCode,
+                        playerId = existingPlayerId,
+                        playerDisplayName = existingName,
+                    ),
+                )
+            }
+
         val event =
             PlayerJoinedLobbyEvent(
                 lobbyCode = payload.lobbyCode,
