@@ -1,6 +1,7 @@
-package at.aau.pulverfass.shared.network.message
+package at.aau.pulverfass.shared.message.lobby.request
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -11,24 +12,26 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 /**
- * Anfrage eines Clients, einer bestehenden Lobby beizutreten.
+ * Anfrage eines Clients (als Lobby Owner), das Spiel zu starten.
  *
- * @property lobbyCode Ziel-Lobby der Join-Anfrage
+ * **Konvention:** Siehe docs/NETWORK_MESSAGES.md für CustomSerializer-Pattern
+ *
+ * @property lobbyCode betroffene Lobby
  */
-@Serializable(with = GameJoinRequestSerializer::class)
-data class GameJoinRequest(
+@Serializable(with = StartGameRequestSerializer::class)
+data class StartGameRequest(
     val lobbyCode: LobbyCode,
 ) : NetworkMessagePayload
 
-object GameJoinRequestSerializer : KSerializer<GameJoinRequest> {
+object StartGameRequestSerializer : KSerializer<StartGameRequest> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameJoinRequest") {
+        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.StartGameRequest") {
             element("lobbyCode", LobbyCode.serializer().descriptor)
         }
 
     override fun serialize(
         encoder: Encoder,
-        value: GameJoinRequest,
+        value: StartGameRequest,
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(
@@ -40,7 +43,7 @@ object GameJoinRequestSerializer : KSerializer<GameJoinRequest> {
         composite.endStructure(descriptor)
     }
 
-    override fun deserialize(decoder: Decoder): GameJoinRequest {
+    override fun deserialize(decoder: Decoder): StartGameRequest {
         val composite = decoder.beginStructure(descriptor)
         var lobbyCode: LobbyCode? = null
 
@@ -53,7 +56,7 @@ object GameJoinRequestSerializer : KSerializer<GameJoinRequest> {
         }
 
         composite.endStructure(descriptor)
-        return GameJoinRequest(
+        return StartGameRequest(
             lobbyCode =
                 lobbyCode
                     ?: throw MissingFieldException("lobbyCode", descriptor.serialName),

@@ -1,9 +1,9 @@
 package at.aau.pulverfass.shared.network.codec
 
+import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.PayloadTypeMismatchException
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.message.NetworkPayloadRegistry
 
 /**
  * Repräsentiert ein bereits fachlich deserialisiertes Netzwerkpaket.

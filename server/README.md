@@ -53,7 +53,7 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstuetzung bereit.
 - `DecodedNetworkRequest` ist das neutrale Inputmodell fuer bereits dekodierte Requests (`ConnectionId`, `MessageHeader`, `NetworkMessagePayload`, `EventContext`).
 - `NetworkToLobbyEventMapper` trennt Netzwerkmodell und Lobby-Domain.
 - `DefaultNetworkToLobbyEventMapper` mappt aktuell:
-  - `GAME_JOIN_REQUEST` + `GameJoinRequest` + `EventContext.playerId` -> `PlayerJoined`
+  - `LOBBY_JOIN_REQUEST` + `JoinLobbyRequest` + `EventContext.playerId` -> `PlayerJoined`
 - Definierte Fehlerfaelle:
   - Header/Payload-Mismatch
   - fehlender `playerId`-Kontext
@@ -85,3 +85,4 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstuetzung bereit.
   - erzeugt `DecodedNetworkRequest`
   - ruft `MainServerRouter.handle(...)` auf
 - Damit bleibt der Transportpfad von Lobby-Domainlogik getrennt.
+

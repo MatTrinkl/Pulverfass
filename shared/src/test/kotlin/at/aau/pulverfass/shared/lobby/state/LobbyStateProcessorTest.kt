@@ -22,7 +22,7 @@ class LobbyStateProcessorTest {
         val processor = DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
         val playerId = PlayerId(1)
 
-        processor.apply(PlayerJoined(lobbyCode, playerId))
+        processor.apply(PlayerJoined(lobbyCode, playerId, "Alice"))
         val snapshot = processor.currentState()
 
         assertEquals(lobbyCode, snapshot.lobbyCode)
@@ -119,7 +119,7 @@ class LobbyStateProcessorTest {
         val processor: LobbyStateProcessor =
             DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
 
-        val updated = processor.apply(PlayerJoined(lobbyCode, PlayerId(4)))
+        val updated = processor.apply(PlayerJoined(lobbyCode, PlayerId(4), "Player 4"))
 
         assertEquals(1, updated.processedEventCount)
         assertEquals(PlayerId(4), updated.activePlayer)
@@ -172,7 +172,7 @@ class LobbyStateProcessorTest {
             method.invoke(
                 null,
                 processor,
-                PlayerJoined(lobbyCode, PlayerId(5)),
+                PlayerJoined(lobbyCode, PlayerId(5), "Player 5"),
                 null,
                 2,
                 null,

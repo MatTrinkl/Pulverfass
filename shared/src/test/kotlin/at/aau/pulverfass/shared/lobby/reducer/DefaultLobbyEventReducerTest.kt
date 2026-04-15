@@ -5,10 +5,12 @@ import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
+import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
 import at.aau.pulverfass.shared.lobby.event.SystemTick
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
@@ -37,7 +39,7 @@ class DefaultLobbyEventReducerTest {
         val updatedState =
             reducer.apply(
                 state = GameState.initial(lobbyCode),
-                event = PlayerJoined(lobbyCode, playerId),
+                event = PlayerJoined(lobbyCode, playerId, "Alice"),
                 context = context,
             )
 
@@ -89,7 +91,7 @@ class DefaultLobbyEventReducerTest {
         val lobbyCode = LobbyCode("GH78")
         val playerId = PlayerId(7)
         val state = GameState.initial(lobbyCode)
-        val event = PlayerJoined(lobbyCode, playerId)
+        val event = PlayerJoined(lobbyCode, playerId, "Grace")
         val context =
             EventContext(
                 connectionId = ConnectionId(8),
@@ -115,7 +117,7 @@ class DefaultLobbyEventReducerTest {
             assertThrows(LobbyCodeMismatchException::class.java) {
                 reducerAsInterface.apply(
                     state = state,
-                    event = PlayerJoined(actualLobbyCode, PlayerId(1)),
+                    event = PlayerJoined(actualLobbyCode, PlayerId(1), "Alice"),
                 )
             }
 
@@ -167,10 +169,14 @@ class DefaultLobbyEventReducerTest {
                 activePlayer = playerOne,
             )
         assertThrows(InvalidLobbyEventException::class.java) {
-            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne))
+            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "Player 1"))
         }
 
-        val runningState = reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerTwo))
+        val runningState =
+            reducer.apply(
+                duplicateState,
+                PlayerJoined(lobbyCode, playerTwo, "Player 2"),
+            )
         assertEquals(GameStatus.RUNNING, runningState.status)
         assertEquals(playerOne, runningState.activePlayer)
 
@@ -179,11 +185,11 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(
             GameStatus.CLOSED,
-            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo)).status,
+            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
         )
         assertEquals(
             GameStatus.FINISHED,
-            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo)).status,
+            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
         )
     }
 
@@ -293,7 +299,7 @@ class DefaultLobbyEventReducerTest {
                 null,
                 reducer,
                 GameState.initial(lobbyCode),
-                PlayerJoined(lobbyCode, PlayerId(3)),
+                PlayerJoined(lobbyCode, PlayerId(3), "Player 3"),
                 null,
                 4,
                 null,
@@ -301,5 +307,179 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(PlayerId(3), updated.activePlayer)
         assertNull(updated.lastEventContext)
+    }
+
+    @Test
+    fun `player kicked requires owner permission`() {
+        val lobbyCode = LobbyCode("ST90")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val nonOwner = PlayerId(3)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer, nonOwner),
+                turnOrder = listOf(owner, targetPlayer, nonOwner),
+                activePlayer = owner,
+                status = GameStatus.RUNNING,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                stateWithOwner,
+                PlayerKicked(lobbyCode, targetPlayer, nonOwner),
+            )
+        }
+    }
+
+    @Test
+    fun `player kicked validates target player exists`() {
+        val lobbyCode = LobbyCode("UV12")
+        val owner = PlayerId(1)
+        val nonExistentPlayer = PlayerId(99)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner),
+                turnOrder = listOf(owner),
+                activePlayer = owner,
+                status = GameStatus.RUNNING,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                stateWithOwner,
+                PlayerKicked(lobbyCode, nonExistentPlayer, owner),
+            )
+        }
+    }
+
+    @Test
+    fun `player kicked removes player and updates state correctly`() {
+        val lobbyCode = LobbyCode("WX34")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val thirdPlayer = PlayerId(3)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer, thirdPlayer),
+                turnOrder = listOf(owner, targetPlayer, thirdPlayer),
+                activePlayer = targetPlayer,
+                status = GameStatus.RUNNING,
+            )
+
+        val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
+
+        assertEquals(listOf(owner, thirdPlayer), updated.players)
+        assertEquals(listOf(owner, thirdPlayer), updated.turnOrder)
+        assertEquals(thirdPlayer, updated.activePlayer)
+        assertEquals(GameStatus.RUNNING, updated.status)
+    }
+
+    @Test
+    fun `player kicked handles single player removal`() {
+        val lobbyCode = LobbyCode("YZ56")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer),
+                turnOrder = listOf(owner, targetPlayer),
+                activePlayer = targetPlayer,
+                status = GameStatus.RUNNING,
+            )
+
+        val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
+
+        assertEquals(listOf(owner), updated.players)
+        assertEquals(listOf(owner), updated.turnOrder)
+        assertEquals(owner, updated.activePlayer)
+        assertEquals(GameStatus.WAITING_FOR_PLAYERS, updated.status)
+    }
+
+    @Test
+    fun `player kicked transitions status when below 2 players`() {
+        val lobbyCode = LobbyCode("AB78")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer),
+                turnOrder = listOf(owner, targetPlayer),
+                activePlayer = owner,
+                status = GameStatus.RUNNING,
+            )
+
+        val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
+
+        assertEquals(listOf(owner), updated.players)
+        assertEquals(GameStatus.WAITING_FOR_PLAYERS, updated.status)
+    }
+
+    @Test
+    fun `game started transitions status to running`() {
+        val lobbyCode = LobbyCode("GS01")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2),
+                turnOrder = listOf(owner, player2),
+                activePlayer = owner,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        val started = reducer.apply(stateWithOwner, GameStarted(lobbyCode))
+
+        assertEquals(GameStatus.RUNNING, started.status)
+    }
+
+    @Test
+    fun `game started requires minimum 2 players`() {
+        val lobbyCode = LobbyCode("GS02")
+        val owner = PlayerId(1)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner),
+                turnOrder = listOf(owner),
+                activePlayer = owner,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(stateWithOwner, GameStarted(lobbyCode))
+        }
+    }
+
+    @Test
+    fun `game started requires waiting for players status`() {
+        val lobbyCode = LobbyCode("GS03")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
+        val stateAlreadyRunning =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2),
+                turnOrder = listOf(owner, player2),
+                activePlayer = owner,
+                status = GameStatus.RUNNING,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(stateAlreadyRunning, GameStarted(lobbyCode))
+        }
     }
 }

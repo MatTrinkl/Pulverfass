@@ -1,4 +1,4 @@
-package at.aau.pulverfass.shared.network.message
+package at.aau.pulverfass.shared.message.protocol
 
 /**
  * Marker-Interface für alle fachlichen Payloads, die über das Netzwerkprotokoll

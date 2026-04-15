@@ -8,8 +8,10 @@ import at.aau.pulverfass.shared.ids.PlayerId
  *
  * @property lobbyCode betroffene Lobby
  * @property playerId beigetretener Spieler
+ * @property playerDisplayName Anzeigename des Players für die Lobby-UI
  */
 data class PlayerJoined(
     override val lobbyCode: LobbyCode,
     val playerId: PlayerId,
+    val playerDisplayName: String,
 ) : ExternalLobbyEvent

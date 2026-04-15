@@ -72,5 +72,6 @@ class DefaultLobbyStateProcessor(
 private fun GameState.snapshot(): GameState =
     copy(
         players = players.toList(),
+        playerDisplayNames = playerDisplayNames.toMap(),
         turnOrder = turnOrder.toList(),
     )

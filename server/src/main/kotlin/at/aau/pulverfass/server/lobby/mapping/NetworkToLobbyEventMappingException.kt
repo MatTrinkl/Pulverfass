@@ -1,6 +1,6 @@
 package at.aau.pulverfass.server.lobby.mapping
 
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.protocol.MessageType
 
 /**
  * Basistyp für technische Mapping-Fehler zwischen Netzwerkmodell und Lobby-Domain.

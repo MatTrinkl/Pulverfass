@@ -1,9 +1,10 @@
 package at.aau.pulverfass.server
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
-import at.aau.pulverfass.shared.network.message.LoginRequest
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
@@ -15,10 +16,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class ServerNetworkIntegrationTest {
     @Test
@@ -34,7 +35,7 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val payload = LoginRequest(username = "alice", password = "secret")
+            val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
 
             coroutineScope {
                 val receivedDeferred =
@@ -69,7 +70,7 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val payload = LoginRequest(username = "bob", password = "topsecret")
+            val payload = JoinLobbyRequest(LobbyCode("CD34"), "bob")
 
             coroutineScope {
                 val connectedDeferred =
@@ -110,5 +111,10 @@ class ServerNetworkIntegrationTest {
         } finally {
             server.stop(1_000, 1_000)
         }
+    }
+
+    private inline fun <reified T> assertIs(value: Any?): T {
+        assertTrue(value is T)
+        return value as T
     }
 }

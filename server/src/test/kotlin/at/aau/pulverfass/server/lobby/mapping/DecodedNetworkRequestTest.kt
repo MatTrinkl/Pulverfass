@@ -3,10 +3,10 @@ package at.aau.pulverfass.server.lobby.mapping
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.GameJoinRequest
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
@@ -19,19 +19,19 @@ class DecodedNetworkRequestTest {
         val packet =
             ReceivedPacket(
                 connectionId = ConnectionId(1),
-                header = MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                 packet = SerializedPacket(byteArrayOf(1), byteArrayOf(2)),
             )
         val request =
             DecodedNetworkRequest(
                 receivedPacket = packet,
-                payload = GameJoinRequest(LobbyCode("AB12")),
+                payload = JoinLobbyRequest(LobbyCode("AB12"), "Alice"),
                 context = EventContext(connectionId = ConnectionId(1), occurredAtEpochMillis = 123),
             )
 
         assertSame(packet, request.receivedPacket)
         assertEquals(ConnectionId(1), request.connectionId)
-        assertEquals(MessageType.GAME_JOIN_REQUEST, request.header.type)
+        assertEquals(MessageType.LOBBY_JOIN_REQUEST, request.header.type)
     }
 
     @Test
@@ -42,10 +42,10 @@ class DecodedNetworkRequestTest {
                     receivedPacket =
                         ReceivedPacket(
                             connectionId = ConnectionId(1),
-                            header = MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                            header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                             packet = SerializedPacket(byteArrayOf(1), byteArrayOf()),
                         ),
-                    payload = GameJoinRequest(LobbyCode("AB12")),
+                    payload = JoinLobbyRequest(LobbyCode("AB12"), "Alice"),
                     context =
                         EventContext(
                             connectionId = ConnectionId(2),
@@ -67,10 +67,10 @@ class DecodedNetworkRequestTest {
                 receivedPacket =
                     ReceivedPacket(
                         connectionId = ConnectionId(7),
-                        header = MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                        header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                         packet = SerializedPacket(byteArrayOf(1), byteArrayOf()),
                     ),
-                payload = GameJoinRequest(LobbyCode("CD34")),
+                payload = JoinLobbyRequest(LobbyCode("CD34"), "Bob"),
                 context = EventContext(occurredAtEpochMillis = 789),
             )
 

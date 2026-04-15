@@ -49,6 +49,7 @@ Diese Events werden durch externe Aktionen ausgelöst (Spielerzüge, Netzwerknac
 data class PlayerJoined(
     override val lobbyCode: LobbyCode,
     val playerId: PlayerId,
+    val playerDisplayName: String,
 ) : ExternalLobbyEvent
 ```
 **Bedeutung**: Ein Spieler ist einer Lobby beigetreten.
@@ -203,7 +204,7 @@ interface LobbyEventReducer {
 val reducer = DefaultLobbyEventReducer()
 val newState = reducer.apply(
     state = currentState,
-    event = PlayerJoined(lobbyCode, playerId),
+    event = PlayerJoined(lobbyCode, playerId, "Alice"),
     context = eventContext
 )
 ```
@@ -247,7 +248,7 @@ Der Zustandsübergang ist ungültig, z.B.:
 Kotlin's `when` mit sealed Interfaces ermöglicht typsicheres Pattern Matching:
 
 ```kotlin
-val event: LobbyEvent = PlayerJoined(lobbyCode, playerId)
+val event: LobbyEvent = PlayerJoined(lobbyCode, playerId, "Alice")
 
 // Auf Root-Ebene
 when (event) {
@@ -501,7 +502,11 @@ Wenn du den GameState mit einem neuen Feld erweiterst:
 
 2. **Reducer-Logik entsprechend anpassen**
    ```kotlin
-   private fun onPlayerJoined(state: GameState, playerId: PlayerId): GameState {
+   private fun onPlayerJoined(
+       state: GameState,
+       playerId: PlayerId,
+       playerDisplayName: String,
+   ): GameState {
        return state.copy(
            // ... existiende Updates ...
            newProperty = calculateNewPropertyValue(state)

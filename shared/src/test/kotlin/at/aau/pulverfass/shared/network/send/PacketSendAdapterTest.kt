@@ -1,10 +1,10 @@
 package at.aau.pulverfass.shared.network.send
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.codec.PacketCodec
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -40,11 +40,11 @@ class PacketSendAdapterTest {
         val adapter = PacketSendAdapter { _, _ -> }
         val payload = byteArrayOf(7, 8)
 
-        val packet = adapter.createPacket(MessageHeader(MessageType.LOGIN_REQUEST), payload)
+        val packet = adapter.createPacket(MessageHeader(MessageType.CONNECTION_REQUEST), payload)
         payload[0] = 0
 
         assertEquals(
-            MessageType.LOGIN_REQUEST,
+            MessageType.CONNECTION_REQUEST,
             NetworkMessageSerializer.deserializeHeader(packet.headerBytes).type,
         )
         assertArrayEquals(byteArrayOf(7, 8), packet.payloadBytes)
@@ -61,13 +61,13 @@ class PacketSendAdapterTest {
 
             adapter.send(
                 connectionId = ConnectionId(5),
-                header = MessageHeader(MessageType.LOGIN_REQUEST),
+                header = MessageHeader(MessageType.CONNECTION_REQUEST),
                 payloadBytes = byteArrayOf(9, 1),
             )
 
             val packet = PacketCodec.unpack(checkNotNull(capturedBytes))
             assertEquals(
-                MessageType.LOGIN_REQUEST,
+                MessageType.CONNECTION_REQUEST,
                 NetworkMessageSerializer.deserializeHeader(packet.headerBytes).type,
             )
             assertArrayEquals(byteArrayOf(9, 1), packet.payloadBytes)

@@ -9,10 +9,10 @@ import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.lobby.event.SystemTick
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.GameJoinRequest
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,11 +21,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class MainServerRouterTest {
     @Test
@@ -83,7 +82,7 @@ class MainServerRouterTest {
             val router = MainServerRouter(manager, mapper)
 
             try {
-                assertFailsWith<UnknownLobbyRoutingException> {
+                assertThrowsSuspend(UnknownLobbyRoutingException::class.java) {
                     router.handle(decodedRequest(connectionId = ConnectionId(2)))
                 }
             } finally {
@@ -116,7 +115,7 @@ class MainServerRouterTest {
             try {
                 manager.createLobby(mappedLobby)
                 val exception =
-                    assertFailsWith<InvalidRoutingDataRoutingException> {
+                    assertThrowsSuspend(InvalidRoutingDataRoutingException::class.java) {
                         router.handle(decodedRequest(connectionId = ConnectionId(3)))
                     }
                 assertTrue(exception.message?.contains("does not match routed lobby") == true)
@@ -187,14 +186,14 @@ class MainServerRouterTest {
             receivedPacket =
                 ReceivedPacket(
                     connectionId = connectionId,
-                    header = MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                    header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                     packet =
                         SerializedPacket(
                             headerBytes = byteArrayOf(1),
                             payloadBytes = byteArrayOf(),
                         ),
                 ),
-            payload = GameJoinRequest(lobbyCode = LobbyCode("AB12")),
+            payload = JoinLobbyRequest(lobbyCode = LobbyCode("AB12"), playerDisplayName = "Alice"),
             context = EventContext(connectionId = connectionId, occurredAtEpochMillis = 1),
         )
 
@@ -209,6 +208,22 @@ class MainServerRouterTest {
                 expectedCount
             ) {
                 delay(5)
+            }
+        }
+    }
+
+    private suspend fun <T : Throwable> assertThrowsSuspend(
+        expectedType: Class<T>,
+        block: suspend () -> Unit,
+    ): T {
+        return try {
+            block()
+            throw AssertionError("Expected exception of type ${expectedType.name}.")
+        } catch (error: Throwable) {
+            if (expectedType.isInstance(error)) {
+                expectedType.cast(error)!!
+            } else {
+                throw error
             }
         }
     }

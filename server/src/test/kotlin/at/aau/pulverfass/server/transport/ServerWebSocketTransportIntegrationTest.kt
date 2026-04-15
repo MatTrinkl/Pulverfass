@@ -18,12 +18,12 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class ServerWebSocketTransportIntegrationTest {
     @Test
@@ -83,7 +83,7 @@ class ServerWebSocketTransportIntegrationTest {
                 session.send(Frame.Binary(fin = true, data = payload))
 
                 val event = messageEvent.await()
-                assertContentEquals(payload, event.bytes)
+                assertArrayEquals(payload, event.bytes)
 
                 session.close()
             }
@@ -125,7 +125,7 @@ class ServerWebSocketTransportIntegrationTest {
                 session.send(Frame.Binary(fin = true, data = inboundPayload))
 
                 val message = messageEvent.await()
-                assertContentEquals(inboundPayload, message.bytes)
+                assertArrayEquals(inboundPayload, message.bytes)
 
                 transport.send(connected.connectionId, outboundPayload)
 
@@ -135,7 +135,7 @@ class ServerWebSocketTransportIntegrationTest {
                     }
 
                 assertTrue(frame is Frame.Binary)
-                assertContentEquals(outboundPayload, frame.readBytes())
+                assertArrayEquals(outboundPayload, frame.readBytes())
                 assertNull(
                     withTimeoutOrNull(250) {
                         session.closeReason.await()
@@ -218,7 +218,7 @@ class ServerWebSocketTransportIntegrationTest {
                     }
 
                 assertTrue(frame is Frame.Binary)
-                assertContentEquals(payload, frame.readBytes())
+                assertArrayEquals(payload, frame.readBytes())
 
                 session.close()
             }
@@ -249,12 +249,13 @@ class ServerWebSocketTransportIntegrationTest {
                 val session = client.webSocketSession("/ws")
                 session.send(Frame.Text("not-supported"))
 
-                val closeReason = assertNotNull(session.closeReason.await())
+                val closeReason = session.closeReason.await()
+                assertNotNull(closeReason)
                 assertEquals(
                     CloseReason.Codes.byCode(WebSocketPolicy.TEXT_FRAME_CLOSE_CODE),
-                    closeReason.knownReason,
+                    closeReason?.knownReason,
                 )
-                assertEquals(WebSocketPolicy.TEXT_FRAMES_NOT_SUPPORTED, closeReason.message)
+                assertEquals(WebSocketPolicy.TEXT_FRAMES_NOT_SUPPORTED, closeReason?.message)
                 assertNull(binaryEvent.await())
             }
         }

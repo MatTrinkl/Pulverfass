@@ -13,9 +13,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Test
 
 class LobbyEventLoopTest {
     @Test
@@ -27,12 +27,12 @@ class LobbyEventLoopTest {
 
             try {
                 assertEquals(lobbyCode, loop.lobbyCode)
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     loop.submit(SystemTick(lobbyCode, 1))
                 }
 
                 loop.start()
-                assertFailsWith<IllegalStateException> {
+                assertThrows(IllegalStateException::class.java) {
                     loop.start()
                 }
 
@@ -40,7 +40,7 @@ class LobbyEventLoopTest {
                 waitUntilProcessed(loop, 1)
                 assertEquals(1, loop.currentState().processedEventCount)
 
-                assertFailsWith<IllegalArgumentException> {
+                assertThrowsSuspend(IllegalArgumentException::class.java) {
                     loop.submit(SystemTick(LobbyCode("CD34"), 1))
                 }
 
@@ -61,9 +61,9 @@ class LobbyEventLoopTest {
 
             try {
                 loop.start()
-                loop.submit(PlayerJoined(lobbyCode, PlayerId(1)))
-                assertFailsWith<InvalidLobbyEventException> {
-                    loop.submit(PlayerJoined(lobbyCode, PlayerId(1)))
+                loop.submit(PlayerJoined(lobbyCode, PlayerId(1), "Alice"))
+                assertThrowsSuspend(InvalidLobbyEventException::class.java) {
+                    loop.submit(PlayerJoined(lobbyCode, PlayerId(1), "Alice"))
                 }
             } finally {
                 loop.shutdown()
@@ -76,7 +76,7 @@ class LobbyEventLoopTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         try {
-            assertFailsWith<IllegalArgumentException> {
+            assertThrows(IllegalArgumentException::class.java) {
                 LobbyEventLoop(
                     lobbyCode = LobbyCode("GH78"),
                     initialState = GameState.initial(LobbyCode("JK90")),
@@ -99,7 +99,7 @@ class LobbyEventLoopTest {
                 loop.start()
                 scope.cancel()
 
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     loop.submit(SystemTick(lobbyCode, 2))
                 }
             } finally {
@@ -114,6 +114,22 @@ class LobbyEventLoopTest {
         withTimeout(5_000) {
             while (loop.currentState().processedEventCount < expectedCount) {
                 delay(5)
+            }
+        }
+    }
+
+    private suspend fun <T : Throwable> assertThrowsSuspend(
+        expectedType: Class<T>,
+        block: suspend () -> Unit,
+    ): T {
+        return try {
+            block()
+            throw AssertionError("Expected exception of type ${expectedType.name}.")
+        } catch (error: Throwable) {
+            if (expectedType.isInstance(error)) {
+                expectedType.cast(error)!!
+            } else {
+                throw error
             }
         }
     }

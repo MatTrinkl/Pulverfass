@@ -1,8 +1,8 @@
 package at.aau.pulverfass.server.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import at.aau.pulverfass.shared.network.transport.Connected
@@ -29,7 +29,7 @@ class PacketReceiverTest {
             val receiver = PacketReceiver()
             val connectionId = ConnectionId(1)
             val payload = byteArrayOf(1, 2, 3)
-            val bytes = encodePacket(MessageHeader(MessageType.LOGIN_REQUEST), payload)
+            val bytes = encodePacket(MessageHeader(MessageType.CONNECTION_REQUEST), payload)
 
             coroutineScope {
                 val packetDeferred =
@@ -45,7 +45,7 @@ class PacketReceiverTest {
                 assertNotNull(result)
                 assertEquals(result, emittedPacket)
                 assertEquals(connectionId, result!!.connectionId)
-                assertEquals(MessageType.LOGIN_REQUEST, result.header.type)
+                assertEquals(MessageType.CONNECTION_REQUEST, result.header.type)
                 assertArrayEquals(payload, result.packet.payloadBytes)
             }
         }
@@ -131,7 +131,7 @@ class PacketReceiverTest {
 
     @Test
     fun `should preserve received packet as neutral model`() {
-        val header = MessageHeader(MessageType.LOGIN_REQUEST)
+        val header = MessageHeader(MessageType.CONNECTION_REQUEST)
         val packet =
             ReceivedPacket(
                 connectionId = ConnectionId(5),
@@ -147,7 +147,7 @@ class PacketReceiverTest {
             )
 
         assertEquals(ConnectionId(5), packet.connectionId)
-        assertEquals(MessageType.LOGIN_REQUEST, packet.header.type)
+        assertEquals(MessageType.CONNECTION_REQUEST, packet.header.type)
         assertArrayEquals(byteArrayOf(4, 5), packet.packet.payloadBytes)
     }
 

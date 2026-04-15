@@ -1,5 +1,8 @@
-package at.aau.pulverfass.shared.network.message
+package at.aau.pulverfass.shared.message.codec
 
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.NetworkSerializationException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException

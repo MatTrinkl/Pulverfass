@@ -4,10 +4,10 @@ import at.aau.pulverfass.server.receive.PacketReceiver
 import at.aau.pulverfass.server.send.PacketSender
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.exception.NetworkException
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow

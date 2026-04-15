@@ -1,6 +1,6 @@
 package at.aau.pulverfass.shared.network.exception
 
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.protocol.MessageType
 
 /**
  * Wird geworfen, wenn für einen [MessageType] keine Payload-Deserialisierung

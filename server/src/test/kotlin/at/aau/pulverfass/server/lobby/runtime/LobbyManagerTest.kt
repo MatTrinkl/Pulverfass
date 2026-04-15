@@ -15,15 +15,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class LobbyManagerTest {
     @Test
@@ -56,7 +56,7 @@ class LobbyManagerTest {
                 manager.createLobby(lobbyCode)
 
                 val exception =
-                    assertFailsWith<IllegalStateException> {
+                    assertThrows(IllegalStateException::class.java) {
                         manager.createLobby(lobbyCode)
                     }
 
@@ -82,7 +82,7 @@ class LobbyManagerTest {
                 manager.removeLobby(lobbyCode)
 
                 assertNull(manager.getLobby(lobbyCode))
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     manager.submit(SystemTick(lobbyCode, tick = 2))
                 }
             } finally {
@@ -156,7 +156,7 @@ class LobbyManagerTest {
 
             try {
                 val exception =
-                    assertFailsWith<IllegalArgumentException> {
+                    assertThrows(IllegalArgumentException::class.java) {
                         manager.createLobby(
                             lobbyCode = LobbyCode("LM12"),
                             initialState = GameState.initial(LobbyCode("NO34")),
@@ -192,7 +192,7 @@ class LobbyManagerTest {
             val manager = LobbyManager(scope)
 
             try {
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     manager.submit(SystemTick(LobbyCode("RS78"), 1))
                 }
             } finally {
@@ -324,5 +324,21 @@ private class ManagerBlockingReducer(
             }
         }
         return delegate.apply(state, event, context)
+    }
+}
+
+private suspend fun <T : Throwable> assertThrowsSuspend(
+    expectedType: Class<T>,
+    block: suspend () -> Unit,
+): T {
+    return try {
+        block()
+        throw AssertionError("Expected exception of type ${expectedType.name}.")
+    } catch (error: Throwable) {
+        if (expectedType.isInstance(error)) {
+            expectedType.cast(error)!!
+        } else {
+            throw error
+        }
     }
 }

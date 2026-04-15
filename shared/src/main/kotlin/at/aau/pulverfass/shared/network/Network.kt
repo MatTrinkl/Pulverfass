@@ -1,6 +1,6 @@
 package at.aau.pulverfass.shared.network
 
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.coroutines.flow.SharedFlow
 
 /**

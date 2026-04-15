@@ -1,10 +1,10 @@
 package at.aau.pulverfass.shared.network.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
 import at.aau.pulverfass.shared.network.codec.PacketCodec
 import at.aau.pulverfass.shared.network.exception.NetworkException
 import at.aau.pulverfass.shared.network.exception.PacketReceiveException
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
 
 /**
  * Dekodiert rohe Transport-Bytes bis zum technischen Nachrichtenkopf.

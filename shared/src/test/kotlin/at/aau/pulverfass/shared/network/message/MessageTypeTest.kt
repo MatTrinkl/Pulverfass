@@ -1,5 +1,6 @@
 package at.aau.pulverfass.shared.network.message
 
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.exception.UnknownMessageTypeIdException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -49,8 +50,13 @@ class MessageTypeTest {
 
     @Test
     fun `should contain expected enum values`() {
-        assertTrue(MessageType.entries.contains(MessageType.LOGIN_REQUEST))
-        assertTrue(MessageType.entries.contains(MessageType.GAME_CREATE_RESPONSE))
-        assertTrue(MessageType.entries.contains(MessageType.GAME_ENDED_BROADCAST))
+        assertTrue(MessageType.entries.contains(MessageType.CONNECTION_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_CREATE_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_ENDED_BROADCAST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_CREATE_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_JOIN_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_LEAVE_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_LEAVE_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_LEFT_BROADCAST))
     }
 }

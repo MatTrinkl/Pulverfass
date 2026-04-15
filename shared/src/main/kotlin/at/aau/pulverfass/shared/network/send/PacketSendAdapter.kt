@@ -1,10 +1,10 @@
 package at.aau.pulverfass.shared.network.send
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
 import at.aau.pulverfass.shared.network.codec.PacketCodec
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
 
 /**
  * Interne technische Sendeschicht für Netzwerkpakete.

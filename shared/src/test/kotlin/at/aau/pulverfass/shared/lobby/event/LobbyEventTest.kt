@@ -14,7 +14,7 @@ class LobbyEventTest {
 
         val events =
             listOf<LobbyEvent>(
-                PlayerJoined(lobbyCode, playerId),
+                PlayerJoined(lobbyCode, playerId, "Alice"),
                 PlayerLeft(lobbyCode, playerId, "quit"),
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
@@ -41,7 +41,9 @@ class LobbyEventTest {
 
         val externalResult =
             when (val event: ExternalLobbyEvent = TurnEnded(lobbyCode, PlayerId(3))) {
+                is GameStarted -> "gameStarted:${event.lobbyCode.value}"
                 is PlayerJoined -> "joined:${event.playerId.value}"
+                is PlayerKicked -> "kicked:${event.targetPlayerId.value}"
                 is PlayerLeft -> "left:${event.playerId.value}"
                 is TurnEnded -> "turnEnded:${event.playerId.value}"
             }
@@ -67,7 +69,7 @@ class LobbyEventTest {
 
         val events =
             listOf<LobbyEvent>(
-                PlayerJoined(lobbyCode, playerId),
+                PlayerJoined(lobbyCode, playerId, "Bob"),
                 PlayerLeft(lobbyCode, playerId),
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),

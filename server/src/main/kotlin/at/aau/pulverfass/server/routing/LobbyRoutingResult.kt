@@ -2,7 +2,7 @@ package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.protocol.MessageType
 
 /**
  * Kontextdaten für Logging und spätere Response-Erzeugung.

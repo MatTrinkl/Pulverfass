@@ -34,8 +34,9 @@ Beispiel:
 import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.createServer
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.network.Network
-import at.aau.pulverfass.shared.network.message.LoginRequest
+import at.aau.pulverfass.shared.network.message.JoinLobbyRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,8 +52,8 @@ CoroutineScope(Dispatchers.Default).launch {
             }
             is Network.Event.MessageReceived<ConnectionId> -> {
                 when (val payload = event.payload) {
-                    is LoginRequest -> {
-                        println("Login von ${payload.username}")
+                    is JoinLobbyRequest -> {
+                        println("Join-Lobby von ${payload.playerDisplayName} für ${payload.lobbyCode}")
                     }
                 }
             }
@@ -72,7 +73,10 @@ server.start(wait = true)
 Senden:
 
 ```kotlin
-network.send(connectionId, LoginRequest(username = "alice", password = "secret"))
+network.send(
+    connectionId,
+    JoinLobbyRequest(lobbyCode = LobbyCode("AB12"), playerDisplayName = "alice"),
+)
 ```
 
 Was der Server dabei automatisch übernimmt:

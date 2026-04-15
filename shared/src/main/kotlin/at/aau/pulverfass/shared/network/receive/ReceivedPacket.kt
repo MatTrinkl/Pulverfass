@@ -1,8 +1,8 @@
 package at.aau.pulverfass.shared.network.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.MessageHeader
 
 /**
  * Technisches Zwischenergebnis nach dem Entpacken eines empfangenen Pakets.

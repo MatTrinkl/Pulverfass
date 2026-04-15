@@ -13,40 +13,37 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.reducer.LobbyCodeMismatchException
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.GameJoinRequest
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class LobbyRoutingResultModelTest {
     @Test
     fun `typische routing fehler werden korrekt modelliert`(): Unit =
         runBlocking {
-            val unknownLobbyResult = routeUnknownLobby()
-            assertIs<LobbyRoutingResult.Failure>(unknownLobbyResult)
+            val unknownLobbyResult = assertIs<LobbyRoutingResult.Failure>(routeUnknownLobby())
             assertIs<LobbyRoutingError.LobbyNotFound>(unknownLobbyResult.error)
 
-            val invalidRoutingResult = routeInvalidRoutingData()
-            assertIs<LobbyRoutingResult.Failure>(invalidRoutingResult)
+            val invalidRoutingResult =
+                assertIs<LobbyRoutingResult.Failure>(routeInvalidRoutingData())
             assertIs<LobbyRoutingError.InvalidRoutingData>(invalidRoutingResult.error)
 
-            val invalidEventResult = routeInvalidEvent()
-            assertIs<LobbyRoutingResult.Failure>(invalidEventResult)
+            val invalidEventResult = assertIs<LobbyRoutingResult.Failure>(routeInvalidEvent())
             assertIs<LobbyRoutingError.InvalidEvent>(invalidEventResult.error)
 
-            val invalidStateResult = routeInvalidStateTransition()
-            assertIs<LobbyRoutingResult.Failure>(invalidStateResult)
+            val invalidStateResult =
+                assertIs<LobbyRoutingResult.Failure>(routeInvalidStateTransition())
             assertIs<LobbyRoutingError.InvalidStateTransition>(invalidStateResult.error)
         }
 
@@ -79,7 +76,7 @@ class LobbyRoutingResultModelTest {
 
                 assertEquals(lobbyCode, error.lobbyCode)
                 assertEquals(connectionId, error.context.connectionId)
-                assertEquals(MessageType.GAME_JOIN_REQUEST, error.context.messageType)
+                assertEquals(MessageType.LOBBY_JOIN_REQUEST, error.context.messageType)
                 assertEquals(lobbyCode, error.context.lobbyCode)
                 assertTrue(error.reason.contains(lobbyCode.value))
                 assertNotNull(error.context)
@@ -236,14 +233,19 @@ class LobbyRoutingResultModelTest {
             receivedPacket =
                 ReceivedPacket(
                     connectionId = connectionId,
-                    header = MessageHeader(MessageType.GAME_JOIN_REQUEST),
+                    header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                     packet =
                         SerializedPacket(
                             headerBytes = byteArrayOf(1),
                             payloadBytes = byteArrayOf(),
                         ),
                 ),
-            payload = GameJoinRequest(lobbyCode = LobbyCode("AB12")),
+            payload = JoinLobbyRequest(lobbyCode = LobbyCode("AB12"), playerDisplayName = "Alice"),
             context = EventContext(connectionId = connectionId, occurredAtEpochMillis = 1),
         )
+
+    private inline fun <reified T> assertIs(value: Any?): T {
+        assertTrue(value is T)
+        return value as T
+    }
 }

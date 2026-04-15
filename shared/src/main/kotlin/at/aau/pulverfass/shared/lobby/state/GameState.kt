@@ -14,7 +14,9 @@ import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
  * Projekt stabil eingesetzt und später erweitert werden kann.
  *
  * @property lobbyCode fachliche Identität der Lobby
+ * @property lobbyOwner Spieler, der die Lobby erstellt hat und Administrationsrechte hat
  * @property players aktuell bekannte Spieler in stabiler Reihenfolge
+ * @property playerDisplayNames Anzeigenamen der bekannten Spieler für die Lobby-UI
  * @property activePlayer aktuell aktiver Spieler, falls vorhanden
  * @property turnOrder aktuelle Zugreihenfolge
  * @property turnNumber laufende Zugnummer ab dem ersten abgeschlossenen Zug
@@ -26,7 +28,9 @@ import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
  */
 data class GameState(
     val lobbyCode: LobbyCode,
+    val lobbyOwner: PlayerId? = null,
     val players: List<PlayerId> = emptyList(),
+    val playerDisplayNames: Map<PlayerId, String> = players.associateWith { it.value.toString() },
     val activePlayer: PlayerId? = null,
     val turnOrder: List<PlayerId> = emptyList(),
     val turnNumber: Int = 0,
@@ -46,6 +50,9 @@ data class GameState(
         require(players == players.distinct()) {
             "GameState.players darf keine Duplikate enthalten."
         }
+        require(playerDisplayNames.keys == players.toSet()) {
+            "GameState.playerDisplayNames muss genau für alle Spieler Einträge enthalten."
+        }
         require(turnOrder == turnOrder.distinct()) {
             "GameState.turnOrder darf keine Duplikate enthalten."
         }
@@ -54,6 +61,9 @@ data class GameState(
         }
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
+        }
+        require(lobbyOwner == null || players.contains(lobbyOwner)) {
+            "GameState.lobbyOwner muss Teil der Spielerliste sein oder null."
         }
     }
 
@@ -67,6 +77,11 @@ data class GameState(
      * Prüft, ob ein Spieler aktuell Teil des States ist.
      */
     fun hasPlayer(playerId: PlayerId): Boolean = players.contains(playerId)
+
+    /**
+     * Liefert den Anzeigenamen eines bekannten Spielers, falls vorhanden.
+     */
+    fun displayNameOf(playerId: PlayerId): String? = playerDisplayNames[playerId]
 
     /**
      * Liefert einen initialen State für eine einzelne Lobby.

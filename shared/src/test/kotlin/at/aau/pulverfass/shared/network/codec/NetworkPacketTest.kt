@@ -1,11 +1,12 @@
 package at.aau.pulverfass.shared.network.codec
 
+import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.PayloadTypeMismatchException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
-import at.aau.pulverfass.shared.network.message.LoginRequest
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -18,12 +19,12 @@ class NetworkPacketTest {
 
     @Test
     fun `should create network packet correctly`() {
-        val payload = LoginRequest(username = "alice", password = "secret")
+        val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
 
         val packet =
-            NetworkPacket(header = MessageHeader(MessageType.LOGIN_REQUEST), payload = payload)
+            NetworkPacket(header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST), payload = payload)
 
-        assertEquals(MessageType.LOGIN_REQUEST, packet.header.type)
+        assertEquals(MessageType.LOBBY_JOIN_REQUEST, packet.header.type)
         assertEquals(payload, packet.payload)
     }
 
@@ -31,13 +32,13 @@ class NetworkPacketTest {
     fun `should support equality for same header and payload`() {
         val first =
             NetworkPacket(
-                header = MessageHeader(MessageType.LOGIN_REQUEST),
-                payload = LoginRequest(username = "alice", password = "secret"),
+                header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
+                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
             )
         val second =
             NetworkPacket(
-                header = MessageHeader(MessageType.LOGIN_REQUEST),
-                payload = LoginRequest(username = "alice", password = "secret"),
+                header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
+                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
             )
 
         assertEquals(first, second)
@@ -48,13 +49,13 @@ class NetworkPacketTest {
     fun `should detect different packets`() {
         val first =
             NetworkPacket(
-                header = MessageHeader(MessageType.LOGIN_REQUEST),
-                payload = LoginRequest(username = "alice", password = "secret"),
+                header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
+                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
             )
         val second =
             NetworkPacket(
-                header = MessageHeader(MessageType.LOGIN_REQUEST),
-                payload = LoginRequest(username = "bob", password = "secret"),
+                header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
+                payload = JoinLobbyRequest(LobbyCode("AB12"), "bob"),
             )
 
         assertNotEquals(first, second)
@@ -66,12 +67,12 @@ class NetworkPacketTest {
             assertThrows(PayloadTypeMismatchException::class.java) {
                 NetworkPacket(
                     header = MessageHeader(MessageType.LOGOUT_REQUEST),
-                    payload = LoginRequest(username = "alice", password = "secret"),
+                    payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
                 )
             }
 
         assertEquals(
-            "Header type LOGOUT_REQUEST does not match payload type LOGIN_REQUEST",
+            "Header type LOGOUT_REQUEST does not match payload type LOBBY_JOIN_REQUEST",
             exception.message,
         )
     }
@@ -81,7 +82,7 @@ class NetworkPacketTest {
         val exception =
             assertThrows(UnsupportedPayloadClassException::class.java) {
                 NetworkPacket(
-                    header = MessageHeader(MessageType.LOGIN_REQUEST),
+                    header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                     payload = UnknownPayload("test"),
                 )
             }

@@ -21,7 +21,7 @@ sealed interface LobbyEvent {
  *
  * Diese Events repräsentieren fachlich relevante, von außen ausgelöste
  * Zustandsänderungen. Die Ableitung aus konkreten
- * [at.aau.pulverfass.shared.network.message.NetworkMessagePayload]s erfolgt
+ * [at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload]s erfolgt
  * bewusst in einer höheren Integrationsschicht und nicht im Domainmodell.
  */
 sealed interface ExternalLobbyEvent : LobbyEvent

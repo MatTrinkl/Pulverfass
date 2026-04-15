@@ -13,11 +13,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class LobbyRuntimeTest {
     @Test
@@ -47,7 +47,7 @@ class LobbyRuntimeTest {
 
                 assertEquals(1, starts.get())
                 assertEquals(1, stops.get())
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     runtime.submit(SystemTick(lobbyCode, tick = 2))
                 }
             } finally {
@@ -74,8 +74,8 @@ class LobbyRuntimeTest {
 
             try {
                 runtime.start()
-                runtime.submit(PlayerJoined(lobbyCode, PlayerId(7)))
-                runtime.submit(PlayerJoined(lobbyCode, PlayerId(8)))
+                runtime.submit(PlayerJoined(lobbyCode, PlayerId(7), "Alice"))
+                runtime.submit(PlayerJoined(lobbyCode, PlayerId(8), "Bob"))
 
                 waitUntilProcessed(runtime, expectedCount = 2)
                 val snapshot = runtime.currentState()
@@ -154,11 +154,11 @@ class LobbyRuntimeTest {
             try {
                 assertEquals(lobbyCode, runtime.lobbyCode)
                 runtime.start()
-                assertFailsWith<IllegalStateException> { runtime.start() }
-                runtime.submit(PlayerJoined(lobbyCode, PlayerId(1)))
+                assertThrows(IllegalStateException::class.java) { runtime.start() }
+                runtime.submit(PlayerJoined(lobbyCode, PlayerId(1), "Alice"))
 
-                assertFailsWith<InvalidLobbyEventException> {
-                    runtime.submit(PlayerJoined(lobbyCode, PlayerId(1)))
+                assertThrowsSuspend(InvalidLobbyEventException::class.java) {
+                    runtime.submit(PlayerJoined(lobbyCode, PlayerId(1), "Alice"))
                 }
                 assertEquals(1, rejected)
             } finally {
@@ -167,4 +167,20 @@ class LobbyRuntimeTest {
                 scope.cancel()
             }
         }
+
+    private suspend fun <T : Throwable> assertThrowsSuspend(
+        expectedType: Class<T>,
+        block: suspend () -> Unit,
+    ): T {
+        return try {
+            block()
+            throw AssertionError("Expected exception of type ${expectedType.name}.")
+        } catch (error: Throwable) {
+            if (expectedType.isInstance(error)) {
+                expectedType.cast(error)!!
+            } else {
+                throw error
+            }
+        }
+    }
 }

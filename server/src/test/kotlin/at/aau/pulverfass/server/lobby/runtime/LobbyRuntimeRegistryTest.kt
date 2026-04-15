@@ -19,15 +19,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class LobbyRuntimeRegistryTest {
     @Test
@@ -35,7 +35,7 @@ class LobbyRuntimeRegistryTest {
         val registry = LobbyRuntimeRegistry(CoroutineScope(SupervisorJob() + Dispatchers.Default))
 
         val exception =
-            assertFailsWith<IllegalArgumentException> {
+            assertThrows(IllegalArgumentException::class.java) {
                 registry.startLobby(
                     lobbyCode = LobbyCode("NO34"),
                     initialState = GameState.initial(LobbyCode("PQ56")),
@@ -56,18 +56,19 @@ class LobbyRuntimeRegistryTest {
 
             try {
                 registry.startLobby(lobbyCode)
-                registry.submit(PlayerJoined(lobbyCode, firstPlayer))
-                registry.submit(PlayerJoined(lobbyCode, secondPlayer))
+                registry.submit(PlayerJoined(lobbyCode, firstPlayer, "Alice"))
+                registry.submit(PlayerJoined(lobbyCode, secondPlayer, "Bob"))
                 registry.submit(TurnEnded(lobbyCode, firstPlayer))
 
                 waitUntilProcessed(registry, lobbyCode, expectedCount = 3)
-                val snapshot = assertNotNull(registry.currentState(lobbyCode))
+                val snapshot = registry.currentState(lobbyCode)
+                assertNotNull(snapshot)
 
-                assertEquals(listOf(firstPlayer, secondPlayer), snapshot.players)
-                assertEquals(listOf(firstPlayer, secondPlayer), snapshot.turnOrder)
-                assertEquals(secondPlayer, snapshot.activePlayer)
-                assertEquals(GameStatus.RUNNING, snapshot.status)
-                assertEquals(1, snapshot.turnNumber)
+                assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.players)
+                assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.turnOrder)
+                assertEquals(secondPlayer, snapshot?.activePlayer)
+                assertEquals(GameStatus.RUNNING, snapshot?.status)
+                assertEquals(1, snapshot?.turnNumber)
             } finally {
                 registry.shutdown()
                 scope.cancel()
@@ -134,8 +135,9 @@ class LobbyRuntimeRegistryTest {
                 }
 
                 waitUntilProcessed(registry, lobbyCode, expectedCount = eventCount)
-                val snapshot = assertNotNull(registry.currentState(lobbyCode))
-                assertEquals(eventCount, snapshot.processedEventCount)
+                val snapshot = registry.currentState(lobbyCode)
+                assertNotNull(snapshot)
+                assertEquals(eventCount, snapshot?.processedEventCount)
             } finally {
                 registry.shutdown()
                 scope.cancel()
@@ -155,7 +157,7 @@ class LobbyRuntimeRegistryTest {
                 waitUntilProcessed(registry, lobbyCode, expectedCount = 1)
 
                 registry.stopLobby(lobbyCode)
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     registry.submit(SystemTick(lobbyCode, tick = 2))
                 }
 
@@ -219,7 +221,7 @@ class LobbyRuntimeRegistryTest {
 
             try {
                 val exception =
-                    assertFailsWith<IllegalArgumentException> {
+                    assertThrows(IllegalArgumentException::class.java) {
                         registry.startLobby(
                             lobbyCode = LobbyCode("NO34"),
                             initialState = GameState.initial(LobbyCode("PQ56")),
@@ -227,7 +229,7 @@ class LobbyRuntimeRegistryTest {
                     }
                 assertTrue(exception.message!!.contains("passt nicht zu Lobby"))
 
-                assertFailsWith<IllegalStateException> {
+                assertThrowsSuspend(IllegalStateException::class.java) {
                     registry.submit(SystemTick(LobbyCode("RS78"), 1))
                 }
             } finally {
@@ -296,6 +298,22 @@ class LobbyRuntimeRegistryTest {
                 scope.cancel()
             }
         }
+
+    private suspend fun <T : Throwable> assertThrowsSuspend(
+        expectedType: Class<T>,
+        block: suspend () -> Unit,
+    ): T {
+        return try {
+            block()
+            throw AssertionError("Expected exception of type ${expectedType.name}.")
+        } catch (error: Throwable) {
+            if (expectedType.isInstance(error)) {
+                expectedType.cast(error)!!
+            } else {
+                throw error
+            }
+        }
+    }
 }
 
 private class BlockingReducer(

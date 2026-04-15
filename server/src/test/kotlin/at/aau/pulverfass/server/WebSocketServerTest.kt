@@ -7,9 +7,9 @@ import io.ktor.server.testing.testApplication
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Test
 
 class WebSocketServerTest {
     @Test
@@ -56,8 +56,9 @@ class WebSocketServerTest {
 
             session.close()
 
-            val closeReason = assertNotNull(session.closeReason.await())
-            assertEquals(CloseReason.Codes.NORMAL, closeReason.knownReason)
+            val closeReason = session.closeReason.await()
+            assertNotNull(closeReason)
+            assertEquals(CloseReason.Codes.NORMAL, closeReason?.knownReason)
         }
 
     @Test
@@ -75,11 +76,12 @@ class WebSocketServerTest {
 
             session.send(Frame.Text("hello"))
 
-            val closeReason = assertNotNull(session.closeReason.await())
+            val closeReason = session.closeReason.await()
+            assertNotNull(closeReason)
             assertEquals(
                 CloseReason.Codes.byCode(WebSocketPolicy.TEXT_FRAME_CLOSE_CODE),
-                closeReason.knownReason,
+                closeReason?.knownReason,
             )
-            assertEquals(WebSocketPolicy.TEXT_FRAMES_NOT_SUPPORTED, closeReason.message)
+            assertEquals(WebSocketPolicy.TEXT_FRAMES_NOT_SUPPORTED, closeReason?.message)
         }
 }

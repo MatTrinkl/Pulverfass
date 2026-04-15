@@ -1,4 +1,4 @@
-package at.aau.pulverfass.shared.network.message
+package at.aau.pulverfass.shared.message.protocol
 
 import at.aau.pulverfass.shared.network.exception.UnknownMessageTypeIdException
 import kotlinx.serialization.Serializable
@@ -14,10 +14,10 @@ enum class MessageType(val id: Int) {
     UNKNOWN_ERROR(0),
 
     /** Login-Anfrage eines Clients an den Server. */
-    LOGIN_REQUEST(1),
+    CONNECTION_REQUEST(1),
 
     /** Antwort des Servers auf eine Login-Anfrage. */
-    LOGIN_RESPONSE(2),
+    CONNECTION_RESPONSE(2),
 
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
@@ -29,25 +29,64 @@ enum class MessageType(val id: Int) {
     CHAT_MESSAGE_BROADCAST(5),
 
     /** Anfrage, einem Spiel über einen Lobbycode beizutreten. */
-    GAME_JOIN_REQUEST(6),
+    LOBBY_JOIN_REQUEST(6),
 
     /** Antwort auf eine Join-Anfrage. */
-    GAME_JOIN_RESPONSE(7),
+    LOBBY_JOIN_RESPONSE(7),
 
     /** Anfrage, ein neues Spiel zu erstellen. */
-    GAME_CREATE_REQUEST(8),
+    LOBBY_CREATE_REQUEST(8),
 
     /** Antwort auf eine Erstellungsanfrage. */
-    GAME_CREATE_RESPONSE(9),
+    LOBBY_CREATE_RESPONSE(9),
 
     /** Broadcast, dass ein Spiel beendet wurde. */
-    GAME_ENDED_BROADCAST(10),
+    LOBBY_ENDED_BROADCAST(10),
 
     /** Broadcast, dass ein Spieler einem Spiel beigetreten ist. */
-    GAME_PLAYER_JOINED_BROADCAST(11),
+    LOBBY_PLAYER_JOINED_BROADCAST(11),
 
     /** Technische Heartbeat-Nachricht zur Verbindungsüberwachung. */
     HEARTBEAT(12),
+
+    /** Fehlgeschlagene Antwort auf eine Erstellungsanfrage. */
+    LOBBY_CREATE_ERROR_RESPONSE(13),
+
+    /** Fehlgeschlagene Antwort auf eine Join-Anfrage. */
+    LOBBY_JOIN_ERROR_RESPONSE(14),
+
+    /** Anfrage, eine Lobby zu verlassen. */
+    LOBBY_LEAVE_REQUEST(15),
+
+    /** Antwort auf eine Leave-Anfrage. */
+    LOBBY_LEAVE_RESPONSE(16),
+
+    /** Broadcast, dass ein Spieler eine Lobby verlassen hat. */
+    LOBBY_PLAYER_LEFT_BROADCAST(17),
+
+    /** Anfrage, einen Spieler aus der Lobby zu werfen. */
+    LOBBY_KICK_REQUEST(18),
+
+    /** Erfolgreiche Antwort auf eine Kick-Anfrage. */
+    LOBBY_KICK_RESPONSE(19),
+
+    /** Fehlantwort auf eine Kick-Anfrage. */
+    LOBBY_KICK_ERROR_RESPONSE(20),
+
+    /** Broadcast, dass ein Spieler aus der Lobby geworfen wurde. */
+    LOBBY_PLAYER_KICKED_BROADCAST(21),
+
+    /** Anfrage, das Spiel zu starten. */
+    LOBBY_START_REQUEST(22),
+
+    /** Antwort auf eine StartGame-Anfrage. */
+    LOBBY_START_RESPONSE(23),
+
+    /** Fehlgeschlagene Antwort auf eine StartGame-Anfrage. */
+    LOBBY_START_ERROR_RESPONSE(24),
+
+    /** Broadcast, dass das Spiel gestartet wurde. */
+    LOBBY_GAME_STARTED_BROADCAST(25),
     ;
 
     companion object {

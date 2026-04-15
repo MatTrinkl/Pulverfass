@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
  * späterer Nachrichtenverarbeitung.
  *
  * Die Klasse nimmt rohe Binary-Transportevents entgegen, dekodiert diese bis
- * zum [at.aau.pulverfass.shared.network.message.MessageHeader] und emittiert
+ * zum [at.aau.pulverfass.shared.message.protocol.MessageHeader] und emittiert
  * das neutrale [ReceivedPacket]-Modell für höhere Schichten.
  */
 class PacketReceiver(

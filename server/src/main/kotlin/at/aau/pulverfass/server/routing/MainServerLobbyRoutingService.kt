@@ -2,15 +2,36 @@ package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
+import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import kotlin.random.Random
 
 /**
  * Bindet den technischen Servereingang an den MainServerRouter.
@@ -22,7 +43,9 @@ import org.slf4j.LoggerFactory
 class MainServerLobbyRoutingService(
     private val network: ServerNetwork,
     private val router: MainServerRouter,
+    private val lobbyManager: LobbyManager,
     private val playerIdResolver: (ConnectionId) -> PlayerId?,
+    private val connectionIdResolver: (PlayerId) -> ConnectionId? = { null },
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
@@ -55,11 +78,43 @@ class MainServerLobbyRoutingService(
                                             occurredAtEpochMillis = nowEpochMillis(),
                                         ),
                                 )
-                            when (val result = router.route(request)) {
-                                is LobbyRoutingResult.Success ->
+                            if (payload is CreateLobbyRequest) {
+                                try {
+                                    handleCreateLobbyRequest(packet.connectionId)
                                     hooks.onRouted(packet.connectionId)
-                                is LobbyRoutingResult.Failure ->
+                                } catch (cause: Throwable) {
+                                    dispatchCreateErrorResponse(
+                                        connectionId = packet.connectionId,
+                                        reason =
+                                            cause.message
+                                                ?: "Lobby konnte nicht erstellt werden.",
+                                    )
+                                    hooks.onRoutingError(
+                                        packet.connectionId,
+                                        LobbyRoutingError.InvalidRoutingData(
+                                            reason =
+                                                cause.message
+                                                    ?: "Lobby konnte nicht erstellt werden.",
+                                            context =
+                                                LobbyRoutingContext(
+                                                    connectionId = packet.connectionId,
+                                                    messageType = packet.header.type,
+                                                ),
+                                            cause = cause,
+                                        ),
+                                    )
+                                }
+                                return@collect
+                            }
+                            when (val result = router.route(request)) {
+                                is LobbyRoutingResult.Success -> {
+                                    dispatchNetworkMessages(request)
+                                    hooks.onRouted(packet.connectionId)
+                                }
+                                is LobbyRoutingResult.Failure -> {
+                                    dispatchErrorResponse(request, result.error.reason)
                                     hooks.onRoutingError(packet.connectionId, result.error)
+                                }
                             }
                         }.onFailure { cause ->
                             logger.warn(
@@ -82,6 +137,150 @@ class MainServerLobbyRoutingService(
                         }
                     }
                 }
+        }
+    }
+
+    private suspend fun dispatchNetworkMessages(request: DecodedNetworkRequest) {
+        when (val payload = request.payload) {
+            is JoinLobbyRequest -> dispatchJoinNetworkMessages(request, payload)
+            is LeaveLobbyRequest -> dispatchLeaveNetworkMessages(request, payload)
+            is KickPlayerRequest -> dispatchKickNetworkMessages(request, payload)
+            is StartGameRequest -> dispatchStartGameNetworkMessages(request, payload)
+            else -> return
+        }
+    }
+
+    private suspend fun handleCreateLobbyRequest(connectionId: ConnectionId) {
+        val lobbyCode = createLobbyWithUniqueCode()
+        network.send(connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
+    }
+
+    private suspend fun dispatchCreateErrorResponse(
+        connectionId: ConnectionId,
+        reason: String,
+    ) {
+        network.send(connectionId, CreateLobbyErrorResponse(reason))
+    }
+
+    private suspend fun dispatchJoinNetworkMessages(
+        request: DecodedNetworkRequest,
+        payload: JoinLobbyRequest,
+    ) {
+        network.send(request.connectionId, JoinLobbyResponse(payload.lobbyCode))
+
+        val playerId = request.context.playerId ?: return
+        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
+        val event =
+            PlayerJoinedLobbyEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = playerId,
+                playerDisplayName = payload.playerDisplayName,
+            )
+
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, event)
+            }
+    }
+
+    private suspend fun dispatchLeaveNetworkMessages(
+        request: DecodedNetworkRequest,
+        payload: LeaveLobbyRequest,
+    ) {
+        network.send(request.connectionId, LeaveLobbyResponse(payload.lobbyCode))
+
+        val playerId = request.context.playerId ?: return
+        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
+        val event = PlayerLeftLobbyEvent(lobbyCode = payload.lobbyCode, playerId = playerId)
+
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, event)
+            }
+    }
+
+    private suspend fun dispatchKickNetworkMessages(
+        request: DecodedNetworkRequest,
+        payload: KickPlayerRequest,
+    ) {
+        network.send(request.connectionId, KickPlayerResponse())
+
+        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
+        val event =
+            PlayerKickedLobbyEvent(
+                lobbyCode = payload.lobbyCode,
+                targetPlayerId = payload.targetPlayerId,
+                requesterPlayerId = payload.requesterPlayerId,
+            )
+
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, event)
+            }
+    }
+
+    private suspend fun dispatchStartGameNetworkMessages(
+        request: DecodedNetworkRequest,
+        payload: StartGameRequest,
+    ) {
+        network.send(request.connectionId, StartGameResponse())
+
+        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
+        val event = GameStartedEvent(lobbyCode = payload.lobbyCode)
+
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, event)
+            }
+    }
+
+    private suspend fun dispatchErrorResponse(
+        request: DecodedNetworkRequest,
+        reason: String,
+    ) {
+        val payload = errorResponseFor(request.payload, reason) ?: return
+        network.send(request.connectionId, payload)
+    }
+
+    private fun errorResponseFor(
+        payload: NetworkMessagePayload,
+        reason: String,
+    ): NetworkMessagePayload? =
+        when (payload) {
+            CreateLobbyRequest -> CreateLobbyErrorResponse(reason)
+            is JoinLobbyRequest -> JoinLobbyErrorResponse(reason)
+            is KickPlayerRequest -> KickPlayerErrorResponse(reason)
+            is StartGameRequest -> StartGameErrorResponse(reason)
+            else -> null
+        }
+
+    private fun createLobbyWithUniqueCode(): LobbyCode {
+        repeat(10_000) {
+            val candidate = LobbyCode(generateLobbyCodeValue())
+            val created =
+                runCatching { lobbyManager.createLobby(candidate) }
+                    .getOrNull()
+            if (created != null) {
+                return candidate
+            }
+        }
+        throw IllegalStateException("Konnte keinen eindeutigen Lobby-Code erzeugen.")
+    }
+
+    private fun generateLobbyCodeValue(): String {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return buildString(4) {
+            repeat(4) {
+                append(alphabet[Random.nextInt(alphabet.length)])
+            }
         }
     }
 

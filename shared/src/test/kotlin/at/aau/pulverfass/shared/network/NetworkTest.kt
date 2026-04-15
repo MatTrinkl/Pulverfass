@@ -1,7 +1,8 @@
 package at.aau.pulverfass.shared.network
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.message.LoginRequest
+import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -17,7 +18,7 @@ class NetworkTest {
 
     @Test
     fun `should expose message received event data`() {
-        val payload = LoginRequest(username = "alice", password = "secret")
+        val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
         val event = Network.Event.MessageReceived(ConnectionId(2), payload)
 
         assertEquals(ConnectionId(2), event.connectionId)
