@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private const val DEFAULT_HOST = "localhost"
+private const val DEFAULT_HOST = "0.0.0.0"
 private const val DEFAULT_PORT = 8080
 private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
 
