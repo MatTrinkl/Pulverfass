@@ -1,8 +1,8 @@
 package at.aau.pulverfass.app.network.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import at.aau.pulverfass.shared.network.transport.Connected
@@ -32,7 +32,7 @@ class PacketReceiverTest {
             val event =
                 BinaryMessageReceived(
                     connectionId = connectionId,
-                    bytes = encodePacket(MessageHeader(MessageType.LOGIN_REQUEST), payload),
+                    bytes = encodePacket(MessageHeader(MessageType.HEARTBEAT), payload),
                 )
 
             coroutineScope {
@@ -47,7 +47,7 @@ class PacketReceiverTest {
                 val emittedPacket: ReceivedPacket = packetDeferred.await()
 
                 assertEquals(connectionId, emittedPacket.connectionId)
-                assertEquals(MessageType.LOGIN_REQUEST, emittedPacket.header.type)
+                assertEquals(MessageType.HEARTBEAT, emittedPacket.header.type)
                 assertContentEquals(payload, emittedPacket.packet.payloadBytes)
             }
         }

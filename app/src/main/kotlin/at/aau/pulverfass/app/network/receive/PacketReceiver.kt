@@ -1,6 +1,6 @@
 package at.aau.pulverfass.app.network.receive
 
-import at.aau.pulverfass.shared.network.PacketReceiveException
+import at.aau.pulverfass.shared.network.exception.PacketReceiveException
 import at.aau.pulverfass.shared.network.receive.PacketReceiveAdapter
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
