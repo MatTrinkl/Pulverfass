@@ -44,6 +44,17 @@ class PlayerLeftLobbyEventTest {
     }
 
     @Test
+    fun `should serialize new host only when present`() {
+        val event = PlayerLeftLobbyEvent(LobbyCode("EF56"), PlayerId(9), newHost = PlayerId(10))
+
+        val serialized = json.encodeToString(PlayerLeftLobbyEvent.serializer(), event)
+        val deserialized = json.decodeFromString<PlayerLeftLobbyEvent>(serialized)
+
+        assertEquals("""{"lobbyCode":"EF56","playerId":9,"newHost":10}""", serialized)
+        assertEquals(event, deserialized)
+    }
+
+    @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
             json.decodeFromString<PlayerLeftLobbyEvent>("""{"lobbyCode":"AB12"}""")

@@ -56,12 +56,14 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
             serializer = PlayerId.serializer(),
             value = value.playerId,
         )
-        composite.encodeNullableSerializableElement(
-            descriptor = descriptor,
-            index = 2,
-            serializer = PlayerId.serializer(),
-            value = value.newHost,
-        )
+        if (value.newHost != null) {
+            composite.encodeNullableSerializableElement(
+                descriptor = descriptor,
+                index = 2,
+                serializer = PlayerId.serializer(),
+                value = value.newHost,
+            )
+        }
         composite.endStructure(descriptor)
     }
 

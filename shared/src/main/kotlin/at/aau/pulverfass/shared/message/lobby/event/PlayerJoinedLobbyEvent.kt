@@ -3,6 +3,7 @@ package at.aau.pulverfass.shared.message.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -30,6 +31,7 @@ data class PlayerJoinedLobbyEvent(
 /**
  * Technischer Serializer für [PlayerJoinedLobbyEvent].
  */
+@OptIn(ExperimentalSerializationApi::class)
 object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
     override val descriptor =
         buildClassSerialDescriptor(
@@ -38,7 +40,7 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("playerId", PlayerId.serializer().descriptor)
             element<String>("playerDisplayName")
-            element<Boolean>("isHost")
+            element<Boolean>("isHost", isOptional = true)
         }
 
     override fun serialize(
@@ -59,7 +61,9 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
             value = value.playerId,
         )
         composite.encodeStringElement(descriptor, 2, value.playerDisplayName)
-        composite.encodeBooleanElement(descriptor, 3, value.isHost)
+        if (value.isHost) {
+            composite.encodeBooleanElement(descriptor, 3, value.isHost)
+        }
         composite.endStructure(descriptor)
     }
 

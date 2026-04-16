@@ -312,7 +312,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(sessionA1AndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice"),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                         receivePayload(sessionA1AndConnection.first),
                     )
 
@@ -327,7 +327,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(sessionB1AndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol"),
+                        PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
                         receivePayload(sessionB1AndConnection.first),
                     )
 
@@ -347,7 +347,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertIs<JoinLobbyResponse>(joinerResponse)
                     assertEquals(JoinLobbyResponse(lobbyA), joinerResponse)
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice"),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                         joinerExistingMemberEvent,
                     )
                     assertEquals(
@@ -479,7 +479,10 @@ class MainServerLobbyRoutingIntegrationTest {
                     val otherLobbyPayload = receivePayloadOrNull(sessionB1AndConnection.first)
 
                     assertEquals(LeaveLobbyResponse(lobbyA), leaverResponse)
-                    assertEquals(PlayerLeftLobbyEvent(lobbyA, PlayerId(2)), remainingMemberEvent)
+                    assertEquals(
+                        PlayerLeftLobbyEvent(lobbyA, PlayerId(2), newHost = PlayerId(1)),
+                        remainingMemberEvent,
+                    )
                     assertNull(leaverScopedPayload)
                     assertNull(otherLobbyPayload)
                     assertEquals(
@@ -669,7 +672,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host"),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
@@ -692,7 +695,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host"),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -723,7 +726,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host"),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -805,11 +808,11 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId),
+                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId, newHost = hostId),
                         receivePayload(hostSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId),
+                        PlayerLeftLobbyEvent(lobbyCode, leavePlayerId, newHost = hostId),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertNull(receivePayloadOrNull(leavePlayerSessionAndConnection.first))
