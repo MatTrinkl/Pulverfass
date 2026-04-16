@@ -24,6 +24,7 @@ data class PlayerJoinedLobbyEvent(
     val lobbyCode: LobbyCode,
     val playerId: PlayerId,
     val playerDisplayName: String,
+    val isHost: Boolean = false,
 ) : NetworkMessagePayload
 
 /**
@@ -37,6 +38,7 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("playerId", PlayerId.serializer().descriptor)
             element<String>("playerDisplayName")
+            element<Boolean>("isHost")
         }
 
     override fun serialize(
@@ -57,6 +59,7 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
             value = value.playerId,
         )
         composite.encodeStringElement(descriptor, 2, value.playerDisplayName)
+        composite.encodeBooleanElement(descriptor, 3, value.isHost)
         composite.endStructure(descriptor)
     }
 
@@ -65,12 +68,14 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
         var lobbyCode: LobbyCode? = null
         var playerId: PlayerId? = null
         var playerDisplayName: String? = null
+        var isHost = false
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
                 0 -> lobbyCode = decodeLobbyCode(composite)
                 1 -> playerId = decodePlayerId(composite)
                 2 -> playerDisplayName = composite.decodeStringElement(descriptor, 2)
+                3 -> isHost = composite.decodeBooleanElement(descriptor, 3)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -87,6 +92,7 @@ object PlayerJoinedLobbyEventSerializer : KSerializer<PlayerJoinedLobbyEvent> {
             playerDisplayName =
                 playerDisplayName
                     ?: throw MissingFieldException("playerDisplayName", descriptor.serialName),
+            isHost = isHost,
         )
     }
 

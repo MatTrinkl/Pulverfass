@@ -195,6 +195,7 @@ class MainServerLobbyRoutingService(
                         lobbyCode = payload.lobbyCode,
                         playerId = existingPlayerId,
                         playerDisplayName = existingName,
+                        isHost = lobbyState.lobbyOwner == existingPlayerId,
                     ),
                 )
             }
@@ -204,6 +205,7 @@ class MainServerLobbyRoutingService(
                 lobbyCode = payload.lobbyCode,
                 playerId = playerId,
                 playerDisplayName = payload.playerDisplayName,
+                isHost = lobbyState.lobbyOwner == playerId,
             )
 
         members
@@ -221,8 +223,15 @@ class MainServerLobbyRoutingService(
         network.send(request.connectionId, LeaveLobbyResponse(payload.lobbyCode))
 
         val playerId = request.context.playerId ?: return
-        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
-        val event = PlayerLeftLobbyEvent(lobbyCode = payload.lobbyCode, playerId = playerId)
+        val lobby = lobbyManager.getLobby(payload.lobbyCode) ?: return
+        val lobbyState = lobby.currentState()
+        val members = lobbyState.players
+        val event =
+            PlayerLeftLobbyEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = playerId,
+                newHost = lobbyState.lobbyOwner,
+            )
 
         members
             .mapNotNull(connectionIdResolver)

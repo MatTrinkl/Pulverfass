@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.transport.Connected
 import at.aau.pulverfass.shared.network.transport.Disconnected
@@ -246,7 +247,7 @@ class LobbyController(
         playersById.clear()
     }
 
-    private fun handlePayload(payload: Any) {
+    private fun handlePayload(payload: NetworkMessagePayload) {
         when (payload) {
             is CreateLobbyResponse -> handleCreateLobbyResponse(payload)
             is CreateLobbyErrorResponse -> {

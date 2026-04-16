@@ -86,6 +86,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
         val updatedPlayers = state.players + playerId
         val updatedTurnOrder = state.turnOrder + playerId
+        val updatedLobbyOwner = state.lobbyOwner ?: playerId
         val updatedStatus =
             when {
                 state.status == GameStatus.CLOSED -> GameStatus.CLOSED
@@ -97,6 +98,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         return state.copy(
             players = updatedPlayers,
             playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
+            lobbyOwner = updatedLobbyOwner,
             activePlayer = state.activePlayer ?: playerId,
             turnOrder = updatedTurnOrder,
             status = updatedStatus,
@@ -115,6 +117,12 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
         val updatedPlayers = state.players.filterNot { it == playerId }
         val updatedTurnOrder = state.turnOrder.filterNot { it == playerId }
+        val updatedLobbyOwner =
+            if (state.lobbyOwner == playerId) {
+                updatedPlayers.firstOrNull()
+            } else {
+                state.lobbyOwner
+            }
         val updatedActivePlayer =
             when {
                 updatedPlayers.isEmpty() -> null
@@ -132,6 +140,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         return state.copy(
             players = updatedPlayers,
             playerDisplayNames = state.playerDisplayNames - playerId,
+            lobbyOwner = updatedLobbyOwner,
             activePlayer = updatedActivePlayer,
             turnOrder = updatedTurnOrder,
             status = updatedStatus,

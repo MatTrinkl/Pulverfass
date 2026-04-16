@@ -22,6 +22,7 @@ import kotlinx.serialization.encoding.Encoder
 data class PlayerLeftLobbyEvent(
     val lobbyCode: LobbyCode,
     val playerId: PlayerId,
+    val newHost: PlayerId? = null,
 ) : NetworkMessagePayload
 
 /**
@@ -35,6 +36,7 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
         ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("playerId", PlayerId.serializer().descriptor)
+            element("newHost", PlayerId.serializer().descriptor, isOptional = true)
         }
 
     override fun serialize(
@@ -54,6 +56,12 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
             serializer = PlayerId.serializer(),
             value = value.playerId,
         )
+        composite.encodeNullableSerializableElement(
+            descriptor = descriptor,
+            index = 2,
+            serializer = PlayerId.serializer(),
+            value = value.newHost,
+        )
         composite.endStructure(descriptor)
     }
 
@@ -62,6 +70,7 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
         val serialName = descriptor.serialName
         var lobbyCode: LobbyCode? = null
         var playerId: PlayerId? = null
+        var newHost: PlayerId? = null
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
@@ -79,6 +88,13 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
                             1,
                             PlayerId.serializer(),
                         )
+                2 ->
+                    newHost =
+                        composite.decodeNullableSerializableElement(
+                            descriptor,
+                            2,
+                            PlayerId.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -88,6 +104,7 @@ object PlayerLeftLobbyEventSerializer : KSerializer<PlayerLeftLobbyEvent> {
         return PlayerLeftLobbyEvent(
             lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", serialName),
             playerId = playerId ?: throw MissingFieldException("playerId", serialName),
+            newHost = newHost,
         )
     }
 }
