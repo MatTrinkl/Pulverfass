@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server.ids
 
+import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
@@ -32,7 +33,7 @@ class EntityAlreadyAssignedException(
     entityId: EntityId,
     currentOwner: PlayerId,
     newOwner: PlayerId,
-) : IllegalStateException("Entity $entityId gehoert bereits zu $currentOwner, nicht zu $newOwner.")
+) : IllegalStateException("Entity $entityId gehört bereits zu $currentOwner, nicht zu $newOwner.")
 
 /**
  * Wird geworfen, wenn zu einer EntityId keine Entity gefunden wird.
@@ -51,3 +52,21 @@ class EntityNotFoundException(
 class PlayerNotFoundException(
     playerId: PlayerId,
 ) : NoSuchElementException("Kein Player mit der ID $playerId gefunden.")
+
+/**
+ * Wird geworfen, wenn eine ConnectionId bereits einem anderen Player zugeordnet ist.
+ *
+ * @param connectionId die betroffene ConnectionId
+ */
+class DuplicateConnectionIdException(
+    val connectionId: ConnectionId,
+) : IllegalStateException("Die Connection ID $connectionId ist bereits einem Player zugeordnet.")
+
+/**
+ * Wird geworfen, wenn eine EntityId bereits einem anderen Player zugeordnet ist.
+ *
+ * @param entityId die betroffene EntityId
+ */
+class DuplicatePlayerEntityIdException(
+    val entityId: EntityId,
+) : IllegalStateException("Die Entity ID $entityId ist bereits einem Player zugeordnet.")

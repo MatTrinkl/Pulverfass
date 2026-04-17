@@ -28,3 +28,4 @@ rootProject.name = "SE2Risiko"
 include(":shared")
 include(":server")
 include(":app")
+include(":e2e")

@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server.manager
 
+import at.aau.pulverfass.server.ids.DuplicateConnectionIdException
+import at.aau.pulverfass.server.ids.DuplicatePlayerEntityIdException
 import at.aau.pulverfass.server.ids.DuplicatePlayerIdException
 import at.aau.pulverfass.server.ids.PlayerNotFoundException
 import at.aau.pulverfass.server.player.Player
@@ -246,5 +248,49 @@ class PlayerManagerTest {
         assertTrue(PlayerManager.all().isEmpty())
         assertFalse(PlayerManager.contains(PlayerId(15)))
         assertFalse(PlayerManager.contains(PlayerId(16)))
+    }
+
+    @Test
+    fun `register sollte exception werfen wenn connectionId bereits vergeben ist`() {
+        val first =
+            Player(
+                playerId = PlayerId(1),
+                username = "A",
+                connectionId = ConnectionId(10),
+            )
+        val second =
+            Player(
+                playerId = PlayerId(2),
+                username = "B",
+                connectionId = ConnectionId(10),
+            )
+
+        PlayerManager.register(first)
+
+        assertThrows(DuplicateConnectionIdException::class.java) {
+            PlayerManager.register(second)
+        }
+    }
+
+    @Test
+    fun `register sollte exception werfen wenn entityId bereits vergeben ist`() {
+        val first =
+            Player(
+                playerId = PlayerId(1),
+                username = "A",
+                entityId = EntityId(20),
+            )
+        val second =
+            Player(
+                playerId = PlayerId(2),
+                username = "B",
+                entityId = EntityId(20),
+            )
+
+        PlayerManager.register(first)
+
+        assertThrows(DuplicatePlayerEntityIdException::class.java) {
+            PlayerManager.register(second)
+        }
     }
 }
