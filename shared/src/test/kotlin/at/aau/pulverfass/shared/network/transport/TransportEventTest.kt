@@ -1,8 +1,6 @@
 package at.aau.pulverfass.shared.network.transport
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.message.LoginRequest
-import at.aau.pulverfass.shared.network.message.MessageType
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -19,19 +17,11 @@ class TransportEventTest {
         val connectionId = ConnectionId(42)
         val connected = Connected(connectionId)
         val binary = BinaryMessageReceived(connectionId, byteArrayOf(1, 2, 3))
-        val loginRequest =
-            LoginRequestReceived(
-                connectionId = connectionId,
-                payload = LoginRequest(username = "alice", password = "secret"),
-            )
         val disconnected = Disconnected(connectionId, "client closed")
         val error = TransportError(connectionId, IllegalStateException("boom"))
 
         assertEquals(connectionId, connected.connectionId)
         assertArrayEquals(byteArrayOf(1, 2, 3), binary.bytes)
-        assertEquals(connectionId, loginRequest.connectionId)
-        assertEquals(MessageType.LOGIN_REQUEST, loginRequest.messageType)
-        assertEquals("alice", loginRequest.payload.username)
         assertEquals(connectionId, disconnected.connectionId)
         assertEquals("client closed", disconnected.reason)
         assertEquals(connectionId, error.connectionId)
@@ -45,14 +35,21 @@ class TransportEventTest {
             listOf<ConnectionBoundTransportEvent>(
                 Connected(connectionId),
                 BinaryMessageReceived(connectionId, byteArrayOf(9)),
-                LoginRequestReceived(
-                    connectionId = connectionId,
-                    payload = LoginRequest(username = "bob", password = "hunter2"),
-                ),
                 Disconnected(connectionId),
             )
 
         events.forEach { event -> assertEquals(connectionId, event.connectionId) }
+    }
+
+    @Test
+    fun `should expose binary messages as received transport events`() {
+        val event = BinaryMessageReceived(ConnectionId(11), byteArrayOf(1, 2))
+
+        val receivedEvent: ReceivedTransportEvent = event
+        val transportEvent: TransportEvent = event
+
+        assertEquals(ConnectionId(11), receivedEvent.connectionId)
+        assertEquals(ConnectionId(11), transportEvent.connectionId)
     }
 
     @Test
@@ -108,36 +105,6 @@ class TransportEventTest {
 
         assertFalse(event.equals(null))
         assertFalse(event.equals("not an event"))
-    }
-
-    @Test
-    fun `should dispatch events through dispatcher interface`() {
-        val received = mutableListOf<TransportEvent>()
-        val dispatcher = TransportEventDispatcher { event -> received += event }
-        val event = Connected(ConnectionId(5))
-
-        dispatcher.dispatch(event)
-
-        assertEquals(listOf(event), received)
-    }
-
-    @Test
-    fun `should expose login request event as decoded message template`() {
-        val event =
-            LoginRequestReceived(
-                connectionId = ConnectionId(11),
-                payload = LoginRequest(username = "charlie", password = "topsecret"),
-            )
-
-        val decodedEvent: DecodedTransportEvent<LoginRequest> = event
-        val receivedEvent: ReceivedTransportEvent = event
-        val transportEvent: TransportEvent = event
-
-        assertEquals(MessageType.LOGIN_REQUEST, decodedEvent.messageType)
-        assertEquals("charlie", decodedEvent.payload.username)
-        assertEquals("topsecret", decodedEvent.payload.password)
-        assertEquals(ConnectionId(11), receivedEvent.connectionId)
-        assertEquals(ConnectionId(11), transportEvent.connectionId)
     }
 
     @Test

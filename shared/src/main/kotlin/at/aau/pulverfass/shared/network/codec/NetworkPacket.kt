@@ -1,12 +1,15 @@
 package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.network.PayloadTypeMismatchException
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.message.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.network.exception.PayloadTypeMismatchException
 
 /**
- * Diese Klasse ist das Netzwerkpaket selbst welches deserialisiert, übertragen und serialisiert wird.
+ * Repräsentiert ein bereits fachlich deserialisiertes Netzwerkpaket.
+ *
+ * Das Modell wird zwischen Protokollschichten übertragen und später wieder
+ * serialisiert. Header-Typ und Payload-Typ müssen dabei konsistent sein.
  *
  * @property header Definiert welchen MessageType dieses Paket hat.
  * @property payload Der eigentliche Inhalt des Paketes.

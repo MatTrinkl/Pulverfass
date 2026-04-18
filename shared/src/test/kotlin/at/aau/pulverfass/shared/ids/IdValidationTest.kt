@@ -31,4 +31,18 @@ class IdValidationTest {
             GameId(-5)
         }
     }
+
+    @Test
+    fun `lobbyCode muss genau 4 zeichen haben`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            LobbyCode("ABC")
+        }
+    }
+
+    @Test
+    fun `lobbyCode darf keine kleinbuchstaben enthalten`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            LobbyCode("ab12")
+        }
+    }
 }

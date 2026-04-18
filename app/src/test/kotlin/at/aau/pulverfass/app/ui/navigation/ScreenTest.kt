@@ -1,7 +1,7 @@
 package at.aau.pulverfass.app.ui.navigation
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 // testet ob alle bildschirmrouten korrekt definiert sind
 class ScreenTest {

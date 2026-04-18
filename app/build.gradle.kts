@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.dokka)
 }
 
 configure<ApplicationExtension> {
@@ -42,6 +43,10 @@ configure<ApplicationExtension> {
         unitTests.isIncludeAndroidResources = true
     }
 
+    lint {
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency")
+    }
+
     buildFeatures {
         compose = true
     }
@@ -68,6 +73,10 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
@@ -75,6 +84,9 @@ dependencies {
     testImplementation(libs.androidx.ui.test.junit4)
     testImplementation(libs.robolectric)
     testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.ktor.server.core)
+    testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.ktor.server.websockets)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

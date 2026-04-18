@@ -1,6 +1,6 @@
 package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.network.NetworkException
+import at.aau.pulverfass.shared.network.exception.NetworkException
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -40,17 +40,10 @@ class PacketCodecTest {
     }
 
     @Test
-    fun `should reject packing packet with empty header`() {
-        val packet = SerializedPacket(headerBytes = byteArrayOf(1), payloadBytes = byteArrayOf(2))
-
-        SerializedPacket::class.java.getDeclaredField("_headerBytes").apply {
-            isAccessible = true
-            set(packet, byteArrayOf())
-        }
-
+    fun `should reject creating packet with empty header`() {
         val exception =
             assertThrows(EmptyHeaderException::class.java) {
-                PacketCodec.pack(packet)
+                SerializedPacket(headerBytes = byteArrayOf(), payloadBytes = byteArrayOf(2))
             }
 
         assertEquals("Header must not be empty.", exception.message)

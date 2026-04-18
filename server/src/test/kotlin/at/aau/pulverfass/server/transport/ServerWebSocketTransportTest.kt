@@ -21,12 +21,11 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Test
 import kotlin.coroutines.CoroutineContext
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 
 class ServerWebSocketTransportTest {
     @Test
@@ -35,7 +34,7 @@ class ServerWebSocketTransportTest {
             val transport = ServerWebSocketTransport()
 
             val exception =
-                assertFailsWith<IllegalArgumentException> {
+                assertThrowsSuspend(IllegalArgumentException::class.java) {
                     transport.send(ConnectionId(99), byteArrayOf(1, 2, 3))
                 }
 
@@ -60,7 +59,7 @@ class ServerWebSocketTransportTest {
                         }
                     }
 
-                assertFailsWith<ClosedSendChannelException> {
+                assertThrowsSuspend(ClosedSendChannelException::class.java) {
                     transport.send(connectionId, byteArrayOf(4, 5, 6))
                 }
 
@@ -85,7 +84,7 @@ class ServerWebSocketTransportTest {
 
             val frame = outgoing.receive()
             require(frame is Frame.Binary)
-            assertContentEquals(byteArrayOf(7, 8, 9), frame.data)
+            assertArrayEquals(byteArrayOf(7, 8, 9), frame.data)
         }
 
     @Test
@@ -112,6 +111,22 @@ class ServerWebSocketTransportTest {
 
     private fun assertTrueIsClosedSend(cause: Throwable) {
         assertEquals(ClosedSendChannelException::class, cause::class)
+    }
+
+    private suspend fun <T : Throwable> assertThrowsSuspend(
+        expectedType: Class<T>,
+        block: suspend () -> Unit,
+    ): T {
+        return try {
+            block()
+            throw AssertionError("Expected exception of type ${expectedType.name}.")
+        } catch (error: Throwable) {
+            if (expectedType.isInstance(error)) {
+                expectedType.cast(error)!!
+            } else {
+                throw error
+            }
+        }
     }
 }
 

@@ -1,8 +1,6 @@
 package at.aau.pulverfass.shared.network.transport
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
 
 /**
  * Gemeinsamer Basistyp für alle transportnahen Ereignisse.
@@ -12,8 +10,8 @@ import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
  */
 sealed interface TransportEvent {
     /**
-     * Die zugehörige Verbindung, falls das Ereignis bereits einer konkreten
-     * technischen Verbindung zugeordnet werden kann.
+     * Zugehörige Verbindung, sofern das Ereignis bereits eindeutig einer
+     * Verbindung zugeordnet werden kann.
      */
     val connectionId: ConnectionId?
 }
@@ -26,19 +24,9 @@ sealed interface ConnectionBoundTransportEvent : TransportEvent {
 }
 
 /**
- * Basistyp für empfangene Nachrichtenereignisse.
+ * Basistyp für empfangene technische Nachrichtenereignisse.
  *
- * Eine Nachricht kann roh als ByteArray oder bereits dekodiert vorliegen.
+ * Auf der Transportebene liegen Nachrichten weiterhin roh vor und werden erst in
+ * höheren Schichten weiter dekodiert.
  */
 sealed interface ReceivedTransportEvent : ConnectionBoundTransportEvent
-
-/**
- * Basistyp für bereits dekodierte Nachrichten mit bekanntem Payload-Typ.
- *
- * Diese Unterhierarchie ist die Vorlage für künftige `MessageType`-spezifische
- * Events oberhalb der reinen Transportebene.
- */
-sealed interface DecodedTransportEvent<T : NetworkMessagePayload> : ReceivedTransportEvent {
-    val messageType: MessageType
-    val payload: T
-}

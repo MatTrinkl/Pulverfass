@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.dokka)
     application
 }
 
@@ -17,6 +18,7 @@ application {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(libs.kotlinx.coroutines.core)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)

@@ -8,7 +8,6 @@ import at.aau.pulverfass.shared.network.transport.TransportError
 import at.aau.pulverfass.shared.network.transport.TransportEvent
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
-import io.ktor.websocket.send
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
