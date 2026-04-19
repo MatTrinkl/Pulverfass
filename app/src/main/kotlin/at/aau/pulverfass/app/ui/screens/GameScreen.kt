@@ -286,6 +286,14 @@ private fun PlayerSidebar(
     modifier: Modifier = Modifier,
 ) {
     val playerListScrollState = rememberScrollState()
+    val activePlayerIndex = players.indexOfFirst { it.id == activePlayerId }
+
+    LaunchedEffect(activePlayerId, playerListScrollState.maxValue) {
+        when (activePlayerIndex) {
+            0 -> playerListScrollState.animateScrollTo(0)
+            players.lastIndex -> playerListScrollState.animateScrollTo(playerListScrollState.maxValue)
+        }
+    }
 
     Surface(
         modifier =
@@ -308,17 +316,11 @@ private fun PlayerSidebar(
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = stringResource(id = R.string.players),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = HudContentColor,
-                )
-
                 players.forEach { player ->
                     PlayerSidebarRow(
                         player = player,
                         isActive = player.id == activePlayerId,
+                        disableBringIntoView = activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
                     )
                 }
             }
@@ -331,11 +333,12 @@ private fun PlayerSidebar(
 private fun PlayerSidebarRow(
     player: DemoPlayer,
     isActive: Boolean,
+    disableBringIntoView: Boolean,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
     LaunchedEffect(isActive) {
-        if (isActive) {
+        if (isActive && !disableBringIntoView) {
             bringIntoViewRequester.bringIntoView()
         }
     }
