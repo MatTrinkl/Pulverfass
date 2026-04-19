@@ -555,11 +555,11 @@ internal fun createMapLayoutMetrics(
 
     val mapSize =
         if (viewportRatio > aspectRatio) {
-            val width = viewportWidth
-            Size(width = width, height = width / aspectRatio)
-        } else {
             val height = viewportHeight
             Size(width = height * aspectRatio, height = height)
+        } else {
+            val width = viewportWidth
+            Size(width = width, height = width / aspectRatio)
         }
 
     return MapLayoutMetrics(
@@ -567,8 +567,8 @@ internal fun createMapLayoutMetrics(
         mapSize = mapSize,
         mapOrigin =
             Offset(
-                x = viewportWidth - mapSize.width,
-                y = 0f,
+                x = (viewportWidth - mapSize.width) / 2f,
+                y = (viewportHeight - mapSize.height) / 2f,
             ),
     )
 }

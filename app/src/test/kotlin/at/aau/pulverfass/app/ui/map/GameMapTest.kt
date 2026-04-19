@@ -15,10 +15,10 @@ class GameMapTest {
         val metrics =
             createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = 16f / 9f)
 
-        assertFloatEquals(1066.6666f, metrics.mapSize.width)
-        assertFloatEquals(600f, metrics.mapSize.height)
-        assertFloatEquals(-66.6666f, metrics.mapOrigin.x)
-        assertFloatEquals(0f, metrics.mapOrigin.y)
+        assertFloatEquals(1000f, metrics.mapSize.width)
+        assertFloatEquals(562.5f, metrics.mapSize.height)
+        assertFloatEquals(0f, metrics.mapOrigin.x)
+        assertFloatEquals(18.75f, metrics.mapOrigin.y)
     }
 
     @Test
@@ -26,8 +26,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1066.6666f, 600f),
-                mapOrigin = Offset(-66.6666f, 0f),
+                mapSize = Size(1000f, 562.5f),
+                mapOrigin = Offset(0f, 18.75f),
             )
 
         val updated =
@@ -39,8 +39,8 @@ class GameMapTest {
                 layoutMetrics = metrics,
             )
 
-        assertFloatEquals(66.6666f, updated.offset.x)
-        assertFloatEquals(0f, updated.offset.y)
+        assertFloatEquals(0f, updated.offset.x)
+        assertFloatEquals(-18.75f, updated.offset.y)
     }
 
     @Test
@@ -48,16 +48,16 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1066.6666f, 600f),
-                mapOrigin = Offset(-66.6666f, 0f),
+                mapSize = Size(1000f, 562.5f),
+                mapOrigin = Offset(0f, 18.75f),
             )
 
         val bounds = calculateOffsetBounds(layoutMetrics = metrics, scale = 2f)
 
-        assertFloatEquals(-1066.6667f, bounds.first.x)
-        assertFloatEquals(-600f, bounds.first.y)
-        assertFloatEquals(66.6666f, bounds.second.x)
-        assertFloatEquals(0f, bounds.second.y)
+        assertFloatEquals(-1000f, bounds.first.x)
+        assertFloatEquals(-543.75f, bounds.first.y)
+        assertFloatEquals(0f, bounds.second.x)
+        assertFloatEquals(-18.75f, bounds.second.y)
     }
 
     @Test
@@ -65,8 +65,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1066.6666f, 600f),
-                mapOrigin = Offset(-66.6666f, 0f),
+                mapSize = Size(1000f, 562.5f),
+                mapOrigin = Offset(0f, 18.75f),
             )
 
         val point =

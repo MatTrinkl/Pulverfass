@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -28,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -278,6 +285,8 @@ private fun PlayerSidebar(
     activePlayerId: String,
     modifier: Modifier = Modifier,
 ) {
+    val playerListScrollState = rememberScrollState()
+
     Surface(
         modifier =
             modifier
@@ -294,7 +303,8 @@ private fun PlayerSidebar(
             Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .verticalScroll(playerListScrollState)
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -317,16 +327,27 @@ private fun PlayerSidebar(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun PlayerSidebarRow(
     player: DemoPlayer,
     isActive: Boolean,
 ) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
     Column {
         Row(
             modifier =
                 Modifier
+                    .bringIntoViewRequester(bringIntoViewRequester)
                     .fillMaxWidth()
                     .background(if (isActive) HudSurfaceMutedColor else Color.Transparent, RoundedCornerShape(14.dp))
+                    .wrapContentHeight()
                     .padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
