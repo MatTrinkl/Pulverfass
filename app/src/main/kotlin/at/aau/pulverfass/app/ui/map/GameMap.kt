@@ -2,7 +2,6 @@ package at.aau.pulverfass.app.ui.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -35,16 +34,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -393,15 +391,6 @@ fun InteractiveGameMap(
         remember(viewportSize, aspectRatio) {
             createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = aspectRatio)
         }
-    val density = LocalDensity.current
-    val mapWidth =
-        with(density) {
-            layoutMetrics.mapSize.width.toDp()
-        }
-    val mapHeight =
-        with(density) {
-            layoutMetrics.mapSize.height.toDp()
-        }
 
     Box(
         modifier =
@@ -444,26 +433,6 @@ fun InteractiveGameMap(
                         }
                     },
         ) {
-            if (backgroundPainter != null && layoutMetrics.mapSize != Size.Zero) {
-                Image(
-                    painter = backgroundPainter,
-                    contentDescription = "Sichtbare Spielkarte",
-                    contentScale = ContentScale.FillBounds,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .requiredSize(width = mapWidth, height = mapHeight)
-                            .graphicsLayer {
-                                transformOrigin = TransformOrigin(0f, 0f)
-                                scaleX = viewportState.scale
-                                scaleY = viewportState.scale
-                                translationX = layoutMetrics.mapOrigin.x + viewportState.offset.x
-                                translationY = layoutMetrics.mapOrigin.y + viewportState.offset.y
-                                alpha = 0.96f
-                            },
-                )
-            }
-
             Canvas(
                 modifier =
                     Modifier
@@ -479,7 +448,7 @@ fun InteractiveGameMap(
                     selectedRegionId = selectedRegionId,
                     layoutMetrics = layoutMetrics,
                     viewportState = viewportState,
-                    hasBackgroundImage = backgroundPainter != null,
+                    backgroundPainter = backgroundPainter,
                 )
             }
 
@@ -832,8 +801,10 @@ private fun DrawScope.drawGameMap(
     selectedRegionId: String?,
     layoutMetrics: MapLayoutMetrics,
     viewportState: MapViewportState,
-    hasBackgroundImage: Boolean,
+    backgroundPainter: Painter?,
 ) {
+    val hasBackgroundImage = backgroundPainter != null
+
     if (!hasBackgroundImage) {
         drawRect(
             brush =
@@ -853,8 +824,24 @@ private fun DrawScope.drawGameMap(
         return
     }
 
-    if (!hasBackgroundImage) {
-        drawPlaceholderWorldMap(layoutMetrics = layoutMetrics, viewportState = viewportState)
+    withTransform({
+        translate(
+            left = layoutMetrics.mapOrigin.x + viewportState.offset.x,
+            top = layoutMetrics.mapOrigin.y + viewportState.offset.y,
+        )
+        scale(
+            scaleX = viewportState.scale,
+            scaleY = viewportState.scale,
+            pivot = Offset.Zero,
+        )
+    }) {
+        if (backgroundPainter != null) {
+            with(backgroundPainter) {
+                draw(size = layoutMetrics.mapSize, alpha = 0.96f)
+            }
+        } else {
+            drawPlaceholderWorldMap(mapSize = layoutMetrics.mapSize)
+        }
     }
 
     val strokeBase = (2.1f * viewportState.scale).coerceAtMost(5.4f)
@@ -891,24 +878,16 @@ private fun DrawScope.drawGameMap(
 }
 
 private fun DrawScope.drawPlaceholderWorldMap(
-    layoutMetrics: MapLayoutMetrics,
-    viewportState: MapViewportState,
+    mapSize: Size,
 ) {
-    val topLeft =
-        mapPointToScreenOffset(
-            point = MapPoint(0f, 0f),
-            layoutMetrics = layoutMetrics,
-            viewportState = viewportState,
-        )
-
     val worldFramePath =
         Path().apply {
             addRoundRect(
                 RoundRect(
-                    left = topLeft.x,
-                    top = topLeft.y,
-                    right = topLeft.x + (layoutMetrics.mapSize.width * viewportState.scale),
-                    bottom = topLeft.y + (layoutMetrics.mapSize.height * viewportState.scale),
+                    left = 0f,
+                    top = 0f,
+                    right = mapSize.width,
+                    bottom = mapSize.height,
                     radiusX = 18f,
                     radiusY = 18f,
                 ),
@@ -987,10 +966,9 @@ private fun DrawScope.drawPlaceholderWorldMap(
             Path().apply {
                 polygon.forEachIndexed { index, point ->
                     val screenPoint =
-                        mapPointToScreenOffset(
-                            point = point,
-                            layoutMetrics = layoutMetrics,
-                            viewportState = viewportState,
+                        Offset(
+                            x = point.x * mapSize.width,
+                            y = point.y * mapSize.height,
                         )
                     if (index == 0) {
                         moveTo(screenPoint.x, screenPoint.y)
@@ -1010,7 +988,7 @@ private fun DrawScope.drawPlaceholderWorldMap(
         drawPath(
             path = path,
             color = continentStroke,
-            style = Stroke(width = (1.4f * viewportState.scale).coerceAtMost(4f)),
+            style = Stroke(width = 1.4f),
             alpha = 0.8f,
         )
     }
