@@ -34,38 +34,44 @@ import org.junit.jupiter.api.Test
  * - Exception-Fälle
  */
 class PlayerEntityManagerTest {
+    private lateinit var playerManager: PlayerManager
+    private lateinit var entityManager: EntityManager
+    private lateinit var playerEntityManager: PlayerEntityManager
+
     @BeforeEach
     fun setUp() {
-        PlayerManager.clear()
-        EntityManager.clear()
+        playerManager = PlayerManager()
+        entityManager = EntityManager()
+        playerEntityManager = PlayerEntityManager.createForTest(playerManager, entityManager)
     }
 
     @Test
     fun `createPlayer sollte player und playerEntity konsistent anlegen`() {
         val player =
-            PlayerEntityManager.createPlayer(
+            playerEntityManager.createPlayer(
                 username = "Anna",
                 connectionId = ConnectionId(10),
             )
+        val entityId = player.entityId!!
 
         assertEquals("Anna", player.username)
         assertEquals(ConnectionId(10), player.connectionId)
         assertNotNull(player.entityId)
-        assertTrue(PlayerManager.contains(player.playerId))
-        assertTrue(EntityManager.contains(player.entityId!!))
+        assertTrue(playerManager.contains(player.playerId))
+        assertTrue(entityManager.contains(entityId))
 
-        val entity = EntityManager.require(player.entityId!!)
+        val entity = entityManager.require(entityId)
         assertTrue(entity is PlayerEntity)
         assertEquals(player.playerId, (entity as PlayerEntity).playerId)
     }
 
     @Test
     fun `lookup sollte in beide Richtungen funktionieren`() {
-        val player = PlayerEntityManager.createPlayer(username = "Max")
+        val player = playerEntityManager.createPlayer(username = "Max")
         val entityId = player.entityId!!
 
-        val entity = PlayerEntityManager.getEntityByPlayerId(player.playerId)
-        val resolvedPlayer = PlayerEntityManager.getPlayerByEntityId(entityId)
+        val entity = playerEntityManager.getEntityByPlayerId(player.playerId)
+        val resolvedPlayer = playerEntityManager.getPlayerByEntityId(entityId)
 
         assertNotNull(entity)
         assertEquals(player.playerId, entity!!.playerId)
@@ -77,59 +83,59 @@ class PlayerEntityManagerTest {
     fun `createPlayer sollte bei doppelter playerId keinen inkonsistenten Zustand hinterlassen`() {
         val existingPlayerId = PlayerId(100)
 
-        PlayerManager.register(
+        playerManager.register(
             Player(
                 playerId = existingPlayerId,
                 username = "BereitsDa",
             ),
         )
 
-        val beforePlayers = PlayerManager.all().toSet()
-        val beforeEntities = EntityManager.all().toSet()
+        val beforePlayers = playerManager.all().toSet()
+        val beforeEntities = entityManager.all().toSet()
 
         assertThrows(DuplicatePlayerIdException::class.java) {
-            PlayerEntityManager.createPlayer(
+            playerEntityManager.createPlayer(
                 playerId = existingPlayerId,
                 entityId = EntityId(201),
                 username = "Anna",
             )
         }
 
-        assertEquals(beforePlayers, PlayerManager.all().toSet())
-        assertEquals(beforeEntities, EntityManager.all().toSet())
-        assertFalse(EntityManager.contains(EntityId(201)))
+        assertEquals(beforePlayers, playerManager.all().toSet())
+        assertEquals(beforeEntities, entityManager.all().toSet())
+        assertFalse(entityManager.contains(EntityId(201)))
     }
 
     @Test
     fun `createPlayer sollte bei doppelter entityId rollback auf player machen`() {
         val existingEntityId = EntityId(200)
 
-        EntityManager.register(
+        entityManager.register(
             PlayerEntity(
                 entityId = existingEntityId,
                 playerId = PlayerId(9999),
             ),
         )
 
-        val beforePlayers = PlayerManager.all().toSet()
-        val beforeEntities = EntityManager.all().toSet()
+        val beforePlayers = playerManager.all().toSet()
+        val beforeEntities = entityManager.all().toSet()
 
         assertThrows(DuplicateEntityIdException::class.java) {
-            PlayerEntityManager.createPlayer(
+            playerEntityManager.createPlayer(
                 playerId = PlayerId(101),
                 entityId = existingEntityId,
                 username = "Tom",
             )
         }
 
-        assertEquals(beforePlayers, PlayerManager.all().toSet())
-        assertEquals(beforeEntities, EntityManager.all().toSet())
-        assertFalse(PlayerManager.contains(PlayerId(101)))
+        assertEquals(beforePlayers, playerManager.all().toSet())
+        assertEquals(beforeEntities, entityManager.all().toSet())
+        assertFalse(playerManager.contains(PlayerId(101)))
     }
 
     @Test
     fun `getEntityByPlayerId sollte null liefern wenn player nicht existiert`() {
-        val result = PlayerEntityManager.getEntityByPlayerId(PlayerId(999))
+        val result = playerEntityManager.getEntityByPlayerId(PlayerId(999))
 
         assertNull(result)
     }
@@ -138,7 +144,7 @@ class PlayerEntityManagerTest {
     fun `getEntityByPlayerId sollte null liefern wenn player keine entityId hat`() {
         val playerId = PlayerId(10)
 
-        PlayerManager.register(
+        playerManager.register(
             Player(
                 playerId = playerId,
                 username = "Anna",
@@ -146,7 +152,7 @@ class PlayerEntityManagerTest {
             ),
         )
 
-        val result = PlayerEntityManager.getEntityByPlayerId(playerId)
+        val result = playerEntityManager.getEntityByPlayerId(playerId)
 
         assertNull(result)
     }
@@ -156,7 +162,7 @@ class PlayerEntityManagerTest {
         val playerId = PlayerId(11)
         val entityId = EntityId(12)
 
-        PlayerManager.register(
+        playerManager.register(
             Player(
                 playerId = playerId,
                 username = "Anna",
@@ -164,7 +170,7 @@ class PlayerEntityManagerTest {
             ),
         )
 
-        val result = PlayerEntityManager.getEntityByPlayerId(playerId)
+        val result = playerEntityManager.getEntityByPlayerId(playerId)
 
         assertNull(result)
     }
@@ -174,7 +180,7 @@ class PlayerEntityManagerTest {
         val playerId = PlayerId(21)
         val entityId = EntityId(22)
 
-        PlayerManager.register(
+        playerManager.register(
             Player(
                 playerId = playerId,
                 username = "Anna",
@@ -182,18 +188,18 @@ class PlayerEntityManagerTest {
             ),
         )
 
-        EntityManager.register(
+        entityManager.register(
             TestEntity(entityId),
         )
 
-        val result = PlayerEntityManager.getEntityByPlayerId(playerId)
+        val result = playerEntityManager.getEntityByPlayerId(playerId)
 
         assertNull(result)
     }
 
     @Test
     fun `getPlayerByEntityId sollte null liefern wenn entity nicht existiert`() {
-        val result = PlayerEntityManager.getPlayerByEntityId(EntityId(999))
+        val result = playerEntityManager.getPlayerByEntityId(EntityId(999))
 
         assertNull(result)
     }
@@ -202,11 +208,11 @@ class PlayerEntityManagerTest {
     fun `getPlayerByEntityId sollte null liefern wenn entity keine PlayerEntity ist`() {
         val entityId = EntityId(31)
 
-        EntityManager.register(
+        entityManager.register(
             TestEntity(entityId),
         )
 
-        val result = PlayerEntityManager.getPlayerByEntityId(entityId)
+        val result = playerEntityManager.getPlayerByEntityId(entityId)
 
         assertNull(result)
     }
@@ -215,43 +221,44 @@ class PlayerEntityManagerTest {
     fun `getPlayerByEntityId sollte null liefern wenn player nicht existiert`() {
         val entityId = EntityId(41)
 
-        EntityManager.register(
+        entityManager.register(
             PlayerEntity(
                 entityId = entityId,
                 playerId = PlayerId(42),
             ),
         )
 
-        val result = PlayerEntityManager.getPlayerByEntityId(entityId)
+        val result = playerEntityManager.getPlayerByEntityId(entityId)
 
         assertNull(result)
     }
 
     @Test
-    fun `requireEntityByPlayerId sollte PlayerEntity zurückgeben`() {
-        val player = PlayerEntityManager.createPlayer(username = "Mia")
+    fun `requireEntityByPlayerId sollte PlayerEntity zurueckgeben`() {
+        val player = playerEntityManager.createPlayer(username = "Mia")
 
-        val entity = PlayerEntityManager.requireEntityByPlayerId(player.playerId)
+        val entity = playerEntityManager.requireEntityByPlayerId(player.playerId)
 
         assertEquals(player.playerId, entity.playerId)
         assertEquals(player.entityId, entity.entityId)
     }
 
     @Test
-    fun `requireEntityByPlayerId sollte Exception werfen wenn Binding fehlt`() {
+    fun `requireEntityByPlayerId sollte exception werfen wenn Binding fehlt`() {
         val exception =
             assertThrows(PlayerEntityBindingNotFoundException::class.java) {
-                PlayerEntityManager.requireEntityByPlayerId(PlayerId(555))
+                playerEntityManager.requireEntityByPlayerId(PlayerId(555))
             }
 
         assertNotNull(exception)
     }
 
     @Test
-    fun `requirePlayerByEntityId sollte player zurückgeben`() {
-        val player = PlayerEntityManager.createPlayer(username = "Noah")
+    fun `requirePlayerByEntityId sollte player zurueckgeben`() {
+        val player = playerEntityManager.createPlayer(username = "Noah")
+        val entityId = player.entityId!!
 
-        val resolvedPlayer = PlayerEntityManager.requirePlayerByEntityId(player.entityId!!)
+        val resolvedPlayer = playerEntityManager.requirePlayerByEntityId(entityId)
 
         assertEquals(player, resolvedPlayer)
     }
@@ -260,7 +267,7 @@ class PlayerEntityManagerTest {
     fun `requirePlayerByEntityId sollte EntityNotFoundException werfen wenn entity fehlt`() {
         val exception =
             assertThrows(EntityNotFoundException::class.java) {
-                PlayerEntityManager.requirePlayerByEntityId(EntityId(777))
+                playerEntityManager.requirePlayerByEntityId(EntityId(777))
             }
 
         assertNotNull(exception)
@@ -270,13 +277,13 @@ class PlayerEntityManagerTest {
     fun `requirePlayerByEntityId sollte TypeMismatch werfen wenn entity keine PlayerEntity ist`() {
         val entityId = EntityId(61)
 
-        EntityManager.register(
+        entityManager.register(
             TestEntity(entityId),
         )
 
         val exception =
             assertThrows(PlayerEntityTypeMismatchException::class.java) {
-                PlayerEntityManager.requirePlayerByEntityId(entityId)
+                playerEntityManager.requirePlayerByEntityId(entityId)
             }
 
         assertNotNull(exception)
@@ -287,7 +294,7 @@ class PlayerEntityManagerTest {
         val entityId = EntityId(71)
         val playerId = PlayerId(72)
 
-        EntityManager.register(
+        entityManager.register(
             PlayerEntity(
                 entityId = entityId,
                 playerId = playerId,
@@ -296,7 +303,7 @@ class PlayerEntityManagerTest {
 
         val exception =
             assertThrows(PlayerNotFoundException::class.java) {
-                PlayerEntityManager.requirePlayerByEntityId(entityId)
+                playerEntityManager.requirePlayerByEntityId(entityId)
             }
 
         assertNotNull(exception)
@@ -304,40 +311,40 @@ class PlayerEntityManagerTest {
 
     @Test
     fun `removeByPlayerId sollte player und entity konsistent entfernen`() {
-        val player = PlayerEntityManager.createPlayer(username = "Tom")
+        val player = playerEntityManager.createPlayer(username = "Tom")
         val entityId = player.entityId!!
 
-        val removed = PlayerEntityManager.removeByPlayerId(player.playerId)
+        val removed = playerEntityManager.removeByPlayerId(player.playerId)
 
         assertEquals(player, removed)
-        assertFalse(PlayerManager.contains(player.playerId))
-        assertFalse(EntityManager.contains(entityId))
-        assertNull(PlayerManager.getByEntityId(entityId))
+        assertFalse(playerManager.contains(player.playerId))
+        assertFalse(entityManager.contains(entityId))
+        assertNull(playerManager.getByEntityId(entityId))
     }
 
     @Test
     fun `removeByPlayerId sollte null liefern wenn player nicht existiert`() {
-        val removed = PlayerEntityManager.removeByPlayerId(PlayerId(888))
+        val removed = playerEntityManager.removeByPlayerId(PlayerId(888))
 
         assertNull(removed)
     }
 
     @Test
     fun `removeByEntityId sollte player und entity konsistent entfernen`() {
-        val player = PlayerEntityManager.createPlayer(username = "Mia")
+        val player = playerEntityManager.createPlayer(username = "Mia")
         val entityId = player.entityId!!
 
-        val removed = PlayerEntityManager.removeByEntityId(entityId)
+        val removed = playerEntityManager.removeByEntityId(entityId)
 
         assertEquals(player, removed)
-        assertFalse(PlayerManager.contains(player.playerId))
-        assertFalse(EntityManager.contains(entityId))
-        assertNull(PlayerManager.getByEntityId(entityId))
+        assertFalse(playerManager.contains(player.playerId))
+        assertFalse(entityManager.contains(entityId))
+        assertNull(playerManager.getByEntityId(entityId))
     }
 
     @Test
     fun `removeByEntityId sollte null liefern wenn kein Binding existiert`() {
-        val removed = PlayerEntityManager.removeByEntityId(EntityId(999))
+        val removed = playerEntityManager.removeByEntityId(EntityId(999))
 
         assertNull(removed)
     }
@@ -353,12 +360,12 @@ class PlayerEntityManagerTest {
                 entityId = null,
             )
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        val removed = PlayerEntityManager.removeByPlayerId(playerId)
+        val removed = playerEntityManager.removeByPlayerId(playerId)
 
         assertEquals(player, removed)
-        assertFalse(PlayerManager.contains(playerId))
+        assertFalse(playerManager.contains(playerId))
     }
 
     private class TestEntity(
