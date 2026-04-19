@@ -3,9 +3,11 @@ package at.aau.pulverfass.app.ui.screens
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -114,7 +116,7 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun game_screen_shows_interactive_map_and_region_controls() {
+    fun game_screen_shows_dynamic_map_ui_and_reacts_to_actions() {
         composeTestRule.setContent {
             AndroidAppTheme {
                 GameScreen()
@@ -122,10 +124,14 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
-        composeTestRule.onNodeWithText(
-            "Mit einem Finger verschieben, mit zwei Fingern zoomen und Regionen direkt antippen.",
-        ).assertIsDisplayed()
-        composeTestRule.onNodeWithTag("region_button_northwest").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Ausgewählt: Nordwest").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("region_button_asia").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Verstärken")
+        composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 7")
+        composeTestRule.onNodeWithText("Karten").performClick()
+        composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
     }
 }

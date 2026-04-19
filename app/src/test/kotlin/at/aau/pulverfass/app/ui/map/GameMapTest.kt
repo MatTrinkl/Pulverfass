@@ -11,12 +11,14 @@ import kotlin.test.assertTrue
 
 class GameMapTest {
     @Test
-    fun create_map_layout_metrics_keeps_map_centered() {
+    fun create_map_layout_metrics_covers_available_viewport() {
         val metrics =
             createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = 16f / 9f)
 
-        assertEquals(Size(1000f, 562.5f), metrics.mapSize)
-        assertEquals(Offset(0f, 18.75f), metrics.mapOrigin)
+        assertFloatEquals(1066.6666f, metrics.mapSize.width)
+        assertFloatEquals(600f, metrics.mapSize.height)
+        assertFloatEquals(-66.6666f, metrics.mapOrigin.x)
+        assertFloatEquals(0f, metrics.mapOrigin.y)
     }
 
     @Test
@@ -24,8 +26,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1000f, 562.5f),
-                mapOrigin = Offset(0f, 18.75f),
+                mapSize = Size(1066.6666f, 600f),
+                mapOrigin = Offset(-66.6666f, 0f),
             )
 
         val updated =
@@ -37,8 +39,25 @@ class GameMapTest {
                 layoutMetrics = metrics,
             )
 
-        assertEquals(500f, updated.offset.x)
-        assertEquals(262.5f, updated.offset.y)
+        assertFloatEquals(66.6666f, updated.offset.x)
+        assertFloatEquals(0f, updated.offset.y)
+    }
+
+    @Test
+    fun calculate_offset_bounds_allow_full_pan_to_eastern_edge() {
+        val metrics =
+            MapLayoutMetrics(
+                viewportSize = Size(1000f, 600f),
+                mapSize = Size(1066.6666f, 600f),
+                mapOrigin = Offset(-66.6666f, 0f),
+            )
+
+        val bounds = calculateOffsetBounds(layoutMetrics = metrics, scale = 2f)
+
+        assertFloatEquals(-1066.6667f, bounds.first.x)
+        assertFloatEquals(-600f, bounds.first.y)
+        assertFloatEquals(66.6666f, bounds.second.x)
+        assertFloatEquals(0f, bounds.second.y)
     }
 
     @Test
@@ -46,8 +65,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1000f, 562.5f),
-                mapOrigin = Offset(0f, 18.75f),
+                mapSize = Size(1066.6666f, 600f),
+                mapOrigin = Offset(-66.6666f, 0f),
             )
 
         val point =
@@ -80,7 +99,7 @@ class GameMapTest {
             )
 
         assertNotNull(region)
-        assertEquals("northwest", region.id)
+        assertEquals("north_america", region.id)
     }
 
     @Test
@@ -93,4 +112,15 @@ class GameMapTest {
 
         assertTrue(!contains)
     }
+}
+
+private fun assertFloatEquals(
+    expected: Float,
+    actual: Float,
+    tolerance: Float = 0.001f,
+) {
+    assertTrue(
+        actual in (expected - tolerance)..(expected + tolerance),
+        "Expected $expected but was $actual",
+    )
 }
