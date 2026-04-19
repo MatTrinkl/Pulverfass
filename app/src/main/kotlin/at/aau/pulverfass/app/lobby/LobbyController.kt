@@ -1,7 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.app.network.ClientNetwork
-import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -256,9 +255,6 @@ class LobbyController(
 
     private fun handlePayload(payload: NetworkMessagePayload) {
         when (payload) {
-            is ConnectionResponse -> {
-                _state.update { it.copy(sessionToken = payload.sessionToken.value) }
-            }
             is CreateLobbyResponse -> handleCreateLobbyResponse(payload)
             is CreateLobbyErrorResponse -> {
                 pendingCreateCallback = null

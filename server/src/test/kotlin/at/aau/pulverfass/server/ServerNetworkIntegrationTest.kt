@@ -44,7 +44,10 @@ class ServerNetworkIntegrationTest {
                 }
 
             val binaryFrame = assertIs<Frame.Binary>(frame)
-            val payload = assertIs<ConnectionResponse>(MessageCodec.decodePayload(binaryFrame.readBytes()))
+            val payload =
+                assertIs<ConnectionResponse>(
+                    MessageCodec.decodePayload(binaryFrame.readBytes()),
+                )
             assertNotNull(network.sessionManager.getByToken(payload.sessionToken))
 
             session.close()

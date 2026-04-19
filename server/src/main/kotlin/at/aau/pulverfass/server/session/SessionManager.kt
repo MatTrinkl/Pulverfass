@@ -21,19 +21,25 @@ class SessionManager(
 ) {
     private val sessionsByToken = ConcurrentHashMap<SessionToken, Session>()
     private val tokensByConnection = ConcurrentHashMap<ConnectionId, SessionToken>()
+    private val lifecycleLock = Any()
 
     /**
      * Erstellt eine neue Session und bindet sie sofort an die angegebene Verbindung.
      */
     fun createSession(connectionId: ConnectionId): Session {
-        if (tokensByConnection.containsKey(connectionId)) {
-            throw DuplicateConnectionIdException(connectionId)
-        }
+        synchronized(lifecycleLock) {
+            if (tokensByConnection.containsKey(connectionId)) {
+                throw DuplicateConnectionIdException(connectionId)
+            }
 
-        while (true) {
-            val token = tokenFactory()
-            val session = Session(sessionToken = token, connectionId = connectionId)
-            if (sessionsByToken.putIfAbsent(token, session) == null) {
+            while (true) {
+                val token = tokenFactory()
+                if (sessionsByToken.containsKey(token)) {
+                    continue
+                }
+
+                val session = Session(sessionToken = token, connectionId = connectionId)
+                sessionsByToken[token] = session
                 tokensByConnection[connectionId] = token
                 return session
             }
@@ -46,21 +52,22 @@ class SessionManager(
     fun bindExisting(
         sessionToken: SessionToken,
         connectionId: ConnectionId,
-    ): Session {
-        if (tokensByConnection.containsKey(connectionId)) {
-            throw DuplicateConnectionIdException(connectionId)
-        }
+    ): Session =
+        synchronized(lifecycleLock) {
+            if (tokensByConnection.containsKey(connectionId)) {
+                throw DuplicateConnectionIdException(connectionId)
+            }
 
-        val current = requireByToken(sessionToken)
-        current.connectionId?.let { previousConnectionId ->
-            tokensByConnection.remove(previousConnectionId)
-        }
+            val current = requireByToken(sessionToken)
+            current.connectionId?.let { previousConnectionId ->
+                tokensByConnection.remove(previousConnectionId)
+            }
 
-        val updated = current.copy(connectionId = connectionId)
-        sessionsByToken[sessionToken] = updated
-        tokensByConnection[connectionId] = sessionToken
-        return updated
-    }
+            val updated = current.copy(connectionId = connectionId)
+            sessionsByToken[sessionToken] = updated
+            tokensByConnection[connectionId] = sessionToken
+            updated
+        }
 
     /**
      * Liefert die Session einer aktiven Verbindung oder `null`.
@@ -88,11 +95,12 @@ class SessionManager(
     /**
      * Löst die aktuelle Verbindung von einer Session, behält den Token aber.
      */
-    fun detachConnection(connectionId: ConnectionId): Session? {
-        val sessionToken = tokensByConnection.remove(connectionId) ?: return null
-        val session = sessionsByToken[sessionToken] ?: return null
-        val detached = session.copy(connectionId = null)
-        sessionsByToken[sessionToken] = detached
-        return detached
-    }
+    fun detachConnection(connectionId: ConnectionId): Session? =
+        synchronized(lifecycleLock) {
+            val sessionToken = tokensByConnection.remove(connectionId) ?: return null
+            val session = sessionsByToken[sessionToken] ?: return null
+            val detached = session.copy(connectionId = null)
+            sessionsByToken[sessionToken] = detached
+            detached
+        }
 }

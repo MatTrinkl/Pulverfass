@@ -1,8 +1,8 @@
 package at.aau.pulverfass.shared.message.connection.response
 
 import at.aau.pulverfass.shared.ids.SessionToken
-import kotlinx.serialization.ExperimentalSerializationApi
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable

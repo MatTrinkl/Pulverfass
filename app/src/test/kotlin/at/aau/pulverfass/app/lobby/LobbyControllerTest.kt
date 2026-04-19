@@ -77,7 +77,10 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("AB12")
             val server =
                 startProtocolServer(
-                    onOpenPayload = ConnectionResponse(SessionToken("123e4567-e89b-12d3-a456-426614174200")),
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174200"),
+                        ),
                 ) { payload, outgoing ->
                     when (payload) {
                         CreateLobbyRequest -> {
@@ -145,7 +148,10 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("Z9Y8")
             val server =
                 startProtocolServer(
-                    onOpenPayload = ConnectionResponse(SessionToken("123e4567-e89b-12d3-a456-426614174201")),
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174201"),
+                        ),
                 ) { payload, outgoing ->
                     if (payload is JoinLobbyRequest) {
                         outgoing.send(

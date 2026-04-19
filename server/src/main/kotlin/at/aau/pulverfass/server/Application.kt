@@ -149,6 +149,7 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
 
     val playersBySession = ConcurrentHashMap<SessionToken, PlayerId>()
     val sessionsByPlayer = ConcurrentHashMap<PlayerId, SessionToken>()
+    val sessionsByConnection = ConcurrentHashMap<ConnectionId, SessionToken>()
     val nextPlayerId = AtomicLong(1)
 
     val routingService =
@@ -175,11 +176,17 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
                     val playerId = PlayerId(nextPlayerId.getAndIncrement())
+                    sessionsByConnection[event.connectionId] = session.sessionToken
                     playersBySession[session.sessionToken] = playerId
                     sessionsByPlayer[playerId] = session.sessionToken
                 }
 
-                is Network.Event.Disconnected<ConnectionId> -> Unit
+                is Network.Event.Disconnected<ConnectionId> -> {
+                    val sessionToken =
+                        sessionsByConnection.remove(event.connectionId) ?: return@collect
+                    val playerId = playersBySession.remove(sessionToken) ?: return@collect
+                    sessionsByPlayer.remove(playerId)
+                }
 
                 else -> Unit
             }

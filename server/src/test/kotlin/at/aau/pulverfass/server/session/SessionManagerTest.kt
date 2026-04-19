@@ -78,6 +78,25 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `bindExisting should reject duplicate target connection and keep current binding`() {
+        val tokens =
+            listOf(
+                SessionToken("123e4567-e89b-12d3-a456-426614174015"),
+                SessionToken("123e4567-e89b-12d3-a456-426614174016"),
+            ).iterator()
+        val manager = SessionManager { tokens.next() }
+        val first = manager.createSession(ConnectionId(6))
+        val second = manager.createSession(ConnectionId(7))
+
+        assertThrows(DuplicateConnectionIdException::class.java) {
+            manager.bindExisting(first.sessionToken, ConnectionId(7))
+        }
+
+        assertEquals(first, manager.getByConnectionId(ConnectionId(6)))
+        assertEquals(second, manager.getByConnectionId(ConnectionId(7)))
+    }
+
+    @Test
     fun `requireByConnectionId should throw for unknown connection`() {
         val manager = SessionManager()
 
