@@ -10,16 +10,21 @@ import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
 
 /**
- * Integrationsmanager zwischen PlayerManager, EntityManager und dem ID-System.
+ * Fassade für die gemeinsame Verwaltung von Playern und Entities.
  *
  * Der Manager kapselt den Standard-Flow für Spieler im Risiko-Backend:
  * - PlayerId erzeugen
  * - EntityId erzeugen
  * - Player und PlayerEntity erstellen
- * - beide Manager konsistent befüllen
+ * - beide Submanager konsistent befüllen
  * - Rollback bei Fehlern sicherstellen
  */
-object PlayerEntityManager {
+class PlayerEntityManager private constructor(
+    private val playerManager: PlayerManager,
+    private val entityManager: EntityManager,
+) {
+    constructor() : this(PlayerManager(), EntityManager())
+
     /**
      * Erzeugt einen neuen Player samt passender PlayerEntity und registriert beide konsistent.
      *
@@ -67,20 +72,20 @@ object PlayerEntityManager {
         var entityRegistered = false
 
         try {
-            PlayerManager.register(player)
+            playerManager.register(player)
             playerRegistered = true
 
-            EntityManager.register(playerEntity)
+            entityManager.register(playerEntity)
             entityRegistered = true
 
             return player
         } catch (exception: Exception) {
             if (entityRegistered) {
-                EntityManager.remove(entityId)
+                entityManager.remove(entityId)
             }
 
             if (playerRegistered) {
-                PlayerManager.remove(playerId)
+                playerManager.remove(playerId)
             }
 
             throw exception
@@ -93,9 +98,9 @@ object PlayerEntityManager {
      * Falls kein Binding existiert, wird null zurückgegeben.
      */
     fun getEntityByPlayerId(playerId: PlayerId): PlayerEntity? {
-        val player = PlayerManager.get(playerId) ?: return null
+        val player = playerManager.get(playerId) ?: return null
         val entityId = player.entityId ?: return null
-        val entity = EntityManager.get(entityId) ?: return null
+        val entity = entityManager.get(entityId) ?: return null
         return entity as? PlayerEntity
     }
 
@@ -105,9 +110,9 @@ object PlayerEntityManager {
      * Falls kein Binding existiert, wird null zurückgegeben.
      */
     fun getPlayerByEntityId(entityId: EntityId): Player? {
-        val entity = EntityManager.get(entityId) ?: return null
+        val entity = entityManager.get(entityId) ?: return null
         val playerEntity = entity as? PlayerEntity ?: return null
-        return PlayerManager.get(playerEntity.playerId)
+        return playerManager.get(playerEntity.playerId)
     }
 
     /**
@@ -115,10 +120,9 @@ object PlayerEntityManager {
      *
      * Falls kein Binding existiert, wird eine Exception geworfen.
      */
-    fun requireEntityByPlayerId(playerId: PlayerId): PlayerEntity {
-        return getEntityByPlayerId(playerId)
+    fun requireEntityByPlayerId(playerId: PlayerId): PlayerEntity =
+        getEntityByPlayerId(playerId)
             ?: throw PlayerEntityBindingNotFoundException(playerId)
-    }
 
     /**
      * Gibt den Player zu einer PlayerEntity zurück.
@@ -127,7 +131,7 @@ object PlayerEntityManager {
      */
     fun requirePlayerByEntityId(entityId: EntityId): Player {
         val playerEntity = requirePlayerEntity(entityId)
-        return PlayerManager.require(playerEntity.playerId)
+        return playerManager.require(playerEntity.playerId)
     }
 
     /**
@@ -136,8 +140,8 @@ object PlayerEntityManager {
      * Falls der Player nicht existiert, wird null zurückgegeben.
      */
     fun removeByPlayerId(playerId: PlayerId): Player? {
-        val player = PlayerManager.remove(playerId) ?: return null
-        player.entityId?.let { EntityManager.remove(it) }
+        val player = playerManager.remove(playerId) ?: return null
+        player.entityId?.let { entityManager.remove(it) }
         return player
     }
 
@@ -147,14 +151,21 @@ object PlayerEntityManager {
      * Falls kein passendes Binding existiert, wird null zurückgegeben.
      */
     fun removeByEntityId(entityId: EntityId): Player? {
-        val player = PlayerManager.getByEntityId(entityId) ?: return null
-        EntityManager.remove(entityId)
-        PlayerManager.remove(player.playerId)
+        val player = playerManager.getByEntityId(entityId) ?: return null
+        entityManager.remove(entityId)
+        playerManager.remove(player.playerId)
         return player
     }
 
     private fun requirePlayerEntity(entityId: EntityId): PlayerEntity {
-        val entity = EntityManager.require(entityId)
+        val entity = entityManager.require(entityId)
         return entity as? PlayerEntity ?: throw PlayerEntityTypeMismatchException(entityId)
+    }
+
+    internal companion object {
+        fun createForTest(
+            playerManager: PlayerManager,
+            entityManager: EntityManager,
+        ): PlayerEntityManager = PlayerEntityManager(playerManager, entityManager)
     }
 }
