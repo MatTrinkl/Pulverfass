@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -70,6 +71,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Spielername eingeben").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lobby erstellen").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lobby beitreten").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Karte direkt testen").assertIsDisplayed()
     }
 
     @Test
@@ -109,5 +111,21 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Lobby: AB12").assertIsDisplayed()
         composeTestRule.onNodeWithText("Du bist der Host").assertIsDisplayed()
         composeTestRule.onNodeWithText("Carol").assertIsDisplayed()
+    }
+
+    @Test
+    fun game_screen_shows_interactive_map_and_region_controls() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreen()
+            }
+        }
+
+        composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Mit einem Finger verschieben, mit zwei Fingern zoomen und Regionen direkt antippen.",
+        ).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("region_button_northwest").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Ausgewaehlt: Nordwest").assertIsDisplayed()
     }
 }

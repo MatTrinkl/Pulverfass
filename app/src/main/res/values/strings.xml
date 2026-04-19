@@ -6,6 +6,7 @@
     <string name="enter_lobby_code">4-stelligen Lobby-Code eingeben</string>
     <string name="create_lobby">Lobby erstellen</string>
     <string name="join_lobby">Lobby beitreten</string>
+    <string name="open_map_playground">Karte direkt testen</string>
     <string name="enter_waiting_room">Warteraum betreten</string>
     <string name="cancel">Abbrechen</string>
     <string name="lobby_id">Lobby</string>
@@ -17,6 +18,7 @@
     <string name="need_players">Mindestens 2 Spieler benötigt</string>
     <string name="leave_lobby">Lobby verlassen</string>
     <string name="game_map_placeholder">Risiko-Weltkarte (Demnächst)</string>
+    <string name="game_map_hint">Mit einem Finger verschieben, mit zwei Fingern zoomen und Regionen direkt antippen</string>
     <string name="server_url">Server URL</string>
     <string name="connection_status">Status</string>
     <string name="last_message_type">Letzte Message</string>
