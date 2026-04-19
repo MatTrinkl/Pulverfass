@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -7,8 +9,10 @@ import io.ktor.server.testing.testApplication
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import io.ktor.websocket.readBytes
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class WebSocketServerTest {
@@ -38,6 +42,10 @@ class WebSocketServerTest {
 
             client.webSocket("/ws") {
                 assertNotNull(this)
+                val frame = incoming.receive()
+                require(frame is Frame.Binary)
+                val payload = MessageCodec.decodePayload(frame.readBytes())
+                assertTrue(payload is ConnectionResponse)
             }
         }
 

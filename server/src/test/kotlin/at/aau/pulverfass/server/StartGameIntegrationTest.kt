@@ -8,6 +8,7 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
@@ -240,6 +241,7 @@ class StartGameIntegrationTest {
 
         val session = client.webSocketSession("/ws")
         val connected = connectedDeferred.await()
+        discardConnectionHandshake(session)
         playersByConnection[connected.connectionId] = playerId
         connectionsByPlayer[playerId] = connected.connectionId
         session to connected.connectionId
@@ -259,5 +261,12 @@ class StartGameIntegrationTest {
         val frame = session.incoming.receive()
         assertTrue(frame is Frame.Binary)
         MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+    }
+
+    private suspend fun discardConnectionHandshake(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ) {
+        val payload = receivePayload(session)
+        assertTrue(payload is ConnectionResponse)
     }
 }

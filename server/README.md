@@ -6,9 +6,15 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstuetzung bereit.
 
 - Das Ktor-Plugin `WebSockets` wird in `Application.module()` installiert.
 - Der WebSocket-Endpunkt ist unter `/ws` verfuegbar.
-- Die serverseitige Transport-Schicht `ServerWebSocketTransport` verwaltet aktive WebSocket-Sessions unabhaengig von
-  Spiellogik.
+- `ConnectionManager` verwaltet aktive technische Verbindungen zentral und stellt `send`, `sendMany` und `broadcast`
+  bereit.
+- `SessionManager` verwaltet stabile Session-Tokens ueber Verbindungswechsel hinweg und bildet die Grundlage fuer
+  spaetere Reconnect-Flows.
+- Die serverseitige Transport-Schicht `ServerWebSocketTransport` registriert und deregistriert WebSocket-Sessions ueber
+  den `ConnectionManager` und emittiert technische Transport-Events.
 - Pro Verbindung wird serverseitig eine `ConnectionId` vergeben.
+- Nach erfolgreichem Connect sendet der Server automatisch eine `CONNECTION_RESPONSE` mit einem `SessionToken` an den
+  Client.
 - Transport-Events werden als `SharedFlow` emittiert: `Connected`, `BinaryMessageReceived`, `Disconnected` und optional
   `TransportError`.
 - Binary Frames werden als rohe ByteArrays weitergereicht und koennen ueber `send(connectionId, bytes)` auch wieder an

@@ -2,7 +2,9 @@ package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -22,6 +24,22 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class NetworkPayloadRegistryTest {
+    @Test
+    fun `should resolve message type and serialization for connection response`() {
+        val payload = ConnectionResponse(SessionToken("123e4567-e89b-12d3-a456-426614174101"))
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.CONNECTION_RESPONSE, messageType)
+        assertEquals(
+            """{"sessionToken":"123e4567-e89b-12d3-a456-426614174101"}""",
+            serialized,
+        )
+        assertEquals(payload, deserialized)
+    }
+
     @Test
     fun `should resolve message type and serialization for create lobby request`() {
         val payload = CreateLobbyRequest

@@ -2,7 +2,9 @@ package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -121,6 +123,20 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.LOBBY_JOIN_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered connection response by runtime type`() {
+        val payload = ConnectionResponse(SessionToken("123e4567-e89b-12d3-a456-426614174102"))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RESPONSE,
                 bytes,
             )
 
@@ -261,12 +277,12 @@ class NetworkMessageSerializerTest {
         val exception =
             assertThrows(UnsupportedPayloadTypeException::class.java) {
                 NetworkMessageSerializer.deserializePayload(
-                    MessageType.CONNECTION_RESPONSE,
+                    MessageType.HEARTBEAT,
                     payloadBytes,
                 )
             }
 
-        assertEquals("Unsupported payload type: CONNECTION_RESPONSE", exception.message)
+        assertEquals("Unsupported payload type: HEARTBEAT", exception.message)
     }
 
     @Test

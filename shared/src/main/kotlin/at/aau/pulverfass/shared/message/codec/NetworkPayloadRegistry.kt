@@ -1,5 +1,6 @@
 package at.aau.pulverfass.shared.message.codec
 
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -31,6 +32,7 @@ import kotlinx.serialization.json.Json
 internal object NetworkPayloadRegistry {
     private val payloadTypeByClass =
         mapOf<Class<out NetworkMessagePayload>, MessageType>(
+            ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
             CreateLobbyRequest::class.java to MessageType.LOBBY_CREATE_REQUEST,
             CreateLobbyErrorResponse::class.java to MessageType.LOBBY_CREATE_ERROR_RESPONSE,
             CreateLobbyResponse::class.java to MessageType.LOBBY_CREATE_RESPONSE,
@@ -53,6 +55,9 @@ internal object NetworkPayloadRegistry {
 
     private val payloadSerializerByClass =
         mapOf<Class<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
+            ConnectionResponse::class.java to { payload ->
+                Json.encodeToString(ConnectionResponse.serializer(), payload as ConnectionResponse)
+            },
             CreateLobbyRequest::class.java to { payload ->
                 Json.encodeToString(CreateLobbyRequest.serializer(), payload as CreateLobbyRequest)
             },
@@ -135,6 +140,9 @@ internal object NetworkPayloadRegistry {
 
     private val payloadDeserializerByType =
         mapOf<MessageType, (String) -> NetworkMessagePayload>(
+            MessageType.CONNECTION_RESPONSE to { json ->
+                Json.decodeFromString(ConnectionResponse.serializer(), json)
+            },
             MessageType.LOBBY_CREATE_REQUEST to { json ->
                 Json.decodeFromString(CreateLobbyRequest.serializer(), json)
             },

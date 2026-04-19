@@ -8,6 +8,7 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.network.Network
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -146,8 +147,8 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
             mapper = DefaultNetworkToLobbyEventMapper(),
         )
 
-    val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
-    val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+    val playersBySession = ConcurrentHashMap<SessionToken, PlayerId>()
+    val sessionsByPlayer = ConcurrentHashMap<PlayerId, SessionToken>()
     val nextPlayerId = AtomicLong(1)
 
     val routingService =
@@ -155,25 +156,30 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
             network = network,
             router = router,
             lobbyManager = lobbyManager,
-            playerIdResolver = { connectionId -> playersByConnection[connectionId] },
-            connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+            playerIdResolver = { connectionId ->
+                network.sessionManager
+                    .getByConnectionId(connectionId)
+                    ?.sessionToken
+                    ?.let(playersBySession::get)
+            },
+            connectionIdResolver = { playerId ->
+                sessionsByPlayer[playerId]
+                    ?.let(network.sessionManager::getByToken)
+                    ?.connectionId
+            },
         )
 
     serverScope.launch {
         network.events.collect { event ->
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
+                    val session = network.sessionManager.requireByConnectionId(event.connectionId)
                     val playerId = PlayerId(nextPlayerId.getAndIncrement())
-                    playersByConnection[event.connectionId] = playerId
-                    connectionsByPlayer[playerId] = event.connectionId
+                    playersBySession[session.sessionToken] = playerId
+                    sessionsByPlayer[playerId] = session.sessionToken
                 }
 
-                is Network.Event.Disconnected<ConnectionId> -> {
-                    val removedPlayer = playersByConnection.remove(event.connectionId)
-                    if (removedPlayer != null) {
-                        connectionsByPlayer.remove(removedPlayer)
-                    }
-                }
+                is Network.Event.Disconnected<ConnectionId> -> Unit
 
                 else -> Unit
             }
@@ -203,9 +209,8 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
 ) {
     val connectionId = IdFactory.nextConnectionId()
 
-    network.onConnected(connectionId, this)
-
     try {
+        network.onConnected(connectionId, this)
         for (frame in incoming) {
             when (frame) {
                 is Frame.Binary -> network.onBinaryMessage(connectionId, frame.data.copyOf())

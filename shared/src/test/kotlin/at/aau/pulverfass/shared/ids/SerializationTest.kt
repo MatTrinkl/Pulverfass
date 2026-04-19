@@ -41,6 +41,17 @@ class SerializationTest {
     }
 
     @Test
+    fun `sessionToken sollte korrekt serialisiert und deserialisiert werden`() {
+        val original = SessionToken("123e4567-e89b-12d3-a456-426614174100")
+
+        val encoded = json.encodeToString(SessionToken.serializer(), original)
+        val decoded = json.decodeFromString(SessionToken.serializer(), encoded)
+
+        assertEquals("\"123e4567-e89b-12d3-a456-426614174100\"", encoded)
+        assertEquals(original, decoded)
+    }
+
+    @Test
     fun `gameId sollte korrekt serialisiert und deserialisiert werden`() {
         val original = GameId(999)
 
