@@ -46,7 +46,7 @@ class LobbyManagerTest {
         }
 
     @Test
-    fun `doppelte erstellung schlaegt definiert fehl`() =
+    fun `doppelte erstellung schlägt definiert fehl`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
@@ -149,7 +149,7 @@ class LobbyManagerTest {
     }
 
     @Test
-    fun `ungueltiger initial state wird bei create lobby abgelehnt`() =
+    fun `ungültiger initial state wird bei create lobby abgelehnt`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
@@ -186,7 +186,7 @@ class LobbyManagerTest {
         }
 
     @Test
-    fun `submit auf unbekannter lobby schlaegt fehl`(): Unit =
+    fun `submit auf unbekannter lobby schlägt fehl`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)

@@ -126,6 +126,6 @@ class ScreenComposableTest {
             "Mit einem Finger verschieben, mit zwei Fingern zoomen und Regionen direkt antippen.",
         ).assertIsDisplayed()
         composeTestRule.onNodeWithTag("region_button_northwest").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Ausgewaehlt: Nordwest").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Ausgewählt: Nordwest").assertIsDisplayed()
     }
 }

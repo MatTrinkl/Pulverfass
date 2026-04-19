@@ -17,19 +17,19 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Tests fuer den EntityManager.
+ * Tests für den EntityManager.
  *
- * Geprueft werden:
+ * Geprüft werden:
  * - Registrierung
  * - Lookup
  * - Remove
  * - Iteration
  * - Filterung nach Typ
- * - Fehlerfaelle
+ * - Fehlerfälle
  */
 class EntityManagerTest {
     /**
-     * Einfache Test-Entity fuer allgemeine Manager-Tests.
+     * Einfache Test-Entity für allgemeine Manager-Tests.
      */
     private data class TestEntity(
         override val entityId: EntityId,
@@ -86,7 +86,7 @@ class EntityManagerTest {
     }
 
     @Test
-    fun `remove sollte entity entfernen und zurueckgeben`() {
+    fun `remove sollte entity entfernen und zurückgeben`() {
         val entity = TestEntity(EntityId(4), EntityType.TERRITORY)
         EntityManager.register(entity)
 

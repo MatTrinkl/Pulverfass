@@ -48,8 +48,8 @@ private const val MAX_ZOOM = 5f
 /**
  * Normalisierter Punkt im Kartenkoordinatensystem.
  *
- * Die Koordinaten liegen unabhÃ¤ngig von der BildschirmgrÃ¶ÃŸe im Bereich `0..1`
- * und referenzieren Positionen relativ zur KartenflÃ¤che.
+ * Die Koordinaten liegen unabhängig von der Bildschirmgröße im Bereich `0..1`
+ * und referenzieren Positionen relativ zur Kartenfläche.
  */
 data class MapPoint(
     val x: Float,
@@ -59,8 +59,8 @@ data class MapPoint(
 /**
  * Beschreibt eine interaktive Region auf der Spielkarte.
  *
- * Das Polygon definiert die klickbare FlÃ¤che. [labelAnchor] markiert die
- * bevorzugte Position fÃ¼r sichtbare UI-Elemente Ã¼ber der Karte.
+ * Das Polygon definiert die klickbare Fläche. [labelAnchor] markiert die
+ * bevorzugte Position für sichtbare UI-Elemente über der Karte.
  */
 data class GameMapRegion(
     val id: String,
@@ -78,7 +78,7 @@ data class MapViewportState(
 )
 
 /**
- * Abgeleitete Layoutdaten fÃ¼r die Kartenprojektion im aktuellen Canvas.
+ * Abgeleitete Layoutdaten für die Kartenprojektion im aktuellen Canvas.
  */
 data class MapLayoutMetrics(
     val viewportSize: Size,
@@ -87,10 +87,10 @@ data class MapLayoutMetrics(
 )
 
 /**
- * Statische Platzhalterdaten fÃ¼r die erste interaktive Kartenansicht.
+ * Statische Platzhalterdaten für die erste interaktive Kartenansicht.
  *
  * Die Regionen sind bewusst im App-Modul gehalten, bis fachliche Map-Daten
- * zwischen App und Server Ã¼ber ein gemeinsames Modell geteilt werden.
+ * zwischen App und Server über ein gemeinsames Modell geteilt werden.
  */
 object PulverfassMapDefaults {
     val regions: List<GameMapRegion> =
@@ -137,7 +137,7 @@ object PulverfassMapDefaults {
             ),
             GameMapRegion(
                 id = "southwest",
-                name = "Suedwest",
+                name = "Südwest",
                 polygon =
                     listOf(
                         MapPoint(0.08f, 0.46f),
@@ -150,7 +150,7 @@ object PulverfassMapDefaults {
             ),
             GameMapRegion(
                 id = "southeast",
-                name = "Suedost",
+                name = "Südost",
                 polygon =
                     listOf(
                         MapPoint(0.57f, 0.46f),
@@ -167,7 +167,7 @@ object PulverfassMapDefaults {
 
 /**
  * Rendert die interaktive Spielkarte mit sichtbarem Kartenlayer,
- * Polygon-HitflÃ¤chen und sichtbaren Regionsbuttons.
+ * Polygon-Hitflächen und sichtbaren Regionsbuttons.
  *
  * Pan und Pinch-Zoom orientieren sich direkt am Finger-Centroid. Dadurch bleibt
  * die Kartenbewegung nahe am erwarteten Verhalten klassischer Map-UIs.
@@ -280,7 +280,7 @@ fun InteractiveGameMap(
 }
 
 /**
- * Zeigt die aktuell ausgewÃ¤hlte Region als kompaktes Overlay an.
+ * Zeigt die aktuell ausgewählte Region als kompaktes Overlay an.
  */
 @Composable
 fun MapSelectionOverlay(
@@ -299,7 +299,7 @@ fun MapSelectionOverlay(
         shadowElevation = 6.dp,
     ) {
         Text(
-            text = "Ausgewaehlt: ${selectedRegion.name}",
+            text = "Ausgewählt: ${selectedRegion.name}",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
@@ -308,9 +308,9 @@ fun MapSelectionOverlay(
 }
 
 /**
- * Berechnet die sichtbare KartenflÃ¤che innerhalb des verfÃ¼gbaren Viewports.
+ * Berechnet die sichtbare Kartenfläche innerhalb des verfügbaren Viewports.
  *
- * Die Karte wird immer mit festem SeitenverhÃ¤ltnis eingepasst und zentriert.
+ * Die Karte wird immer mit festem Seitenverhältnis eingepasst und zentriert.
  */
 internal fun createMapLayoutMetrics(
     viewportSize: IntSize,
@@ -349,10 +349,10 @@ internal fun createMapLayoutMetrics(
 }
 
 /**
- * ÃœberfÃ¼hrt eine Transform-Geste in einen neuen Karten-Viewport.
+ * Überführt eine Transform-Geste in einen neuen Karten-Viewport.
  *
- * Die Berechnung hÃ¤lt den Kartenpunkt unter dem Gesture-Centroid beim Zoomen
- * mÃ¶glichst stabil. Das reduziert das typische "Wegspringen" der Karte.
+ * Die Berechnung hält den Kartenpunkt unter dem Gesture-Centroid beim Zoomen
+ * möglichst stabil. Das reduziert das typische "Wegspringen" der Karte.
  */
 internal fun updateViewportForGesture(
     current: MapViewportState,
@@ -382,7 +382,7 @@ internal fun updateViewportForGesture(
 
 /**
  * Ermittelt die erste Region, deren Polygon den gegebenen Bildschirmpunkt
- * enthÃ¤lt.
+ * enthält.
  */
 internal fun findRegionAtScreenPoint(
     regions: List<GameMapRegion>,
@@ -428,7 +428,7 @@ internal fun screenOffsetToNormalizedMapPoint(
 }
 
 /**
- * Punkt-in-Polygon-Test fÃ¼r Regions-Hitdetection.
+ * Punkt-in-Polygon-Test für Regions-Hitdetection.
  */
 internal fun regionContainsPoint(
     region: GameMapRegion,
@@ -498,7 +498,7 @@ internal fun clampOffset(
 }
 
 /**
- * Liefert die erlaubten Minimal- und Maximalwerte fÃ¼r den Kartenoffset.
+ * Liefert die erlaubten Minimal- und Maximalwerte für den Kartenoffset.
  */
 internal fun calculateOffsetBounds(
     layoutMetrics: MapLayoutMetrics,
