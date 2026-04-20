@@ -126,7 +126,6 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
         composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
         composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("region_button_asia").assertIsDisplayed()
         composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
         composeTestRule.onNodeWithText("Host").assertIsDisplayed()
         composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Verstärken")

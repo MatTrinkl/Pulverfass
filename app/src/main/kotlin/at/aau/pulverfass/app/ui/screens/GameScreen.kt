@@ -1,7 +1,6 @@
 package at.aau.pulverfass.app.ui.screens
 
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -63,6 +62,7 @@ private val HudInverseColor = Color.White
 private val TopBarHeight = 52.dp
 private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
+private val CardsSidebarWidth = SidebarWidth
 
 private enum class DemoGamePhase(
     @StringRes val labelRes: Int,
@@ -125,6 +125,15 @@ fun GameScreen() {
                         .weight(1f)
                         .fillMaxWidth(),
             ) {
+                CardsSidebar(
+                    activePlayer = activePlayer,
+                    isVisible = uiState.cardsVisible,
+                    modifier =
+                        Modifier
+                            .width(CardsSidebarWidth)
+                            .fillMaxHeight(),
+                )
+
                 InteractiveGameMap(
                     regions = PulverfassMapDefaults.regions,
                     regionStates = uiState.regionStates,
@@ -168,19 +177,6 @@ fun GameScreen() {
                     Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding(),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = uiState.cardsVisible,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = SidebarWidth + 12.dp, bottom = BottomBarHeight + 12.dp),
-        ) {
-            CardsOverview(
-                activePlayer = activePlayer,
-                modifier = Modifier.width(220.dp),
             )
         }
     }
@@ -275,6 +271,34 @@ private fun GameTopBar(
                     fontWeight = FontWeight.Bold,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CardsSidebar(
+    activePlayer: DemoPlayer,
+    isVisible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(0.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        if (!isVisible) {
+            Box(modifier = Modifier.fillMaxSize())
+        } else {
+            CardsOverview(
+                activePlayer = activePlayer,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+            )
         }
     }
 }
@@ -509,6 +533,18 @@ private fun BottomActionClusters(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            BlockActionButton(
+                label =
+                    if (cardsVisible) {
+                        stringResource(id = R.string.game_cards_hide)
+                    } else {
+                        stringResource(id = R.string.game_cards_button)
+                    },
+                onClick = onToggleCards,
+                selected = false,
+                modifier = Modifier.width(CardsSidebarWidth - 20.dp),
+            )
+
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -534,28 +570,14 @@ private fun BottomActionClusters(
             }
 
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(172.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                BlockActionButton(
-                    label =
-                        if (cardsVisible) {
-                            stringResource(id = R.string.game_cards_hide)
-                        } else {
-                            stringResource(id = R.string.game_cards_button)
-                        },
-                    onClick = onToggleCards,
-                    selected = false,
-                    modifier = Modifier.weight(1f),
-                )
                 BlockActionButton(
                     label = stringResource(id = R.string.game_end_round_button),
                     onClick = onEndRound,
                     selected = true,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .testTag("end_round_button"),
+                    modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                 )
             }
         }
