@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.SessionToken
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -65,6 +66,37 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `createSession should retry when token factory returns duplicate token`() {
+        val duplicateToken = SessionToken("123e4567-e89b-12d3-a456-426614174020")
+        val freshToken = SessionToken("123e4567-e89b-12d3-a456-426614174021")
+        val tokens =
+            listOf(duplicateToken, duplicateToken, freshToken).iterator()
+        val manager = SessionManager { tokens.next() }
+
+        val first = manager.createSession(ConnectionId(30))
+        val second = manager.createSession(ConnectionId(31))
+
+        assertEquals(duplicateToken, first.sessionToken)
+        assertEquals(freshToken, second.sessionToken)
+        assertEquals(second, manager.getByToken(freshToken))
+    }
+
+    @Test
+    fun `bindExisting should move active binding from old connection to new connection`() {
+        val manager =
+            SessionManager {
+                SessionToken("123e4567-e89b-12d3-a456-426614174022")
+            }
+        val created = manager.createSession(ConnectionId(32))
+
+        val rebound = manager.bindExisting(created.sessionToken, ConnectionId(33))
+
+        assertNull(manager.getByConnectionId(ConnectionId(32)))
+        assertEquals(rebound, manager.getByConnectionId(ConnectionId(33)))
+        assertEquals(rebound, manager.getByToken(created.sessionToken))
+    }
+
+    @Test
     fun `createSession should reject duplicate connection binding`() {
         val manager =
             SessionManager {
@@ -106,11 +138,67 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `require methods should return the existing session`() {
+        val manager =
+            SessionManager {
+                SessionToken("123e4567-e89b-12d3-a456-426614174023")
+            }
+        val created = manager.createSession(ConnectionId(34))
+
+        assertEquals(created, manager.requireByConnectionId(ConnectionId(34)))
+        assertEquals(created, manager.requireByToken(created.sessionToken))
+    }
+
+    @Test
     fun `requireByToken should throw for unknown token`() {
         val manager = SessionManager()
 
         assertThrows(SessionTokenNotFoundException::class.java) {
             manager.requireByToken(SessionToken("123e4567-e89b-12d3-a456-426614174014"))
         }
+    }
+
+    @Test
+    fun `bindExisting should throw for unknown token without changing existing connection map`() {
+        val manager =
+            SessionManager {
+                SessionToken("123e4567-e89b-12d3-a456-426614174024")
+            }
+        val existing = manager.createSession(ConnectionId(35))
+
+        assertThrows(SessionTokenNotFoundException::class.java) {
+            manager.bindExisting(
+                SessionToken("123e4567-e89b-12d3-a456-426614174025"),
+                ConnectionId(36),
+            )
+        }
+
+        assertEquals(existing, manager.getByConnectionId(ConnectionId(35)))
+        assertNull(manager.getByConnectionId(ConnectionId(36)))
+    }
+
+    @Test
+    fun `detachConnection should return null for unknown connection`() {
+        val manager = SessionManager()
+
+        val detached = manager.detachConnection(ConnectionId(37))
+
+        assertNull(detached)
+    }
+
+    @Test
+    fun `detachConnection should return null when token mapping points to missing session`() {
+        val manager =
+            SessionManager {
+                SessionToken("123e4567-e89b-12d3-a456-426614174026")
+            }
+        val created = manager.createSession(ConnectionId(38))
+        val detached = manager.detachConnection(ConnectionId(38))
+
+        assertNotNull(detached)
+        val detachedAgain = manager.detachConnection(ConnectionId(38))
+
+        assertNull(detachedAgain)
+        assertEquals(detached, manager.getByToken(created.sessionToken))
     }
 }
