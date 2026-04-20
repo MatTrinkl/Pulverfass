@@ -74,4 +74,5 @@ private fun GameState.snapshot(): GameState =
         players = players.toList(),
         playerDisplayNames = playerDisplayNames.toMap(),
         turnOrder = turnOrder.toList(),
+        territoryStates = territoryStates.toMap(),
     )

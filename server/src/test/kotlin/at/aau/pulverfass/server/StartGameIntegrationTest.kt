@@ -8,8 +8,10 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
@@ -40,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class StartGameIntegrationTest {
     @Test
-    fun `start game request broadcasts event to all players`() =
+    fun `start game request broadcasts game started and turn state to all players`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -123,9 +125,30 @@ class StartGameIntegrationTest {
                         receivePayload(ownerSession.first),
                     )
                     assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = ownerId,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = ownerId,
+                        ),
+                        receivePayload(ownerSession.first),
+                    )
+                    assertEquals(
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(player2Session.first),
                     )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = ownerId,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = ownerId,
+                        ),
+                        receivePayload(player2Session.first),
+                    )
+                    assertNull(receivePayloadOrNull(ownerSession.first))
                     assertNull(receivePayloadOrNull(player2Session.first))
                     assertEquals(2, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
 

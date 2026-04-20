@@ -46,6 +46,29 @@ class LobbyManagerTest {
         }
 
     @Test
+    fun `create lobby nutzt injected initial state factory`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val manager =
+                LobbyManager(
+                    scope = scope,
+                    initialStateFactory = { lobbyCode ->
+                        GameState.initial(lobbyCode).copy(closedReason = "factory-default")
+                    },
+                )
+            val lobbyCode = LobbyCode("BC23")
+
+            try {
+                val runtime = manager.createLobby(lobbyCode)
+
+                assertEquals("factory-default", runtime.currentState().closedReason)
+            } finally {
+                manager.shutdownAll()
+                scope.cancel()
+            }
+        }
+
+    @Test
     fun `doppelte erstellung schlaegt definiert fehl`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

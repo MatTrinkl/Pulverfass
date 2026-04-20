@@ -113,7 +113,7 @@ data class LobbyRuntimeHooks(
     /** Wird unmittelbar vor dem technischen Enqueue ausgelöst. */
     val onEventEnqueued: (LobbyCode, LobbyEvent, EventContext?) -> Unit = { _, _, _ -> },
     /** Wird nach erfolgreicher Eventverarbeitung ausgelöst. */
-    val onEventAccepted: (LobbyCode, LobbyEvent) -> Unit = { _, _ -> },
+    val onEventAccepted: suspend (LobbyCode, LobbyEvent) -> Unit = { _, _ -> },
     /** Wird bei Verarbeitungsfehlern ausgelöst. */
     val onEventRejected: (LobbyCode, LobbyEvent, Throwable) -> Unit = { _, _, _ -> },
 )

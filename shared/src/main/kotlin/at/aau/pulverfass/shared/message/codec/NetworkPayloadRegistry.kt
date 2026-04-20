@@ -1,5 +1,8 @@
 package at.aau.pulverfass.shared.message.codec
 
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -8,16 +11,28 @@ import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
@@ -49,6 +64,21 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            MapGetRequest::class.java to MessageType.LOBBY_MAP_GET_REQUEST,
+            MapGetResponse::class.java to MessageType.LOBBY_MAP_GET_RESPONSE,
+            MapGetErrorResponse::class.java to MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
+            StartPlayerSetRequest::class.java to MessageType.LOBBY_START_PLAYER_SET_REQUEST,
+            StartPlayerSetResponse::class.java to MessageType.LOBBY_START_PLAYER_SET_RESPONSE,
+            StartPlayerSetErrorResponse::class.java to MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE,
+            TerritoryOwnerChangedEvent::class.java to MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST,
+            TerritoryTroopsChangedEvent::class.java to MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST,
+            TurnAdvanceRequest::class.java to MessageType.LOBBY_TURN_ADVANCE_REQUEST,
+            TurnAdvanceResponse::class.java to MessageType.LOBBY_TURN_ADVANCE_RESPONSE,
+            TurnAdvanceErrorResponse::class.java to MessageType.LOBBY_TURN_ADVANCE_ERROR_RESPONSE,
+            TurnStateUpdatedEvent::class.java to MessageType.LOBBY_TURN_STATE_UPDATED_BROADCAST,
+            TurnStateGetRequest::class.java to MessageType.LOBBY_TURN_STATE_GET_REQUEST,
+            TurnStateGetResponse::class.java to MessageType.LOBBY_TURN_STATE_GET_RESPONSE,
+            TurnStateGetErrorResponse::class.java to MessageType.LOBBY_TURN_STATE_GET_ERROR_RESPONSE,
         )
 
     private val payloadSerializerByClass =
@@ -131,6 +161,69 @@ internal object NetworkPayloadRegistry {
             GameStartedEvent::class.java to { payload ->
                 Json.encodeToString(GameStartedEvent.serializer(), payload as GameStartedEvent)
             },
+            MapGetRequest::class.java to { payload ->
+                Json.encodeToString(MapGetRequest.serializer(), payload as MapGetRequest)
+            },
+            MapGetResponse::class.java to { payload ->
+                Json.encodeToString(MapGetResponse.serializer(), payload as MapGetResponse)
+            },
+            MapGetErrorResponse::class.java to { payload ->
+                Json.encodeToString(MapGetErrorResponse.serializer(), payload as MapGetErrorResponse)
+            },
+            StartPlayerSetRequest::class.java to { payload ->
+                Json.encodeToString(StartPlayerSetRequest.serializer(), payload as StartPlayerSetRequest)
+            },
+            StartPlayerSetResponse::class.java to { payload ->
+                Json.encodeToString(StartPlayerSetResponse.serializer(), payload as StartPlayerSetResponse)
+            },
+            StartPlayerSetErrorResponse::class.java to { payload ->
+                Json.encodeToString(
+                    StartPlayerSetErrorResponse.serializer(),
+                    payload as StartPlayerSetErrorResponse,
+                )
+            },
+            TerritoryOwnerChangedEvent::class.java to { payload ->
+                Json.encodeToString(
+                    TerritoryOwnerChangedEvent.serializer(),
+                    payload as TerritoryOwnerChangedEvent,
+                )
+            },
+            TerritoryTroopsChangedEvent::class.java to { payload ->
+                Json.encodeToString(
+                    TerritoryTroopsChangedEvent.serializer(),
+                    payload as TerritoryTroopsChangedEvent,
+                )
+            },
+            TurnAdvanceRequest::class.java to { payload ->
+                Json.encodeToString(TurnAdvanceRequest.serializer(), payload as TurnAdvanceRequest)
+            },
+            TurnAdvanceResponse::class.java to { payload ->
+                Json.encodeToString(TurnAdvanceResponse.serializer(), payload as TurnAdvanceResponse)
+            },
+            TurnAdvanceErrorResponse::class.java to { payload ->
+                Json.encodeToString(
+                    TurnAdvanceErrorResponse.serializer(),
+                    payload as TurnAdvanceErrorResponse,
+                )
+            },
+            TurnStateUpdatedEvent::class.java to { payload ->
+                Json.encodeToString(
+                    TurnStateUpdatedEvent.serializer(),
+                    payload as TurnStateUpdatedEvent,
+                )
+            },
+            TurnStateGetRequest::class.java to { payload ->
+                Json.encodeToString(TurnStateGetRequest.serializer(), payload as TurnStateGetRequest)
+            },
+            TurnStateGetResponse::class.java to { payload ->
+                Json.encodeToString(TurnStateGetResponse.serializer(), payload as TurnStateGetResponse)
+            },
+            TurnStateGetErrorResponse::class.java to { payload ->
+                Json.encodeToString(
+                    TurnStateGetErrorResponse.serializer(),
+                    payload as TurnStateGetErrorResponse,
+                )
+            },
         )
 
     private val payloadDeserializerByType =
@@ -188,6 +281,51 @@ internal object NetworkPayloadRegistry {
             },
             MessageType.LOBBY_GAME_STARTED_BROADCAST to { json ->
                 Json.decodeFromString(GameStartedEvent.serializer(), json)
+            },
+            MessageType.LOBBY_MAP_GET_REQUEST to { json ->
+                Json.decodeFromString(MapGetRequest.serializer(), json)
+            },
+            MessageType.LOBBY_MAP_GET_RESPONSE to { json ->
+                Json.decodeFromString(MapGetResponse.serializer(), json)
+            },
+            MessageType.LOBBY_MAP_GET_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(MapGetErrorResponse.serializer(), json)
+            },
+            MessageType.LOBBY_START_PLAYER_SET_REQUEST to { json ->
+                Json.decodeFromString(StartPlayerSetRequest.serializer(), json)
+            },
+            MessageType.LOBBY_START_PLAYER_SET_RESPONSE to { json ->
+                Json.decodeFromString(StartPlayerSetResponse.serializer(), json)
+            },
+            MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(StartPlayerSetErrorResponse.serializer(), json)
+            },
+            MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST to { json ->
+                Json.decodeFromString(TerritoryOwnerChangedEvent.serializer(), json)
+            },
+            MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST to { json ->
+                Json.decodeFromString(TerritoryTroopsChangedEvent.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_ADVANCE_REQUEST to { json ->
+                Json.decodeFromString(TurnAdvanceRequest.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_ADVANCE_RESPONSE to { json ->
+                Json.decodeFromString(TurnAdvanceResponse.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_ADVANCE_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(TurnAdvanceErrorResponse.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_STATE_UPDATED_BROADCAST to { json ->
+                Json.decodeFromString(TurnStateUpdatedEvent.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_STATE_GET_REQUEST to { json ->
+                Json.decodeFromString(TurnStateGetRequest.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_STATE_GET_RESPONSE to { json ->
+                Json.decodeFromString(TurnStateGetResponse.serializer(), json)
+            },
+            MessageType.LOBBY_TURN_STATE_GET_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(TurnStateGetErrorResponse.serializer(), json)
             },
         )
 

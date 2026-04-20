@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.SystemTick
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
@@ -11,6 +12,7 @@ import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,15 +60,17 @@ class LobbyRuntimeRegistryTest {
                 registry.startLobby(lobbyCode)
                 registry.submit(PlayerJoined(lobbyCode, firstPlayer, "Alice"))
                 registry.submit(PlayerJoined(lobbyCode, secondPlayer, "Bob"))
+                registry.submit(GameStarted(lobbyCode))
                 registry.submit(TurnEnded(lobbyCode, firstPlayer))
 
-                waitUntilProcessed(registry, lobbyCode, expectedCount = 3)
+                waitUntilProcessed(registry, lobbyCode, expectedCount = 4)
                 val snapshot = registry.currentState(lobbyCode)
                 assertNotNull(snapshot)
 
                 assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.players)
                 assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.turnOrder)
-                assertEquals(secondPlayer, snapshot?.activePlayer)
+                assertEquals(firstPlayer, snapshot?.activePlayer)
+                assertEquals(TurnPhase.ATTACK, snapshot?.turnState?.turnPhase)
                 assertEquals(GameStatus.RUNNING, snapshot?.status)
                 assertEquals(1, snapshot?.turnNumber)
             } finally {

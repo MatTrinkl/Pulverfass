@@ -45,4 +45,18 @@ class IdValidationTest {
             LobbyCode("ab12")
         }
     }
+
+    @Test
+    fun `territoryId darf keine grossbuchstaben enthalten`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            TerritoryId("NorthHarbor")
+        }
+    }
+
+    @Test
+    fun `continentId darf nicht leer sein`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ContinentId("")
+        }
+    }
 }
