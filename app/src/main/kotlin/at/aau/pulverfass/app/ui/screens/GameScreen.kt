@@ -3,8 +3,8 @@ package at.aau.pulverfass.app.ui.screens
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +19,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,7 +67,7 @@ private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 
 private enum class DemoGamePhase(
-    @StringRes val labelRes: Int,
+    @param:StringRes val labelRes: Int,
 ) {
     VERSTAERKEN(R.string.game_action_reinforce),
     ANGRIFF(R.string.game_action_attack),
@@ -101,8 +102,24 @@ fun GameScreen() {
         )
     }
 
+    GameScreenContent(
+        players = players,
+        uiState = uiState,
+        onUiStateChange = { uiState = it },
+        mapPainter = mapPainter,
+    )
+}
+
+@Composable
+private fun GameScreenContent(
+    players: List<DemoPlayer>,
+    uiState: DemoGameUiState,
+    onUiStateChange: (DemoGameUiState) -> Unit,
+    mapPainter: Painter,
+) {
     val personalPlayer = players.first { it.id == uiState.personalPlayerId }
     val activePlayer = players.first { it.id == uiState.activePlayerId }
+
     Box(
         modifier =
             Modifier
@@ -114,7 +131,9 @@ fun GameScreen() {
             regions = PulverfassMapDefaults.regions,
             regionStates = uiState.regionStates,
             selectedRegionId = uiState.selectedRegionId,
-            onRegionSelected = { region -> uiState = uiState.copy(selectedRegionId = region.id) },
+            onRegionSelected = { region ->
+                onUiStateChange(uiState.copy(selectedRegionId = region.id))
+            },
             backgroundPainter = mapPainter,
             modifier = Modifier.fillMaxSize(),
         )
@@ -154,19 +173,20 @@ fun GameScreen() {
         BottomActionClusters(
             currentPhase = uiState.currentPhase,
             onPhaseSelected = { phase ->
-                uiState = applyPhaseSelection(uiState = uiState, phase = phase)
+                onUiStateChange(applyPhaseSelection(uiState = uiState, phase = phase))
             },
             cardsVisible = uiState.cardsVisible,
             onToggleCards = {
-                uiState = uiState.copy(cardsVisible = !uiState.cardsVisible)
+                onUiStateChange(uiState.copy(cardsVisible = !uiState.cardsVisible))
             },
             onEndRound = {
-                uiState =
+                onUiStateChange(
                     advanceRound(
                         uiState = uiState,
                         players = players,
                         regions = PulverfassMapDefaults.regions,
-                    )
+                    ),
+                )
             },
             modifier =
                 Modifier
@@ -310,7 +330,10 @@ private fun PlayerSidebar(
     LaunchedEffect(activePlayerId, playerListScrollState.maxValue) {
         when (activePlayerIndex) {
             0 -> playerListScrollState.animateScrollTo(0)
-            players.lastIndex -> playerListScrollState.animateScrollTo(playerListScrollState.maxValue)
+            players.lastIndex ->
+                playerListScrollState.animateScrollTo(
+                    playerListScrollState.maxValue,
+                )
         }
     }
 
@@ -339,7 +362,8 @@ private fun PlayerSidebar(
                     PlayerSidebarRow(
                         player = player,
                         isActive = player.id == activePlayerId,
-                        disableBringIntoView = activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
+                        disableBringIntoView =
+                            activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
                     )
                 }
             }
@@ -368,7 +392,10 @@ private fun PlayerSidebarRow(
                 Modifier
                     .bringIntoViewRequester(bringIntoViewRequester)
                     .fillMaxWidth()
-                    .background(if (isActive) HudSurfaceMutedColor else Color.Transparent, RoundedCornerShape(14.dp))
+                    .background(
+                        if (isActive) HudSurfaceMutedColor else Color.Transparent,
+                        RoundedCornerShape(14.dp),
+                    )
                     .wrapContentHeight()
                     .padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -412,9 +439,7 @@ private fun HostIndicator() {
 }
 
 @Composable
-private fun ActiveTurnIndicator(
-    isVisible: Boolean,
-) {
+private fun ActiveTurnIndicator(isVisible: Boolean) {
     if (!isVisible) {
         Spacer(modifier = Modifier.width(8.dp))
         return
@@ -495,9 +520,18 @@ private fun CardsOverview(
                 color = HudContentColor,
             )
 
-            Text(text = stringResource(id = R.string.game_cards_demo_infantry), style = MaterialTheme.typography.bodySmall)
-            Text(text = stringResource(id = R.string.game_cards_demo_cavalry), style = MaterialTheme.typography.bodySmall)
-            Text(text = stringResource(id = R.string.game_cards_demo_artillery), style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = stringResource(id = R.string.game_cards_demo_infantry),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = stringResource(id = R.string.game_cards_demo_cavalry),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = stringResource(id = R.string.game_cards_demo_artillery),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -673,9 +707,7 @@ private fun createDemoPlayers(): List<DemoPlayer> =
         ),
     )
 
-private fun createDemoGameUiState(
-    players: List<DemoPlayer>,
-): DemoGameUiState {
+private fun createDemoGameUiState(players: List<DemoPlayer>): DemoGameUiState {
     val playersById = players.associateBy { it.id }
 
     fun regionState(

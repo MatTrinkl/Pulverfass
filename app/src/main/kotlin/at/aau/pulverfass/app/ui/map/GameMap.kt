@@ -1,23 +1,19 @@
 package at.aau.pulverfass.app.ui.map
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,11 +46,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-private const val DEFAULT_MAP_ASPECT_RATIO = 2540f / 1346f
-private const val MAP_CONTENT_OFFSET_X = 470f / 2540f
-private const val MAP_CONTENT_OFFSET_Y = 249f / 1346f
-private const val MAP_CONTENT_SCALE_X = 1600f / 2540f
-private const val MAP_CONTENT_SCALE_Y = 848f / 1346f
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 private val MapOverlaySurfaceColor = Color.White
@@ -73,6 +64,41 @@ data class MapPoint(
     val y: Float,
 )
 
+/**
+ * Beschreibt das Kartenbild und den darin enthaltenen eigentlichen Karteninhalt.
+ *
+ * Neue Kartenbilder müssen nur diese Werte anpassen, solange die Regionsdaten
+ * weiter auf den inneren Karteninhalt normalisiert sind.
+ */
+data class GameMapCanvasSpec(
+    val imageWidthPx: Float,
+    val imageHeightPx: Float,
+    val contentLeftPx: Float,
+    val contentTopPx: Float,
+    val contentWidthPx: Float,
+    val contentHeightPx: Float,
+) {
+    init {
+        require(imageWidthPx > 0f)
+        require(imageHeightPx > 0f)
+        require(contentWidthPx > 0f)
+        require(contentHeightPx > 0f)
+        require(contentLeftPx >= 0f)
+        require(contentTopPx >= 0f)
+        require(contentLeftPx + contentWidthPx <= imageWidthPx)
+        require(contentTopPx + contentHeightPx <= imageHeightPx)
+    }
+
+    val aspectRatio: Float
+        get() = imageWidthPx / imageHeightPx
+
+    fun projectContentPoint(point: MapPoint): MapPoint =
+        MapPoint(
+            x = (contentLeftPx + (point.x * contentWidthPx)) / imageWidthPx,
+            y = (contentTopPx + (point.y * contentHeightPx)) / imageHeightPx,
+        )
+}
+
 private fun MapPoint.shiftedBy(
     dx: Float = 0f,
     dy: Float = 0f,
@@ -83,16 +109,10 @@ private fun List<MapPoint>.shiftedBy(
     dy: Float = 0f,
 ): List<MapPoint> = map { point -> point.shiftedBy(dx = dx, dy = dy) }
 
-private fun MapPoint.fromMapContentToCanvas(): MapPoint =
-    MapPoint(
-        x = MAP_CONTENT_OFFSET_X + (x * MAP_CONTENT_SCALE_X),
-        y = MAP_CONTENT_OFFSET_Y + (y * MAP_CONTENT_SCALE_Y),
-    )
-
-private fun GameMapRegion.fromMapContentToCanvas(): GameMapRegion =
+private fun GameMapRegion.projectContentToCanvas(canvasSpec: GameMapCanvasSpec): GameMapRegion =
     copy(
-        polygon = polygon.map { point -> point.fromMapContentToCanvas() },
-        labelAnchor = labelAnchor.fromMapContentToCanvas(),
+        polygon = polygon.map(canvasSpec::projectContentPoint),
+        labelAnchor = canvasSpec.projectContentPoint(labelAnchor),
     )
 
 /**
@@ -144,6 +164,16 @@ data class MapLayoutMetrics(
  * die erweiterte Bildleinwand mit UI-Rand projiziert.
  */
 object PulverfassMapDefaults {
+    val canvasSpec =
+        GameMapCanvasSpec(
+            imageWidthPx = 2540f,
+            imageHeightPx = 1346f,
+            contentLeftPx = 470f,
+            contentTopPx = 249f,
+            contentWidthPx = 1600f,
+            contentHeightPx = 848f,
+        )
+
     val regions: List<GameMapRegion> =
         listOf(
             GameMapRegion(
@@ -381,7 +411,7 @@ object PulverfassMapDefaults {
                     ).shiftedBy(dy = 0.010f),
                 labelAnchor = MapPoint(0.840f, 0.756f).shiftedBy(dy = 0.010f),
             ),
-        ).map { region -> region.fromMapContentToCanvas() }
+        ).map { region -> region.projectContentToCanvas(canvasSpec) }
 }
 
 /**
@@ -399,14 +429,17 @@ fun InteractiveGameMap(
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
     backgroundPainter: Painter? = null,
-    aspectRatio: Float = DEFAULT_MAP_ASPECT_RATIO,
+    canvasSpec: GameMapCanvasSpec = PulverfassMapDefaults.canvasSpec,
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     val layoutMetrics =
-        remember(viewportSize, aspectRatio) {
-            createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = aspectRatio)
+        remember(viewportSize, canvasSpec) {
+            createMapLayoutMetrics(
+                viewportSize = viewportSize,
+                aspectRatio = canvasSpec.aspectRatio,
+            )
         }
 
     Box(
@@ -498,52 +531,6 @@ fun InteractiveGameMap(
                                 .testTag("region_button_${region.id}"),
                     )
                 }
-            }
-        }
-    }
-}
-
-/**
- * Zeigt die aktuell ausgewählte Region als kompaktes Overlay an.
- */
-@Composable
-fun MapSelectionOverlay(
-    selectedRegion: GameMapRegion?,
-    selectedRegionState: GameMapRegionState?,
-    modifier: Modifier = Modifier,
-) {
-    if (selectedRegion == null) {
-        return
-    }
-
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(0.dp),
-        color = MapOverlaySurfaceColor,
-        contentColor = MapOverlayContentColor,
-        border = BorderStroke(1.dp, MapOverlayBorderColor),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Text(
-                text = "Ausgewählt",
-                style = MaterialTheme.typography.labelSmall,
-                color = MapOverlayContentColor,
-            )
-            Text(
-                text = selectedRegion.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = MapOverlayContentColor,
-            )
-            if (selectedRegionState != null) {
-                Text(
-                    text = "${selectedRegionState.ownerName} · ${selectedRegionState.troopCount} Truppen",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MapOverlayContentColor,
-                )
             }
         }
     }
@@ -895,9 +882,7 @@ private fun DrawScope.drawGameMap(
     }
 }
 
-private fun DrawScope.drawPlaceholderWorldMap(
-    mapSize: Size,
-) {
+private fun DrawScope.drawPlaceholderWorldMap(mapSize: Size) {
     val worldFramePath =
         Path().apply {
             addRoundRect(

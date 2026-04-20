@@ -10,7 +10,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GameMapTest {
-    private val mapAspectRatio = 2540f / 1346f
+    private val mapAspectRatio = PulverfassMapDefaults.canvasSpec.aspectRatio
 
     @Test
     fun create_map_layout_metrics_covers_available_viewport() {
