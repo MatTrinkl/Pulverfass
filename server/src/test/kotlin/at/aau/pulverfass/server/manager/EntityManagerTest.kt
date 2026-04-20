@@ -17,53 +17,55 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Tests fuer den EntityManager.
+ * Tests für den EntityManager.
  *
- * Geprueft werden:
+ * Geprüft werden:
  * - Registrierung
  * - Lookup
  * - Remove
  * - Iteration
  * - Filterung nach Typ
- * - Fehlerfaelle
+ * - Fehlerfälle
  */
 class EntityManagerTest {
     /**
-     * Einfache Test-Entity fuer allgemeine Manager-Tests.
+     * Einfache Test-Entity für allgemeine Manager-Tests.
      */
     private data class TestEntity(
         override val entityId: EntityId,
         override val entityType: EntityType,
     ) : BaseEntity(entityId, entityType)
 
+    private lateinit var entityManager: EntityManager
+
     @BeforeEach
     fun setUp() {
-        EntityManager.clear()
+        entityManager = EntityManager()
     }
 
     @Test
     fun `register sollte entity speichern`() {
         val entity = TestEntity(EntityId(1), EntityType.PLAYER)
 
-        EntityManager.register(entity)
+        entityManager.register(entity)
 
-        assertEquals(entity, EntityManager.get(EntityId(1)))
+        assertEquals(entity, entityManager.get(EntityId(1)))
     }
 
     @Test
     fun `register sollte doppelte entity ids verhindern`() {
         val entity = TestEntity(EntityId(2), EntityType.PLAYER)
 
-        EntityManager.register(entity)
+        entityManager.register(entity)
 
         assertThrows(DuplicateEntityIdException::class.java) {
-            EntityManager.register(entity)
+            entityManager.register(entity)
         }
     }
 
     @Test
     fun `get sollte null liefern wenn entity nicht existiert`() {
-        val result = EntityManager.get(EntityId(999))
+        val result = entityManager.get(EntityId(999))
 
         assertNull(result)
     }
@@ -71,9 +73,9 @@ class EntityManagerTest {
     @Test
     fun `require sollte entity liefern wenn sie existiert`() {
         val entity = TestEntity(EntityId(3), EntityType.TERRITORY)
-        EntityManager.register(entity)
+        entityManager.register(entity)
 
-        val result = EntityManager.require(EntityId(3))
+        val result = entityManager.require(EntityId(3))
 
         assertEquals(entity, result)
     }
@@ -81,24 +83,24 @@ class EntityManagerTest {
     @Test
     fun `require sollte exception werfen wenn entity nicht existiert`() {
         assertThrows(EntityNotFoundException::class.java) {
-            EntityManager.require(EntityId(404))
+            entityManager.require(EntityId(404))
         }
     }
 
     @Test
-    fun `remove sollte entity entfernen und zurueckgeben`() {
+    fun `remove sollte entity entfernen und zurückgeben`() {
         val entity = TestEntity(EntityId(4), EntityType.TERRITORY)
-        EntityManager.register(entity)
+        entityManager.register(entity)
 
-        val removed = EntityManager.remove(EntityId(4))
+        val removed = entityManager.remove(EntityId(4))
 
         assertEquals(entity, removed)
-        assertFalse(EntityManager.contains(EntityId(4)))
+        assertFalse(entityManager.contains(EntityId(4)))
     }
 
     @Test
     fun `remove sollte null liefern wenn entity nicht existiert`() {
-        val removed = EntityManager.remove(EntityId(405))
+        val removed = entityManager.remove(EntityId(405))
 
         assertNull(removed)
     }
@@ -106,14 +108,14 @@ class EntityManagerTest {
     @Test
     fun `contains sollte true liefern wenn entity existiert`() {
         val entity = TestEntity(EntityId(5), EntityType.PLAYER)
-        EntityManager.register(entity)
+        entityManager.register(entity)
 
-        assertTrue(EntityManager.contains(EntityId(5)))
+        assertTrue(entityManager.contains(EntityId(5)))
     }
 
     @Test
     fun `contains sollte false liefern wenn entity nicht existiert`() {
-        assertFalse(EntityManager.contains(EntityId(500)))
+        assertFalse(entityManager.contains(EntityId(500)))
     }
 
     @Test
@@ -138,11 +140,11 @@ class EntityManagerTest {
                 troopCount = 3,
             )
 
-        EntityManager.register(player)
-        EntityManager.register(territory1)
-        EntityManager.register(territory2)
+        entityManager.register(player)
+        entityManager.register(territory1)
+        entityManager.register(territory2)
 
-        val result = EntityManager.getByType(EntityType.TERRITORY)
+        val result = entityManager.getByType(EntityType.TERRITORY)
 
         assertEquals(2, result.size)
         assertTrue(result.contains(territory1))
@@ -157,9 +159,9 @@ class EntityManagerTest {
                 playerId = PlayerId(2),
             )
 
-        EntityManager.register(player)
+        entityManager.register(player)
 
-        val result = EntityManager.getByType(EntityType.TERRITORY)
+        val result = entityManager.getByType(EntityType.TERRITORY)
 
         assertTrue(result.isEmpty())
     }
@@ -179,10 +181,10 @@ class EntityManagerTest {
                 troopCount = 3,
             )
 
-        EntityManager.register(player)
-        EntityManager.register(territory)
+        entityManager.register(player)
+        entityManager.register(territory)
 
-        val result = EntityManager.allEntityIds()
+        val result = entityManager.allEntityIds()
 
         assertEquals(2, result.size)
         assertTrue(result.contains(EntityId(20)))
@@ -204,10 +206,10 @@ class EntityManagerTest {
                 troopCount = 3,
             )
 
-        EntityManager.register(player)
-        EntityManager.register(territory)
+        entityManager.register(player)
+        entityManager.register(territory)
 
-        val result = EntityManager.all()
+        val result = entityManager.all()
 
         assertEquals(2, result.size)
         assertTrue(result.contains(player))
@@ -229,13 +231,13 @@ class EntityManagerTest {
                 troopCount = 3,
             )
 
-        EntityManager.register(player)
-        EntityManager.register(territory)
+        entityManager.register(player)
+        entityManager.register(territory)
 
-        EntityManager.clear()
+        entityManager.clear()
 
-        assertTrue(EntityManager.all().isEmpty())
-        assertFalse(EntityManager.contains(EntityId(12)))
-        assertFalse(EntityManager.contains(EntityId(13)))
+        assertTrue(entityManager.all().isEmpty())
+        assertFalse(entityManager.contains(EntityId(12)))
+        assertFalse(entityManager.contains(EntityId(13)))
     }
 }

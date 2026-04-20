@@ -16,7 +16,7 @@ import at.aau.pulverfass.shared.ids.EntityId
  * - Entities nach Typ filtern
  *
  */
-object EntityManager {
+internal class EntityManager {
     private val entities: MutableMap<EntityId, BaseEntity> = mutableMapOf()
 
     /**
