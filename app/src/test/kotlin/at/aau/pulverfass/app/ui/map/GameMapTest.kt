@@ -10,15 +10,17 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GameMapTest {
+    private val mapAspectRatio = 1600f / 848f
+
     @Test
     fun create_map_layout_metrics_covers_available_viewport() {
         val metrics =
-            createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = 16f / 9f)
+            createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = mapAspectRatio)
 
         assertFloatEquals(1000f, metrics.mapSize.width)
-        assertFloatEquals(562.5f, metrics.mapSize.height)
+        assertFloatEquals(530f, metrics.mapSize.height)
         assertFloatEquals(0f, metrics.mapOrigin.x)
-        assertFloatEquals(18.75f, metrics.mapOrigin.y)
+        assertFloatEquals(35f, metrics.mapOrigin.y)
     }
 
     @Test
@@ -26,8 +28,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1000f, 562.5f),
-                mapOrigin = Offset(0f, 18.75f),
+                mapSize = Size(1000f, 530f),
+                mapOrigin = Offset(0f, 35f),
             )
 
         val updated =
@@ -40,7 +42,7 @@ class GameMapTest {
             )
 
         assertFloatEquals(0f, updated.offset.x)
-        assertFloatEquals(-18.75f, updated.offset.y)
+        assertFloatEquals(-35f, updated.offset.y)
     }
 
     @Test
@@ -48,16 +50,16 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1000f, 562.5f),
-                mapOrigin = Offset(0f, 18.75f),
+                mapSize = Size(1000f, 530f),
+                mapOrigin = Offset(0f, 35f),
             )
 
         val bounds = calculateOffsetBounds(layoutMetrics = metrics, scale = 2f)
 
         assertFloatEquals(-1000f, bounds.first.x)
-        assertFloatEquals(-543.75f, bounds.first.y)
+        assertFloatEquals(-495f, bounds.first.y)
         assertFloatEquals(0f, bounds.second.x)
-        assertFloatEquals(-18.75f, bounds.second.y)
+        assertFloatEquals(-35f, bounds.second.y)
     }
 
     @Test
@@ -65,8 +67,8 @@ class GameMapTest {
         val metrics =
             MapLayoutMetrics(
                 viewportSize = Size(1000f, 600f),
-                mapSize = Size(1000f, 562.5f),
-                mapOrigin = Offset(0f, 18.75f),
+                mapSize = Size(1000f, 530f),
+                mapOrigin = Offset(0f, 35f),
             )
 
         val point =
@@ -82,7 +84,7 @@ class GameMapTest {
     @Test
     fun find_region_at_screen_point_detects_polygon_hit() {
         val metrics =
-            createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = 16f / 9f)
+            createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = mapAspectRatio)
         val screenPoint =
             mapPointToScreenOffset(
                 point = PulverfassMapDefaults.regions.first().labelAnchor,

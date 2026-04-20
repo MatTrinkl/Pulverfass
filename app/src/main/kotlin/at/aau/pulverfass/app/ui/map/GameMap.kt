@@ -51,7 +51,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-private const val DEFAULT_MAP_ASPECT_RATIO = 1920f / 1018f
+private const val DEFAULT_MAP_ASPECT_RATIO = 1600f / 848f
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 private val MapOverlaySurfaceColor = Color.White

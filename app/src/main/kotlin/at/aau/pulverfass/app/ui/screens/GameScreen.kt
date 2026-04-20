@@ -93,7 +93,7 @@ private data class DemoGameUiState(
 @Composable
 fun GameScreen() {
     val players = remember { createDemoPlayers() }
-    val mapPainter = painterResource(id = R.drawable.world_map)
+    val mapPainter = painterResource(id = R.drawable.world_map_test)
     var uiState by remember {
         mutableStateOf(
             createDemoGameUiState(players = players),
