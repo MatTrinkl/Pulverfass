@@ -275,7 +275,7 @@ private fun LobbyPrimaryActions(
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick = { navController.navigate(Screen.Game.route) },
+            onClick = { navController.navigate(Screen.LoadGame.route) },
             modifier = Modifier.fillMaxWidth(0.8f),
         ) {
             Text(stringResource(id = R.string.open_map_playground))

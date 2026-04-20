@@ -17,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import kotlinx.coroutines.delay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +39,14 @@ class ScreenComposableTest {
                     startDestination = Screen.Load.route,
                 ) {
                     composable(Screen.Load.route) {
-                        LoadScreen(navController)
+                        LoadScreen(
+                            navController = navController,
+                            preloadAssets = { _, onProgressChanged ->
+                                onProgressChanged(0, 1)
+                                delay(1_000)
+                                onProgressChanged(1, 1)
+                            },
+                        )
                     }
                     composable(Screen.Lobby.route) {
                         Text("Lobby destination")
@@ -50,7 +58,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Pulverfass").assertIsDisplayed()
         composeTestRule.onNodeWithText("v1.0.0").assertIsDisplayed()
 
-        composeTestRule.mainClock.advanceTimeBy(2_100)
+        composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Lobby destination").assertIsDisplayed()
@@ -74,6 +82,45 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Lobby erstellen").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lobby beitreten").assertIsDisplayed()
         composeTestRule.onNodeWithText("Karte direkt testen").assertIsDisplayed()
+    }
+
+    @Test
+    fun load_game_screen_prepares_game_and_navigates_to_map() {
+        composeTestRule.mainClock.autoAdvance = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.LoadGame.route,
+                ) {
+                    composable(Screen.LoadGame.route) {
+                        LoadGameScreen(
+                            navController = navController,
+                            preloadGame = { _, onProgressChanged ->
+                                onProgressChanged(0, 1)
+                                delay(1_000)
+                                onProgressChanged(1, 1)
+                            },
+                        )
+                    }
+                    composable(Screen.Game.route) {
+                        Text("Game destination")
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Spiel wird vorbereitet").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Karte und Demo-Spielzustand werden geladen.",
+        ).assertIsDisplayed()
+
+        composeTestRule.mainClock.advanceTimeBy(1_100)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Game destination").assertIsDisplayed()
     }
 
     @Test

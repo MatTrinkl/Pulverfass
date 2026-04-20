@@ -26,66 +26,71 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
-import at.aau.pulverfass.shared.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Ladebildschirm beim Start der App.
+/**
+ * Lädt aktuell die Demo-Karte vor dem eigentlichen Spielscreen.
+ *
+ * Später kann hier derselbe Einstieg für echten Game-State aus Lobby, Server
+ * und Shared-Modul verwendet werden.
+ */
 @Composable
-fun LoadScreen(
+fun LoadGameScreen(
     navController: NavController,
-    preloadAssets: suspend (Resources, (loaded: Int, total: Int) -> Unit) -> Unit =
+    preloadGame: suspend (Resources, (loaded: Int, total: Int) -> Unit) -> Unit =
         MapAssetPreloader::preload,
 ) {
     val resources = LocalContext.current.resources
-    var loadedAssets by remember { mutableIntStateOf(0) }
-    var totalAssets by remember { mutableIntStateOf(1) }
+    var loadedSteps by remember { mutableIntStateOf(0) }
+    var totalSteps by remember { mutableIntStateOf(1) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
-    // Wechselt erst weiter, wenn die App-Assets tatsächlich dekodierbar sind.
     LaunchedEffect(Unit) {
         runCatching {
-            preloadAssets(resources) { loaded, total ->
-                loadedAssets = loaded
-                totalAssets = total.coerceAtLeast(1)
+            preloadGame(resources) { loaded, total ->
+                loadedSteps = loaded
+                totalSteps = total.coerceAtLeast(1)
             }
         }.onSuccess {
             withContext(Dispatchers.Main.immediate) {
-                navController.navigate(Screen.Lobby.route) {
-                    popUpTo(Screen.Load.route) { inclusive = true }
+                navController.navigate(Screen.Game.route) {
+                    popUpTo(Screen.LoadGame.route) { inclusive = true }
                 }
             }
         }.onFailure { error ->
             withContext(Dispatchers.Main.immediate) {
-                loadError = error.message ?: "Assets konnten nicht geladen werden."
+                loadError = error.message ?: "Spiel konnte nicht geladen werden."
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val appName = stringResource(id = R.string.app_name)
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // Zeigt den Namen der App und die aktuelle Version an.
             Text(
-                text = appName,
-                style = MaterialTheme.typography.headlineLarge,
+                text = stringResource(id = R.string.load_game_title),
+                style = MaterialTheme.typography.headlineMedium,
             )
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "v${Constants.APP_VERSION}",
+                text = stringResource(id = R.string.load_game_description),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(32.dp))
             LinearProgressIndicator(
-                progress = { loadedAssets.toFloat() / totalAssets.toFloat() },
+                progress = { loadedSteps.toFloat() / totalSteps.toFloat() },
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text =
                     loadError
-                        ?: "${stringResource(id = R.string.loading)} $loadedAssets/$totalAssets",
+                        ?: "${stringResource(id = R.string.loading)} $loadedSteps/$totalSteps",
             )
         }
     }

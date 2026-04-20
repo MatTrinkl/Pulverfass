@@ -10,7 +10,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GameMapTest {
-    private val mapAspectRatio = PulverfassMapDefaults.canvasSpec.aspectRatio
+    private val mapAspectRatio = PulverfassMapDefaults.aspectRatio
 
     @Test
     fun create_map_layout_metrics_covers_available_viewport() {
@@ -82,37 +82,73 @@ class GameMapTest {
     }
 
     @Test
-    fun find_region_at_screen_point_detects_polygon_hit() {
+    fun screen_offset_to_image_pixel_projects_to_bitmap_coordinates() {
         val metrics =
-            createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = mapAspectRatio)
-        val screenPoint =
-            mapPointToScreenOffset(
-                point = PulverfassMapDefaults.regions.first().labelAnchor,
-                layoutMetrics = metrics,
-                viewportState = MapViewportState(),
+            MapLayoutMetrics(
+                viewportSize = Size(1000f, 600f),
+                mapSize = Size(1000f, 500f),
+                mapOrigin = Offset.Zero,
             )
 
-        val region =
-            findRegionAtScreenPoint(
-                regions = PulverfassMapDefaults.regions,
-                tapPoint = screenPoint,
+        val pixel =
+            screenOffsetToImagePixel(
+                screenPoint = Offset(500f, 250f),
                 layoutMetrics = metrics,
                 viewportState = MapViewportState(),
+                imageSize = IntSize(2540, 1346),
             )
 
-        assertNotNull(region)
-        assertEquals("north_america", region.id)
+        assertNotNull(pixel)
+        assertEquals(1270, pixel.x)
+        assertEquals(673, pixel.y)
     }
 
     @Test
-    fun region_contains_point_returns_false_for_external_point() {
-        val contains =
-            regionContainsPoint(
-                region = PulverfassMapDefaults.regions.first(),
-                point = MapPoint(0.9f, 0.9f),
+    fun find_region_by_exact_id_color_returns_region() {
+        val region =
+            findRegionByIdColor(
+                regions = PulverfassMapDefaults.regions,
+                pixelRgb = 0x00F032E6,
             )
 
-        assertTrue(!contains)
+        assertNotNull(region)
+        assertEquals("central_europe", region.id)
+    }
+
+    @Test
+    fun find_region_by_antialiased_or_unknown_color_returns_null() {
+        assertNull(
+            findRegionByIdColor(
+                regions = PulverfassMapDefaults.regions,
+                pixelRgb = 0x00F032E5,
+            ),
+        )
+        assertNull(
+            findRegionByIdColor(
+                regions = PulverfassMapDefaults.regions,
+                pixelRgb = 0x00FFFFFF,
+            ),
+        )
+    }
+
+    @Test
+    fun calculate_mask_center_uses_visible_pixels_only() {
+        val center =
+            calculateMaskCenter(
+                width = 5,
+                height = 5,
+                alphaAt = { x, y ->
+                    if ((x == 1 && y == 1) || (x == 3 && y == 3)) {
+                        128
+                    } else {
+                        0
+                    }
+                },
+            )
+
+        assertNotNull(center)
+        assertFloatEquals(0.5f, center.x)
+        assertFloatEquals(0.5f, center.y)
     }
 }
 

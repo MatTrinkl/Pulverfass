@@ -1,19 +1,21 @@
 package at.aau.pulverfass.app.ui.map
 
+import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,30 +26,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import at.aau.pulverfass.app.R
 import kotlin.math.roundToInt
 
+private const val MAP_IMAGE_WIDTH_PX = 2540
+private const val MAP_IMAGE_HEIGHT_PX = 1346
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
+private const val TERRITORY_OVERLAY_ALPHA = 0.64f
 private val MapOverlaySurfaceColor = Color.White
 private val MapOverlayBorderColor = Color.Black
 private val MapOverlayContentColor = Color.Black
@@ -57,7 +61,7 @@ private val MapOverlayInverseColor = Color.White
  * Normalisierter Punkt im Kartenkoordinatensystem.
  *
  * Die Koordinaten liegen unabhängig von der Bildschirmgröße im Bereich `0..1`
- * und referenzieren Positionen relativ zur Kartenfläche.
+ * und referenzieren Positionen relativ zur kompletten Kartenbildfläche.
  */
 data class MapPoint(
     val x: Float,
@@ -65,67 +69,18 @@ data class MapPoint(
 )
 
 /**
- * Beschreibt das Kartenbild und den darin enthaltenen eigentlichen Karteninhalt.
+ * Beschreibt eine Territory-Region der Spielkarte.
  *
- * Neue Kartenbilder müssen nur diese Werte anpassen, solange die Regionsdaten
- * weiter auf den inneren Karteninhalt normalisiert sind.
- */
-data class GameMapCanvasSpec(
-    val imageWidthPx: Float,
-    val imageHeightPx: Float,
-    val contentLeftPx: Float,
-    val contentTopPx: Float,
-    val contentWidthPx: Float,
-    val contentHeightPx: Float,
-) {
-    init {
-        require(imageWidthPx > 0f)
-        require(imageHeightPx > 0f)
-        require(contentWidthPx > 0f)
-        require(contentHeightPx > 0f)
-        require(contentLeftPx >= 0f)
-        require(contentTopPx >= 0f)
-        require(contentLeftPx + contentWidthPx <= imageWidthPx)
-        require(contentTopPx + contentHeightPx <= imageHeightPx)
-    }
-
-    val aspectRatio: Float
-        get() = imageWidthPx / imageHeightPx
-
-    fun projectContentPoint(point: MapPoint): MapPoint =
-        MapPoint(
-            x = (contentLeftPx + (point.x * contentWidthPx)) / imageWidthPx,
-            y = (contentTopPx + (point.y * contentHeightPx)) / imageHeightPx,
-        )
-}
-
-private fun MapPoint.shiftedBy(
-    dx: Float = 0f,
-    dy: Float = 0f,
-): MapPoint = MapPoint(x = x + dx, y = y + dy)
-
-private fun List<MapPoint>.shiftedBy(
-    dx: Float = 0f,
-    dy: Float = 0f,
-): List<MapPoint> = map { point -> point.shiftedBy(dx = dx, dy = dy) }
-
-private fun GameMapRegion.projectContentToCanvas(canvasSpec: GameMapCanvasSpec): GameMapRegion =
-    copy(
-        polygon = polygon.map(canvasSpec::projectContentPoint),
-        labelAnchor = canvasSpec.projectContentPoint(labelAnchor),
-    )
-
-/**
- * Beschreibt eine interaktive Region auf der Spielkarte.
- *
- * Das Polygon definiert die klickbare Fläche. [labelAnchor] markiert die
- * bevorzugte Position für sichtbare UI-Elemente über der Karte.
+ * [maskResId] verweist auf die transparente Territory-Maske. [idMapColorRgb]
+ * ist die exakte RGB-Farbe aus `map_region_id.png`, die für Hitdetection
+ * verwendet wird. Andere Farben werden bewusst ignoriert.
  */
 data class GameMapRegion(
     val id: String,
     val name: String,
-    val polygon: List<MapPoint>,
-    val labelAnchor: MapPoint,
+    @param:DrawableRes val maskResId: Int,
+    val idMapColorRgb: Int,
+    val fallbackAnchor: MapPoint = MapPoint(0.5f, 0.5f),
 )
 
 /**
@@ -155,271 +110,174 @@ data class MapLayoutMetrics(
     val mapOrigin: Offset,
 )
 
+private data class TerritoryRenderAssets(
+    val overlay: ImageBitmap,
+    val anchors: Map<String, MapPoint>,
+)
+
 /**
- * Statische Platzhalterdaten für die erste interaktive Kartenansicht.
+ * Statische Frontend-Daten für die aktuelle Demo-Karte.
  *
- * Die Regionen sind bewusst im App-Modul gehalten, bis fachliche Map-Daten
- * zwischen App und Server über ein gemeinsames Modell geteilt werden.
- * Die Rohkoordinaten beziehen sich auf den inneren Karteninhalt und werden auf
- * die erweiterte Bildleinwand mit UI-Rand projiziert.
+ * Die Territories liegen bewusst im App-Modul, bis fachliche Kartendaten aus
+ * den anderen Modulen kommen. Die präzisen Grenzen kommen jetzt aus Bildern
+ * statt aus hart codierten Polygonen.
  */
 object PulverfassMapDefaults {
-    val canvasSpec =
-        GameMapCanvasSpec(
-            imageWidthPx = 2540f,
-            imageHeightPx = 1346f,
-            contentLeftPx = 470f,
-            contentTopPx = 249f,
-            contentWidthPx = 1600f,
-            contentHeightPx = 848f,
-        )
+    val aspectRatio: Float =
+        MAP_IMAGE_WIDTH_PX.toFloat() / MAP_IMAGE_HEIGHT_PX.toFloat()
 
     val regions: List<GameMapRegion> =
         listOf(
             GameMapRegion(
-                id = "north_america",
-                name = "Nordamerika",
-                polygon =
-                    listOf(
-                        MapPoint(0.002f, 0.142f),
-                        MapPoint(0.010f, 0.126f),
-                        MapPoint(0.024f, 0.114f),
-                        MapPoint(0.050f, 0.112f),
-                        MapPoint(0.082f, 0.118f),
-                        MapPoint(0.118f, 0.119f),
-                        MapPoint(0.146f, 0.105f),
-                        MapPoint(0.169f, 0.100f),
-                        MapPoint(0.184f, 0.114f),
-                        MapPoint(0.204f, 0.105f),
-                        MapPoint(0.231f, 0.105f),
-                        MapPoint(0.245f, 0.125f),
-                        MapPoint(0.240f, 0.149f),
-                        MapPoint(0.223f, 0.160f),
-                        MapPoint(0.211f, 0.182f),
-                        MapPoint(0.211f, 0.212f),
-                        MapPoint(0.228f, 0.243f),
-                        MapPoint(0.241f, 0.279f),
-                        MapPoint(0.238f, 0.317f),
-                        MapPoint(0.223f, 0.344f),
-                        MapPoint(0.216f, 0.381f),
-                        MapPoint(0.208f, 0.418f),
-                        MapPoint(0.212f, 0.456f),
-                        MapPoint(0.203f, 0.485f),
-                        MapPoint(0.186f, 0.491f),
-                        MapPoint(0.172f, 0.466f),
-                        MapPoint(0.152f, 0.437f),
-                        MapPoint(0.133f, 0.407f),
-                        MapPoint(0.116f, 0.378f),
-                        MapPoint(0.104f, 0.343f),
-                        MapPoint(0.089f, 0.317f),
-                        MapPoint(0.071f, 0.290f),
-                        MapPoint(0.050f, 0.270f),
-                        MapPoint(0.030f, 0.250f),
-                        MapPoint(0.015f, 0.220f),
-                        MapPoint(0.004f, 0.188f),
-                    ).shiftedBy(dy = 0.012f),
-                labelAnchor = MapPoint(0.132f, 0.248f).shiftedBy(dy = 0.012f),
+                "america",
+                "Amerika",
+                R.drawable.territory_america,
+                rgbKey(0xE6, 0x19, 0x4B),
             ),
             GameMapRegion(
-                id = "south_america",
-                name = "Südamerika",
-                polygon =
-                    listOf(
-                        MapPoint(0.124f, 0.500f),
-                        MapPoint(0.152f, 0.507f),
-                        MapPoint(0.177f, 0.518f),
-                        MapPoint(0.197f, 0.540f),
-                        MapPoint(0.205f, 0.569f),
-                        MapPoint(0.204f, 0.608f),
-                        MapPoint(0.199f, 0.646f),
-                        MapPoint(0.198f, 0.690f),
-                        MapPoint(0.192f, 0.733f),
-                        MapPoint(0.184f, 0.778f),
-                        MapPoint(0.176f, 0.818f),
-                        MapPoint(0.171f, 0.858f),
-                        MapPoint(0.164f, 0.893f),
-                        MapPoint(0.151f, 0.938f),
-                        MapPoint(0.141f, 0.967f),
-                        MapPoint(0.134f, 0.945f),
-                        MapPoint(0.132f, 0.904f),
-                        MapPoint(0.131f, 0.861f),
-                        MapPoint(0.127f, 0.818f),
-                        MapPoint(0.123f, 0.778f),
-                        MapPoint(0.121f, 0.734f),
-                        MapPoint(0.120f, 0.687f),
-                        MapPoint(0.118f, 0.643f),
-                        MapPoint(0.118f, 0.597f),
-                        MapPoint(0.120f, 0.550f),
-                    ).shiftedBy(dx = 0.018f, dy = 0.014f),
-                labelAnchor = MapPoint(0.161f, 0.699f).shiftedBy(dx = 0.018f, dy = 0.014f),
+                "canada",
+                "Kanada",
+                R.drawable.territory_canada,
+                rgbKey(0x3C, 0xB4, 0x4B),
             ),
             GameMapRegion(
-                id = "greenland",
-                name = "Grönland",
-                polygon =
-                    listOf(
-                        MapPoint(0.265f, 0.038f),
-                        MapPoint(0.286f, 0.021f),
-                        MapPoint(0.322f, 0.015f),
-                        MapPoint(0.354f, 0.013f),
-                        MapPoint(0.386f, 0.013f),
-                        MapPoint(0.419f, 0.027f),
-                        MapPoint(0.415f, 0.053f),
-                        MapPoint(0.402f, 0.081f),
-                        MapPoint(0.399f, 0.112f),
-                        MapPoint(0.387f, 0.142f),
-                        MapPoint(0.365f, 0.162f),
-                        MapPoint(0.337f, 0.171f),
-                        MapPoint(0.309f, 0.162f),
-                        MapPoint(0.291f, 0.141f),
-                        MapPoint(0.282f, 0.112f),
-                        MapPoint(0.277f, 0.080f),
-                    ),
-                labelAnchor = MapPoint(0.344f, 0.091f),
+                "mexico",
+                "Mexiko",
+                R.drawable.territory_mexico,
+                rgbKey(0xFF, 0xE1, 0x19),
             ),
             GameMapRegion(
-                id = "europe",
-                name = "Europa",
-                polygon =
-                    listOf(
-                        MapPoint(0.440f, 0.139f),
-                        MapPoint(0.455f, 0.126f),
-                        MapPoint(0.475f, 0.125f),
-                        MapPoint(0.494f, 0.127f),
-                        MapPoint(0.514f, 0.125f),
-                        MapPoint(0.536f, 0.137f),
-                        MapPoint(0.548f, 0.157f),
-                        MapPoint(0.549f, 0.176f),
-                        MapPoint(0.544f, 0.195f),
-                        MapPoint(0.531f, 0.205f),
-                        MapPoint(0.517f, 0.203f),
-                        MapPoint(0.506f, 0.193f),
-                        MapPoint(0.495f, 0.186f),
-                        MapPoint(0.486f, 0.198f),
-                        MapPoint(0.470f, 0.204f),
-                        MapPoint(0.456f, 0.195f),
-                        MapPoint(0.448f, 0.176f),
-                    ).shiftedBy(dy = 0.018f),
-                labelAnchor = MapPoint(0.500f, 0.167f).shiftedBy(dy = 0.018f),
+                "greenland",
+                "Grönland",
+                R.drawable.territory_greenland,
+                rgbKey(0x43, 0x63, 0xD8),
             ),
             GameMapRegion(
-                id = "africa",
-                name = "Afrika",
-                polygon =
-                    listOf(
-                        MapPoint(0.446f, 0.259f),
-                        MapPoint(0.469f, 0.248f),
-                        MapPoint(0.498f, 0.249f),
-                        MapPoint(0.526f, 0.252f),
-                        MapPoint(0.547f, 0.265f),
-                        MapPoint(0.567f, 0.291f),
-                        MapPoint(0.579f, 0.324f),
-                        MapPoint(0.585f, 0.362f),
-                        MapPoint(0.590f, 0.403f),
-                        MapPoint(0.592f, 0.444f),
-                        MapPoint(0.590f, 0.487f),
-                        MapPoint(0.585f, 0.531f),
-                        MapPoint(0.577f, 0.575f),
-                        MapPoint(0.565f, 0.620f),
-                        MapPoint(0.548f, 0.664f),
-                        MapPoint(0.531f, 0.702f),
-                        MapPoint(0.513f, 0.719f),
-                        MapPoint(0.499f, 0.691f),
-                        MapPoint(0.490f, 0.648f),
-                        MapPoint(0.479f, 0.607f),
-                        MapPoint(0.470f, 0.563f),
-                        MapPoint(0.464f, 0.516f),
-                        MapPoint(0.459f, 0.472f),
-                        MapPoint(0.454f, 0.425f),
-                        MapPoint(0.450f, 0.378f),
-                        MapPoint(0.447f, 0.327f),
-                        MapPoint(0.444f, 0.286f),
-                    ).shiftedBy(dy = 0.022f),
-                labelAnchor = MapPoint(0.528f, 0.460f).shiftedBy(dy = 0.022f),
+                "british_islands",
+                "Britische Inseln",
+                R.drawable.territory_british_islands,
+                rgbKey(0xF5, 0x82, 0x31),
             ),
             GameMapRegion(
-                id = "asia",
-                name = "Asien",
-                polygon =
-                    listOf(
-                        MapPoint(0.522f, 0.131f),
-                        MapPoint(0.554f, 0.128f),
-                        MapPoint(0.582f, 0.124f),
-                        MapPoint(0.612f, 0.128f),
-                        MapPoint(0.646f, 0.117f),
-                        MapPoint(0.678f, 0.104f),
-                        MapPoint(0.710f, 0.092f),
-                        MapPoint(0.742f, 0.086f),
-                        MapPoint(0.772f, 0.101f),
-                        MapPoint(0.806f, 0.093f),
-                        MapPoint(0.839f, 0.098f),
-                        MapPoint(0.873f, 0.107f),
-                        MapPoint(0.910f, 0.109f),
-                        MapPoint(0.946f, 0.120f),
-                        MapPoint(0.979f, 0.124f),
-                        MapPoint(0.995f, 0.145f),
-                        MapPoint(0.987f, 0.164f),
-                        MapPoint(0.966f, 0.176f),
-                        MapPoint(0.948f, 0.197f),
-                        MapPoint(0.923f, 0.216f),
-                        MapPoint(0.900f, 0.240f),
-                        MapPoint(0.887f, 0.266f),
-                        MapPoint(0.878f, 0.296f),
-                        MapPoint(0.878f, 0.331f),
-                        MapPoint(0.872f, 0.367f),
-                        MapPoint(0.853f, 0.389f),
-                        MapPoint(0.830f, 0.389f),
-                        MapPoint(0.810f, 0.369f),
-                        MapPoint(0.792f, 0.346f),
-                        MapPoint(0.780f, 0.320f),
-                        MapPoint(0.760f, 0.307f),
-                        MapPoint(0.740f, 0.318f),
-                        MapPoint(0.724f, 0.348f),
-                        MapPoint(0.708f, 0.383f),
-                        MapPoint(0.689f, 0.395f),
-                        MapPoint(0.671f, 0.378f),
-                        MapPoint(0.659f, 0.343f),
-                        MapPoint(0.650f, 0.312f),
-                        MapPoint(0.633f, 0.279f),
-                        MapPoint(0.618f, 0.247f),
-                        MapPoint(0.602f, 0.221f),
-                        MapPoint(0.579f, 0.208f),
-                        MapPoint(0.554f, 0.190f),
-                        MapPoint(0.536f, 0.166f),
-                    ).shiftedBy(dy = 0.018f),
-                labelAnchor = MapPoint(0.778f, 0.225f).shiftedBy(dy = 0.018f),
+                "scandinavia",
+                "Skandinavien",
+                R.drawable.territory_scandinavia,
+                rgbKey(0x91, 0x1E, 0xB4),
             ),
             GameMapRegion(
-                id = "australia",
-                name = "Australien",
-                polygon =
-                    listOf(
-                        MapPoint(0.785f, 0.680f),
-                        MapPoint(0.815f, 0.670f),
-                        MapPoint(0.844f, 0.676f),
-                        MapPoint(0.872f, 0.693f),
-                        MapPoint(0.894f, 0.718f),
-                        MapPoint(0.901f, 0.753f),
-                        MapPoint(0.896f, 0.790f),
-                        MapPoint(0.884f, 0.827f),
-                        MapPoint(0.862f, 0.846f),
-                        MapPoint(0.835f, 0.838f),
-                        MapPoint(0.811f, 0.823f),
-                        MapPoint(0.792f, 0.793f),
-                        MapPoint(0.781f, 0.757f),
-                        MapPoint(0.778f, 0.718f),
-                    ).shiftedBy(dy = 0.010f),
-                labelAnchor = MapPoint(0.840f, 0.756f).shiftedBy(dy = 0.010f),
+                "west_europe",
+                "Westeuropa",
+                R.drawable.territory_west_europe,
+                rgbKey(0x46, 0xF0, 0xF0),
             ),
-        ).map { region -> region.projectContentToCanvas(canvasSpec) }
+            GameMapRegion(
+                "central_europe",
+                "Mitteleuropa",
+                R.drawable.territory_central_europe,
+                rgbKey(0xF0, 0x32, 0xE6),
+            ),
+            GameMapRegion(
+                "russia",
+                "Russland",
+                R.drawable.territory_russia,
+                rgbKey(0xBC, 0xF6, 0x0C),
+            ),
+            GameMapRegion(
+                "siberia",
+                "Sibirien",
+                R.drawable.territory_siberia,
+                rgbKey(0xFA, 0xBE, 0xBE),
+            ),
+            GameMapRegion(
+                "east_siberia",
+                "Ostsibirien",
+                R.drawable.territory_east_siberia,
+                rgbKey(0x00, 0x80, 0x80),
+            ),
+            GameMapRegion(
+                "china",
+                "China",
+                R.drawable.territory_china,
+                rgbKey(0xE6, 0xBE, 0xFF),
+            ),
+            GameMapRegion(
+                "japan",
+                "Japan",
+                R.drawable.territory_japan,
+                rgbKey(0x9A, 0x63, 0x24),
+            ),
+            GameMapRegion(
+                "orient",
+                "Orient",
+                R.drawable.territory_orient,
+                rgbKey(0xFF, 0xFA, 0xC8),
+            ),
+            GameMapRegion(
+                "middle_east",
+                "Mittlerer Osten",
+                R.drawable.territory_middle_east,
+                rgbKey(0x80, 0x00, 0x00),
+            ),
+            GameMapRegion(
+                "egypt",
+                "Ägypten",
+                R.drawable.territory_egypt,
+                rgbKey(0xAA, 0xFF, 0xC3),
+            ),
+            GameMapRegion(
+                "west_africa",
+                "Westafrika",
+                R.drawable.territory_west_africa,
+                rgbKey(0x80, 0x80, 0x00),
+            ),
+            GameMapRegion(
+                "central_africa",
+                "Zentralafrika",
+                R.drawable.territory_central_africa,
+                rgbKey(0xFF, 0xD8, 0xB1),
+            ),
+            GameMapRegion(
+                "south_africa",
+                "Südafrika",
+                R.drawable.territory_south_africa,
+                rgbKey(0x00, 0x00, 0x75),
+            ),
+            GameMapRegion(
+                "brazil",
+                "Brasilien",
+                R.drawable.territory_brazil,
+                rgbKey(0xA9, 0xA9, 0xA9),
+            ),
+            GameMapRegion(
+                "andean_community",
+                "Andengemeinschaft",
+                R.drawable.territory_andean_community,
+                rgbKey(0xFF, 0x8C, 0x00),
+            ),
+            GameMapRegion(
+                "argentina",
+                "Argentinien",
+                R.drawable.territory_argentina,
+                rgbKey(0x8B, 0x00, 0x8B),
+            ),
+            GameMapRegion(
+                "australia",
+                "Australien",
+                R.drawable.territory_australia,
+                rgbKey(0x00, 0xCE, 0xD1),
+            ),
+            GameMapRegion(
+                "oceania",
+                "Ozeanien",
+                R.drawable.territory_oceania,
+                rgbKey(0xDC, 0x14, 0x3C),
+            ),
+        )
 }
 
 /**
- * Rendert die interaktive Spielkarte mit sichtbarem Kartenbild,
- * Polygon-Hitflächen und sichtbaren Regions-Overlays.
- *
- * Pan und Pinch-Zoom orientieren sich direkt am Finger-Centroid. Dadurch bleibt
- * die Kartenbewegung nahe am erwarteten Verhalten klassischer Map-UIs.
+ * Rendert die interaktive Spielkarte mit Hintergrundbild, einfärbbaren
+ * Territory-Masken, Region-ID-Hitmap und Truppenzählern.
  */
 @Composable
 fun InteractiveGameMap(
@@ -429,23 +287,39 @@ fun InteractiveGameMap(
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
     backgroundPainter: Painter? = null,
-    canvasSpec: GameMapCanvasSpec = PulverfassMapDefaults.canvasSpec,
+    aspectRatio: Float = PulverfassMapDefaults.aspectRatio,
+    @DrawableRes regionIdMapResId: Int = R.drawable.map_region_id,
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    val context = LocalContext.current
+    val resources = context.resources
+    val regionIdBitmap =
+        remember(resources, regionIdMapResId) {
+            BitmapFactory.decodeResource(resources, regionIdMapResId)
+        }
+    val regionTintColors =
+        regions.associate { region ->
+            region.id to (regionStates[region.id]?.accentColor ?: Color(0xFF8F8F8F))
+        }
+    val territoryRenderAssets =
+        remember(resources, regions, regionTintColors) {
+            buildTerritoryRenderAssets(
+                resources = resources,
+                regions = regions,
+                regionTintColors = regionTintColors,
+            )
+        }
 
     val layoutMetrics =
-        remember(viewportSize, canvasSpec) {
-            createMapLayoutMetrics(
-                viewportSize = viewportSize,
-                aspectRatio = canvasSpec.aspectRatio,
-            )
+        remember(viewportSize, aspectRatio) {
+            createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = aspectRatio)
         }
 
     Box(
         modifier =
             modifier
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(Color.White)
                 .clipToBounds(),
     ) {
         Box(
@@ -453,7 +327,7 @@ fun InteractiveGameMap(
                 Modifier
                     .fillMaxSize()
                     .onSizeChanged { viewportSize = it }
-                    .pointerInput(regions, layoutMetrics, viewportState) {
+                    .pointerInput(regions, layoutMetrics, viewportState, regionIdBitmap) {
                         detectTapGestures { tapOffset ->
                             val tappedRegion =
                                 findRegionAtScreenPoint(
@@ -461,6 +335,7 @@ fun InteractiveGameMap(
                                     tapPoint = tapOffset,
                                     layoutMetrics = layoutMetrics,
                                     viewportState = viewportState,
+                                    regionIdBitmap = regionIdBitmap,
                                 )
 
                             if (tappedRegion != null) {
@@ -493,9 +368,7 @@ fun InteractiveGameMap(
                         .testTag("game_map_canvas"),
             ) {
                 drawGameMap(
-                    regions = regions,
-                    regionStates = regionStates,
-                    selectedRegionId = selectedRegionId,
+                    territoryOverlay = territoryRenderAssets.overlay,
                     layoutMetrics = layoutMetrics,
                     viewportState = viewportState,
                     backgroundPainter = backgroundPainter,
@@ -503,9 +376,10 @@ fun InteractiveGameMap(
             }
 
             regions.forEach { region ->
+                val anchor = territoryRenderAssets.anchors[region.id] ?: region.fallbackAnchor
                 val labelPosition =
                     mapPointToScreenOffset(
-                        point = region.labelAnchor,
+                        point = anchor,
                         layoutMetrics = layoutMetrics,
                         viewportState = viewportState,
                     )
@@ -514,11 +388,9 @@ fun InteractiveGameMap(
                     labelPosition.isFinite() &&
                     labelPosition.isWithin(layoutMetrics.viewportSize)
                 ) {
-                    RegionStatusButton(
-                        region = region,
+                    RegionTroopCounter(
                         state = regionStates[region.id],
                         isSelected = region.id == selectedRegionId,
-                        onClick = { onRegionSelected(region) },
                         modifier =
                             Modifier
                                 .align(Alignment.TopStart)
@@ -539,7 +411,7 @@ fun InteractiveGameMap(
 /**
  * Berechnet die sichtbare Kartenfläche innerhalb des verfügbaren Viewports.
  *
- * Die Karte wird immer mit festem Seitenverhältnis so skaliert, dass sie den
+ * Die Karte wird mit festem Seitenverhältnis so skaliert, dass sie den
  * gesamten Viewport abdeckt.
  */
 internal fun createMapLayoutMetrics(
@@ -582,7 +454,7 @@ internal fun createMapLayoutMetrics(
  * Überführt eine Transform-Geste in einen neuen Karten-Viewport.
  *
  * Die Berechnung hält den Kartenpunkt unter dem Gesture-Centroid beim Zoomen
- * möglichst stabil. Das reduziert das typische "Wegspringen" der Karte.
+ * möglichst stabil. Das reduziert das typische Wegspringen der Karte.
  */
 internal fun updateViewportForGesture(
     current: MapViewportState,
@@ -611,25 +483,25 @@ internal fun updateViewportForGesture(
 }
 
 /**
- * Ermittelt die erste Region, deren Polygon den gegebenen Bildschirmpunkt
- * enthält.
+ * Ermittelt die Region unter einem Bildschirmpunkt über die technische ID-Map.
  */
 internal fun findRegionAtScreenPoint(
     regions: List<GameMapRegion>,
     tapPoint: Offset,
     layoutMetrics: MapLayoutMetrics,
     viewportState: MapViewportState,
+    regionIdBitmap: Bitmap,
 ): GameMapRegion? {
-    val normalizedPoint =
-        screenOffsetToNormalizedMapPoint(
+    val imagePixel =
+        screenOffsetToImagePixel(
             screenPoint = tapPoint,
             layoutMetrics = layoutMetrics,
             viewportState = viewportState,
+            imageSize = IntSize(regionIdBitmap.width, regionIdBitmap.height),
         ) ?: return null
 
-    return regions.firstOrNull { region ->
-        regionContainsPoint(region = region, point = normalizedPoint)
-    }
+    val pixelRgb = regionIdBitmap.getPixel(imagePixel.x, imagePixel.y) and RGB_MASK
+    return findRegionByIdColor(regions = regions, pixelRgb = pixelRgb)
 }
 
 /**
@@ -657,33 +529,31 @@ internal fun screenOffsetToNormalizedMapPoint(
     return MapPoint(normalizedX, normalizedY)
 }
 
-/**
- * Punkt-in-Polygon-Test für Regions-Hitdetection.
- */
-internal fun regionContainsPoint(
-    region: GameMapRegion,
-    point: MapPoint,
-): Boolean {
-    var inside = false
-    val polygon = region.polygon
+internal fun screenOffsetToImagePixel(
+    screenPoint: Offset,
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+    imageSize: IntSize,
+): IntOffset? {
+    val normalizedPoint =
+        screenOffsetToNormalizedMapPoint(
+            screenPoint = screenPoint,
+            layoutMetrics = layoutMetrics,
+            viewportState = viewportState,
+        ) ?: return null
 
-    for (index in polygon.indices) {
-        val current = polygon[index]
-        val next = polygon[(index + 1) % polygon.size]
-
-        val crossesEdge =
-            (current.y > point.y) != (next.y > point.y) &&
-                point.x <
-                ((next.x - current.x) * (point.y - current.y) / ((next.y - current.y) + 0.00001f)) +
-                current.x
-
-        if (crossesEdge) {
-            inside = !inside
-        }
-    }
-
-    return inside
+    val pixelX = (normalizedPoint.x * imageSize.width).toInt().coerceIn(0, imageSize.width - 1)
+    val pixelY = (normalizedPoint.y * imageSize.height).toInt().coerceIn(0, imageSize.height - 1)
+    return IntOffset(pixelX, pixelY)
 }
+
+internal fun findRegionByIdColor(
+    regions: List<GameMapRegion>,
+    pixelRgb: Int,
+): GameMapRegion? =
+    regions.firstOrNull { region ->
+        region.idMapColorRgb == (pixelRgb and RGB_MASK)
+    }
 
 /**
  * Transformiert einen normalisierten Kartenpunkt in Bildschirmkoordinaten.
@@ -711,9 +581,6 @@ internal fun mapPointToScreenOffset(
 
 /**
  * Begrenzt die Kartenverschiebung auf den sichtbaren Kartenbereich.
- *
- * Dadurch bleibt die Karte innerhalb ihrer fachlich definierten Grenzen und
- * kann nicht aus dem Viewport "herausgezogen" werden.
  */
 internal fun clampOffset(
     offset: Offset,
@@ -754,6 +621,38 @@ internal fun calculateOffsetBounds(
         Offset(horizontalBounds.second, verticalBounds.second)
 }
 
+internal fun calculateMaskCenter(
+    width: Int,
+    height: Int,
+    alphaAt: (x: Int, y: Int) -> Int,
+): MapPoint? {
+    require(width > 0)
+    require(height > 0)
+
+    var visibleCount = 0L
+    var sumX = 0.0
+    var sumY = 0.0
+
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            if (alphaAt(x, y) > 1) {
+                visibleCount++
+                sumX += x.toDouble()
+                sumY += y.toDouble()
+            }
+        }
+    }
+
+    if (visibleCount == 0L) {
+        return null
+    }
+
+    return MapPoint(
+        x = (sumX / visibleCount / (width - 1).coerceAtLeast(1)).toFloat(),
+        y = (sumY / visibleCount / (height - 1).coerceAtLeast(1)).toFloat(),
+    )
+}
+
 private fun calculateAxisOffsetBounds(
     scaledMapSize: Float,
     viewportSize: Float,
@@ -769,48 +668,40 @@ private fun calculateAxisOffsetBounds(
 }
 
 @Composable
-private fun RegionStatusButton(
-    region: GameMapRegion,
+private fun RegionTroopCounter(
     state: GameMapRegionState?,
     isSelected: Boolean,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val containerColor = if (isSelected) MapOverlayContentColor else MapOverlaySurfaceColor
     val contentColor = if (isSelected) MapOverlayInverseColor else MapOverlayContentColor
 
-    FilledTonalButton(
-        onClick = onClick,
+    Surface(
         modifier =
             modifier
                 .size(36.dp),
         shape = CircleShape,
-        contentPadding = PaddingValues(0.dp),
+        color = containerColor,
+        contentColor = contentColor,
         border = BorderStroke(1.5.dp, MapOverlayBorderColor),
-        colors =
-            ButtonDefaults.filledTonalButtonColors(
-                containerColor = containerColor,
-                contentColor = contentColor,
-            ),
+        shadowElevation = 0.dp,
     ) {
-        Text(
-            text = state?.troopCount?.toString() ?: "0",
-            style = MaterialTheme.typography.labelMedium,
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = state?.troopCount?.toString() ?: "0",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }
 
 private fun DrawScope.drawGameMap(
-    regions: List<GameMapRegion>,
-    regionStates: Map<String, GameMapRegionState>,
-    selectedRegionId: String?,
+    territoryOverlay: ImageBitmap,
     layoutMetrics: MapLayoutMetrics,
     viewportState: MapViewportState,
     backgroundPainter: Painter?,
 ) {
-    val hasBackgroundImage = backgroundPainter != null
-
-    if (!hasBackgroundImage) {
+    if (backgroundPainter == null) {
         drawRect(
             brush =
                 Brush.linearGradient(
@@ -829,6 +720,32 @@ private fun DrawScope.drawGameMap(
         return
     }
 
+    withMapTransform(layoutMetrics = layoutMetrics, viewportState = viewportState) {
+        if (backgroundPainter != null) {
+            with(backgroundPainter) {
+                draw(size = layoutMetrics.mapSize, alpha = 0.96f)
+            }
+        }
+
+        drawImage(
+            image = territoryOverlay,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(territoryOverlay.width, territoryOverlay.height),
+            dstOffset = IntOffset.Zero,
+            dstSize =
+                IntSize(
+                    width = layoutMetrics.mapSize.width.roundToInt(),
+                    height = layoutMetrics.mapSize.height.roundToInt(),
+                ),
+        )
+    }
+}
+
+private fun DrawScope.withMapTransform(
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+    block: DrawScope.() -> Unit,
+) {
     withTransform({
         translate(
             left = layoutMetrics.mapOrigin.x + viewportState.offset.x,
@@ -840,186 +757,84 @@ private fun DrawScope.drawGameMap(
             pivot = Offset.Zero,
         )
     }) {
-        if (backgroundPainter != null) {
-            with(backgroundPainter) {
-                draw(size = layoutMetrics.mapSize, alpha = 0.96f)
-            }
-        } else {
-            drawPlaceholderWorldMap(mapSize = layoutMetrics.mapSize)
-        }
+        block()
     }
+}
 
-    val strokeBase = (2.1f * viewportState.scale).coerceAtMost(5.4f)
+private fun buildTerritoryRenderAssets(
+    resources: Resources,
+    regions: List<GameMapRegion>,
+    regionTintColors: Map<String, Color>,
+): TerritoryRenderAssets {
+    var targetWidth = MAP_IMAGE_WIDTH_PX
+    var targetHeight = MAP_IMAGE_HEIGHT_PX
+    var overlayPixels = IntArray(targetWidth * targetHeight)
+    val anchors = mutableMapOf<String, MapPoint>()
 
     regions.forEach { region ->
-        val path =
-            region.toScreenPath(
-                layoutMetrics = layoutMetrics,
-                viewportState = viewportState,
-            )
-        val regionState = regionStates[region.id]
-        val isSelected = region.id == selectedRegionId
-        val fillColor = regionState?.accentColor ?: Color(0xFFD8D0B7)
-        val fillAlpha =
-            if (hasBackgroundImage) {
-                if (isSelected) 0.58f else 0.28f
-            } else {
-                if (isSelected) 0.92f else 0.76f
+        val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
+        try {
+            if (bitmap.width != targetWidth || bitmap.height != targetHeight) {
+                targetWidth = bitmap.width
+                targetHeight = bitmap.height
+                overlayPixels = IntArray(targetWidth * targetHeight)
             }
 
-        drawPath(
-            path = path,
-            color = fillColor,
-            style = Fill,
-            alpha = fillAlpha,
-        )
-        drawPath(
-            path = path,
-            color = if (isSelected) Color(0xFFFCE0A4) else Color(0xFF102230),
-            style = Stroke(width = strokeBase),
-            alpha = if (isSelected) 0.95f else 0.78f,
-        )
-    }
-}
+            val maskPixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-private fun DrawScope.drawPlaceholderWorldMap(mapSize: Size) {
-    val worldFramePath =
-        Path().apply {
-            addRoundRect(
-                RoundRect(
-                    left = 0f,
-                    top = 0f,
-                    right = mapSize.width,
-                    bottom = mapSize.height,
-                    radiusX = 18f,
-                    radiusY = 18f,
-                ),
-            )
-        }
+            val tintColor = regionTintColors[region.id] ?: Color(0xFF8F8F8F)
+            val tintRgb = tintColor.toArgb() and RGB_MASK
+            var visibleCount = 0L
+            var sumX = 0.0
+            var sumY = 0.0
+            var index = 0
 
-    drawPath(
-        path = worldFramePath,
-        brush =
-            Brush.linearGradient(
-                colors =
-                    listOf(
-                        Color(0xFF173D63),
-                        Color(0xFF285D85),
-                        Color(0xFF4E8AA1),
-                    ),
-            ),
-        style = Fill,
-        alpha = 0.92f,
-    )
-
-    val continentFill = Color(0xFFE5D3A1)
-    val continentStroke = Color(0xFF6B5837)
-
-    listOf(
-        listOf(
-            MapPoint(0.08f, 0.23f),
-            MapPoint(0.16f, 0.12f),
-            MapPoint(0.24f, 0.14f),
-            MapPoint(0.28f, 0.24f),
-            MapPoint(0.23f, 0.34f),
-            MapPoint(0.18f, 0.44f),
-            MapPoint(0.21f, 0.58f),
-            MapPoint(0.16f, 0.76f),
-            MapPoint(0.10f, 0.63f),
-            MapPoint(0.08f, 0.43f),
-        ),
-        listOf(
-            MapPoint(0.31f, 0.18f),
-            MapPoint(0.42f, 0.13f),
-            MapPoint(0.56f, 0.14f),
-            MapPoint(0.66f, 0.21f),
-            MapPoint(0.69f, 0.31f),
-            MapPoint(0.61f, 0.38f),
-            MapPoint(0.52f, 0.34f),
-            MapPoint(0.49f, 0.44f),
-            MapPoint(0.42f, 0.42f),
-            MapPoint(0.37f, 0.31f),
-        ),
-        listOf(
-            MapPoint(0.53f, 0.46f),
-            MapPoint(0.61f, 0.49f),
-            MapPoint(0.68f, 0.58f),
-            MapPoint(0.65f, 0.74f),
-            MapPoint(0.57f, 0.82f),
-            MapPoint(0.50f, 0.73f),
-            MapPoint(0.49f, 0.58f),
-        ),
-        listOf(
-            MapPoint(0.73f, 0.62f),
-            MapPoint(0.79f, 0.66f),
-            MapPoint(0.82f, 0.74f),
-            MapPoint(0.75f, 0.79f),
-            MapPoint(0.70f, 0.71f),
-        ),
-        listOf(
-            MapPoint(0.78f, 0.18f),
-            MapPoint(0.91f, 0.16f),
-            MapPoint(0.95f, 0.24f),
-            MapPoint(0.91f, 0.35f),
-            MapPoint(0.84f, 0.38f),
-            MapPoint(0.76f, 0.31f),
-        ),
-    ).forEach { polygon ->
-        val path =
-            Path().apply {
-                polygon.forEachIndexed { index, point ->
-                    val screenPoint =
-                        Offset(
-                            x = point.x * mapSize.width,
-                            y = point.y * mapSize.height,
-                        )
-                    if (index == 0) {
-                        moveTo(screenPoint.x, screenPoint.y)
-                    } else {
-                        lineTo(screenPoint.x, screenPoint.y)
+            for (y in 0 until bitmap.height) {
+                for (x in 0 until bitmap.width) {
+                    val alpha = (maskPixels[index] ushr 24) and 0xFF
+                    if (alpha > 1) {
+                        visibleCount++
+                        sumX += x.toDouble()
+                        sumY += y.toDouble()
+                        overlayPixels[index] =
+                            ((alpha * TERRITORY_OVERLAY_ALPHA).roundToInt() shl 24) or tintRgb
                     }
+                    index++
                 }
-                close()
             }
 
-        drawPath(
-            path = path,
-            color = continentFill,
-            style = Fill,
-            alpha = 0.7f,
-        )
-        drawPath(
-            path = path,
-            color = continentStroke,
-            style = Stroke(width = 1.4f),
-            alpha = 0.8f,
-        )
-    }
-}
-
-private fun GameMapRegion.toScreenPath(
-    layoutMetrics: MapLayoutMetrics,
-    viewportState: MapViewportState,
-): Path =
-    Path().apply {
-        polygon.forEachIndexed { index, point ->
-            val screenPoint =
-                mapPointToScreenOffset(
-                    point = point,
-                    layoutMetrics = layoutMetrics,
-                    viewportState = viewportState,
-                )
-
-            if (index == 0) {
-                moveTo(screenPoint.x, screenPoint.y)
-            } else {
-                lineTo(screenPoint.x, screenPoint.y)
-            }
+            anchors[region.id] =
+                if (visibleCount > 0L) {
+                    MapPoint(
+                        x = (sumX / visibleCount / (bitmap.width - 1).coerceAtLeast(1)).toFloat(),
+                        y = (sumY / visibleCount / (bitmap.height - 1).coerceAtLeast(1)).toFloat(),
+                    )
+                } else {
+                    region.fallbackAnchor
+                }
+        } finally {
+            bitmap.recycle()
         }
-        close()
     }
+
+    val overlayBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+    overlayBitmap.setPixels(overlayPixels, 0, targetWidth, 0, 0, targetWidth, targetHeight)
+    return TerritoryRenderAssets(
+        overlay = overlayBitmap.asImageBitmap(),
+        anchors = anchors,
+    )
+}
 
 private fun Offset.isFinite(): Boolean = x.isFinite() && y.isFinite()
 
 private fun Offset.isWithin(size: Size): Boolean =
     x in -150f..(size.width + 150f) && y in -60f..(size.height + 60f)
+
+private const val RGB_MASK = 0x00FFFFFF
+
+private fun rgbKey(
+    red: Int,
+    green: Int,
+    blue: Int,
+): Int = ((red and 0xFF) shl 16) or ((green and 0xFF) shl 8) or (blue and 0xFF)

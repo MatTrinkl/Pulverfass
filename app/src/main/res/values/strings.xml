@@ -7,6 +7,8 @@
     <string name="create_lobby">Lobby erstellen</string>
     <string name="join_lobby">Lobby beitreten</string>
     <string name="open_map_playground">Karte direkt testen</string>
+    <string name="load_game_title">Spiel wird vorbereitet</string>
+    <string name="load_game_description">Karte und Demo-Spielzustand werden geladen.</string>
     <string name="enter_waiting_room">Warteraum betreten</string>
     <string name="cancel">Abbrechen</string>
     <string name="lobby_id">Lobby</string>

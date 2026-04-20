@@ -95,7 +95,7 @@ private data class DemoGameUiState(
 @Composable
 fun GameScreen() {
     val players = remember { createDemoPlayers() }
-    val mapPainter = painterResource(id = R.drawable.world_map_test)
+    val mapPainter = painterResource(id = R.drawable.map_world)
     var uiState by remember {
         mutableStateOf(
             createDemoGameUiState(players = players),
@@ -296,25 +296,23 @@ private fun CardsSidebar(
     isVisible: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!isVisible) {
-        return
-    }
-
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        CardsOverview(
-            activePlayer = activePlayer,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-        )
+    if (isVisible) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(0.dp),
+            color = HudSurfaceColor,
+            contentColor = HudContentColor,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            CardsOverview(
+                activePlayer = activePlayer,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+            )
+        }
     }
 }
 
@@ -728,17 +726,34 @@ private fun createDemoGameUiState(players: List<DemoPlayer>): DemoGameUiState {
         currentPhase = DemoGamePhase.VERSTAERKEN,
         activePlayerId = "marco",
         personalPlayerId = "robin",
-        selectedRegionId = "europe",
+        selectedRegionId = "central_europe",
         cardsVisible = false,
         regionStates =
             linkedMapOf(
-                "north_america" to regionState(ownerId = "matthias", troops = 5),
-                "south_america" to regionState(ownerId = "aldin", troops = 3),
+                "america" to regionState(ownerId = "matthias", troops = 5),
+                "canada" to regionState(ownerId = "matthias", troops = 4),
+                "mexico" to regionState(ownerId = "aldin", troops = 3),
                 "greenland" to regionState(ownerId = "robin", troops = 2),
-                "europe" to regionState(ownerId = "robin", troops = 4),
-                "africa" to regionState(ownerId = "marco", troops = 6),
-                "asia" to regionState(ownerId = "marco", troops = 7),
+                "british_islands" to regionState(ownerId = "robin", troops = 3),
+                "scandinavia" to regionState(ownerId = "robin", troops = 2),
+                "west_europe" to regionState(ownerId = "robin", troops = 4),
+                "central_europe" to regionState(ownerId = "robin", troops = 5),
+                "russia" to regionState(ownerId = "marco", troops = 5),
+                "siberia" to regionState(ownerId = "marco", troops = 4),
+                "east_siberia" to regionState(ownerId = "marco", troops = 3),
+                "china" to regionState(ownerId = "marco", troops = 6),
+                "japan" to regionState(ownerId = "marco", troops = 2),
+                "orient" to regionState(ownerId = "marco", troops = 3),
+                "middle_east" to regionState(ownerId = "marco", troops = 4),
+                "egypt" to regionState(ownerId = "aldin", troops = 3),
+                "west_africa" to regionState(ownerId = "aldin", troops = 4),
+                "central_africa" to regionState(ownerId = "aldin", troops = 5),
+                "south_africa" to regionState(ownerId = "aldin", troops = 3),
+                "brazil" to regionState(ownerId = "aldin", troops = 4),
+                "andean_community" to regionState(ownerId = "aldin", troops = 3),
+                "argentina" to regionState(ownerId = "aldin", troops = 2),
                 "australia" to regionState(ownerId = "matthias", troops = 4),
+                "oceania" to regionState(ownerId = "matthias", troops = 2),
             ),
     )
 }
