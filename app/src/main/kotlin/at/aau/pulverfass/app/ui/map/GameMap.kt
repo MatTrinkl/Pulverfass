@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,7 +50,11 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-private const val DEFAULT_MAP_ASPECT_RATIO = 1600f / 848f
+private const val DEFAULT_MAP_ASPECT_RATIO = 2540f / 1346f
+private const val MAP_CONTENT_OFFSET_X = 470f / 2540f
+private const val MAP_CONTENT_OFFSET_Y = 249f / 1346f
+private const val MAP_CONTENT_SCALE_X = 1600f / 2540f
+private const val MAP_CONTENT_SCALE_Y = 848f / 1346f
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 private val MapOverlaySurfaceColor = Color.White
@@ -79,6 +82,18 @@ private fun List<MapPoint>.shiftedBy(
     dx: Float = 0f,
     dy: Float = 0f,
 ): List<MapPoint> = map { point -> point.shiftedBy(dx = dx, dy = dy) }
+
+private fun MapPoint.fromMapContentToCanvas(): MapPoint =
+    MapPoint(
+        x = MAP_CONTENT_OFFSET_X + (x * MAP_CONTENT_SCALE_X),
+        y = MAP_CONTENT_OFFSET_Y + (y * MAP_CONTENT_SCALE_Y),
+    )
+
+private fun GameMapRegion.fromMapContentToCanvas(): GameMapRegion =
+    copy(
+        polygon = polygon.map { point -> point.fromMapContentToCanvas() },
+        labelAnchor = labelAnchor.fromMapContentToCanvas(),
+    )
 
 /**
  * Beschreibt eine interaktive Region auf der Spielkarte.
@@ -125,6 +140,8 @@ data class MapLayoutMetrics(
  *
  * Die Regionen sind bewusst im App-Modul gehalten, bis fachliche Map-Daten
  * zwischen App und Server über ein gemeinsames Modell geteilt werden.
+ * Die Rohkoordinaten beziehen sich auf den inneren Karteninhalt und werden auf
+ * die erweiterte Bildleinwand mit UI-Rand projiziert.
  */
 object PulverfassMapDefaults {
     val regions: List<GameMapRegion> =
@@ -364,7 +381,7 @@ object PulverfassMapDefaults {
                     ).shiftedBy(dy = 0.010f),
                 labelAnchor = MapPoint(0.840f, 0.756f).shiftedBy(dy = 0.010f),
             ),
-        )
+        ).map { region -> region.fromMapContentToCanvas() }
 }
 
 /**
@@ -535,7 +552,8 @@ fun MapSelectionOverlay(
 /**
  * Berechnet die sichtbare Kartenfläche innerhalb des verfügbaren Viewports.
  *
- * Die Karte wird immer mit festem Seitenverhältnis eingepasst und zentriert.
+ * Die Karte wird immer mit festem Seitenverhältnis so skaliert, dass sie den
+ * gesamten Viewport abdeckt.
  */
 internal fun createMapLayoutMetrics(
     viewportSize: IntSize,
@@ -555,11 +573,11 @@ internal fun createMapLayoutMetrics(
 
     val mapSize =
         if (viewportRatio > aspectRatio) {
-            val height = viewportHeight
-            Size(width = height * aspectRatio, height = height)
-        } else {
             val width = viewportWidth
             Size(width = width, height = width / aspectRatio)
+        } else {
+            val height = viewportHeight
+            Size(width = height * aspectRatio, height = height)
         }
 
     return MapLayoutMetrics(

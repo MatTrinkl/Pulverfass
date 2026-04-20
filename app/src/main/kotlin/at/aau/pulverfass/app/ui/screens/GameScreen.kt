@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.width
@@ -109,76 +110,70 @@ fun GameScreen() {
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        Column(
+        InteractiveGameMap(
+            regions = PulverfassMapDefaults.regions,
+            regionStates = uiState.regionStates,
+            selectedRegionId = uiState.selectedRegionId,
+            onRegionSelected = { region -> uiState = uiState.copy(selectedRegionId = region.id) },
+            backgroundPainter = mapPainter,
             modifier = Modifier.fillMaxSize(),
-        ) {
-            GameTopBar(
-                personalPlayer = personalPlayer,
-                phase = uiState.currentPhase,
-                round = uiState.round,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        )
 
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-            ) {
-                CardsSidebar(
-                    activePlayer = activePlayer,
-                    isVisible = uiState.cardsVisible,
-                    modifier =
-                        Modifier
-                            .width(CardsSidebarWidth)
-                            .fillMaxHeight(),
-                )
+        GameTopBar(
+            personalPlayer = personalPlayer,
+            phase = uiState.currentPhase,
+            round = uiState.round,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(),
+        )
 
-                InteractiveGameMap(
-                    regions = PulverfassMapDefaults.regions,
-                    regionStates = uiState.regionStates,
-                    selectedRegionId = uiState.selectedRegionId,
-                    onRegionSelected = { region -> uiState = uiState.copy(selectedRegionId = region.id) },
-                    backgroundPainter = mapPainter,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                )
+        CardsSidebar(
+            activePlayer = activePlayer,
+            isVisible = uiState.cardsVisible,
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(top = TopBarHeight, bottom = BottomBarHeight)
+                    .requiredWidth(CardsSidebarWidth)
+                    .fillMaxHeight(),
+        )
 
-                PlayerSidebar(
-                    players = players,
-                    activePlayerId = uiState.activePlayerId,
-                    modifier =
-                        Modifier
-                            .width(SidebarWidth)
-                            .fillMaxHeight(),
-                )
-            }
+        PlayerSidebar(
+            players = players,
+            activePlayerId = uiState.activePlayerId,
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(top = TopBarHeight, bottom = BottomBarHeight)
+                    .width(SidebarWidth)
+                    .fillMaxHeight(),
+        )
 
-            BottomActionClusters(
-                currentPhase = uiState.currentPhase,
-                onPhaseSelected = { phase ->
-                    uiState = applyPhaseSelection(uiState = uiState, phase = phase)
-                },
-                cardsVisible = uiState.cardsVisible,
-                onToggleCards = {
-                    uiState = uiState.copy(cardsVisible = !uiState.cardsVisible)
-                },
-                onEndRound = {
-                    uiState =
-                        advanceRound(
-                            uiState = uiState,
-                            players = players,
-                            regions = PulverfassMapDefaults.regions,
-                        )
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-            )
-        }
+        BottomActionClusters(
+            currentPhase = uiState.currentPhase,
+            onPhaseSelected = { phase ->
+                uiState = applyPhaseSelection(uiState = uiState, phase = phase)
+            },
+            cardsVisible = uiState.cardsVisible,
+            onToggleCards = {
+                uiState = uiState.copy(cardsVisible = !uiState.cardsVisible)
+            },
+            onEndRound = {
+                uiState =
+                    advanceRound(
+                        uiState = uiState,
+                        players = players,
+                        regions = PulverfassMapDefaults.regions,
+                    )
+            },
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+        )
     }
 }
 
@@ -281,6 +276,10 @@ private fun CardsSidebar(
     isVisible: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    if (!isVisible) {
+        return
+    }
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(0.dp),
@@ -289,17 +288,13 @@ private fun CardsSidebar(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
-        if (!isVisible) {
-            Box(modifier = Modifier.fillMaxSize())
-        } else {
-            CardsOverview(
-                activePlayer = activePlayer,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-            )
-        }
+        CardsOverview(
+            activePlayer = activePlayer,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+        )
     }
 }
 
