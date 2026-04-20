@@ -2,10 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [ main ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
@@ -92,7 +92,7 @@ jobs:
   analyze:
     name: Build, coverage and SonarCloud
     runs-on: self-hosted
-    needs: [style, unit-tests]
+    needs: [ style, unit-tests ]
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk

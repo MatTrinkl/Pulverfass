@@ -15,8 +15,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,18 +24,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 
 // bildschirm für den warteraum vor spielbeginn
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
+    controller: LobbyController,
     lobbyCode: String,
     isHost: Boolean,
     playerName: String,
 ) {
-    // liste der spieler die aktuell in der lobby sind
-    val players = remember { mutableStateListOf(playerName) }
+    val state by controller.state.collectAsState()
+    val players = if (state.playerNames.isEmpty()) listOf(playerName) else state.playerNames
 
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -63,7 +65,10 @@ fun WaitingRoomScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = { navController.popBackStack() },
+            onClick = {
+                controller.leaveLobby()
+                navController.popBackStack()
+            },
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
             // ermöglicht das verlassen der aktuellen lobby

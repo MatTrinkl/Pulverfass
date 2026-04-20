@@ -1,10 +1,13 @@
 package at.aau.pulverfass.shared.network.codec
 
 /**
- * Das serialisierte Paket welches wirklich übertragen wird.
+ * Technisches Paketmodell aus bereits serialisiertem Header und Payload.
  *
- * @property headerBytes Der serialisierte Header.
- * @property payloadBytes Der serialisierte Payload.
+ * Diese Klasse repräsentiert die Grenze zwischen Nachrichten-Serialisierung und
+ * binärem Wire-Format. Sie enthält nur Bytes und keine fachlichen Typen.
+ *
+ * @property headerBytes serialisierte Header-Daten
+ * @property payloadBytes serialisierte Payload-Daten
  */
 class SerializedPacket(
     headerBytes: ByteArray,
@@ -16,14 +19,23 @@ class SerializedPacket(
         }
     }
 
-    private val _headerBytes: ByteArray = headerBytes.copyOf()
-    private val _payloadBytes: ByteArray = payloadBytes.copyOf()
-
-    val headerBytes: ByteArray get() = _headerBytes.copyOf()
-    val payloadBytes: ByteArray get() = _payloadBytes.copyOf()
+    private val rawHeaderBytes: ByteArray = headerBytes.copyOf()
+    private val rawPayloadBytes: ByteArray = payloadBytes.copyOf()
 
     /**
-     * Vergleicht zwei SerializedPacket Objekte.
+     * Liefert eine defensive Kopie der Header-Bytes.
+     */
+    val headerBytes: ByteArray
+        get() = rawHeaderBytes.copyOf()
+
+    /**
+     * Liefert eine defensive Kopie der Payload-Bytes.
+     */
+    val payloadBytes: ByteArray
+        get() = rawPayloadBytes.copyOf()
+
+    /**
+     * Vergleicht zwei Pakete inhaltlich über Header- und Payload-Bytes.
      */
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -31,18 +43,18 @@ class SerializedPacket(
 
         other as SerializedPacket
 
-        if (!_headerBytes.contentEquals(other._headerBytes)) return false
-        if (!_payloadBytes.contentEquals(other._payloadBytes)) return false
+        if (!rawHeaderBytes.contentEquals(other.rawHeaderBytes)) return false
+        if (!rawPayloadBytes.contentEquals(other.rawPayloadBytes)) return false
 
         return true
     }
 
     /**
-     * Gibt den HashCode dieses SerializedPacket zurück.
+     * Berechnet einen inhaltsbasierten Hashcode über Header- und Payload-Bytes.
      */
     override fun hashCode(): Int {
-        var result = _headerBytes.contentHashCode()
-        result = 31 * result + _payloadBytes.contentHashCode()
+        var result = rawHeaderBytes.contentHashCode()
+        result = 31 * result + rawPayloadBytes.contentHashCode()
         return result
     }
 }

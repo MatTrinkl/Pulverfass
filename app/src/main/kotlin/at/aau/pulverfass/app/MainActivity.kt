@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,12 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.screens.GameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
@@ -32,6 +36,13 @@ class MainActivity : AppCompatActivity() {
             AndroidAppTheme {
                 // verwaltet die navigation zwischen den bildschirmen
                 val navController = rememberNavController()
+                val lobbyController = remember { LobbyController() }
+
+                DisposableEffect(Unit) {
+                    onDispose {
+                        lobbyController.close()
+                    }
+                }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
@@ -44,7 +55,10 @@ class MainActivity : AppCompatActivity() {
                                 LoadScreen(navController)
                             }
                             composable(Screen.Lobby.route) {
-                                LobbyScreen(navController)
+                                LobbyScreen(
+                                    navController = navController,
+                                    controller = lobbyController,
+                                )
                             }
                             // warteraum mit übergabe von parametern wie lobbycode & name
                             composable(
@@ -60,8 +74,14 @@ class MainActivity : AppCompatActivity() {
                                 val args = backStackEntry.arguments
                                 val lobbyCode = args?.getString("lobbyCode") ?: ""
                                 val isHost = args?.getBoolean("isHost") ?: false
-                                val playerName = args?.getString("playerName") ?: ""
-                                WaitingRoomScreen(navController, lobbyCode, isHost, playerName)
+                                val playerName = Uri.decode(args?.getString("playerName") ?: "")
+                                WaitingRoomScreen(
+                                    navController = navController,
+                                    controller = lobbyController,
+                                    lobbyCode = lobbyCode,
+                                    isHost = isHost,
+                                    playerName = playerName,
+                                )
                             }
                             composable(Screen.Game.route) {
                                 GameScreen()

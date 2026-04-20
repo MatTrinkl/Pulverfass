@@ -1,12 +1,12 @@
 package at.aau.pulverfass.shared.network.receive
 
 import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.network.PacketReceiveException
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.network.codec.PacketCodec
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.MessageType
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
+import at.aau.pulverfass.shared.network.exception.PacketReceiveException
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -19,7 +19,7 @@ class PacketReceiveAdapterTest {
     @Test
     fun `should unpack valid packet and read header`() {
         val connectionId = ConnectionId(1)
-        val header = MessageHeader(MessageType.LOGIN_REQUEST)
+        val header = MessageHeader(MessageType.CONNECTION_REQUEST)
         val packet =
             SerializedPacket(
                 headerBytes = NetworkMessageSerializer.serializeHeader(header),

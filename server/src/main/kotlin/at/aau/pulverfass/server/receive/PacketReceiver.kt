@@ -1,6 +1,6 @@
 package at.aau.pulverfass.server.receive
 
-import at.aau.pulverfass.shared.network.PacketReceiveException
+import at.aau.pulverfass.shared.network.exception.PacketReceiveException
 import at.aau.pulverfass.shared.network.receive.PacketReceiveAdapter
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
  * späterer Nachrichtenverarbeitung.
  *
  * Die Klasse nimmt rohe Binary-Transportevents entgegen, dekodiert diese bis
- * zum [at.aau.pulverfass.shared.network.message.MessageHeader] und emittiert
+ * zum [at.aau.pulverfass.shared.message.protocol.MessageHeader] und emittiert
  * das neutrale [ReceivedPacket]-Modell für höhere Schichten.
  */
 class PacketReceiver(
@@ -49,14 +49,20 @@ class PacketReceiver(
     }
 
     /**
-     * Dekodiert ein Binary-Transportevent bis zum Header.
+     * Dekodiert rohe Bytes bis zum Header.
+     *
+     * Diese Variante vermeidet zusätzliche defensive Kopien, wenn Aufrufende
+     * bereits ein ByteArray besitzen und kein [BinaryMessageReceived] benötigen.
      *
      * @return das neutrale [ReceivedPacket] oder `null`, falls die Bytes nicht
      * bis zum Header dekodiert werden konnten
      */
-    suspend fun decode(event: BinaryMessageReceived): ReceivedPacket? =
+    suspend fun decode(
+        connectionId: at.aau.pulverfass.shared.ids.ConnectionId,
+        bytes: ByteArray,
+    ): ReceivedPacket? =
         try {
-            val receivedPacket = adapter.decode(event.connectionId, event.bytes)
+            val receivedPacket = adapter.decode(connectionId, bytes)
             logger.debug(
                 "Decoded packet header {} for connection {}",
                 receivedPacket.header.type,
@@ -67,10 +73,19 @@ class PacketReceiver(
         } catch (cause: PacketReceiveException) {
             logger.warn(
                 "Failed to decode packet for connection {}",
-                event.connectionId.value,
+                connectionId.value,
                 cause,
             )
             _errors.emit(cause)
             null
         }
+
+    /**
+     * Dekodiert ein Binary-Transportevent bis zum Header.
+     *
+     * @return das neutrale [ReceivedPacket] oder `null`, falls die Bytes nicht
+     * bis zum Header dekodiert werden konnten
+     */
+    suspend fun decode(event: BinaryMessageReceived): ReceivedPacket? =
+        decode(event.connectionId, event.bytes)
 }

@@ -1,24 +1,26 @@
 package at.aau.pulverfass.shared.network.send
 
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
 import at.aau.pulverfass.shared.network.codec.PacketCodec
 import at.aau.pulverfass.shared.network.codec.SerializedPacket
-import at.aau.pulverfass.shared.network.message.MessageHeader
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
 
 /**
- * Technische Sendeschicht für Netzwerkpakete.
+ * Interne technische Sendeschicht für Netzwerkpakete.
  *
  * Die Klasse übernimmt ausschließlich das Verpacken in das Wire-Format und das
- * Ausliefern über einen injizierten Raw-Byte-Sender. Fachliche
- * Response-Entscheidungen gehören nicht in diese Schicht.
+ * Ausliefern über einen injizierten Raw-Byte-Sender.
  */
-class PacketSendAdapter(
+internal class PacketSendAdapter(
     private val sender: suspend (ConnectionId, ByteArray) -> Unit,
 ) {
     /**
      * Verpackt ein [SerializedPacket] in Wire-Bytes und sendet diese an die
      * angegebene Verbindung.
+     *
+     * @param connectionId Zielverbindung
+     * @param packet bereits serialisiertes Paket
      */
     suspend fun send(
         connectionId: ConnectionId,
@@ -29,8 +31,11 @@ class PacketSendAdapter(
     }
 
     /**
-     * Hilfsmethode für den technischen Weg von Header plus bereits serialisiertem
-     * Payload zu einem gesendeten Binary Frame.
+     * Erstellt aus Header und Payload ein technisches Paket und sendet es.
+     *
+     * @param connectionId Zielverbindung
+     * @param header technischer Nachrichtenkopf
+     * @param payloadBytes bereits serialisierte Payload
      */
     suspend fun send(
         connectionId: ConnectionId,
@@ -41,8 +46,11 @@ class PacketSendAdapter(
     }
 
     /**
-     * Erstellt aus Header und bereits serialisiertem Payload ein technisches
-     * [SerializedPacket].
+     * Erstellt aus Header und bereits serialisierter Payload ein [SerializedPacket].
+     *
+     * @param header technischer Nachrichtenkopf
+     * @param payloadBytes bereits serialisierte Payload
+     * @return technisches Paketmodell für den Wire-Versand
      */
     fun createPacket(
         header: MessageHeader,

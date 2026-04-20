@@ -1,74 +1,88 @@
 package at.aau.pulverfass.shared.network.codec
 
-import at.aau.pulverfass.shared.network.InvalidSerializedPacketException
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.message.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.protocol.MessageHeader
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.network.exception.InvalidSerializedPacketException
+import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.serialization.KSerializer
 
 /**
- * Zentraler Einstiegspunkt für die Kodierung und Dekodierung von Netzwerk-Nachrichten.
+ * Zentraler Einstiegspunkt für die Kodierung und Dekodierung von
+ * Netzwerknachrichten.
  *
- * Diese Klasse setzt die beiden bereits getrennten Ebenen des Protokolls zusammen:
- * fachliche Serialisierung von Header und Payload via [NetworkMessageSerializer]
- * sowie das Transport-Framing via [PacketCodec].
- *
- * Ablauf beim Encoden:
- * 1. [NetworkPacket] in Header- und Payload-Bytes serialisieren
- * 2. Die serialisierten Teile in ein transportierbares Byte-Format packen
- *
- * Ablauf beim Decoden:
- * 1. Transport-Bytes wieder in Header- und Payload-Bytes zerlegen
- * 2. Header und Payload anhand des Header-Typs in Objekte deserialisieren
- *
- * Dadurch können Aufrufer das Protokoll über diese eine Klasse verwenden,
- * ohne selbst zwischen Objekt-, Serialisierungs- und Framing-Ebene wechseln zu müssen.
+ * Die Klasse verbindet die fachliche Serialisierung von Header und Payload mit
+ * dem binären Framing für den Transport.
  */
-internal object MessageCodec {
+object MessageCodec {
     /**
-     * Kodiert ein fachliches [NetworkPacket] in das Byte-Format, das über den Transport
-     * versendet werden kann.
+     * Kodiert eine fachliche Payload direkt in das vollständige Wire-Format.
      *
-     * @param packet das zu kodierende Netzwerkpaket
-     * @param serializer Serializer für den konkreten Payload-Typ des Pakets
-     * @return das vollständig kodierte ByteArray inklusive Framing
-     * @throws at.aau.pulverfass.shared.network.NetworkSerializationException wenn Header oder Payload
-     * nicht serialisiert werden können
-     * @throws at.aau.pulverfass.shared.network.UnsupportedPayloadClassException wenn der Payload-Typ
-     * nicht im Protokoll registriert ist
-     * @throws at.aau.pulverfass.shared.network.PayloadTypeMismatchException wenn Header-Typ und
-     * Payload-Typ nicht zusammenpassen
-     * @throws InvalidSerializedPacketException wenn das serialisierte Paket keine gültige Basisstruktur hat
+     * Der zugehörige Nachrichtentyp wird über die Payload-Registry bestimmt.
+     *
+     * @param payload fachliche Nutzlast
+     * @return transportierbare Wire-Bytes
+     * @throws InvalidSerializedPacketException wenn beim Framing eine ungültige
+     * Paketstruktur entsteht
      */
-    fun <T : NetworkMessagePayload> encode(
+    fun encode(payload: NetworkMessagePayload): ByteArray =
+        PacketCodec.pack(
+            SerializedPacket(
+                headerBytes =
+                    NetworkMessageSerializer.serializeHeader(
+                        MessageHeader(NetworkPayloadRegistry.messageTypeFor(payload)),
+                    ),
+                payloadBytes = NetworkMessageSerializer.serializePayload(payload),
+            ),
+        )
+
+    /**
+     * Kodiert ein bereits zusammengesetztes [NetworkPacket].
+     *
+     * Diese Überladung wird nur intern für Tests und technische Zwischenschichten
+     * benötigt.
+     */
+    internal fun <T : NetworkMessagePayload> encode(
         packet: NetworkPacket<T>,
         serializer: KSerializer<T>,
-    ): ByteArray =
-        try {
-            PacketCodec.pack(serialize(packet, serializer))
-        } catch (exception: PacketCodecException) {
-            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
-        }
+    ): ByteArray = PacketCodec.pack(serialize(packet, serializer))
 
     /**
-     * Dekodiert ein empfangenes ByteArray in ein fachliches [NetworkPacket].
+     * Dekodiert transportierte Bytes direkt in eine fachliche Payload.
      *
-     * Das ByteArray muss dem durch [PacketCodec] definierten Framing entsprechen.
-     * Der Payload-Typ wird anhand des im Header enthaltenen [at.aau.pulverfass.shared.network.message.MessageType]s
-     * bestimmt.
-     *
-     * @param bytes das empfangene ByteArray inklusive Framing
-     * @return das deserialisierte Netzwerkpaket mit Header und Payload
-     * @throws InvalidSerializedPacketException wenn das ByteArray kein gültiges transportiertes Paket beschreibt
-     * @throws at.aau.pulverfass.shared.network.NetworkSerializationException wenn Header oder Payload
-     * nicht deserialisiert werden können
-     * @throws at.aau.pulverfass.shared.network.UnsupportedPayloadTypeException wenn für den Header-Typ
-     * kein Payload-Mapping hinterlegt ist
+     * @param bytes empfangene Wire-Bytes
+     * @return dekodierte Payload
+     * @throws InvalidSerializedPacketException wenn das Wire-Format ungültig ist
      */
-    fun decode(bytes: ByteArray): NetworkPacket<NetworkMessagePayload> = deserialize(unpack(bytes))
+    fun decodePayload(bytes: ByteArray): NetworkMessagePayload = decode(bytes).payload
 
     /**
-     * Serialisiert ein [NetworkPacket] in seine Header- und Payload-Bestandteile, ohne
-     * bereits das Transport-Framing anzuwenden.
+     * Dekodiert ein bereits bis zum Header gelesenes Paket direkt in eine
+     * fachliche Payload, ohne das Wire-Format erneut zusammenzubauen.
+     *
+     * Diese Variante vermeidet unnötiges Re-Framing in Hot Paths, in denen
+     * der Header bereits vorliegt und nur die Payload noch fachlich
+     * deserialisiert werden muss.
+     *
+     * @param packet bereits entpacktes technisches Paketmodell
+     * @return dekodierte Payload
+     */
+    fun decodePayload(packet: ReceivedPacket): NetworkMessagePayload =
+        NetworkMessageSerializer.deserializePayload(
+            packet.header.type,
+            packet.packet.payloadBytes,
+        )
+
+    /**
+     * Dekodiert transportierte Bytes intern in ein [NetworkPacket].
+     */
+    internal fun decode(bytes: ByteArray): NetworkPacket<NetworkMessagePayload> =
+        deserialize(unpack(bytes))
+
+    /**
+     * Serialisiert ein [NetworkPacket] in Header- und Payload-Bytes, ohne das
+     * Transport-Framing anzuwenden.
      */
     internal fun <T : NetworkMessagePayload> serialize(
         packet: NetworkPacket<T>,
@@ -80,7 +94,8 @@ internal object MessageCodec {
         )
 
     /**
-     * Deserialisiert ein bereits entpacktes [SerializedPacket] in ein fachliches [NetworkPacket].
+     * Deserialisiert ein bereits entpacktes [SerializedPacket] in ein fachliches
+     * [NetworkPacket].
      */
     internal fun deserialize(packet: SerializedPacket): NetworkPacket<NetworkMessagePayload> {
         val header = NetworkMessageSerializer.deserializeHeader(packet.headerBytes)
@@ -92,10 +107,14 @@ internal object MessageCodec {
         )
     }
 
+    /**
+     * Entpackt transportierte Bytes in ein [SerializedPacket] und übersetzt
+     * Framing-Fehler in die öffentliche Protokollexception.
+     */
     private fun unpack(bytes: ByteArray): SerializedPacket =
         try {
             PacketCodec.unpack(bytes)
         } catch (exception: PacketCodecException) {
-            throw InvalidSerializedPacketException(exception.message ?: "Invalid serialized packet")
+            throw InvalidSerializedPacketException(exception.message.toString())
         }
 }

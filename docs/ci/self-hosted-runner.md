@@ -7,4 +7,5 @@ Für die Workflows in `.github/workflows/ci.yml` wird ein Runner mit folgenden E
 - Gradle Wrapper-Ausführung erlaubt (`./gradlew`)
 - Netzwerkzugriff auf Maven Central / Gradle Plugin Portal / Google Maven (Dependency-Auflösung)
 
-Hinweis zum E2E-Teil: Das Modul `:e2e` ist aktuell ein Placeholder zur CI-Vorbereitung. Echte End-to-End-Tests folgen erst, wenn die benötigten Dependencies und technischen Grundlagen final verfügbar sind.
+Hinweis zum E2E-Teil: Das Modul `:e2e` ist aktuell ein Placeholder zur CI-Vorbereitung. Echte End-to-End-Tests folgen
+erst, wenn die benötigten Dependencies und technischen Grundlagen final verfügbar sind.
