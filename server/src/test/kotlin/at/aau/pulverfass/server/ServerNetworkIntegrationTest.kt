@@ -12,6 +12,7 @@ import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
@@ -105,7 +106,7 @@ class ServerNetworkIntegrationTest {
 
             coroutineScope {
                 val connectedDeferred =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             network.events
                                 .filterIsInstance<Network.Event.Connected<ConnectionId>>()
