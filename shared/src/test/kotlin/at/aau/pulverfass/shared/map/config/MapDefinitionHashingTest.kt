@@ -6,6 +6,11 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -159,12 +164,21 @@ class MapDefinitionHashingTest {
     @Test
     fun `map get response enthält identifier aus definition`() {
         val definition = MapConfigLoader.loadFromJson(validEdgesJson())
+        val gameState =
+            GameState.initial(
+                lobbyCode = LobbyCode("AB12"),
+                mapDefinition = definition,
+                players = listOf(PlayerId(1)),
+            )
         val response =
-            MapGetResponse.fromGameState(
-                GameState.initial(
-                    lobbyCode = LobbyCode("AB12"),
-                    mapDefinition = definition,
-                    players = listOf(PlayerId(1)),
+            MapGetResponse.from(
+                PublicGameStateSnapshot(
+                    lobbyCode = gameState.lobbyCode,
+                    stateVersion = gameState.stateVersion,
+                    determinism = PublicDeterminismMetadataSnapshot.from(definition),
+                    turnState = PublicTurnStateSnapshot.from(gameState.resolvedTurnState!!),
+                    definition = MapDefinitionSnapshot.from(definition),
+                    territoryStates = gameState.allTerritoryStates().map(MapTerritoryStateSnapshot::from),
                 ),
             )
 

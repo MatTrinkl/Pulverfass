@@ -96,6 +96,7 @@ Bei Verstößen bricht der Loader deterministisch mit einer `MapConfigValidation
 ## Reconnect
 
 - Der minimale Reconnect-Pfad läuft aktuell über einen vollständigen Snapshot via `MapGetRequest` / `MapGetResponse`.
-- `stateVersion` entspricht der Anzahl der bereits angewendeten Lobby-Events (`GameState.processedEventCount`).
+- `stateVersion` ist eine explizite, server-authoritative Revision im `GameState` und wird bei jeder erfolgreichen Event-Anwendung monoton erhöht.
+- `processedEventCount` bleibt separat als technischer Zähler für Runtime/Tests bestehen und ist nicht mehr die fachliche Definition von `stateVersion`.
 - Delta-Broadcasts für Map-Events tragen ebenfalls `stateVersion`, damit Clients Reihenfolge und Snapshot-Stände vergleichen können.
 - Ein Catch-up per Event-Replay seit Version ist noch nicht implementiert; bei Reconnect ist der Snapshot die autoritative Quelle.

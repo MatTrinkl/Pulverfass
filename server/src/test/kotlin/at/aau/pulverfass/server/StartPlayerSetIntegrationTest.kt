@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
@@ -303,19 +304,33 @@ class StartPlayerSetIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+        repeat(10) {
+            val frame = withTimeout(5_000) { session.incoming.receive() }
+            assertTrue(frame is Frame.Binary)
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return payload
+            }
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any? =
-        withTimeoutOrNull(500) {
-            val frame = session.incoming.receive()
+    ): Any? {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return null
             assertTrue(frame is Frame.Binary)
-            MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return payload
+            }
         }
+        return null
+    }
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")

@@ -70,8 +70,13 @@ class LobbyRuntime private constructor(
     ) {
         hooks.onEventEnqueued(lobbyCode, event, context)
         try {
-            eventLoop.submit(event, context)
-            hooks.onEventAccepted(lobbyCode, event)
+            val processed = eventLoop.submit(event, context)
+            hooks.onEventAccepted(
+                lobbyCode,
+                processed.event,
+                processed.beforeState,
+                processed.afterState,
+            )
         } catch (cause: Throwable) {
             hooks.onEventRejected(lobbyCode, event, cause)
             throw cause
@@ -113,7 +118,7 @@ data class LobbyRuntimeHooks(
     /** Wird unmittelbar vor dem technischen Enqueue ausgelöst. */
     val onEventEnqueued: (LobbyCode, LobbyEvent, EventContext?) -> Unit = { _, _, _ -> },
     /** Wird nach erfolgreicher Eventverarbeitung ausgelöst. */
-    val onEventAccepted: suspend (LobbyCode, LobbyEvent) -> Unit = { _, _ -> },
+    val onEventAccepted: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit = { _, _, _, _ -> },
     /** Wird bei Verarbeitungsfehlern ausgelöst. */
     val onEventRejected: (LobbyCode, LobbyEvent, Throwable) -> Unit = { _, _, _ -> },
 )

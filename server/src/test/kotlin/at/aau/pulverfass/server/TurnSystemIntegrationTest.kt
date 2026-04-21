@@ -14,7 +14,10 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -549,10 +552,34 @@ class TurnSystemIntegrationTest {
         )
 
         assertEquals(TurnAdvanceResponse(request.lobbyCode), receivePayload(actor))
+        assertPhaseBoundary(
+            receivePayload(actor),
+            request = request,
+            expectedUpdate = expectedUpdate,
+        )
         assertEquals(expectedUpdate, receivePayload(actor))
         watchers.forEach { watcher ->
+            assertPhaseBoundary(
+                receivePayload(watcher),
+                request = request,
+                expectedUpdate = expectedUpdate,
+            )
             assertEquals(expectedUpdate, receivePayload(watcher))
         }
+    }
+
+    private fun assertPhaseBoundary(
+        payload: Any?,
+        request: TurnAdvanceRequest,
+        expectedUpdate: TurnStateUpdatedEvent,
+    ) {
+        val boundary = assertIs<PhaseBoundaryEvent>(payload)
+        assertEquals(request.lobbyCode, boundary.lobbyCode)
+        assertEquals(request.expectedPhase ?: error("expectedPhase is required for boundary assertions."), boundary.previousPhase)
+        assertEquals(expectedUpdate.turnPhase, boundary.nextPhase)
+        assertEquals(expectedUpdate.activePlayerId, boundary.activePlayerId)
+        assertEquals(expectedUpdate.turnCount, boundary.turnCount)
+        assertTrue(boundary.stateVersion >= 1)
     }
 
     private suspend fun disconnectPlayer(
@@ -595,19 +622,33 @@ class TurnSystemIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+        repeat(10) {
+            val frame = withTimeout(5_000) { session.incoming.receive() }
+            assertTrue(frame is Frame.Binary)
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any? =
-        withTimeoutOrNull(500) {
-            val frame = session.incoming.receive()
+    ): Any? {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return null
             assertTrue(frame is Frame.Binary)
-            MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
         }
+        return null
+    }
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")

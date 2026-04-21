@@ -25,7 +25,8 @@ class LobbyManager(
     private val hooksFactory: (LobbyCode) -> LobbyRuntimeHooks = { LobbyRuntimeHooks() },
     private val initialStateFactory: (LobbyCode) -> GameState = { lobbyCode -> GameState.initial(lobbyCode) },
 ) {
-    private val acceptedEventListeners = CopyOnWriteArrayList<suspend (LobbyCode, LobbyEvent) -> Unit>()
+    private val acceptedEventListeners =
+        CopyOnWriteArrayList<suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit>()
 
     private val lobbies = ConcurrentHashMap<LobbyCode, LobbyRuntime>()
     private val lifecycleLock = Any()
@@ -100,7 +101,7 @@ class LobbyManager(
         activeRuntimes.forEach { runtime -> runtime.shutdown() }
     }
 
-    fun registerAcceptedEventListener(listener: suspend (LobbyCode, LobbyEvent) -> Unit) {
+    fun registerAcceptedEventListener(listener: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit) {
         acceptedEventListeners.add(listener)
     }
 
@@ -118,10 +119,10 @@ class LobbyManager(
             queueCapacity = queueCapacity,
             hooks =
                 baseHooks.copy(
-                    onEventAccepted = { acceptedLobbyCode, event ->
-                        baseHooks.onEventAccepted(acceptedLobbyCode, event)
+                    onEventAccepted = { acceptedLobbyCode, event, beforeState, afterState ->
+                        baseHooks.onEventAccepted(acceptedLobbyCode, event, beforeState, afterState)
                         acceptedEventListeners.forEach { listener ->
-                            listener(acceptedLobbyCode, event)
+                            listener(acceptedLobbyCode, event, beforeState, afterState)
                         }
                     },
                 ),

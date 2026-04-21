@@ -73,5 +73,14 @@ class MessageTypeTest {
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_START_PLAYER_SET_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_START_PLAYER_SET_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE))
     }
 }

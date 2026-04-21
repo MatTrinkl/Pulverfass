@@ -3,7 +3,7 @@ package at.aau.pulverfass.shared.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
@@ -28,7 +28,7 @@ data class TerritoryOwnerChangedEvent(
     val territoryId: TerritoryId,
     val ownerId: PlayerId? = null,
     val stateVersion: Long? = null,
-) : InternalLobbyEvent, NetworkMessagePayload {
+) : InternalLobbyEvent, PublicGameEvent {
     init {
         require(stateVersion == null || stateVersion >= 0) {
             "TerritoryOwnerChangedEvent.stateVersion darf nicht negativ sein, war aber $stateVersion."

@@ -68,7 +68,7 @@ class LobbyRuntimeTest {
                     scope = scope,
                     hooks =
                         LobbyRuntimeHooks(
-                            onEventAccepted = { _, _ -> acceptedEvents.incrementAndGet() },
+                            onEventAccepted = { _, _, _, _ -> acceptedEvents.incrementAndGet() },
                         ),
                 )
 

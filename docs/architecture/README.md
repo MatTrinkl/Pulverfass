@@ -5,6 +5,7 @@ System design, integration patterns, and network protocols.
 ## 📚 Files in This Section
 
 - **lobby-event-system.md** - Lobby event flow and state management
+- **game-state-visibility.md** - Public/private visibility and delivery rules for GameState payloads
 - **map-config.md** - Shared map schema, loader, and validation rules
 - **network-api-integration.md** - Server API and routing integration
 

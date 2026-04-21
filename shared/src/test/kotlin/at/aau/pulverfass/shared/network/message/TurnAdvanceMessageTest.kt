@@ -5,6 +5,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -79,6 +80,26 @@ class TurnAdvanceMessageTest {
         assertTrue(serialized.contains("turnPhase"))
         assertTrue(serialized.contains("pauseReason"))
         assertTrue(serialized.contains("pausedPlayerId"))
+        assertEquals(event, deserialized)
+    }
+
+    @Test
+    fun `serializer roundtrip phase boundary broadcast`() {
+        val event =
+            PhaseBoundaryEvent(
+                lobbyCode = LobbyCode("GH78"),
+                stateVersion = 12,
+                previousPhase = TurnPhase.FORTIFY,
+                nextPhase = TurnPhase.DRAW_CARD,
+                activePlayerId = PlayerId(2),
+                turnCount = 4,
+            )
+
+        val serialized = json.encodeToString(PhaseBoundaryEvent.serializer(), event)
+        val deserialized = json.decodeFromString(PhaseBoundaryEvent.serializer(), serialized)
+
+        assertTrue(serialized.contains("previousPhase"))
+        assertTrue(serialized.contains("stateVersion"))
         assertEquals(event, deserialized)
     }
 }

@@ -83,7 +83,10 @@ Turn Advance
 Active Player -> TurnAdvanceRequest(expectedPhase=current)
 Server validates requester, pause-state, expectedPhase
 Server -> TurnAdvanceResponse (an Requester)
+Server -> GameStateDeltaEvent (an Lobby)
+Server -> PhaseBoundaryEvent(previousPhase, nextPhase, stateVersion) (an Lobby, nur bei echtem Phasenwechsel)
 Server -> TurnStateUpdatedEvent (an Lobby)
+Server -> GameStateSnapshotBroadcast (an Lobby, nur bei echtem Spielerwechsel)
 
 Pause on Disconnect
 Connection lost for active player or next would-be active player
@@ -98,6 +101,13 @@ Server -> TurnStateUpdatedEvent(isPaused=false, pausedPlayerId=null)
 
 - `MainServerLobbyRoutingService` behandelt `StartPlayerSetRequest`, `StartGameRequest`, `TurnAdvanceRequest` und `TurnStateGetRequest` direkt auf der Routing-Ebene.
 - Turn-State-Broadcasts werden zentral nur dann gesendet, wenn sich der autoritative `TurnState` einer Lobby tatsächlich geändert hat.
+- Bei `TurnAdvanceRequest` ist die Broadcast-Reihenfolge definiert als:
+  - `GameStateDeltaEvent`
+  - `PhaseBoundaryEvent`
+  - `TurnStateUpdatedEvent`
+  - `GameStateSnapshotBroadcast` nur dann, wenn sich `activePlayerId` geändert hat
+- `PhaseBoundaryEvent` wird nur erzeugt, wenn `previousPhase != nextPhase` gilt.
+- `GameStateSnapshotBroadcast` dient als abschließender Self-Heal-Broadcast nach `DRAW_CARD -> nächster Spieler`.
 - Die Logging-Ausgaben auf Server-Seite protokollieren bei jedem Turn-State-Wechsel mindestens:
   - `lobbyCode`
   - `activePlayerId`

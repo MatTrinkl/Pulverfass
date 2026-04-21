@@ -14,6 +14,9 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -148,6 +151,17 @@ class TurnAdvanceIntegrationTest {
                         receivePayload(playerOneSession.first),
                     )
                     assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receivePayload(playerOneSession.first),
+                    )
+                    assertEquals(
                         TurnStateUpdatedEvent(
                             lobbyCode = lobbyCode,
                             activePlayerId = playerOne,
@@ -156,6 +170,17 @@ class TurnAdvanceIntegrationTest {
                             startPlayerId = playerOne,
                         ),
                         receivePayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receivePayload(playerTwoSession.first),
                     )
                     assertEquals(
                         TurnStateUpdatedEvent(
@@ -174,6 +199,319 @@ class TurnAdvanceIntegrationTest {
                     playerOneSession.first.close()
                     playerTwoSession.first.close()
                     outsiderSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `phase advance sends delta then boundary then turn update in deterministic order`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("TA08")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val playerTwoSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TurnAdvanceRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        expectedPhase = TurnPhase.REINFORCEMENTS,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    TurnStateUpdatedEvent(
+                                        lobbyCode = lobbyCode,
+                                        activePlayerId = playerOne,
+                                        turnPhase = TurnPhase.ATTACK,
+                                        turnCount = 1,
+                                        startPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(TurnAdvanceResponse(lobbyCode), receiveAnyPayload(playerOneSession.first))
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    TurnStateUpdatedEvent(
+                                        lobbyCode = lobbyCode,
+                                        activePlayerId = playerOne,
+                                        turnPhase = TurnPhase.ATTACK,
+                                        turnCount = 1,
+                                        startPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+
+                    playerOneSession.first.close()
+                    playerTwoSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `turn change broadcasts full public snapshot after turn state update`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("TA09")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val playerTwoSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TurnAdvanceRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        expectedPhase = TurnPhase.DRAW_CARD,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    TurnStateUpdatedEvent(
+                                        lobbyCode = lobbyCode,
+                                        activePlayerId = playerTwo,
+                                        turnPhase = TurnPhase.REINFORCEMENTS,
+                                        turnCount = 1,
+                                        startPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.DRAW_CARD,
+                            nextPhase = TurnPhase.REINFORCEMENTS,
+                            activePlayerId = playerTwo,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerTwo,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+
+                    val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerTwoSession.first))
+                    assertEquals(lobbyCode, snapshot.lobbyCode)
+                    assertEquals(1, snapshot.stateVersion)
+                    assertEquals(defaultMapDefinition().mapHash, snapshot.determinism.mapHash)
+                    assertEquals(defaultMapDefinition().schemaVersion, snapshot.determinism.schemaVersion)
+                    assertEquals(playerTwo, snapshot.turnState.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, snapshot.turnState.turnPhase)
+                    assertEquals(1, snapshot.turnState.turnCount)
+                    assertEquals(playerOne, snapshot.turnState.startPlayerId)
+                    assertEquals(23, snapshot.territoryStates.size)
+                    assertEquals(23, snapshot.definition.territories.size)
+
+                    playerOneSession.first.close()
+                    playerTwoSession.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -443,6 +781,17 @@ class TurnAdvanceIntegrationTest {
 
                     assertEquals(TurnAdvanceResponse(lobbyCode), receivePayload(playerOneSession.first))
                     assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.DRAW_CARD,
+                            nextPhase = TurnPhase.REINFORCEMENTS,
+                            activePlayerId = playerTwo,
+                            turnCount = 1,
+                        ),
+                        receivePayload(playerOneSession.first),
+                    )
+                    assertEquals(
                         TurnStateUpdatedEvent(
                             lobbyCode = lobbyCode,
                             activePlayerId = playerTwo,
@@ -648,26 +997,29 @@ class TurnAdvanceIntegrationTest {
         pauseReason: String? = null,
         pausedPlayerId: PlayerId? = null,
     ): GameState =
-        GameState(
-            lobbyCode = lobbyCode,
-            lobbyOwner = players.firstOrNull(),
-            players = players,
-            playerDisplayNames = players.associateWith { "Player ${it.value}" },
-            activePlayer = activePlayerId,
-            turnOrder = players,
-            turnNumber = 1,
-            turnState =
-                TurnState(
-                    activePlayerId = activePlayerId,
-                    turnPhase = turnPhase,
-                    turnCount = 1,
-                    startPlayerId = players.first(),
-                    isPaused = isPaused,
-                    pauseReason = pauseReason,
-                    pausedPlayerId = pausedPlayerId,
-                ),
-            status = GameStatus.RUNNING,
-        )
+        GameState
+            .initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = players,
+                playerDisplayNames = players.associateWith { "Player ${it.value}" },
+            ).copy(
+                lobbyOwner = players.firstOrNull(),
+                activePlayer = activePlayerId,
+                turnOrder = players,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = activePlayerId,
+                        turnPhase = turnPhase,
+                        turnCount = 1,
+                        startPlayerId = players.first(),
+                        isPaused = isPaused,
+                        pauseReason = pauseReason,
+                        pausedPlayerId = pausedPlayerId,
+                    ),
+                status = GameStatus.RUNNING,
+            )
 
     private suspend fun disconnectPlayer(
         playerId: PlayerId,
@@ -709,6 +1061,18 @@ class TurnAdvanceIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): Any {
+        repeat(10) {
+            val payload = receiveAnyPayload(session)
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
+    }
+
+    private suspend fun receiveAnyPayload(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ): Any {
         val frame = withTimeout(5_000) { session.incoming.receive() }
         assertTrue(frame is Frame.Binary)
         return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
@@ -716,15 +1080,25 @@ class TurnAdvanceIntegrationTest {
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any? =
-        withTimeoutOrNull(500) {
-            val frame = session.incoming.receive()
+    ): Any? {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return null
             assertTrue(frame is Frame.Binary)
-            MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
         }
+        return null
+    }
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")
         return value as T
     }
+
+    private fun defaultMapDefinition() = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
 }

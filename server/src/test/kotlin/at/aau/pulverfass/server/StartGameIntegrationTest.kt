@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
@@ -271,16 +272,31 @@ class StartGameIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ) = run {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+        repeat(10) {
+            val frame = withTimeout(5_000) { session.incoming.receive() }
+            assertTrue(frame is Frame.Binary)
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return@run payload
+            }
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = withTimeoutOrNull(500) {
-        val frame = session.incoming.receive()
-        assertTrue(frame is Frame.Binary)
-        MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+    ) = run {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return@run null
+            assertTrue(frame is Frame.Binary)
+            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return@run payload
+            }
+        }
+        null
     }
 }

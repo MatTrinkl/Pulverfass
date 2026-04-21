@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
@@ -318,15 +319,31 @@ class KickPlayerIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ) = run {
-        val frame = assertIs<Frame.Binary>(withTimeout(5_000) { session.incoming.receive() })
-        MessageCodec.decodePayload(frame.readBytes())
+        repeat(10) {
+            val frame = assertIs<Frame.Binary>(withTimeout(5_000) { session.incoming.receive() })
+            val payload = MessageCodec.decodePayload(frame.readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return@run payload
+            }
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = withTimeoutOrNull(500) {
-        val frame = assertIs<Frame.Binary>(session.incoming.receive())
-        MessageCodec.decodePayload(frame.readBytes())
+    ) = run {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return@run null
+            val binary = assertIs<Frame.Binary>(frame)
+            val payload = MessageCodec.decodePayload(binary.readBytes())
+            if (payload !is GameStateDeltaEvent) {
+                return@run payload
+            }
+        }
+        null
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {

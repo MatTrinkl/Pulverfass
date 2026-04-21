@@ -58,6 +58,7 @@ class GameStateTest {
                         startPlayerId = playerOne,
                     ),
                 status = GameStatus.RUNNING,
+                stateVersion = 7,
                 processedEventCount = 4,
                 lastEventContext = context,
             )
@@ -72,7 +73,8 @@ class GameStateTest {
         assertEquals(context, state.lastEventContext)
         assertNull(state.closedReason)
         assertNull(state.lastInvalidActionReason)
-        assertEquals(4, state.stateVersion)
+        assertEquals(7, state.stateVersion)
+        assertEquals(4, state.processedEventCount)
         assertEquals(2, state.playerCount)
         assertTrue(state.hasPlayer(playerTwo))
     }
@@ -313,6 +315,9 @@ class GameStateTest {
             GameState(lobbyCode = LobbyCode("NO34"), turnNumber = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
+            GameState(lobbyCode = LobbyCode("OP12"), stateVersion = -1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             GameState(lobbyCode = LobbyCode("PQ56"), processedEventCount = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
@@ -383,6 +388,38 @@ class GameStateTest {
                     ),
             )
         }
+    }
+
+    @Test
+    fun `should increment state version monotonically for each applied event`() {
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("SV12")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+        val afterOwnerChanged =
+            reducer.apply(
+                initialState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+            )
+        val afterTroopsChanged =
+            reducer.apply(
+                afterOwnerChanged,
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 3),
+            )
+
+        assertEquals(0, initialState.stateVersion)
+        assertEquals(1, afterOwnerChanged.stateVersion)
+        assertEquals(2, afterTroopsChanged.stateVersion)
+        assertEquals(0, initialState.processedEventCount)
+        assertEquals(1, afterOwnerChanged.processedEventCount)
+        assertEquals(2, afterTroopsChanged.processedEventCount)
     }
 
     private fun sampleMapDefinition(): MapDefinition =

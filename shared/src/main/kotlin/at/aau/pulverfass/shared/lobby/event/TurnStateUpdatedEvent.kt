@@ -4,7 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
-import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -40,7 +40,7 @@ data class TurnStateUpdatedEvent(
     val isPaused: Boolean = false,
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
-) : InternalLobbyEvent, NetworkMessagePayload {
+) : InternalLobbyEvent, PublicGameEvent {
     init {
         require(turnCount >= 1) {
             "TurnStateUpdatedEvent.turnCount darf nicht kleiner als 1 sein, war aber $turnCount."

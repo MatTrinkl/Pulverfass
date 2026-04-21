@@ -238,3 +238,49 @@ Mindestens ergänzen:
 - Appseitig fehlt noch eine Client-Implementierung derselben Schnittstelle.
 - Neue Nachrichten brauchen immer:
   `MessageType` + Payload-Klasse + Registry-Einträge + Tests.
+
+## 3. GameState Sync Overview
+
+Die öffentliche und private GameState-Synchronisation ist serverseitig zentral im
+`MainServerLobbyRoutingService` verdrahtet.
+
+### C2S Requests
+
+- `GameStatePrivateGetRequest`
+- `GameStateCatchUpRequest`
+- `TurnAdvanceRequest`
+
+### S2L Broadcasts
+
+- `GameStateDeltaEvent` nach jeder akzeptierten öffentlichen State-Änderung
+- `PhaseBoundaryEvent` bei jedem Phasenwechsel
+- `GameStateSnapshotBroadcast` bei jedem Spielerwechsel
+
+### S2C Antworten
+
+- `GameStatePrivateGetResponse` nur an den anfragenden Spieler
+- `GameStateCatchUpResponse` nur an den anfragenden Spieler
+
+### Reihenfolge bei TurnAdvance
+
+Bei einem erfolgreichen `TurnAdvanceRequest` ist die Reihenfolge der öffentlichen
+Nachrichten wie folgt definiert:
+
+1. `GameStateDeltaEvent`
+2. `PhaseBoundaryEvent`
+3. `TurnStateUpdatedEvent`
+4. optional `GameStateSnapshotBroadcast` bei Spielerwechsel
+
+### Observability
+
+Folgende Metadaten werden für Diagnose und Logging mitgeführt bzw. geloggt:
+
+- `lobbyCode`
+- `playerId` bzw. aktiver Spieler
+- `fromVersion` / `toVersion` bei Deltas
+- `stateVersion`
+- `turnCount`
+
+Zusätzlich hält der Server pro Lobby einen flüchtigen `RoundHistoryBuffer` für
+die letzten 2 Runden, der Delta-, Boundary-, TurnState- und Snapshot-Metadaten
+ohne private Inhalte speichert.

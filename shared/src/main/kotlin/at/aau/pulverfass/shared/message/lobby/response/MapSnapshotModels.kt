@@ -1,10 +1,11 @@
 package at.aau.pulverfass.shared.message.lobby.response
 
 import at.aau.pulverfass.shared.ids.ContinentId
+import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
@@ -96,35 +97,65 @@ data class MapTerritoryStateSnapshot(
     }
 }
 
-internal fun GameState.toMapGetResponse(): MapGetResponse {
-    val definition =
-        mapDefinition
-            ?: throw IllegalStateException("GameState enthält keine MapDefinition für einen Snapshot.")
-    val definitionSnapshot = MapDefinitionSnapshot.from(definition)
-
-    return MapGetResponse(
-        lobbyCode = lobbyCode,
-        schemaVersion = definition.schemaVersion,
-        mapHash = definition.mapHash,
-        stateVersion = stateVersion,
-        definition = definitionSnapshot,
-        territoryStates = allTerritoryStates().map(MapTerritoryStateSnapshot::from),
-    )
+/**
+ * Öffentliche Turn-State-Sicht innerhalb eines Full-Snapshots.
+ */
+@Serializable
+data class PublicTurnStateSnapshot(
+    val activePlayerId: PlayerId,
+    val turnPhase: at.aau.pulverfass.shared.lobby.state.TurnPhase,
+    val turnCount: Int,
+    val startPlayerId: PlayerId,
+    val isPaused: Boolean = false,
+    val pauseReason: String? = null,
+    val pausedPlayerId: PlayerId? = null,
+) {
+    companion object {
+        fun from(turnState: TurnState): PublicTurnStateSnapshot =
+            PublicTurnStateSnapshot(
+                activePlayerId = turnState.activePlayerId,
+                turnPhase = turnState.turnPhase,
+                turnCount = turnState.turnCount,
+                startPlayerId = turnState.startPlayerId,
+                isPaused = turnState.isPaused,
+                pauseReason = turnState.pauseReason,
+                pausedPlayerId = turnState.pausedPlayerId,
+            )
+    }
 }
 
-internal fun GameState.toTurnStateGetResponse(): TurnStateGetResponse {
-    val resolvedTurnState =
-        resolvedTurnState
-            ?: throw IllegalStateException("GameState enthält keinen TurnState für einen Snapshot.")
-
-    return TurnStateGetResponse(
-        lobbyCode = lobbyCode,
-        activePlayerId = resolvedTurnState.activePlayerId,
-        turnPhase = resolvedTurnState.turnPhase,
-        turnCount = resolvedTurnState.turnCount,
-        startPlayerId = resolvedTurnState.startPlayerId,
-        isPaused = resolvedTurnState.isPaused,
-        pauseReason = resolvedTurnState.pauseReason,
-        pausedPlayerId = resolvedTurnState.pausedPlayerId,
-    )
+/**
+ * Öffentliche Determinismus-Metadaten für Snapshot-/Reconnect-Pfade.
+ */
+@Serializable
+data class PublicDeterminismMetadataSnapshot(
+    val mapHash: String,
+    val schemaVersion: Int,
+    val mapId: String? = null,
+    val seed: Long? = null,
+    val rulesVersion: Int? = null,
+) {
+    companion object {
+        fun from(definition: MapDefinition): PublicDeterminismMetadataSnapshot =
+            PublicDeterminismMetadataSnapshot(
+                mapHash = definition.mapHash,
+                schemaVersion = definition.schemaVersion,
+            )
+    }
 }
+
+/**
+ * Gemeinsame öffentliche Snapshot-Repräsentation des GameStates.
+ *
+ * Diese DTO ist die neutrale Quelle für alle öffentlichen Full-Snapshot-Payloads
+ * wie Broadcasts, Catch-up-Antworten oder Map-Snapshots.
+ */
+@Serializable
+data class PublicGameStateSnapshot(
+    val lobbyCode: LobbyCode,
+    val stateVersion: Long,
+    val determinism: PublicDeterminismMetadataSnapshot,
+    val turnState: PublicTurnStateSnapshot,
+    val definition: MapDefinitionSnapshot,
+    val territoryStates: List<MapTerritoryStateSnapshot>,
+)

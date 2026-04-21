@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property turnState eindeutiger serverseitiger Turn-/Phasen-Zustand der Lobby
  * @property gameStarted signalisiert, ob das Spiel fachlich bereits gestartet wurde
  * @property status grober Lebenszyklus der Lobby
+ * @property stateVersion server-authoritative, monotone Zustandsversion für Clients
  * @property processedEventCount Anzahl bereits auf den State angewendeter Events
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
@@ -46,6 +47,7 @@ data class GameState(
     val turnState: TurnState? = null,
     val gameStarted: Boolean = false,
     val status: GameStatus = GameStatus.WAITING_FOR_PLAYERS,
+    val stateVersion: Long = 0,
     val processedEventCount: Long = 0,
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
@@ -56,6 +58,9 @@ data class GameState(
     init {
         require(turnNumber >= 0) {
             "GameState.turnNumber darf nicht negativ sein, war aber $turnNumber."
+        }
+        require(stateVersion >= 0) {
+            "GameState.stateVersion darf nicht negativ sein, war aber $stateVersion."
         }
         require(processedEventCount >= 0) {
             "GameState.processedEventCount darf nicht negativ sein, war aber $processedEventCount."
@@ -121,14 +126,6 @@ data class GameState(
      */
     val playerCount: Int
         get() = players.size
-
-    /**
-     * Monotone Zustandsversion für Snapshot- und Delta-Konsistenz.
-     *
-     * Aktuell entspricht sie der Anzahl bereits angewendeter Events.
-     */
-    val stateVersion: Long
-        get() = processedEventCount
 
     /**
      * Liefert den aufgelösten Turn-Zustand, inklusive Legacy-Fallback.
@@ -438,6 +435,7 @@ data class GameState(
      */
     internal fun withMetadata(context: EventContext?): GameState =
         copy(
+            stateVersion = stateVersion + 1,
             processedEventCount = processedEventCount + 1,
             lastEventContext = context,
         )

@@ -8,6 +8,9 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -23,9 +26,11 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -355,6 +360,112 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_TURN_STATE_UPDATED_BROADCAST, messageType)
         assertEquals(payload, deserialized)
         assertTrue(serialized.contains("turnCount"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for phase boundary broadcast`() {
+        val payload =
+            PhaseBoundaryEvent(
+                lobbyCode = LobbyCode("PB12"),
+                stateVersion = 9,
+                previousPhase = TurnPhase.ATTACK,
+                nextPhase = TurnPhase.FORTIFY,
+                activePlayerId = PlayerId(2),
+                turnCount = 3,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("previousPhase"))
+        assertTrue(serialized.contains("stateVersion"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for game state delta broadcast`() {
+        val payload =
+            GameStateDeltaEvent(
+                lobbyCode = LobbyCode("GD12"),
+                fromVersion = 7,
+                toVersion = 7,
+                events =
+                    listOf(
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode = LobbyCode("GD12"),
+                            territoryId = TerritoryId("alpha"),
+                            ownerId = PlayerId(2),
+                            stateVersion = 7,
+                        ),
+                        TurnStateUpdatedEvent(
+                            lobbyCode = LobbyCode("GD12"),
+                            activePlayerId = PlayerId(2),
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 2,
+                            startPlayerId = PlayerId(1),
+                        ),
+                    ),
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("fromVersion"))
+        assertTrue(serialized.contains("messageType"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for game state snapshot broadcast`() {
+        val payload =
+            GameStateSnapshotBroadcast(
+                lobbyCode = LobbyCode("GS12"),
+                stateVersion = 11,
+                determinism =
+                    PublicDeterminismMetadataSnapshot(
+                        mapHash = "hash",
+                        schemaVersion = 1,
+                    ),
+                turnState =
+                    PublicTurnStateSnapshot(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 3,
+                        startPlayerId = PlayerId(1),
+                    ),
+                definition =
+                    MapDefinitionSnapshot(
+                        territories =
+                            listOf(
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = TerritoryId("alpha"),
+                                    edges = listOf(MapTerritoryEdgeSnapshot(TerritoryId("beta"))),
+                                ),
+                            ),
+                        continents = emptyList(),
+                    ),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(
+                            territoryId = TerritoryId("alpha"),
+                            ownerId = PlayerId(2),
+                            troopCount = 9,
+                        ),
+                    ),
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("determinism"))
+        assertTrue(serialized.contains("turnState"))
     }
 
     @Test

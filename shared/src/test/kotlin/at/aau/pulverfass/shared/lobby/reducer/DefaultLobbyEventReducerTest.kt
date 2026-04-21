@@ -62,6 +62,7 @@ class DefaultLobbyEventReducerTest {
         assertEquals(TurnPhase.REINFORCEMENTS, updatedState.turnState?.turnPhase)
         assertEquals(1, updatedState.turnState?.turnCount)
         assertEquals(GameStatus.WAITING_FOR_PLAYERS, updatedState.status)
+        assertEquals(1, updatedState.stateVersion)
         assertEquals(1, updatedState.processedEventCount)
         assertEquals(context, updatedState.lastEventContext)
     }
@@ -183,8 +184,39 @@ class DefaultLobbyEventReducerTest {
         assertNull(closed.turnState)
         assertEquals(baseState.players, ticked.players)
         assertEquals(baseState.turnOrder, timedOut.turnOrder)
+        assertEquals(1, ticked.stateVersion)
+        assertEquals(1, timedOut.stateVersion)
         assertEquals(1, ticked.processedEventCount)
         assertEquals(1, timedOut.processedEventCount)
+    }
+
+    @Test
+    fun `state version increases strictly with each reducer apply`() {
+        val lobbyCode = LobbyCode("SV34")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        val afterFirstAdvance = reducer.apply(baseState, TurnEnded(lobbyCode, playerOne))
+        val afterSecondAdvance = reducer.apply(afterFirstAdvance, TurnEnded(lobbyCode, playerOne))
+
+        assertEquals(0, baseState.stateVersion)
+        assertEquals(1, afterFirstAdvance.stateVersion)
+        assertEquals(2, afterSecondAdvance.stateVersion)
     }
 
     @Test

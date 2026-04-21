@@ -7,8 +7,10 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
@@ -22,9 +24,11 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -298,6 +302,69 @@ class MessageCodecTest {
                 turnPhase = TurnPhase.DRAW_CARD,
                 turnCount = 4,
                 startPlayerId = PlayerId(1),
+            )
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode phase boundary broadcast payload directly`() {
+        val payload =
+            PhaseBoundaryEvent(
+                lobbyCode = LobbyCode("PB34"),
+                stateVersion = 5,
+                previousPhase = TurnPhase.FORTIFY,
+                nextPhase = TurnPhase.DRAW_CARD,
+                activePlayerId = PlayerId(1),
+                turnCount = 2,
+            )
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode game state snapshot broadcast payload directly`() {
+        val payload =
+            GameStateSnapshotBroadcast(
+                lobbyCode = LobbyCode("GS34"),
+                stateVersion = 8,
+                determinism =
+                    PublicDeterminismMetadataSnapshot(
+                        mapHash = "hash",
+                        schemaVersion = 1,
+                    ),
+                turnState =
+                    PublicTurnStateSnapshot(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 2,
+                        startPlayerId = PlayerId(1),
+                    ),
+                definition =
+                    MapDefinitionSnapshot(
+                        territories =
+                            listOf(
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = TerritoryId("alpha"),
+                                    edges = listOf(MapTerritoryEdgeSnapshot(TerritoryId("beta"))),
+                                ),
+                            ),
+                        continents = emptyList(),
+                    ),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(
+                            territoryId = TerritoryId("alpha"),
+                            ownerId = PlayerId(2),
+                            troopCount = 3,
+                        ),
+                    ),
             )
 
         val bytes = MessageCodec.encode(payload)

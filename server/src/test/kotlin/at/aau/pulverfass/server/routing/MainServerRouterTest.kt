@@ -135,7 +135,7 @@ class MainServerRouterTest {
                     scope = scope,
                     hooksFactory = {
                         LobbyRuntimeHooks(
-                            onEventAccepted = { _, _ -> acceptedCounter.incrementAndGet() },
+                            onEventAccepted = { _, _, _, _ -> acceptedCounter.incrementAndGet() },
                         )
                     },
                 )

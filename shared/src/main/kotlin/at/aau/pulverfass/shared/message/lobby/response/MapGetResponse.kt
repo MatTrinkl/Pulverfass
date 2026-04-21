@@ -1,8 +1,7 @@
 package at.aau.pulverfass.shared.message.lobby.response
 
 import at.aau.pulverfass.shared.ids.LobbyCode
-import at.aau.pulverfass.shared.lobby.state.GameState
-import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -31,9 +30,17 @@ data class MapGetResponse(
     val stateVersion: Long,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
-) : NetworkMessagePayload {
+) : PublicGameStatePayload {
     companion object {
-        fun fromGameState(gameState: GameState): MapGetResponse = gameState.toMapGetResponse()
+        fun from(snapshot: PublicGameStateSnapshot): MapGetResponse =
+            MapGetResponse(
+                lobbyCode = snapshot.lobbyCode,
+                schemaVersion = snapshot.determinism.schemaVersion,
+                mapHash = snapshot.determinism.mapHash,
+                stateVersion = snapshot.stateVersion,
+                definition = snapshot.definition,
+                territoryStates = snapshot.territoryStates,
+            )
     }
 }
 

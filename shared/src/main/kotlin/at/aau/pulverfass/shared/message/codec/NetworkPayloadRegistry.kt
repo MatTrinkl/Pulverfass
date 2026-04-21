@@ -4,10 +4,15 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
@@ -17,6 +22,8 @@ import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
@@ -26,6 +33,8 @@ import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
@@ -64,6 +73,15 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            GameStateDeltaEvent::class.java to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
+            PhaseBoundaryEvent::class.java to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
+            GameStateSnapshotBroadcast::class.java to MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST,
+            GameStateCatchUpRequest::class.java to MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST,
+            GameStateCatchUpResponse::class.java to MessageType.LOBBY_GAME_STATE_CATCH_UP_RESPONSE,
+            GameStateCatchUpErrorResponse::class.java to MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE,
+            GameStatePrivateGetRequest::class.java to MessageType.LOBBY_GAME_STATE_PRIVATE_GET_REQUEST,
+            GameStatePrivateGetResponse::class.java to MessageType.LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE,
+            GameStatePrivateGetErrorResponse::class.java to MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE,
             MapGetRequest::class.java to MessageType.LOBBY_MAP_GET_REQUEST,
             MapGetResponse::class.java to MessageType.LOBBY_MAP_GET_RESPONSE,
             MapGetErrorResponse::class.java to MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
@@ -160,6 +178,54 @@ internal object NetworkPayloadRegistry {
             },
             GameStartedEvent::class.java to { payload ->
                 Json.encodeToString(GameStartedEvent.serializer(), payload as GameStartedEvent)
+            },
+            GameStateDeltaEvent::class.java to { payload ->
+                Json.encodeToString(GameStateDeltaEvent.serializer(), payload as GameStateDeltaEvent)
+            },
+            PhaseBoundaryEvent::class.java to { payload ->
+                Json.encodeToString(PhaseBoundaryEvent.serializer(), payload as PhaseBoundaryEvent)
+            },
+            GameStateSnapshotBroadcast::class.java to { payload ->
+                Json.encodeToString(
+                    GameStateSnapshotBroadcast.serializer(),
+                    payload as GameStateSnapshotBroadcast,
+                )
+            },
+            GameStateCatchUpRequest::class.java to { payload ->
+                Json.encodeToString(
+                    GameStateCatchUpRequest.serializer(),
+                    payload as GameStateCatchUpRequest,
+                )
+            },
+            GameStateCatchUpResponse::class.java to { payload ->
+                Json.encodeToString(
+                    GameStateCatchUpResponse.serializer(),
+                    payload as GameStateCatchUpResponse,
+                )
+            },
+            GameStateCatchUpErrorResponse::class.java to { payload ->
+                Json.encodeToString(
+                    GameStateCatchUpErrorResponse.serializer(),
+                    payload as GameStateCatchUpErrorResponse,
+                )
+            },
+            GameStatePrivateGetRequest::class.java to { payload ->
+                Json.encodeToString(
+                    GameStatePrivateGetRequest.serializer(),
+                    payload as GameStatePrivateGetRequest,
+                )
+            },
+            GameStatePrivateGetResponse::class.java to { payload ->
+                Json.encodeToString(
+                    GameStatePrivateGetResponse.serializer(),
+                    payload as GameStatePrivateGetResponse,
+                )
+            },
+            GameStatePrivateGetErrorResponse::class.java to { payload ->
+                Json.encodeToString(
+                    GameStatePrivateGetErrorResponse.serializer(),
+                    payload as GameStatePrivateGetErrorResponse,
+                )
             },
             MapGetRequest::class.java to { payload ->
                 Json.encodeToString(MapGetRequest.serializer(), payload as MapGetRequest)
@@ -281,6 +347,33 @@ internal object NetworkPayloadRegistry {
             },
             MessageType.LOBBY_GAME_STARTED_BROADCAST to { json ->
                 Json.decodeFromString(GameStartedEvent.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST to { json ->
+                Json.decodeFromString(GameStateDeltaEvent.serializer(), json)
+            },
+            MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST to { json ->
+                Json.decodeFromString(PhaseBoundaryEvent.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST to { json ->
+                Json.decodeFromString(GameStateSnapshotBroadcast.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST to { json ->
+                Json.decodeFromString(GameStateCatchUpRequest.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_CATCH_UP_RESPONSE to { json ->
+                Json.decodeFromString(GameStateCatchUpResponse.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(GameStateCatchUpErrorResponse.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_PRIVATE_GET_REQUEST to { json ->
+                Json.decodeFromString(GameStatePrivateGetRequest.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE to { json ->
+                Json.decodeFromString(GameStatePrivateGetResponse.serializer(), json)
+            },
+            MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE to { json ->
+                Json.decodeFromString(GameStatePrivateGetErrorResponse.serializer(), json)
             },
             MessageType.LOBBY_MAP_GET_REQUEST to { json ->
                 Json.decodeFromString(MapGetRequest.serializer(), json)

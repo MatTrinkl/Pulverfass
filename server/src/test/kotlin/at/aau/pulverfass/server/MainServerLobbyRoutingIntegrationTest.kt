@@ -16,8 +16,11 @@ import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -26,6 +29,7 @@ import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -501,6 +505,135 @@ class MainServerLobbyRoutingIntegrationTest {
                     sessionOneAndConnection.first.close()
                     sessionTwoAndConnection.first.close()
                     sessionThreeAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `turn advance request broadcasts game state delta with correct version range`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("DG12")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    GameState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        playerDisplayNames =
+                            mapOf(
+                                playerOne to "Alice",
+                                playerTwo to "Bob",
+                            ),
+                        activePlayer = playerOne,
+                        configuredStartPlayerId = playerOne,
+                        turnOrder = listOf(playerOne, playerTwo),
+                        turnNumber = 1,
+                        turnState =
+                            TurnState(
+                                activePlayerId = playerOne,
+                                turnPhase = TurnPhase.REINFORCEMENTS,
+                                turnCount = 1,
+                                startPlayerId = playerOne,
+                            ),
+                        gameStarted = true,
+                        status = GameStatus.RUNNING,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionOneAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val sessionTwoAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    sessionOneAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TurnAdvanceRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        expectedPhase = TurnPhase.REINFORCEMENTS,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val requesterDelta =
+                        receivePayloadOfType<GameStateDeltaEvent>(sessionOneAndConnection.first)
+                    val otherPlayerDelta =
+                        receivePayloadOfType<GameStateDeltaEvent>(sessionTwoAndConnection.first)
+
+                    val expectedEvent =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+                    val expectedDelta =
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events = listOf(expectedEvent),
+                        )
+
+                    assertEquals(expectedDelta, requesterDelta)
+                    assertEquals(expectedDelta, otherPlayerDelta)
+
+                    sessionOneAndConnection.first.close()
+                    sessionTwoAndConnection.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -1461,22 +1594,53 @@ class MainServerLobbyRoutingIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload {
-        val frame =
-            withTimeout(5_000) {
-                session.incoming.receive()
+        repeat(10) {
+            val payload = receiveAnyPayload(session)
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
             }
-
-        val binary = assertIs<Frame.Binary>(frame)
-        return MessageCodec.decodePayload(binary.readBytes())
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload? {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return null
+
+            val binary = assertIs<Frame.Binary>(frame)
+            val payload = MessageCodec.decodePayload(binary.readBytes())
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
+        }
+        return null
+    }
+
+    private suspend inline fun <reified T : NetworkMessagePayload> receivePayloadOfType(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+        maxMessages: Int = 5,
+    ): T {
+        repeat(maxMessages) {
+            val payload = receiveAnyPayload(session)
+            if (payload is T) {
+                return payload
+            }
+        }
+        throw AssertionError("Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.")
+    }
+
+    private suspend fun receiveAnyPayload(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ): NetworkMessagePayload {
         val frame =
-            withTimeoutOrNull(500) {
+            withTimeout(5_000) {
                 session.incoming.receive()
-            } ?: return null
+            }
 
         val binary = assertIs<Frame.Binary>(frame)
         return MessageCodec.decodePayload(binary.readBytes())

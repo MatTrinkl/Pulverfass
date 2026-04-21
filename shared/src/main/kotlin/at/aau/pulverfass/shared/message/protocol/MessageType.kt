@@ -132,6 +132,33 @@ enum class MessageType(val id: Int) {
 
     /** Fehlantwort auf das Setzen des Startspielers. */
     LOBBY_START_PLAYER_SET_ERROR_RESPONSE(40),
+
+    /** Öffentliches Delta des GameStates für eine Lobby. */
+    LOBBY_GAME_STATE_DELTA_BROADCAST(41),
+
+    /** Marker für den Abschluss einer Turn-Phase und den Beginn der nächsten. */
+    LOBBY_PHASE_BOUNDARY_BROADCAST(42),
+
+    /** Vollständiger öffentlicher GameState-Snapshot bei Spielerwechsel. */
+    LOBBY_GAME_STATE_SNAPSHOT_BROADCAST(43),
+
+    /** Anfrage nach einem privaten, spielerspezifischen GameState-Snapshot. */
+    LOBBY_GAME_STATE_PRIVATE_GET_REQUEST(44),
+
+    /** Erfolgsantwort mit privatem, spielerspezifischem GameState-Snapshot. */
+    LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE(45),
+
+    /** Fehlantwort auf eine private GameState-Snapshot-Anfrage. */
+    LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE(46),
+
+    /** Anfrage nach einem vollständigen Catch-up-Snapshot bei erkanntem Desync. */
+    LOBBY_GAME_STATE_CATCH_UP_REQUEST(47),
+
+    /** Erfolgsantwort mit vollständigem öffentlichem Catch-up-Snapshot. */
+    LOBBY_GAME_STATE_CATCH_UP_RESPONSE(48),
+
+    /** Fehlantwort auf eine Catch-up-Snapshot-Anfrage. */
+    LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE(49),
     ;
 
     companion object {

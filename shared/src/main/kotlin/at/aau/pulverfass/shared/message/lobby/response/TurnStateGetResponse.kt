@@ -4,7 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
-import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -36,9 +36,24 @@ data class TurnStateGetResponse(
     val isPaused: Boolean = false,
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
-) : NetworkMessagePayload {
+) : PublicGameStatePayload {
     companion object {
-        fun fromGameState(gameState: GameState): TurnStateGetResponse = gameState.toTurnStateGetResponse()
+        fun fromGameState(gameState: GameState): TurnStateGetResponse {
+            val resolvedTurnState =
+                gameState.resolvedTurnState
+                    ?: throw IllegalStateException("GameState enthält keinen TurnState für einen Snapshot.")
+
+            return TurnStateGetResponse(
+                lobbyCode = gameState.lobbyCode,
+                activePlayerId = resolvedTurnState.activePlayerId,
+                turnPhase = resolvedTurnState.turnPhase,
+                turnCount = resolvedTurnState.turnCount,
+                startPlayerId = resolvedTurnState.startPlayerId,
+                isPaused = resolvedTurnState.isPaused,
+                pauseReason = resolvedTurnState.pauseReason,
+                pausedPlayerId = resolvedTurnState.pausedPlayerId,
+            )
+        }
     }
 }
 

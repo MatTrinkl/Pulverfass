@@ -1,7 +1,6 @@
 package at.aau.pulverfass.shared.message.lobby.event
 
 import at.aau.pulverfass.shared.ids.LobbyCode
-import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -19,7 +18,7 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable(with = GameStartedEventSerializer::class)
 data class GameStartedEvent(
     val lobbyCode: LobbyCode,
-) : NetworkMessagePayload
+) : PublicGameEvent
 
 /**
  * Technischer Serializer für [GameStartedEvent].

@@ -28,6 +28,7 @@ class LobbyStateProcessorTest {
         assertEquals(lobbyCode, snapshot.lobbyCode)
         assertEquals(listOf(playerId), snapshot.players)
         assertEquals(playerId, snapshot.activePlayer)
+        assertEquals(1, snapshot.stateVersion)
         assertEquals(1, snapshot.processedEventCount)
     }
 
@@ -87,6 +88,7 @@ class LobbyStateProcessorTest {
                     repeat(eventCount * 3) {
                         val snapshot = processor.currentState()
                         assertEquals(lobbyCode, snapshot.lobbyCode)
+                        assertTrue(snapshot.stateVersion >= 0)
                         assertTrue(snapshot.processedEventCount >= 0)
                         if (snapshot.activePlayer != null) {
                             assertTrue(snapshot.players.contains(snapshot.activePlayer))
@@ -109,6 +111,7 @@ class LobbyStateProcessorTest {
         readerFailure.get()?.let { throw it }
 
         val finalSnapshot = processor.currentState()
+        assertEquals(eventCount.toLong(), finalSnapshot.stateVersion)
         assertEquals(eventCount.toLong(), finalSnapshot.processedEventCount)
         assertNull(finalSnapshot.lastEventContext)
     }
@@ -121,6 +124,7 @@ class LobbyStateProcessorTest {
 
         val updated = processor.apply(PlayerJoined(lobbyCode, PlayerId(4), "Player 4"))
 
+        assertEquals(1, updated.stateVersion)
         assertEquals(1, updated.processedEventCount)
         assertEquals(PlayerId(4), updated.activePlayer)
     }

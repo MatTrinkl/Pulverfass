@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
@@ -19,7 +20,12 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
@@ -29,6 +35,8 @@ import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
@@ -38,6 +46,10 @@ import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
@@ -56,6 +68,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 /**
@@ -77,6 +90,14 @@ class MainServerLobbyRoutingService(
     private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
+    private val gameStateDelivery =
+        GameStateDeliveryDispatcher(
+            sendPayload = network::send,
+            lobbyMembers = { lobbyCode -> lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty() },
+            connectionIdResolver = connectionIdResolver,
+        )
+    private val publicGameStateBuilder = PublicGameStateBuilder()
+    private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
 
     init {
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
@@ -109,6 +130,14 @@ class MainServerLobbyRoutingService(
             }
             if (request.payload is MapGetRequest) {
                 routeMapGetRequest(request)
+                return
+            }
+            if (request.payload is GameStateCatchUpRequest) {
+                routeGameStateCatchUpRequest(request)
+                return
+            }
+            if (request.payload is GameStatePrivateGetRequest) {
+                routeGameStatePrivateGetRequest(request)
                 return
             }
             if (request.payload is StartPlayerSetRequest) {
@@ -245,10 +274,67 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val response = buildMapGetResponse(request, payload)
-            network.send(request.connectionId, response)
+            gameStateDelivery.sendPublicState(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = mapGetErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeGameStateCatchUpRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as GameStateCatchUpRequest
+
+        runCatching {
+            val response = buildGameStateCatchUpResponse(request, payload)
+            gameStateDelivery.sendPublicState(request.connectionId, response)
+            roundHistoryBuffer(payload.lobbyCode).recordSnapshot(
+                roundIndex = response.turnState.turnCount,
+                stateVersion = response.stateVersion,
+                trigger = RoundSnapshotTrigger.CATCH_UP_RESPONSE,
+            )
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = gameStateCatchUpErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeGameStatePrivateGetRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as GameStatePrivateGetRequest
+
+        runCatching {
+            val response = buildGameStatePrivateGetResponse(request, payload)
+            gameStateDelivery.sendPrivateState(request.connectionId, response)
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = gameStatePrivateGetErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -274,7 +360,9 @@ class MainServerLobbyRoutingService(
             val turnStateUpdate = buildTurnAdvanceEvent(request, payload)
             lobbyManager.submit(turnStateUpdate, request.context)
             network.send(request.connectionId, TurnAdvanceResponse(payload.lobbyCode))
+            broadcastPhaseBoundaryIfChanged(payload.lobbyCode, previousTurnState)
             broadcastTurnStateIfChanged(payload.lobbyCode, previousTurnState)
+            broadcastFullSnapshotOnTurnChangeIfNeeded(payload.lobbyCode, previousTurnState)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = turnAdvanceErrorResponse(request, payload, cause)
@@ -335,7 +423,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val response = buildTurnStateGetResponse(payload)
-            network.send(request.connectionId, response)
+            gameStateDelivery.sendPublicState(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = turnStateGetErrorResponse(payload, cause)
@@ -496,15 +584,8 @@ class MainServerLobbyRoutingService(
     ) {
         network.send(request.connectionId, StartGameResponse())
 
-        val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
         val event = GameStartedEvent(lobbyCode = payload.lobbyCode)
-
-        members
-            .mapNotNull(connectionIdResolver)
-            .distinct()
-            .forEach { connectionId ->
-                network.send(connectionId, event)
-            }
+        gameStateDelivery.broadcastPublicState(payload.lobbyCode, event)
     }
 
     private suspend fun dispatchErrorResponse(
@@ -543,7 +624,65 @@ class MainServerLobbyRoutingService(
             throw IllegalStateException("MAP_NOT_READY")
         }
 
-        return MapGetResponse.fromGameState(state)
+        return publicGameStateBuilder.buildMapGetResponse(state)
+    }
+
+    private fun buildGameStateCatchUpResponse(
+        request: DecodedNetworkRequest,
+        payload: GameStateCatchUpRequest,
+    ): GameStateCatchUpResponse {
+        val lobby = lobbyManager.getLobby(payload.lobbyCode)
+            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val state = lobby.currentState()
+        val playerId = request.context.playerId
+
+        if (playerId == null || !state.hasPlayer(playerId)) {
+            throw IllegalArgumentException("NOT_IN_GAME")
+        }
+        if (!state.hasMap() || state.resolvedTurnState == null) {
+            throw IllegalStateException("SNAPSHOT_NOT_READY")
+        }
+
+        val currentVersion = state.stateVersion
+        val diff = currentVersion - payload.clientStateVersion
+        logger.info(
+            "GameState catch-up served: lobbyCode={} playerId={} requestedVersion={} currentVersion={} versionDiff={} reason={} recentRounds={}",
+            payload.lobbyCode.value,
+            playerId.value,
+            payload.clientStateVersion,
+            currentVersion,
+            diff,
+            payload.reason?.name ?: "UNSPECIFIED",
+            describeRoundHistory(payload.lobbyCode),
+        )
+
+        return publicGameStateBuilder.buildCatchUpResponse(state)
+    }
+
+    private fun buildGameStatePrivateGetResponse(
+        request: DecodedNetworkRequest,
+        payload: GameStatePrivateGetRequest,
+    ): GameStatePrivateGetResponse {
+        val lobby = lobbyManager.getLobby(payload.lobbyCode)
+            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val state = lobby.currentState()
+        val contextPlayerId = request.context.playerId
+
+        if (contextPlayerId == null || contextPlayerId != payload.playerId) {
+            throw IllegalArgumentException("REQUESTER_MISMATCH")
+        }
+        if (!state.hasPlayer(payload.playerId)) {
+            throw IllegalArgumentException("NOT_IN_GAME")
+        }
+
+        val response = GameStatePrivateGetResponse.fromGameState(state, payload.playerId)
+        logger.info(
+            "Private snapshot served: lobbyCode={} playerId={} stateVersion={}",
+            payload.lobbyCode.value,
+            payload.playerId.value,
+            response.stateVersion,
+        )
+        return response
     }
 
     private fun mapGetErrorResponse(
@@ -579,6 +718,69 @@ class MainServerLobbyRoutingService(
             code = code,
             reason = reason,
         )
+    }
+
+    private fun gameStateCatchUpErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: GameStateCatchUpRequest,
+        cause: Throwable,
+    ): GameStateCatchUpErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> GameStateCatchUpErrorCode.GAME_NOT_FOUND
+                "NOT_IN_GAME" -> GameStateCatchUpErrorCode.NOT_IN_GAME
+                "SNAPSHOT_NOT_READY" -> GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY
+                else -> GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY
+            }
+
+        val reason =
+            when (code) {
+                GameStateCatchUpErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                GameStateCatchUpErrorCode.NOT_IN_GAME -> {
+                    val playerId = request.context.playerId
+                    if (playerId == null) {
+                        "Connection ist keinem Spieler in Lobby '${payload.lobbyCode.value}' zugeordnet."
+                    } else {
+                        "Spieler '${playerId.value}' ist nicht Teil von Lobby '${payload.lobbyCode.value}'."
+                    }
+                }
+                GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
+                    "Catch-up-Snapshot für Lobby '${payload.lobbyCode.value}' ist noch nicht verfügbar."
+            }
+
+        return GameStateCatchUpErrorResponse(code = code, reason = reason)
+    }
+
+    private fun gameStatePrivateGetErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: GameStatePrivateGetRequest,
+        cause: Throwable,
+    ): GameStatePrivateGetErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> GameStatePrivateGetErrorCode.GAME_NOT_FOUND
+                "NOT_IN_GAME" -> GameStatePrivateGetErrorCode.NOT_IN_GAME
+                else -> GameStatePrivateGetErrorCode.REQUESTER_MISMATCH
+            }
+
+        val reason =
+            when (code) {
+                GameStatePrivateGetErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                GameStatePrivateGetErrorCode.NOT_IN_GAME ->
+                    "Spieler '${payload.playerId.value}' ist nicht Teil der Lobby '${payload.lobbyCode.value}'."
+                GameStatePrivateGetErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        "Connection ist keinem Spieler fuer Lobby '${payload.lobbyCode.value}' zugeordnet."
+                    } else {
+                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+            }
+
+        return GameStatePrivateGetErrorResponse(code = code, reason = reason)
     }
 
     private fun buildTurnAdvanceEvent(
@@ -777,20 +979,44 @@ class MainServerLobbyRoutingService(
     private suspend fun broadcastAcceptedLobbyEvent(
         lobbyCode: LobbyCode,
         event: at.aau.pulverfass.shared.lobby.event.LobbyEvent,
+        previousState: GameState,
+        currentState: GameState,
     ) {
+        val publicDelta = publicGameStateBuilder.buildDelta(lobbyCode, event, previousState, currentState)
+        if (publicDelta != null) {
+            val currentTurnCount = currentState.resolvedTurnState?.turnCount
+            logger.info(
+                "Public delta broadcast: lobbyCode={} playerId={} fromVersion={} toVersion={} stateVersion={} turnCount={} eventCount={}",
+                lobbyCode.value,
+                currentState.resolvedTurnState?.activePlayerId?.value,
+                publicDelta.fromVersion,
+                publicDelta.toVersion,
+                currentState.stateVersion,
+                currentTurnCount,
+                publicDelta.events.size,
+            )
+            gameStateDelivery.broadcastPublicState(lobbyCode, publicDelta)
+            currentTurnCount?.let { turnCount ->
+                roundHistoryBuffer(lobbyCode).recordDelta(
+                    roundIndex = turnCount,
+                    fromVersion = publicDelta.fromVersion,
+                    toVersion = publicDelta.toVersion,
+                    eventCount = publicDelta.events.size,
+                )
+            }
+        }
+
         val broadcastPayload =
             when (event) {
                 is TerritoryOwnerChangedEvent -> {
-                    val stateVersion = lobbyManager.getLobby(lobbyCode)?.currentState()?.stateVersion ?: return
-                    event.copy(stateVersion = stateVersion)
+                    event.copy(stateVersion = currentState.stateVersion)
                 }
                 is TerritoryTroopsChangedEvent -> {
-                    val stateVersion = lobbyManager.getLobby(lobbyCode)?.currentState()?.stateVersion ?: return
-                    event.copy(stateVersion = stateVersion)
+                    event.copy(stateVersion = currentState.stateVersion)
                 }
                 else -> return
         }
-        broadcastLobbyMembers(lobbyCode, broadcastPayload)
+        gameStateDelivery.broadcastPublicState(lobbyCode, broadcastPayload)
     }
 
     private fun lobbyCodeOf(payload: NetworkMessagePayload): LobbyCode? =
@@ -806,6 +1032,47 @@ class MainServerLobbyRoutingService(
 
     private fun currentTurnState(lobbyCode: LobbyCode): TurnState? =
         lobbyManager.getLobby(lobbyCode)?.currentState()?.turnState
+
+    fun roundHistory(lobbyCode: LobbyCode): List<RoundHistory> = roundHistoryBuffer(lobbyCode).history()
+
+    fun describeRoundHistory(lobbyCode: LobbyCode): String = roundHistoryBuffer(lobbyCode).describe()
+
+    private suspend fun broadcastPhaseBoundaryIfChanged(
+        lobbyCode: LobbyCode,
+        previousTurnState: TurnState?,
+    ) {
+        val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        val currentTurnState = currentState.turnState ?: return
+        val previousPhase = previousTurnState?.turnPhase ?: return
+        if (previousPhase == currentTurnState.turnPhase) {
+            return
+        }
+
+        val payload =
+            PhaseBoundaryEvent(
+                lobbyCode = lobbyCode,
+                stateVersion = currentState.stateVersion,
+                previousPhase = previousPhase,
+                nextPhase = currentTurnState.turnPhase,
+                activePlayerId = currentTurnState.activePlayerId,
+                turnCount = currentTurnState.turnCount,
+            )
+
+        logger.info(
+            "Phase boundary broadcast: lobbyCode={} playerId={} stateVersion={} previousPhase={} nextPhase={} turnCount={}",
+            lobbyCode.value,
+            currentTurnState.activePlayerId.value,
+            currentState.stateVersion,
+            previousPhase.name,
+            currentTurnState.turnPhase.name,
+            currentTurnState.turnCount,
+        )
+        gameStateDelivery.broadcastPublicState(
+            lobbyCode = lobbyCode,
+            payload = payload,
+        )
+        roundHistoryBuffer(lobbyCode).recordBoundary(payload)
+    }
 
     private suspend fun broadcastTurnStateIfChanged(
         lobbyCode: LobbyCode,
@@ -827,9 +1094,48 @@ class MainServerLobbyRoutingService(
             currentTurnState.isPaused,
             currentTurnState.pausedPlayerId?.value,
         )
-        broadcastLobbyMembers(
+        val payload = currentTurnState.toUpdatedEvent(lobbyCode)
+        gameStateDelivery.broadcastPublicState(
             lobbyCode = lobbyCode,
-            payload = currentTurnState.toUpdatedEvent(lobbyCode),
+            payload = payload,
+        )
+        roundHistoryBuffer(lobbyCode).recordTurnStateChange(
+            stateVersion = currentState.stateVersion,
+            event = payload,
+        )
+    }
+
+    private suspend fun broadcastFullSnapshotOnTurnChangeIfNeeded(
+        lobbyCode: LobbyCode,
+        previousTurnState: TurnState?,
+    ) {
+        val previousActivePlayerId = previousTurnState?.activePlayerId ?: return
+        val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        if (!currentState.hasMap()) {
+            return
+        }
+        val currentTurnState = currentState.turnState ?: return
+        if (previousActivePlayerId == currentTurnState.activePlayerId) {
+            return
+        }
+
+        val payload = publicGameStateBuilder.buildSnapshotBroadcast(currentState)
+        logger.info(
+            "Public snapshot broadcast: lobbyCode={} playerId={} stateVersion={} turnCount={} mapHash={}",
+            lobbyCode.value,
+            currentTurnState.activePlayerId.value,
+            payload.stateVersion,
+            payload.turnState.turnCount,
+            payload.determinism.mapHash,
+        )
+        gameStateDelivery.broadcastPublicState(
+            lobbyCode = lobbyCode,
+            payload = payload,
+        )
+        roundHistoryBuffer(lobbyCode).recordSnapshot(
+            roundIndex = payload.turnState.turnCount,
+            stateVersion = payload.stateVersion,
+            trigger = RoundSnapshotTrigger.TURN_CHANGE_BROADCAST,
         )
     }
 
@@ -864,19 +1170,8 @@ class MainServerLobbyRoutingService(
 
     private fun isPlayerConnected(playerId: PlayerId): Boolean = connectionIdResolver(playerId) != null
 
-    private suspend fun broadcastLobbyMembers(
-        lobbyCode: LobbyCode,
-        payload: NetworkMessagePayload,
-    ) {
-        val members = lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
-
-        members
-            .mapNotNull(connectionIdResolver)
-            .distinct()
-            .forEach { connectionId ->
-                network.send(connectionId, payload)
-            }
-    }
+    private fun roundHistoryBuffer(lobbyCode: LobbyCode): RoundHistoryBuffer =
+        roundHistoryByLobby.computeIfAbsent(lobbyCode) { RoundHistoryBuffer() }
 
     private fun createLobbyWithUniqueCode(): LobbyCode {
         repeat(10_000) {
