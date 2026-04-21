@@ -110,6 +110,12 @@ data class MapLayoutMetrics(
     val mapOrigin: Offset,
 )
 
+data class InteractiveGameMapOptions(
+    val backgroundPainter: Painter? = null,
+    val aspectRatio: Float = PulverfassMapDefaults.aspectRatio,
+    @param:DrawableRes val regionIdMapResId: Int = R.drawable.map_region_id,
+)
+
 private data class TerritoryRenderAssets(
     val overlay: ImageBitmap,
     val anchors: Map<String, MapPoint>,
@@ -286,17 +292,15 @@ fun InteractiveGameMap(
     onRegionSelected: (GameMapRegion) -> Unit,
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
-    backgroundPainter: Painter? = null,
-    aspectRatio: Float = PulverfassMapDefaults.aspectRatio,
-    @DrawableRes regionIdMapResId: Int = R.drawable.map_region_id,
+    options: InteractiveGameMapOptions = InteractiveGameMapOptions(),
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     val context = LocalContext.current
     val resources = context.resources
     val regionIdBitmap =
-        remember(resources, regionIdMapResId) {
-            BitmapFactory.decodeResource(resources, regionIdMapResId)
+        remember(resources, options.regionIdMapResId) {
+            BitmapFactory.decodeResource(resources, options.regionIdMapResId)
         }
     val regionTintColors =
         regions.associate { region ->
@@ -312,8 +316,8 @@ fun InteractiveGameMap(
         }
 
     val layoutMetrics =
-        remember(viewportSize, aspectRatio) {
-            createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = aspectRatio)
+        remember(viewportSize, options.aspectRatio) {
+            createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = options.aspectRatio)
         }
 
     Box(
@@ -371,7 +375,7 @@ fun InteractiveGameMap(
                     territoryOverlay = territoryRenderAssets.overlay,
                     layoutMetrics = layoutMetrics,
                     viewportState = viewportState,
-                    backgroundPainter = backgroundPainter,
+                    backgroundPainter = options.backgroundPainter,
                 )
             }
 

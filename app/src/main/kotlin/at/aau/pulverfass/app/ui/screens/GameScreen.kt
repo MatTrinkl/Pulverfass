@@ -54,6 +54,7 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.map.GameMapRegion
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
+import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
 
 private val HudSurfaceColor = Color.White
@@ -134,7 +135,7 @@ private fun GameScreenContent(
             onRegionSelected = { region ->
                 onUiStateChange(uiState.copy(selectedRegionId = region.id))
             },
-            backgroundPainter = mapPainter,
+            options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
             modifier = Modifier.fillMaxSize(),
         )
 

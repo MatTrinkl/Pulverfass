@@ -59,7 +59,10 @@ class InteractiveGameMapTest {
                     regions = listOf(region),
                     selectedRegionId = null,
                     onRegionSelected = { selectedRegions += it.id },
-                    backgroundPainter = ColorPainter(Color(0xFF0A3D62)),
+                    options =
+                        InteractiveGameMapOptions(
+                            backgroundPainter = ColorPainter(Color(0xFF0A3D62)),
+                        ),
                 )
             }
         }
