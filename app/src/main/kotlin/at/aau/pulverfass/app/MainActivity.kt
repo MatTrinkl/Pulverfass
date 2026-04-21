@@ -20,6 +20,7 @@ import androidx.navigation.navArgument
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.screens.GameScreen
+import at.aau.pulverfass.app.ui.screens.LoadGameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
@@ -59,6 +60,9 @@ class MainActivity : AppCompatActivity() {
                                     navController = navController,
                                     controller = lobbyController,
                                 )
+                            }
+                            composable(Screen.LoadGame.route) {
+                                LoadGameScreen(navController = navController)
                             }
                             // warteraum mit übergabe von parametern wie lobbycode & name
                             composable(

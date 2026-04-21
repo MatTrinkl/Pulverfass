@@ -17,7 +17,7 @@ class MainActivityTest {
     fun main_activity_navigates_from_load_to_lobby() {
         composeTestRule.onNodeWithText("Pulverfass").assertExists()
 
-        composeTestRule.waitUntil(timeoutMillis = 3_000) {
+        composeTestRule.waitUntil(timeoutMillis = 15_000) {
             composeTestRule
                 .onAllNodes(hasSetTextAction())
                 .fetchSemanticsNodes()

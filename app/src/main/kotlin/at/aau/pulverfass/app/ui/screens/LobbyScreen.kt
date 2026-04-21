@@ -96,6 +96,7 @@ fun LobbyScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         LobbyPrimaryActions(
+            navController = navController,
             isJoining = state.isJoining,
             playerName = state.playerName,
             lobbyCode = state.lobbyCode,
@@ -244,6 +245,7 @@ private fun ConnectionActions(
 
 @Composable
 private fun LobbyPrimaryActions(
+    navController: NavController,
     isJoining: Boolean,
     playerName: String,
     lobbyCode: String,
@@ -268,6 +270,15 @@ private fun LobbyPrimaryActions(
             ) {
                 Text(stringResource(id = R.string.join_lobby))
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = { navController.navigate(Screen.LoadGame.route) },
+            modifier = Modifier.fillMaxWidth(0.8f),
+        ) {
+            Text(stringResource(id = R.string.open_map_playground))
         }
     } else {
         Button(

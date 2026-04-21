@@ -82,7 +82,7 @@ class DefaultNetworkToLobbyEventMapperTest {
     }
 
     @Test
-    fun `ungueltige lobby payload kombination wird erkannt`() {
+    fun `ungültige lobby payload kombination wird erkannt`() {
         val request =
             DecodedNetworkRequest(
                 receivedPacket =

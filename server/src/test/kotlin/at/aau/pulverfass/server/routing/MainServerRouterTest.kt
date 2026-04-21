@@ -92,7 +92,7 @@ class MainServerRouterTest {
         }
 
     @Test
-    fun `ungueltige routingdaten erzeugen definierten fehlerpfad`() =
+    fun `ungültige routingdaten erzeugen definierten fehlerpfad`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)

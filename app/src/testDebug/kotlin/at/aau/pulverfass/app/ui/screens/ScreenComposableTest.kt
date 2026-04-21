@@ -3,8 +3,11 @@ package at.aau.pulverfass.app.ui.screens
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import kotlinx.coroutines.delay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,7 +39,14 @@ class ScreenComposableTest {
                     startDestination = Screen.Load.route,
                 ) {
                     composable(Screen.Load.route) {
-                        LoadScreen(navController)
+                        LoadScreen(
+                            navController = navController,
+                            preloadAssets = { _, onProgressChanged ->
+                                onProgressChanged(0, 1)
+                                delay(1_000)
+                                onProgressChanged(1, 1)
+                            },
+                        )
                     }
                     composable(Screen.Lobby.route) {
                         Text("Lobby destination")
@@ -47,7 +58,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Pulverfass").assertIsDisplayed()
         composeTestRule.onNodeWithText("v1.0.0").assertIsDisplayed()
 
-        composeTestRule.mainClock.advanceTimeBy(2_100)
+        composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Lobby destination").assertIsDisplayed()
@@ -70,6 +81,46 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Spielername eingeben").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lobby erstellen").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lobby beitreten").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Karte direkt testen").assertIsDisplayed()
+    }
+
+    @Test
+    fun load_game_screen_prepares_game_and_navigates_to_map() {
+        composeTestRule.mainClock.autoAdvance = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.LoadGame.route,
+                ) {
+                    composable(Screen.LoadGame.route) {
+                        LoadGameScreen(
+                            navController = navController,
+                            preloadGame = { _, onProgressChanged ->
+                                onProgressChanged(0, 1)
+                                delay(1_000)
+                                onProgressChanged(1, 1)
+                            },
+                        )
+                    }
+                    composable(Screen.Game.route) {
+                        Text("Game destination")
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Spiel wird vorbereitet").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Karte und Demo-Spielzustand werden geladen.",
+        ).assertIsDisplayed()
+
+        composeTestRule.mainClock.advanceTimeBy(1_100)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Game destination").assertIsDisplayed()
     }
 
     @Test
@@ -109,5 +160,24 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("Lobby: AB12").assertIsDisplayed()
         composeTestRule.onNodeWithText("Du bist der Host").assertIsDisplayed()
         composeTestRule.onNodeWithText("Carol").assertIsDisplayed()
+    }
+
+    @Test
+    fun game_screen_shows_dynamic_map_ui_and_reacts_to_actions() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreen()
+            }
+        }
+
+        composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Verstärken")
+        composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 7")
+        composeTestRule.onNodeWithText("Karten").performClick()
+        composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
     }
 }
