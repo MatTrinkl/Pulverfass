@@ -51,6 +51,8 @@ class MessageTypeTest {
     @Test
     fun `should contain expected enum values`() {
         assertTrue(MessageType.entries.contains(MessageType.CONNECTION_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.CONNECTION_RECONNECT_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.CONNECTION_RECONNECT_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_CREATE_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_ENDED_BROADCAST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_CREATE_ERROR_RESPONSE))

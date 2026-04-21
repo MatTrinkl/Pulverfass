@@ -19,6 +19,12 @@ enum class MessageType(val id: Int) {
     /** Antwort des Servers auf eine Login-Anfrage. */
     CONNECTION_RESPONSE(2),
 
+    /** Anfrage zum Wiederverbinden einer bestehenden Session. */
+    CONNECTION_RECONNECT_REQUEST(26),
+
+    /** Antwort des Servers auf einen Reconnect-Versuch. */
+    CONNECTION_RECONNECT_RESPONSE(27),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 
