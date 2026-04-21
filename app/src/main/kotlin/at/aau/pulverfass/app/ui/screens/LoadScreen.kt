@@ -27,6 +27,7 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.shared.Constants
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,6 +57,9 @@ fun LoadScreen(
                 }
             }
         }.onFailure { error ->
+            if (error is CancellationException) {
+                throw error
+            }
             withContext(Dispatchers.Main.immediate) {
                 loadError = error.message ?: "Assets konnten nicht geladen werden."
             }
