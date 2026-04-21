@@ -116,6 +116,18 @@ class GameMapTest {
     }
 
     @Test
+    fun find_region_by_east_siberia_id_color_returns_east_siberia() {
+        val region =
+            findRegionByIdColor(
+                regions = PulverfassMapDefaults.regions,
+                pixelRgb = 0x00008080,
+            )
+
+        assertNotNull(region)
+        assertEquals("east_siberia", region.id)
+    }
+
+    @Test
     fun find_region_by_antialiased_or_unknown_color_returns_null() {
         assertNull(
             findRegionByIdColor(
