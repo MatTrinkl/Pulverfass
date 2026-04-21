@@ -10,7 +10,14 @@ import at.aau.pulverfass.shared.ids.SessionToken
 data class Session(
     val sessionToken: SessionToken,
     val connectionId: ConnectionId?,
+    val expiresAtEpochMillis: Long,
+    val revokedAtEpochMillis: Long? = null,
 ) {
     val isConnected: Boolean
         get() = connectionId != null
+
+    val isRevoked: Boolean
+        get() = revokedAtEpochMillis != null
+
+    fun isExpired(nowEpochMillis: Long): Boolean = nowEpochMillis >= expiresAtEpochMillis
 }

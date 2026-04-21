@@ -5,6 +5,7 @@ import at.aau.pulverfass.server.ids.SessionConnectionNotFoundException
 import at.aau.pulverfass.server.ids.SessionTokenNotFoundException
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -15,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
  * eine neue [ConnectionId] gebunden werden.
  */
 class SessionManager(
+    private val sessionTtlMillis: Long = DEFAULT_SESSION_TTL_MILLIS,
+    private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
     private val tokenFactory: () -> SessionToken = {
         SessionToken(UUID.randomUUID().toString())
     },
@@ -22,6 +25,12 @@ class SessionManager(
     private val sessionsByToken = ConcurrentHashMap<SessionToken, Session>()
     private val tokensByConnection = ConcurrentHashMap<ConnectionId, SessionToken>()
     private val lifecycleLock = Any()
+
+    init {
+        require(sessionTtlMillis > 0) {
+            "sessionTtlMillis muss positiv sein, war aber $sessionTtlMillis."
+        }
+    }
 
     /**
      * Erstellt eine neue Session und bindet sie sofort an die angegebene Verbindung.
@@ -38,7 +47,12 @@ class SessionManager(
                     continue
                 }
 
-                val session = Session(sessionToken = token, connectionId = connectionId)
+                val session =
+                    Session(
+                        sessionToken = token,
+                        connectionId = connectionId,
+                        expiresAtEpochMillis = expiresAtEpochMillis(),
+                    )
                 sessionsByToken[token] = session
                 tokensByConnection[connectionId] = token
                 return session
@@ -63,7 +77,11 @@ class SessionManager(
                 tokensByConnection.remove(previousConnectionId)
             }
 
-            val updated = current.copy(connectionId = connectionId)
+            val updated =
+                current.copy(
+                    connectionId = connectionId,
+                    expiresAtEpochMillis = expiresAtEpochMillis(),
+                )
             sessionsByToken[sessionToken] = updated
             tokensByConnection[connectionId] = sessionToken
             updated
@@ -81,6 +99,19 @@ class SessionManager(
     fun getByToken(sessionToken: SessionToken): Session? = sessionsByToken[sessionToken]
 
     /**
+     * Prüft, ob ein Token aktuell für einen Reconnect verwendbar ist.
+     */
+    fun reconnectErrorFor(sessionToken: SessionToken): ReconnectErrorCode? =
+        synchronized(lifecycleLock) {
+            val session = sessionsByToken[sessionToken] ?: return ReconnectErrorCode.TOKEN_INVALID
+            when {
+                session.isRevoked -> ReconnectErrorCode.TOKEN_REVOKED
+                session.isExpired(nowEpochMillis()) -> ReconnectErrorCode.TOKEN_EXPIRED
+                else -> null
+            }
+        }
+
+    /**
      * Liefert die Session zu einer aktiven Verbindung oder wirft.
      */
     fun requireByConnectionId(connectionId: ConnectionId): Session =
@@ -93,6 +124,34 @@ class SessionManager(
         sessionsByToken[sessionToken] ?: throw SessionTokenNotFoundException(sessionToken)
 
     /**
+     * Invalidiert eine Session dauerhaft für spätere Reconnect-Versuche.
+     */
+    fun invalidate(sessionToken: SessionToken): Session? =
+        synchronized(lifecycleLock) {
+            val session = sessionsByToken[sessionToken] ?: return null
+            session.connectionId?.let(tokensByConnection::remove)
+            val invalidated =
+                session.copy(
+                    connectionId = null,
+                    revokedAtEpochMillis = nowEpochMillis(),
+                )
+            sessionsByToken[sessionToken] = invalidated
+            invalidated
+        }
+
+    /**
+     * Entfernt die Session einer Verbindung vollständig.
+     *
+     * Diese Operation wird für provisorische Sessions benötigt, die durch einen
+     * erfolgreichen Reconnect ersetzt werden.
+     */
+    fun removeByConnectionId(connectionId: ConnectionId): Session? =
+        synchronized(lifecycleLock) {
+            val sessionToken = tokensByConnection.remove(connectionId) ?: return null
+            sessionsByToken.remove(sessionToken)
+        }
+
+    /**
      * Löst die aktuelle Verbindung von einer Session, behält den Token aber.
      */
     fun detachConnection(connectionId: ConnectionId): Session? =
@@ -103,4 +162,10 @@ class SessionManager(
             sessionsByToken[sessionToken] = detached
             detached
         }
+
+    private fun expiresAtEpochMillis(): Long = nowEpochMillis() + sessionTtlMillis
+
+    companion object {
+        const val DEFAULT_SESSION_TTL_MILLIS: Long = 5 * 60 * 1000
+    }
 }
