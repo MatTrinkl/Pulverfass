@@ -26,6 +26,7 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -59,6 +60,9 @@ fun LoadGameScreen(
                 }
             }
         }.onFailure { error ->
+            if (error is CancellationException) {
+                throw error
+            }
             withContext(Dispatchers.Main.immediate) {
                 loadError = error.message ?: "Spiel konnte nicht geladen werden."
             }

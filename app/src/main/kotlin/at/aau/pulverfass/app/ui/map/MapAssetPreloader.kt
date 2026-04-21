@@ -10,8 +10,9 @@ import kotlinx.coroutines.withContext
 /**
  * Lädt die Karten-Assets vor, bevor die App in Lobby oder Spielbildschirm wechselt.
  *
- * Die Bitmaps werden nur dekodiert und direkt wieder freigegeben. Dadurch fällt der
- * Ladevorgang früh fehl, wenn eine Karte oder Territory-Maske nicht dekodierbar ist.
+ * Es werden nur die Bildabmessungen gelesen. Dadurch fällt der Ladevorgang früh
+ * fehl, wenn eine Karte oder Territory-Maske nicht als Bitmap lesbar ist, ohne die
+ * kompletten Pixel-Daten in den Speicher zu laden.
  */
 object MapAssetPreloader {
     // Enthält Weltkarte, Farb-ID-Karte und alle Territory-Masken der Demo-Karte.
@@ -33,7 +34,7 @@ object MapAssetPreloader {
     ) {
         withContext(Dispatchers.Default) {
             mapAssetIds.forEachIndexed { index, assetId ->
-                decodeAndRelease(resources = resources, assetId = assetId)
+                readImageBounds(resources = resources, assetId = assetId)
                 withContext(Dispatchers.Main.immediate) {
                     onProgressChanged(index + 1, mapAssetIds.size)
                 }
@@ -42,12 +43,21 @@ object MapAssetPreloader {
     }
 
     /**
-     * Dekodiert ein Drawable einmal und gibt das erzeugte Bitmap sofort wieder frei.
+     * Liest nur die Bitmap-Abmessungen eines Drawables, ohne Pixel-Daten zu allokieren.
      */
-    private fun decodeAndRelease(
+    private fun readImageBounds(
         resources: Resources,
         @DrawableRes assetId: Int,
     ) {
-        BitmapFactory.decodeResource(resources, assetId)?.recycle()
+        val options =
+            BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+
+        BitmapFactory.decodeResource(resources, assetId, options)
+
+        check(options.outWidth > 0 && options.outHeight > 0) {
+            "Karten-Asset konnte nicht dekodiert werden: $assetId"
+        }
     }
 }
