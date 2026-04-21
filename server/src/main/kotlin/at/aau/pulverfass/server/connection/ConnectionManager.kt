@@ -67,6 +67,16 @@ class ConnectionManager {
     }
 
     /**
+     * Schließt eine bekannte Verbindung serverseitig.
+     */
+    suspend fun close(
+        connectionId: ConnectionId,
+        reason: String?,
+    ) {
+        remove(connectionId)?.close(reason) ?: throw ConnectionNotFoundException(connectionId)
+    }
+
+    /**
      * Sendet rohe Bytes an mehrere bekannte Verbindungen.
      *
      * Doppelte IDs werden innerhalb eines Aufrufs nur einmal bedient.
