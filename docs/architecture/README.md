@@ -6,6 +6,7 @@ System design, integration patterns, and network protocols.
 
 - **lobby-event-system.md** - Lobby event flow and state management
 - **network-api-integration.md** - Server API and routing integration
+- **reconnect-session-flow.md** - SessionToken-basierter Reconnect-Ablauf
 
 ## 🎯 When to Read
 

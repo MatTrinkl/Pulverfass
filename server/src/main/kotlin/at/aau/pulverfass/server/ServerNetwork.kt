@@ -34,7 +34,6 @@ class ServerNetwork(
     internal val packetReceiver: PacketReceiver = PacketReceiver(),
     internal val connectionManager: ConnectionManager = transport.connectionManager,
     internal val sessionManager: SessionManager = SessionManager(),
-    private val reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null },
 ) : Network<ConnectionId> {
     init {
         require(connectionManager === transport.connectionManager) {
@@ -45,6 +44,8 @@ class ServerNetwork(
     private val logger = LoggerFactory.getLogger(ServerNetwork::class.java)
     private val sender: PacketSender = PacketSender(connectionManager)
     private val _events = MutableSharedFlow<Network.Event<ConnectionId>>(extraBufferCapacity = 64)
+    private var reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null }
+    private var onSessionRemoved: (SessionToken) -> Unit = {}
 
     /**
      * High-Level-Eventstrom des Servers.
@@ -53,6 +54,17 @@ class ServerNetwork(
      * Fehler, aber keine Low-Level-WebSocket-Frames.
      */
     override val events: SharedFlow<Network.Event<ConnectionId>> = _events.asSharedFlow()
+
+    /**
+     * Installiert optionale Hooks für Reconnect-Kontext und Session-Cleanup.
+     */
+    fun installReconnectHooks(
+        reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null },
+        onSessionRemoved: (SessionToken) -> Unit = {},
+    ) {
+        this.reconnectContextProvider = reconnectContextProvider
+        this.onSessionRemoved = onSessionRemoved
+    }
 
     /**
      * Registriert eine neue WebSocket-Verbindung im Transport und emittiert das
@@ -186,7 +198,8 @@ class ServerNetwork(
             return
         }
 
-        sessionManager.removeByConnectionId(connectionId)
+        val removedSession = sessionManager.removeByConnectionId(connectionId)
+        removedSession?.let { removed -> onSessionRemoved(removed.sessionToken) }
         sessionManager.bindExisting(payload.sessionToken, connectionId)
 
         if (previousConnectionId != null && previousConnectionId != connectionId) {
