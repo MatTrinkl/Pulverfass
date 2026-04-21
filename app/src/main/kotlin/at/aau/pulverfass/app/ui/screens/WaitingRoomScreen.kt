@@ -59,7 +59,7 @@ fun WaitingRoomScreen(
         HostActions(
             isHost = isHost,
             playersCount = players.size,
-            onStartGame = { navController.navigate(Screen.Game.route) },
+            onStartGame = { navController.navigate(Screen.LoadGame.route) },
         )
 
         Spacer(modifier = Modifier.height(12.dp))
