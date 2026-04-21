@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -161,6 +162,158 @@ class GameMapTest {
         assertNotNull(center)
         assertFloatEquals(0.5f, center.x)
         assertFloatEquals(0.5f, center.y)
+    }
+
+    @Test
+    fun create_map_layout_metrics_returns_zero_metrics_for_zero_viewport() {
+        val metrics =
+            createMapLayoutMetrics(
+                viewportSize = IntSize.Zero,
+                aspectRatio = mapAspectRatio,
+            )
+
+        assertEquals(Size.Zero, metrics.viewportSize)
+        assertEquals(Size.Zero, metrics.mapSize)
+        assertEquals(Offset.Zero, metrics.mapOrigin)
+    }
+
+    @Test
+    fun update_viewport_for_gesture_returns_current_when_map_size_is_zero() {
+        val current = MapViewportState(scale = 1.25f, offset = Offset(10f, -8f))
+        val metrics =
+            MapLayoutMetrics(
+                viewportSize = Size(400f, 300f),
+                mapSize = Size.Zero,
+                mapOrigin = Offset.Zero,
+            )
+
+        val updated =
+            updateViewportForGesture(
+                current = current,
+                centroid = Offset(100f, 100f),
+                pan = Offset(50f, 50f),
+                zoomChange = 3f,
+                layoutMetrics = metrics,
+            )
+
+        assertEquals(current, updated)
+    }
+
+    @Test
+    fun update_viewport_for_gesture_clamps_zoom_to_limits() {
+        val metrics =
+            MapLayoutMetrics(
+                viewportSize = Size(1000f, 600f),
+                mapSize = Size(1132.244f, 600f),
+                mapOrigin = Offset(-66.122f, 0f),
+            )
+
+        val zoomedOut =
+            updateViewportForGesture(
+                current = MapViewportState(scale = 1f, offset = Offset.Zero),
+                centroid = Offset(500f, 300f),
+                pan = Offset.Zero,
+                zoomChange = 0.05f,
+                layoutMetrics = metrics,
+            )
+        val zoomedIn =
+            updateViewportForGesture(
+                current = MapViewportState(scale = 5f, offset = Offset.Zero),
+                centroid = Offset(500f, 300f),
+                pan = Offset.Zero,
+                zoomChange = 2f,
+                layoutMetrics = metrics,
+            )
+
+        assertFloatEquals(1f, zoomedOut.scale)
+        assertFloatEquals(5f, zoomedIn.scale)
+    }
+
+    @Test
+    fun screen_offset_to_normalized_map_point_returns_null_for_zero_map_size() {
+        val normalized =
+            screenOffsetToNormalizedMapPoint(
+                screenPoint = Offset(20f, 30f),
+                layoutMetrics =
+                    MapLayoutMetrics(
+                        viewportSize = Size(100f, 100f),
+                        mapSize = Size.Zero,
+                        mapOrigin = Offset.Zero,
+                    ),
+                viewportState = MapViewportState(),
+            )
+
+        assertNull(normalized)
+    }
+
+    @Test
+    fun screen_offset_to_image_pixel_clamps_to_image_edges() {
+        val pixel =
+            screenOffsetToImagePixel(
+                screenPoint = Offset(1000f, 600f),
+                layoutMetrics =
+                    MapLayoutMetrics(
+                        viewportSize = Size(1000f, 600f),
+                        mapSize = Size(1000f, 600f),
+                        mapOrigin = Offset.Zero,
+                    ),
+                viewportState = MapViewportState(),
+                imageSize = IntSize(4, 3),
+            )
+
+        assertNotNull(pixel)
+        assertEquals(3, pixel.x)
+        assertEquals(2, pixel.y)
+    }
+
+    @Test
+    fun map_point_to_screen_offset_returns_unspecified_for_zero_map_size() {
+        val result =
+            mapPointToScreenOffset(
+                point = MapPoint(0.5f, 0.5f),
+                layoutMetrics =
+                    MapLayoutMetrics(
+                        viewportSize = Size(200f, 100f),
+                        mapSize = Size.Zero,
+                        mapOrigin = Offset.Zero,
+                    ),
+                viewportState = MapViewportState(),
+            )
+
+        assertTrue(result.x.isNaN() && result.y.isNaN())
+    }
+
+    @Test
+    fun clamp_offset_returns_zero_when_scaled_map_is_smaller_than_viewport() {
+        val clamped =
+            clampOffset(
+                offset = Offset(500f, -500f),
+                layoutMetrics =
+                    MapLayoutMetrics(
+                        viewportSize = Size(1000f, 600f),
+                        mapSize = Size(500f, 300f),
+                        mapOrigin = Offset(250f, 150f),
+                    ),
+                scale = 1f,
+            )
+
+        assertEquals(Offset.Zero, clamped)
+    }
+
+    @Test
+    fun calculate_mask_center_returns_null_without_visible_pixels() {
+        val center = calculateMaskCenter(width = 4, height = 4) { _, _ -> 0 }
+        assertNull(center)
+    }
+
+    @Test
+    fun calculate_mask_center_requires_positive_dimensions() {
+        assertFailsWith<IllegalArgumentException> {
+            calculateMaskCenter(width = 0, height = 1) { _, _ -> 255 }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            calculateMaskCenter(width = 1, height = 0) { _, _ -> 255 }
+        }
     }
 }
 
