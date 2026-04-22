@@ -26,7 +26,7 @@ class DefaultLobbyEventReducerTest {
     private val reducer = DefaultLobbyEventReducer()
 
     @Test
-    fun `player joined verÃ¤ndert state korrekt`() {
+    fun `player joined verändert state korrekt`() {
         val lobbyCode = LobbyCode("AB12")
         val playerId = PlayerId(1)
         val context =
@@ -52,7 +52,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `turn ended verÃ¤ndert turn information korrekt`() {
+    fun `turn ended verändert turn information korrekt`() {
         val lobbyCode = LobbyCode("CD34")
         val firstPlayer = PlayerId(1)
         val secondPlayer = PlayerId(2)
@@ -73,7 +73,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `ungueltige aktion wird erkannt`() {
+    fun `ungültige aktion wird erkannt`() {
         val lobbyCode = LobbyCode("EF56")
         val state = GameState.initial(lobbyCode)
 

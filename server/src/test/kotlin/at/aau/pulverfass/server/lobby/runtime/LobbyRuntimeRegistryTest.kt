@@ -76,7 +76,7 @@ class LobbyRuntimeRegistryTest {
         }
 
     @Test
-    fun `zwei lobbys koennen parallel events verarbeiten`() =
+    fun `zwei lobbys können parallel events verarbeiten`() =
         runBlocking {
             val blockedLobby = LobbyCode("CD34")
             val freeLobby = LobbyCode("EF56")

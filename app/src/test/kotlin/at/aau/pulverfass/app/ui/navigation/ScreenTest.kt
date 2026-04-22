@@ -24,6 +24,12 @@ class ScreenTest {
     }
 
     @Test
+    fun `load game screen has correct route`() {
+        // prüft die route für spielvorbereitung
+        assertEquals("load_game", Screen.LoadGame.route)
+    }
+
+    @Test
     fun `game screen has correct route`() {
         // prüft die route für hauptspiel
         assertEquals("game", Screen.Game.route)

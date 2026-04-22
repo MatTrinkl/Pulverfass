@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class MainServerLobbyRoutingIntegrationTest {
     @Test
-    fun `server websocket packets werden ueber router in mehrere lobbys korrekt verteilt`() =
+    fun `server websocket packets werden über router in mehrere lobbys korrekt verteilt`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
