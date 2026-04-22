@@ -21,6 +21,10 @@ class GameStateDeliveryDispatcher(
     private val lobbyMembers: (LobbyCode) -> List<PlayerId>,
     private val connectionIdResolver: (PlayerId) -> ConnectionId?,
 ) {
+    /**
+     * Sendet eine öffentliche GameState-Payload gezielt an eine konkrete
+     * Verbindung, ohne selbst Autorisierungslogik auszuführen.
+     */
     suspend fun sendPublicState(
         connectionId: ConnectionId,
         payload: PublicGameStatePayload,
@@ -28,6 +32,13 @@ class GameStateDeliveryDispatcher(
         sendPayload(connectionId, payload)
     }
 
+    /**
+     * Verteilt eine öffentliche GameState-Payload an alle aktuell auflösbaren
+     * Verbindungen der Lobby.
+     *
+     * Nicht verbundene Spieler werden still übersprungen, weil dieser Layer nur
+     * Delivery und keine Presence-Fehler modelliert.
+     */
     suspend fun broadcastPublicState(
         lobbyCode: LobbyCode,
         payload: PublicGameStatePayload,
@@ -37,6 +48,12 @@ class GameStateDeliveryDispatcher(
         }
     }
 
+    /**
+     * Convenience-API für den häufigsten öffentlichen Delta-Broadcast.
+     *
+     * [events] muss bereits rein öffentlich sein; die eigentliche Guard-Logik
+     * liegt im [PublicGameStateBuilder].
+     */
     suspend fun broadcastPublicDelta(
         lobbyCode: LobbyCode,
         fromVersion: Long,
@@ -55,6 +72,9 @@ class GameStateDeliveryDispatcher(
         )
     }
 
+    /**
+     * Sendet eine private Payload direkt an eine bekannte Verbindung.
+     */
     suspend fun sendPrivateState(
         connectionId: ConnectionId,
         payload: PrivateGameStatePayload,
@@ -62,6 +82,13 @@ class GameStateDeliveryDispatcher(
         sendPayload(connectionId, payload)
     }
 
+    /**
+     * Löst die Verbindung des [PrivateGameStatePayload.recipientPlayerId] auf
+     * und sendet die Payload nur dann, wenn der Empfänger tatsächlich Teil der
+     * angegebenen Lobby ist.
+     *
+     * Ist der Empfänger aktuell nicht verbunden, wird bewusst nichts gesendet.
+     */
     suspend fun sendPrivateState(
         lobbyCode: LobbyCode,
         payload: PrivateGameStatePayload,

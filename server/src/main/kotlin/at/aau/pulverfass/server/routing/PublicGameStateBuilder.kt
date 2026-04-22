@@ -29,6 +29,12 @@ import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
  * öffentliche DTOs gelangen.
  */
 class PublicGameStateBuilder {
+    /**
+     * Baut einen vollständigen öffentlichen Snapshot des aktuellen GameStates.
+     *
+     * @throws IllegalStateException wenn der GameState noch keinen Turn-State
+     * oder keine MapDefinition enthält
+     */
     fun buildSnapshot(gameState: GameState): PublicGameStateSnapshot {
         val resolvedTurnState =
             gameState.resolvedTurnState
@@ -45,6 +51,10 @@ class PublicGameStateBuilder {
         )
     }
 
+    /**
+     * Baut die ältere Map-spezifische Snapshot-Response aus derselben
+     * öffentlichen Projektion wie Full-Snapshots.
+     */
     fun buildMapGetResponse(gameState: GameState): MapGetResponse {
         val mapProjection = buildMapProjection(gameState)
 
@@ -58,12 +68,20 @@ class PublicGameStateBuilder {
         )
     }
 
+    /** Baut eine Catch-up-Response als vollständigen öffentlichen Snapshot. */
     fun buildCatchUpResponse(gameState: GameState): GameStateCatchUpResponse =
         GameStateCatchUpResponse.from(buildSnapshot(gameState))
 
+    /** Baut den öffentlichen Turnwechsel-/Self-Heal-Broadcast. */
     fun buildSnapshotBroadcast(gameState: GameState): GameStateSnapshotBroadcast =
         GameStateSnapshotBroadcast.from(buildSnapshot(gameState))
 
+    /**
+     * Baut ein Delta für genau ein fachliches Event.
+     *
+     * Für Einzelevents ist `fromVersion == toVersion`, weil die Version bereits
+     * nach Anwendung des Events im [currentState] enthalten ist.
+     */
     fun buildDelta(
         lobbyCode: LobbyCode,
         event: LobbyEvent,
@@ -77,6 +95,12 @@ class PublicGameStateBuilder {
             payloads = buildPublicPayloads(lobbyCode, event, previousState, currentState),
         )
 
+    /**
+     * Baut ein Delta aus bereits aufbereiteter sichtbarer Payload-Liste.
+     *
+     * Nicht-öffentliche Payloads werden aktiv abgewiesen, damit keine privaten
+     * Inhalte in öffentliche Delta-Broadcasts geraten.
+     */
     fun buildDelta(
         lobbyCode: LobbyCode,
         fromVersion: Long,
@@ -102,6 +126,14 @@ class PublicGameStateBuilder {
         )
     }
 
+    /**
+     * Leitet aus einem Domain-Event die sichtbaren öffentlichen
+     * Netzwerk-Payloads ab.
+     *
+     * Die Funktion enthält bewusst auch Fallback-Projektionen für Fälle, in
+     * denen kein direkt sendbares Event vorliegt, der öffentliche Turn-State
+     * sich aber trotzdem geändert hat.
+     */
     fun buildPublicPayloads(
         lobbyCode: LobbyCode,
         event: LobbyEvent,

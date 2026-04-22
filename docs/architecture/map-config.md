@@ -71,7 +71,7 @@ Bei Verstößen bricht der Loader deterministisch mit einer `MapConfigValidation
 ## Runtime-Integration
 
 - Der Server lädt die Default-Map beim Startup zentral über `ClasspathMapDefinitionRepository`.
-- `Application.installLobbyRuntime(...)` injiziert diese Definition in den `LobbyManager`.
+- `Application.moduleWithLobbyRuntime(...)` erstellt einen `LobbyManager` mit `initialStateFactory`, die `GameState.initial(lobbyCode, mapDefinition)` verwendet.
 - Neue Lobbys starten dadurch deterministisch mit `GameState.initial(lobbyCode, mapDefinition)`.
 - `territoryStates` enthalten nur den mutierbaren Zustand (`ownerId`, `troopCount`).
 - Adjacency bleibt readonly in der `MapDefinition` und wird im Runtime-Code ausschließlich über `edges` abgefragt.
@@ -95,8 +95,10 @@ Bei Verstößen bricht der Loader deterministisch mit einer `MapConfigValidation
 
 ## Reconnect
 
-- Der minimale Reconnect-Pfad läuft aktuell über einen vollständigen Snapshot via `MapGetRequest` / `MapGetResponse`.
+- `MapGetRequest` / `MapGetResponse` liefern einen vollständigen öffentlichen Map-Snapshot.
+- Für Desync- und Reconnect-Fälle existiert zusätzlich `GameStateCatchUpRequest` / `GameStateCatchUpResponse` als vollständiger öffentlicher Catch-up-Snapshot.
 - `stateVersion` ist eine explizite, server-authoritative Revision im `GameState` und wird bei jeder erfolgreichen Event-Anwendung monoton erhöht.
 - `processedEventCount` bleibt separat als technischer Zähler für Runtime/Tests bestehen und ist nicht mehr die fachliche Definition von `stateVersion`.
 - Delta-Broadcasts für Map-Events tragen ebenfalls `stateVersion`, damit Clients Reihenfolge und Snapshot-Stände vergleichen können.
-- Ein Catch-up per Event-Replay seit Version ist noch nicht implementiert; bei Reconnect ist der Snapshot die autoritative Quelle.
+- Ein Catch-up per Event-Replay seit Version ist bewusst noch nicht implementiert; der autoritative Rücksetzpfad ist aktuell immer ein vollständiger Snapshot.
+- Der Server hält für Diagnosezwecke einen `RoundHistoryBuffer` über die letzten zwei Runden, nutzt diesen aber aktuell noch nicht als öffentliches Replay-API.

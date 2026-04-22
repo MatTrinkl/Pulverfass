@@ -144,9 +144,9 @@ shared/src/test/kotlin/at/aau/pulverfass/shared/network/message/
 
 | Document | When to Use |
 |----------|------------|
-| `docs/NETWORK_MESSAGES.md` | Full reference, detailed explanation |
-| `docs/SERIALIZER_TEMPLATE.kt` | Copy-paste template with variations |
-| `docs/PR_REVIEW_CHECKLIST.md` | Before merging your PR |
+| `docs/network-messages/CONVENTIONS.md` | Full reference, detailed explanation |
+| `docs/network-messages/TEMPLATE.kt` | Copy-paste template with variations |
+| `docs/checklists/PR_REVIEW.md` | Before merging your PR |
 | `NetworkSerializerContractTest.kt` | Validates your implementation |
 
 ---
@@ -196,7 +196,7 @@ Before you merge:
 
 ## Questions?
 
-See `docs/NETWORK_MESSAGES.md` → FAQ section
+See `docs/network-messages/CONVENTIONS.md` → FAQ section
 
 **Common questions:**
 - "Can I reorder fields?" → NO

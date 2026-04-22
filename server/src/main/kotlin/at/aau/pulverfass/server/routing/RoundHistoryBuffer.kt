@@ -11,21 +11,30 @@ import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
  * und speichert bewusst keine privaten Nutzdaten.
  */
 data class RoundHistory(
+    /** `turnCount` der beschriebenen Runde. */
     val roundIndex: Int,
+    /** Kleinste bekannte öffentliche Version innerhalb der Runde. */
     val startStateVersion: Long,
+    /** Größte bekannte öffentliche Version innerhalb der Runde. */
     val endStateVersion: Long,
+    /** Alle in dieser Runde gesendeten Delta-Metadaten. */
     val deltas: List<RoundDeltaMetadata>,
+    /** Alle in dieser Runde gesendeten Phasenmarker. */
     val phaseBoundaries: List<PhaseBoundaryEvent>,
+    /** Alle beobachteten kombinierten Turn-State-Updates der Runde. */
     val turnStateChanges: List<RoundTurnStateChange>,
+    /** Snapshot-Marker für Self-Heal- oder Catch-up-Snapshots. */
     val snapshots: List<RoundSnapshotMetadata>,
 )
 
+/** Metadaten eines einzelnen öffentlichen Deltas innerhalb einer Runde. */
 data class RoundDeltaMetadata(
     val fromVersion: Long,
     val toVersion: Long,
     val eventCount: Int,
 )
 
+/** Projektion eines kombinierten Turn-State-Updates für den History-Buffer. */
 data class RoundTurnStateChange(
     val stateVersion: Long,
     val activePlayerId: PlayerId,
@@ -54,16 +63,25 @@ data class RoundTurnStateChange(
     }
 }
 
+/** Metadaten eines gesendeten Vollsnapshots innerhalb einer Runde. */
 data class RoundSnapshotMetadata(
     val stateVersion: Long,
     val trigger: RoundSnapshotTrigger,
 )
 
+/** Auslöser, der zur Speicherung eines Snapshot-Markers geführt hat. */
 enum class RoundSnapshotTrigger {
     TURN_CHANGE_BROADCAST,
     CATCH_UP_RESPONSE,
 }
 
+/**
+ * Ring-Buffer-artiger Speicher für öffentliche Rundenmetadaten der letzten
+ * [maxRounds] Runden.
+ *
+ * Der Buffer ist absichtlich flüchtig und nur für Diagnose, Logging und
+ * zukünftige Erweiterungen wie ein mögliches `events-since`-API gedacht.
+ */
 class RoundHistoryBuffer(
     private val maxRounds: Int = 2,
 ) {
@@ -75,6 +93,7 @@ class RoundHistoryBuffer(
 
     private val histories = linkedMapOf<Int, MutableRoundHistory>()
 
+    /** Fügt ein öffentliches Delta der angegebenen Runde hinzu. */
     @Synchronized
     fun recordDelta(
         roundIndex: Int,
@@ -95,6 +114,7 @@ class RoundHistoryBuffer(
         }
     }
 
+    /** Fügt einen Phasenwechsel-Marker der zugehörigen Runde hinzu. */
     @Synchronized
     fun recordBoundary(event: PhaseBoundaryEvent) {
         round(event.turnCount).apply {
@@ -103,6 +123,7 @@ class RoundHistoryBuffer(
         }
     }
 
+    /** Fügt ein kombiniertes Turn-State-Update der zugehörigen Runde hinzu. */
     @Synchronized
     fun recordTurnStateChange(
         stateVersion: Long,
@@ -114,6 +135,7 @@ class RoundHistoryBuffer(
         }
     }
 
+    /** Fügt einen Snapshot-Marker der angegebenen Runde hinzu. */
     @Synchronized
     fun recordSnapshot(
         roundIndex: Int,
@@ -126,9 +148,11 @@ class RoundHistoryBuffer(
         }
     }
 
+    /** Liefert eine immutable Sicht auf die aktuell gespeicherten Runden. */
     @Synchronized
     fun history(): List<RoundHistory> = histories.values.map(MutableRoundHistory::toImmutable)
 
+    /** Formatiert den Buffer kompakt für Logging und Diagnoseausgaben. */
     @Synchronized
     fun describe(): String =
         history().joinToString(separator = " | ") { history ->
