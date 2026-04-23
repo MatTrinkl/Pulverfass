@@ -116,14 +116,12 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
         val remainingTargetTroops = targetTroops - command.defenderLosses
         return if (remainingTargetTroops > 0) {
             createResolvedAttackEventsWithoutCapture(
-                state = state,
                 command = command,
                 sourceTroops = sourceTroops,
                 remainingTargetTroops = remainingTargetTroops,
             )
         } else {
             createResolvedAttackEventsWithCapture(
-                state = state,
                 command = command,
                 sourceTroops = sourceTroops,
             )
@@ -131,7 +129,6 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
     }
 
     private fun createResolvedAttackEventsWithoutCapture(
-        state: GameState,
         command: AttackCommand,
         sourceTroops: Int,
         remainingTargetTroops: Int,
@@ -167,7 +164,6 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
     }
 
     private fun createResolvedAttackEventsWithCapture(
-        state: GameState,
         command: AttackCommand,
         sourceTroops: Int,
     ): List<LobbyEvent> {

@@ -35,7 +35,14 @@ object TurnStateMachine {
     ): TurnState? {
         val normalizedOrder = TurnOrderPolicy.normalize(turnOrder)
         val resolvedActivePlayer = activePlayer ?: normalizedOrder.firstOrNull() ?: return null
-        val resolvedStartPlayer = normalizedOrder.firstOrNull() ?: resolvedActivePlayer
+        val resolvedStartPlayer =
+            normalizedOrder.firstOrNull().let { firstPlayer ->
+                if (firstPlayer != null) {
+                    firstPlayer
+                } else {
+                    resolvedActivePlayer
+                }
+            }
 
         return TurnState(
             activePlayerId = resolvedActivePlayer,

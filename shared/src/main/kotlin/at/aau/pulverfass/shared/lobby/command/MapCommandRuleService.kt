@@ -7,7 +7,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
  * Bewertet Map-Commands gegen den aktuellen State und erzeugt daraus
  * deterministische Domain-Events.
  */
-interface MapCommandRuleService {
+fun interface MapCommandRuleService {
     /**
      * Übersetzt einen validen Command in die resultierende Event-Sequenz.
      *

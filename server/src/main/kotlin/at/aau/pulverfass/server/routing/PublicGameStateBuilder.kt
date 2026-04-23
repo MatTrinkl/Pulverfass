@@ -159,14 +159,10 @@ class PublicGameStateBuilder {
             }
 
             when (event) {
-                is TerritoryOwnerChangedEvent ->
-                    add(
-                        event.copy(stateVersion = currentState.stateVersion),
-                    )
-                is TerritoryTroopsChangedEvent ->
-                    add(
-                        event.copy(stateVersion = currentState.stateVersion),
-                    )
+                is TerritoryOwnerChangedEvent,
+                is TerritoryTroopsChangedEvent,
+                ->
+                    add(versionedTerritoryEvent(event, currentState.stateVersion))
                 is TurnStateUpdatedEvent -> add(event)
                 else -> {
                     if (previousState.turnState != currentState.turnState) {
@@ -177,6 +173,19 @@ class PublicGameStateBuilder {
                     }
                 }
             }
+        }
+
+    private fun versionedTerritoryEvent(
+        event: LobbyEvent,
+        stateVersion: Long,
+    ): PublicGameEvent =
+        when (event) {
+            is TerritoryOwnerChangedEvent -> event.copy(stateVersion = stateVersion)
+            is TerritoryTroopsChangedEvent -> event.copy(stateVersion = stateVersion)
+            else ->
+                throw IllegalArgumentException(
+                    "Unsupported territory event: ${event::class.simpleName}",
+                )
         }
 
     private fun at.aau.pulverfass.shared.lobby.state.TurnState.toUpdatedEvent(

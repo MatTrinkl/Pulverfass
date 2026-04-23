@@ -619,12 +619,8 @@ class MainServerLobbyRoutingService(
         val state = lobby.currentState()
         val playerId = request.context.playerId
 
-        if (playerId == null || !state.hasPlayer(playerId)) {
-            throw IllegalArgumentException("NOT_IN_GAME")
-        }
-        if (!state.hasMap()) {
-            throw IllegalStateException("MAP_NOT_READY")
-        }
+        require(!(playerId == null || !state.hasPlayer(playerId))) { "NOT_IN_GAME" }
+        check(state.hasMap()) { "MAP_NOT_READY" }
 
         return publicGameStateBuilder.buildMapGetResponse(state)
     }
@@ -639,12 +635,8 @@ class MainServerLobbyRoutingService(
         val state = lobby.currentState()
         val playerId = request.context.playerId
 
-        if (playerId == null || !state.hasPlayer(playerId)) {
-            throw IllegalArgumentException("NOT_IN_GAME")
-        }
-        if (!state.hasMap() || state.resolvedTurnState == null) {
-            throw IllegalStateException("SNAPSHOT_NOT_READY")
-        }
+        require(!(playerId == null || !state.hasPlayer(playerId))) { "NOT_IN_GAME" }
+        check(!(!state.hasMap() || state.resolvedTurnState == null)) { "SNAPSHOT_NOT_READY" }
 
         val currentVersion = state.stateVersion
         val diff = currentVersion - payload.clientStateVersion
@@ -673,12 +665,10 @@ class MainServerLobbyRoutingService(
         val state = lobby.currentState()
         val contextPlayerId = request.context.playerId
 
-        if (contextPlayerId == null || contextPlayerId != payload.playerId) {
-            throw IllegalArgumentException("REQUESTER_MISMATCH")
+        require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
+            "REQUESTER_MISMATCH"
         }
-        if (!state.hasPlayer(payload.playerId)) {
-            throw IllegalArgumentException("NOT_IN_GAME")
-        }
+        require(state.hasPlayer(payload.playerId)) { "NOT_IN_GAME" }
 
         val response = GameStatePrivateGetResponse.fromGameState(state, payload.playerId)
         logger.info(
@@ -809,17 +799,18 @@ class MainServerLobbyRoutingService(
             state.resolvedTurnState
                 ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
-        if (contextPlayerId == null || contextPlayerId != payload.playerId) {
-            throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
+        require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
+            "NOT_ACTIVE_PLAYER"
         }
-        if (currentTurnState.activePlayerId != payload.playerId) {
-            throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
-        }
-        if (currentTurnState.isPaused) {
-            throw IllegalStateException("GAME_PAUSED")
-        }
-        if (payload.expectedPhase != null && payload.expectedPhase != currentTurnState.turnPhase) {
-            throw IllegalArgumentException("PHASE_MISMATCH")
+        require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
+        check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
+        require(
+            !(
+                payload.expectedPhase != null &&
+                    payload.expectedPhase != currentTurnState.turnPhase
+            ),
+        ) {
+            "PHASE_MISMATCH"
         }
 
         val updatedTurnState =
@@ -851,21 +842,17 @@ class MainServerLobbyRoutingService(
         val state = lobby.currentState()
         val contextPlayerId = request.context.playerId
 
-        if (contextPlayerId == null || contextPlayerId != payload.requesterPlayerId) {
-            throw IllegalArgumentException("REQUESTER_MISMATCH")
+        require(!(contextPlayerId == null || contextPlayerId != payload.requesterPlayerId)) {
+            "REQUESTER_MISMATCH"
         }
-        if (
-            state.gameStarted ||
-            state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING
-        ) {
-            throw IllegalStateException("GAME_ALREADY_STARTED")
-        }
-        if (state.lobbyOwner != payload.requesterPlayerId) {
-            throw IllegalArgumentException("NOT_HOST")
-        }
-        if (!state.hasPlayer(payload.startPlayerId)) {
-            throw IllegalArgumentException("PLAYER_NOT_IN_LOBBY")
-        }
+        check(
+            !(
+                state.gameStarted ||
+                    state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING
+            ),
+        ) { "GAME_ALREADY_STARTED" }
+        require(state.lobbyOwner == payload.requesterPlayerId) { "NOT_HOST" }
+        require(state.hasPlayer(payload.startPlayerId)) { "PLAYER_NOT_IN_LOBBY" }
 
         return StartPlayerConfigured(
             lobbyCode = payload.lobbyCode,

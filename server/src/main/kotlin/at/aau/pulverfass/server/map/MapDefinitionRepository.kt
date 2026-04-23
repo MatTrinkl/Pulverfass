@@ -9,7 +9,7 @@ import at.aau.pulverfass.shared.map.config.MapDefinition
  * Der aktuelle Scope enthält genau eine Default-Map, die beim Startup
  * geladen und für alle neuen Lobbys wiederverwendet wird.
  */
-interface MapDefinitionRepository {
+fun interface MapDefinitionRepository {
     fun defaultMapDefinition(): MapDefinition
 }
 
