@@ -26,7 +26,12 @@ class GameStateDeliveryDispatcherTest {
 
             val dispatcher =
                 GameStateDeliveryDispatcher(
-                    sendPayload = { connectionId, payload -> sentPayloads += connectionId to payload },
+                    sendPayload = {
+                            connectionId,
+                            payload,
+                        ->
+                        sentPayloads += connectionId to payload
+                    },
                     lobbyMembers = { requestedLobby ->
                         if (requestedLobby == lobbyCode) {
                             listOf(playerOne, playerTwo, playerThree)
@@ -84,7 +89,12 @@ class GameStateDeliveryDispatcherTest {
 
             val dispatcher =
                 GameStateDeliveryDispatcher(
-                    sendPayload = { connectionId, payload -> sentPayloads += connectionId to payload },
+                    sendPayload = {
+                            connectionId,
+                            payload,
+                        ->
+                        sentPayloads += connectionId to payload
+                    },
                     lobbyMembers = { requestedLobby ->
                         if (requestedLobby == lobbyCode) {
                             listOf(playerOne, playerTwo)
@@ -101,7 +111,8 @@ class GameStateDeliveryDispatcherTest {
                     },
                 )
 
-            val privatePayload = FakePrivateEvent(recipientPlayerId = playerTwo, secret = "hand-cards")
+            val privatePayload =
+                FakePrivateEvent(recipientPlayerId = playerTwo, secret = "hand-cards")
 
             dispatcher.sendPrivateState(lobbyCode, privatePayload)
 
@@ -118,7 +129,12 @@ class GameStateDeliveryDispatcherTest {
 
             val dispatcher =
                 GameStateDeliveryDispatcher(
-                    sendPayload = { connectionId, payload -> sentPayloads += connectionId to payload },
+                    sendPayload = {
+                            connectionId,
+                            payload,
+                        ->
+                        sentPayloads += connectionId to payload
+                    },
                     lobbyMembers = { requestedLobby ->
                         if (requestedLobby == lobbyCode) {
                             listOf(playerOne)

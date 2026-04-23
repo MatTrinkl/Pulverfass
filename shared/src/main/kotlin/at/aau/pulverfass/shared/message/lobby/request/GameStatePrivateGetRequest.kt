@@ -32,7 +32,9 @@ data class GameStatePrivateGetRequest(
  */
 object GameStatePrivateGetRequestSerializer : KSerializer<GameStatePrivateGetRequest> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStatePrivateGetRequest") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStatePrivateGetRequest",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("playerId", PlayerId.serializer().descriptor)
         }
@@ -54,8 +56,20 @@ object GameStatePrivateGetRequestSerializer : KSerializer<GameStatePrivateGetReq
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> playerId = composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    playerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            PlayerId.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -63,7 +77,9 @@ object GameStatePrivateGetRequestSerializer : KSerializer<GameStatePrivateGetReq
 
         composite.endStructure(descriptor)
         return GameStatePrivateGetRequest(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
             playerId = playerId ?: throw MissingFieldException("playerId", descriptor.serialName),
         )
     }

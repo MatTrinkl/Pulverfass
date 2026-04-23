@@ -65,7 +65,9 @@ object TurnStateMachine {
             return turnState.copy(turnPhase = turnState.turnPhase.next())
         }
 
-        val nextPlayer = TurnOrderPolicy.nextAfter(turnState.activePlayerId, normalizedOrder) ?: turnState.activePlayerId
+        val nextPlayer =
+            TurnOrderPolicy.nextAfter(turnState.activePlayerId, normalizedOrder)
+                ?: turnState.activePlayerId
         val switchedPlayer = nextPlayer != turnState.activePlayerId
         val nextTurnCount =
             if (switchedPlayer && nextPlayer == turnState.startPlayerId) {
@@ -121,7 +123,8 @@ object TurnStateMachine {
         val pauseReason =
             when {
                 !current.isPaused -> null
-                current.pauseReason == TurnPauseReasons.WAITING_FOR_PLAYER && pausedPlayerId == null -> null
+                current.pauseReason == TurnPauseReasons.WAITING_FOR_PLAYER &&
+                    pausedPlayerId == null -> null
                 else -> current.pauseReason
             }
         val isPaused = pauseReason != null

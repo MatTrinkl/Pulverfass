@@ -98,7 +98,11 @@ class GameStateCatchUpMessageTest {
             )
 
         val serialized = json.encodeToString(GameStateCatchUpErrorResponse.serializer(), response)
-        val deserialized = json.decodeFromString(GameStateCatchUpErrorResponse.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                GameStateCatchUpErrorResponse.serializer(),
+                serialized,
+            )
 
         assertEquals(response, deserialized)
     }

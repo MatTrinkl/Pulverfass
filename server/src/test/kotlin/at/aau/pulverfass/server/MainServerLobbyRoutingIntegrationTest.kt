@@ -17,7 +17,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
-import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -28,21 +28,21 @@ import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
-import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
-import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
@@ -136,11 +136,15 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(23, response.territoryStates.size)
                     assertEquals(
                         PlayerId(1),
-                        response.territoryStates.first { it.territoryId == TerritoryId("argentinien") }.ownerId,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .ownerId,
                     )
                     assertEquals(
                         5,
-                        response.territoryStates.first { it.territoryId == TerritoryId("argentinien") }.troopCount,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .troopCount,
                     )
                     assertTrue(
                         response.definition.territories
@@ -187,7 +191,10 @@ class MainServerLobbyRoutingIntegrationTest {
                     session.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(JoinLobbyRequest(createResponse.lobbyCode, "Alice")),
+                            data =
+                                MessageCodec.encode(
+                                    JoinLobbyRequest(createResponse.lobbyCode, "Alice"),
+                                ),
                         ),
                     )
 
@@ -231,7 +238,9 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(23, response.definition.territories.size)
                     assertEquals(6, response.definition.continents.size)
                     assertEquals(23, response.territoryStates.size)
-                    assertTrue(response.territoryStates.all { it.ownerId == null && it.troopCount == 0 })
+                    assertTrue(
+                        response.territoryStates.all { it.ownerId == null && it.troopCount == 0 },
+                    )
                     assertTrue(
                         response.definition.territories
                             .first { it.territoryId == TerritoryId("brasilien") }
@@ -335,18 +344,25 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
 
-                    val response = assertIs<MapGetResponse>(receivePayload(reconnectedSessionAndConnection.first))
+                    val response =
+                        assertIs<MapGetResponse>(
+                            receivePayload(reconnectedSessionAndConnection.first),
+                        )
 
                     assertEquals(lobbyCode, response.lobbyCode)
                     assertEquals(2, response.stateVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(
                         playerId,
-                        response.territoryStates.first { it.territoryId == TerritoryId("argentinien") }.ownerId,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .ownerId,
                     )
                     assertEquals(
                         6,
-                        response.territoryStates.first { it.territoryId == TerritoryId("argentinien") }.troopCount,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .troopCount,
                     )
 
                     reconnectedSessionAndConnection.first.close()
@@ -1631,7 +1647,9 @@ class MainServerLobbyRoutingIntegrationTest {
                 return payload
             }
         }
-        throw AssertionError("Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.")
+        throw AssertionError(
+            "Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.",
+        )
     }
 
     private suspend fun receiveAnyPayload(

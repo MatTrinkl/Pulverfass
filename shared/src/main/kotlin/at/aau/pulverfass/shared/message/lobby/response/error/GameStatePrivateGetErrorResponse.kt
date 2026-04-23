@@ -37,7 +37,9 @@ data class GameStatePrivateGetErrorResponse(
  */
 object GameStatePrivateGetErrorResponseSerializer : KSerializer<GameStatePrivateGetErrorResponse> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStatePrivateGetErrorResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStatePrivateGetErrorResponse",
+        ) {
             element("code", GameStatePrivateGetErrorCode.serializer().descriptor)
             element<String>("reason")
         }
@@ -47,7 +49,12 @@ object GameStatePrivateGetErrorResponseSerializer : KSerializer<GameStatePrivate
         value: GameStatePrivateGetErrorResponse,
     ) {
         val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, GameStatePrivateGetErrorCode.serializer(), value.code)
+        composite.encodeSerializableElement(
+            descriptor,
+            0,
+            GameStatePrivateGetErrorCode.serializer(),
+            value.code,
+        )
         composite.encodeStringElement(descriptor, 1, value.reason)
         composite.endStructure(descriptor)
     }

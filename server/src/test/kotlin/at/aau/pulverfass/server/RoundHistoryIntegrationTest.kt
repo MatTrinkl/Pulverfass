@@ -112,7 +112,9 @@ class RoundHistoryIntegrationTest {
                         )
 
                     repeat(16) {
-                        val turnState = lobbyManager.getLobby(lobbyCode)?.currentState()?.turnState ?: error("turnState missing")
+                        val turnState =
+                            lobbyManager.getLobby(lobbyCode)?.currentState()?.turnState
+                                ?: error("turnState missing")
                         val actor = sessionsByPlayer.getValue(turnState.activePlayerId)
                         val watcher =
                             sessionsByPlayer
@@ -139,7 +141,9 @@ class RoundHistoryIntegrationTest {
                         assertEquals(TurnAdvanceResponse(lobbyCode), receivePayload(actor))
                         assertTrue(receivePayload(actor) is PhaseBoundaryEvent)
                         assertTrue(
-                            receivePayload(actor) is at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent,
+                            receivePayload(
+                                actor,
+                            ) is at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent,
                         )
                         if (turnChange) {
                             assertTrue(receivePayload(actor) is GameStateSnapshotBroadcast)
@@ -148,7 +152,9 @@ class RoundHistoryIntegrationTest {
                         assertTrue(receivePayload(watcher) is GameStateDeltaEvent)
                         assertTrue(receivePayload(watcher) is PhaseBoundaryEvent)
                         assertTrue(
-                            receivePayload(watcher) is at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent,
+                            receivePayload(
+                                watcher,
+                            ) is at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent,
                         )
                         if (turnChange) {
                             assertTrue(receivePayload(watcher) is GameStateSnapshotBroadcast)
@@ -240,5 +246,6 @@ class RoundHistoryIntegrationTest {
         return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
     }
 
-    private fun defaultMapDefinition() = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
+    private fun defaultMapDefinition() =
+        at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
 }

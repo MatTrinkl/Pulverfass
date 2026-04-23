@@ -31,7 +31,8 @@ data class TerritoryOwnerChangedEvent(
 ) : InternalLobbyEvent, PublicGameEvent {
     init {
         require(stateVersion == null || stateVersion >= 0) {
-            "TerritoryOwnerChangedEvent.stateVersion darf nicht negativ sein, war aber $stateVersion."
+            "TerritoryOwnerChangedEvent.stateVersion darf nicht negativ sein, " +
+                "war aber $stateVersion."
         }
     }
 }
@@ -54,7 +55,12 @@ object TerritoryOwnerChangedEventSerializer : KSerializer<TerritoryOwnerChangedE
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(descriptor, 1, TerritoryId.serializer(), value.territoryId)
+        composite.encodeSerializableElement(
+            descriptor,
+            1,
+            TerritoryId.serializer(),
+            value.territoryId,
+        )
         if (value.ownerId != null) {
             composite.encodeSerializableElement(descriptor, 2, PlayerId.serializer(), value.ownerId)
         }
@@ -73,9 +79,27 @@ object TerritoryOwnerChangedEventSerializer : KSerializer<TerritoryOwnerChangedE
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> territoryId = composite.decodeSerializableElement(descriptor, 1, TerritoryId.serializer())
-                2 -> ownerId = composite.decodeSerializableElement(descriptor, 2, PlayerId.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    territoryId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            TerritoryId.serializer(),
+                        )
+                2 ->
+                    ownerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            PlayerId.serializer(),
+                        )
                 3 -> stateVersion = composite.decodeLongElement(descriptor, 3)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
@@ -84,8 +108,12 @@ object TerritoryOwnerChangedEventSerializer : KSerializer<TerritoryOwnerChangedE
 
         composite.endStructure(descriptor)
         return TerritoryOwnerChangedEvent(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            territoryId = territoryId ?: throw MissingFieldException("territoryId", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            territoryId =
+                territoryId
+                    ?: throw MissingFieldException("territoryId", descriptor.serialName),
             ownerId = ownerId,
             stateVersion = stateVersion,
         )

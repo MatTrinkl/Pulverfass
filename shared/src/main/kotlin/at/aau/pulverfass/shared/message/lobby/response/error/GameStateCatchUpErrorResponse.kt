@@ -37,7 +37,9 @@ data class GameStateCatchUpErrorResponse(
  */
 object GameStateCatchUpErrorResponseSerializer : KSerializer<GameStateCatchUpErrorResponse> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStateCatchUpErrorResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStateCatchUpErrorResponse",
+        ) {
             element("code", GameStateCatchUpErrorCode.serializer().descriptor)
             element<String>("reason")
         }
@@ -47,7 +49,12 @@ object GameStateCatchUpErrorResponseSerializer : KSerializer<GameStateCatchUpErr
         value: GameStateCatchUpErrorResponse,
     ) {
         val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, GameStateCatchUpErrorCode.serializer(), value.code)
+        composite.encodeSerializableElement(
+            descriptor,
+            0,
+            GameStateCatchUpErrorCode.serializer(),
+            value.code,
+        )
         composite.encodeStringElement(descriptor, 1, value.reason)
         composite.endStructure(descriptor)
     }
@@ -59,7 +66,13 @@ object GameStateCatchUpErrorResponseSerializer : KSerializer<GameStateCatchUpErr
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> code = composite.decodeSerializableElement(descriptor, 0, GameStateCatchUpErrorCode.serializer())
+                0 ->
+                    code =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            GameStateCatchUpErrorCode.serializer(),
+                        )
                 1 -> reason = composite.decodeStringElement(descriptor, 1)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")

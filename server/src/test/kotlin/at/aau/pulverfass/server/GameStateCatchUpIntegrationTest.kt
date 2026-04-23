@@ -108,7 +108,10 @@ class GameStateCatchUpIntegrationTest {
                         ),
                     )
 
-                    val response = receivePayload(playerOneSession.first) as GameStateCatchUpResponse
+                    val response =
+                        receivePayload(
+                            playerOneSession.first,
+                        ) as GameStateCatchUpResponse
                     assertEquals(lobbyCode, response.lobbyCode)
                     assertEquals(7, response.stateVersion)
                     assertEquals(definition.mapHash, response.determinism.mapHash)
@@ -253,5 +256,6 @@ class GameStateCatchUpIntegrationTest {
             MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
         }
 
-    private fun defaultMapDefinition() = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
+    private fun defaultMapDefinition() =
+        at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
 }

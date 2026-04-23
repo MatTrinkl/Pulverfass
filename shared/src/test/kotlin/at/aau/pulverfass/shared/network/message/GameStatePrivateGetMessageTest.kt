@@ -23,7 +23,11 @@ class GameStatePrivateGetMessageTest {
             )
 
         val serialized = json.encodeToString(GameStatePrivateGetRequest.serializer(), request)
-        val deserialized = json.decodeFromString(GameStatePrivateGetRequest.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                GameStatePrivateGetRequest.serializer(),
+                serialized,
+            )
 
         assertEquals("""{"lobbyCode":"AB12","playerId":3}""", serialized)
         assertEquals(request, deserialized)
@@ -41,7 +45,11 @@ class GameStatePrivateGetMessageTest {
             )
 
         val serialized = json.encodeToString(GameStatePrivateGetResponse.serializer(), response)
-        val deserialized = json.decodeFromString(GameStatePrivateGetResponse.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                GameStatePrivateGetResponse.serializer(),
+                serialized,
+            )
 
         assertTrue(serialized.contains("recipientPlayerId"))
         assertTrue(serialized.contains("stateVersion"))
@@ -57,8 +65,16 @@ class GameStatePrivateGetMessageTest {
                 reason = "Requester '2' passt nicht zur aktuellen Connection '1'.",
             )
 
-        val serialized = json.encodeToString(GameStatePrivateGetErrorResponse.serializer(), response)
-        val deserialized = json.decodeFromString(GameStatePrivateGetErrorResponse.serializer(), serialized)
+        val serialized =
+            json.encodeToString(
+                GameStatePrivateGetErrorResponse.serializer(),
+                response,
+            )
+        val deserialized =
+            json.decodeFromString(
+                GameStatePrivateGetErrorResponse.serializer(),
+                serialized,
+            )
 
         assertEquals(response, deserialized)
     }

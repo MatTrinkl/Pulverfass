@@ -98,14 +98,22 @@ data class GameState(
         require(turnState == null || turnOrder.contains(turnState.startPlayerId)) {
             "GameState.turnState.startPlayerId muss Teil der TurnOrder sein."
         }
-        require(turnState == null || activePlayer == null || activePlayer == turnState.activePlayerId) {
+        require(
+            turnState == null || activePlayer == null || activePlayer == turnState.activePlayerId,
+        ) {
             "GameState.activePlayer und GameState.turnState.activePlayerId müssen identisch sein."
         }
-        require(turnState == null || configuredStartPlayerId == null || configuredStartPlayerId == turnState.startPlayerId) {
-            "GameState.configuredStartPlayerId und GameState.turnState.startPlayerId müssen identisch sein."
+        require(
+            turnState == null ||
+                configuredStartPlayerId == null ||
+                configuredStartPlayerId == turnState.startPlayerId,
+        ) {
+            "GameState.configuredStartPlayerId und " +
+                "GameState.turnState.startPlayerId müssen identisch sein."
         }
         require((mapDefinition == null) == territoryStates.isEmpty()) {
-            "GameState.mapDefinition und GameState.territoryStates müssen gemeinsam gesetzt oder leer sein."
+            "GameState.mapDefinition und GameState.territoryStates müssen " +
+                "gemeinsam gesetzt oder leer sein."
         }
 
         if (mapDefinition != null) {
@@ -115,7 +123,8 @@ data class GameState(
             }
             territoryStates.forEach { (territoryId, territoryState) ->
                 require(territoryState.territoryId == territoryId) {
-                    "TerritoryState '$territoryId' muss dieselbe TerritoryId wie sein Map-Key besitzen."
+                    "TerritoryState '$territoryId' muss dieselbe TerritoryId " +
+                        "wie sein Map-Key besitzen."
                 }
             }
         }
@@ -197,8 +206,7 @@ data class GameState(
     /**
      * Liefert die aktuelle Truppenanzahl eines Territoriums.
      */
-    fun troopCountOf(territoryId: TerritoryId): Int =
-        requireTerritoryState(territoryId).troopCount
+    fun troopCountOf(territoryId: TerritoryId): Int = requireTerritoryState(territoryId).troopCount
 
     /**
      * Alias für Gameplay-Logik: Truppenanzahl eines Territoriums.
@@ -409,7 +417,8 @@ data class GameState(
             lobbyCode: LobbyCode,
             mapDefinition: MapDefinition,
             players: List<PlayerId> = emptyList(),
-            playerDisplayNames: Map<PlayerId, String> = players.associateWith { it.value.toString() },
+            playerDisplayNames: Map<PlayerId, String> =
+                players.associateWith { it.value.toString() },
         ): GameState {
             val turnOrder = TurnOrderPolicy.normalize(players)
             val turnState = TurnStateMachine.prepareSetupState(turnOrder)

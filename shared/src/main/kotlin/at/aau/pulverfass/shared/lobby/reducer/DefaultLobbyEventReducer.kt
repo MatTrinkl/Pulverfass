@@ -19,9 +19,9 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
-import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 
 /**
@@ -106,7 +106,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val updatedTurnOrder = TurnOrderPolicy.normalize(state.turnOrder + playerId)
         val updatedLobbyOwner = state.lobbyOwner ?: playerId
         val updatedStatus = preserveLobbyStatus(state, updatedPlayers)
-        val updatedTurnState = synchronizedTurnStateForLobbySetup(state, updatedTurnOrder, state.turnOrder)
+        val updatedTurnState =
+            synchronizedTurnStateForLobbySetup(state, updatedTurnOrder, state.turnOrder)
         val baseUpdatedState =
             state.copy(
                 players = updatedPlayers,
@@ -117,7 +118,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 status = updatedStatus,
             )
 
-        return updatedTurnState?.let { applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it)) }
+        return updatedTurnState?.let {
+            applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
+        }
             ?: baseUpdatedState.copy(
                 activePlayer = null,
                 turnNumber = 0,
@@ -167,7 +170,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 status = updatedStatus,
             )
 
-        return updatedTurnState?.let { applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it)) }
+        return updatedTurnState?.let {
+            applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
+        }
             ?: baseUpdatedState.copy(
                 activePlayer = null,
                 turnNumber = 0,
@@ -218,7 +223,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 status = updatedStatus,
             )
 
-        return updatedTurnState?.let { applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it)) }
+        return updatedTurnState?.let {
+            applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
+        }
             ?: baseUpdatedState.copy(
                 activePlayer = null,
                 turnNumber = 0,
@@ -299,22 +306,26 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ): GameState {
         if (hasStartedGame(state)) {
             throw InvalidLobbyEventException(
-                "Startspieler kann für Lobby '${state.lobbyCode}' nach Spielstart nicht mehr geändert werden.",
+                "Startspieler kann für Lobby '${state.lobbyCode}' nach " +
+                    "Spielstart nicht mehr geändert werden.",
             )
         }
         if (state.status == GameStatus.CLOSED || state.status == GameStatus.FINISHED) {
             throw InvalidLobbyEventException(
-                "Startspieler kann für Lobby '${state.lobbyCode}' im Status '${state.status}' nicht geändert werden.",
+                "Startspieler kann für Lobby '${state.lobbyCode}' im Status " +
+                    "'${state.status}' nicht geändert werden.",
             )
         }
         if (state.lobbyOwner != requesterPlayerId) {
             throw InvalidLobbyEventException(
-                "Nur der Lobby Owner kann den Startspieler setzen. Requester '$requesterPlayerId' ist nicht der Owner '${state.lobbyOwner}'.",
+                "Nur der Lobby Owner kann den Startspieler setzen. " +
+                    "Requester '$requesterPlayerId' ist nicht der Owner '${state.lobbyOwner}'.",
             )
         }
         if (!state.hasPlayer(startPlayerId)) {
             throw InvalidLobbyEventException(
-                "Startspieler '${startPlayerId.value}' ist nicht Teil der Lobby '${state.lobbyCode}'.",
+                "Startspieler '${startPlayerId.value}' ist nicht Teil der " +
+                    "Lobby '${state.lobbyCode}'.",
             )
         }
 
@@ -323,7 +334,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 turnOrder = state.turnOrder,
                 preferredStartPlayerId = startPlayerId,
             ) ?: throw InvalidLobbyEventException(
-                "Startspieler kann für Lobby '${state.lobbyCode}' ohne Spieler nicht gesetzt werden.",
+                "Startspieler kann für Lobby '${state.lobbyCode}' ohne " +
+                    "Spieler nicht gesetzt werden.",
             )
         val updatedState =
             state.copy(
@@ -331,7 +343,10 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 turnState = null,
             )
 
-        return applyTurnStateUpdate(updatedState, turnStateUpdatedEvent(updatedState, updatedTurnState))
+        return applyTurnStateUpdate(
+            updatedState,
+            turnStateUpdatedEvent(updatedState, updatedTurnState),
+        )
     }
 
     private fun onGameStarted(state: GameState): GameState {
@@ -365,7 +380,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 status = GameStatus.RUNNING,
             )
 
-        return initializedTurnState?.let { applyTurnStateUpdate(runningState, turnStateUpdatedEvent(runningState, it)) }
+        return initializedTurnState?.let {
+            applyTurnStateUpdate(runningState, turnStateUpdatedEvent(runningState, it))
+        }
             ?: runningState
     }
 
@@ -380,39 +397,54 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ): GameState {
         require(state.hasPlayer(event.activePlayerId)) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.activePlayerId '${event.activePlayerId.value}' ist nicht Teil der Lobby '${state.lobbyCode}'.",
+                "TurnStateUpdatedEvent.activePlayerId " +
+                    "'${event.activePlayerId.value}' ist nicht Teil der Lobby " +
+                    "'${state.lobbyCode}'.",
             )
         }
         require(state.hasPlayer(event.startPlayerId)) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.startPlayerId '${event.startPlayerId.value}' ist nicht Teil der Lobby '${state.lobbyCode}'.",
+                "TurnStateUpdatedEvent.startPlayerId " +
+                    "'${event.startPlayerId.value}' ist nicht Teil der Lobby " +
+                    "'${state.lobbyCode}'.",
             )
         }
         require(state.turnOrder.contains(event.activePlayerId)) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.activePlayerId '${event.activePlayerId.value}' ist nicht Teil der TurnOrder von Lobby '${state.lobbyCode}'.",
+                "TurnStateUpdatedEvent.activePlayerId " +
+                    "'${event.activePlayerId.value}' ist nicht Teil der TurnOrder " +
+                    "von Lobby '${state.lobbyCode}'.",
             )
         }
         require(state.turnOrder.contains(event.startPlayerId)) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.startPlayerId '${event.startPlayerId.value}' ist nicht Teil der TurnOrder von Lobby '${state.lobbyCode}'.",
+                "TurnStateUpdatedEvent.startPlayerId " +
+                    "'${event.startPlayerId.value}' ist nicht Teil der TurnOrder " +
+                    "von Lobby '${state.lobbyCode}'.",
             )
         }
         if (event.pausedPlayerId != null && !state.hasPlayer(event.pausedPlayerId)) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.pausedPlayerId '${event.pausedPlayerId.value}' ist nicht Teil der Lobby '${state.lobbyCode}'.",
+                "TurnStateUpdatedEvent.pausedPlayerId " +
+                    "'${event.pausedPlayerId.value}' ist nicht Teil der Lobby " +
+                    "'${state.lobbyCode}'.",
             )
         }
-        if (event.pauseReason == TurnPauseReasons.WAITING_FOR_PLAYER && event.pausedPlayerId != event.activePlayerId) {
+        if (
+            event.pauseReason == TurnPauseReasons.WAITING_FOR_PLAYER &&
+            event.pausedPlayerId != event.activePlayerId
+        ) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.pausedPlayerId muss bei WAITING_FOR_PLAYER dem aktiven Spieler entsprechen.",
+                "TurnStateUpdatedEvent.pausedPlayerId muss bei " +
+                    "WAITING_FOR_PLAYER dem aktiven Spieler entsprechen.",
             )
         }
 
         val currentTurnCount = state.resolvedTurnState?.turnCount ?: 0
         if (event.turnCount < currentTurnCount) {
             throw InvalidLobbyEventException(
-                "TurnStateUpdatedEvent.turnCount darf nicht rückwärts laufen: aktuell=$currentTurnCount, neu=${event.turnCount}.",
+                "TurnStateUpdatedEvent.turnCount darf nicht rückwärts " +
+                    "laufen: aktuell=$currentTurnCount, neu=${event.turnCount}.",
             )
         }
 
@@ -502,7 +534,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ) {
         if (state.territoryStateOf(territoryId) == null) {
             throw InvalidLobbyEventException(
-                "Territory '${territoryId.value}' ist nicht Teil der Map von Lobby '${state.lobbyCode}'.",
+                "Territory '${territoryId.value}' ist nicht Teil der Map " +
+                    "von Lobby '${state.lobbyCode}'.",
             )
         }
     }

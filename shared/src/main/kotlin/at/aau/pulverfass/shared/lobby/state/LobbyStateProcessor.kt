@@ -1,6 +1,9 @@
 package at.aau.pulverfass.shared.lobby.state
 
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.lobby.command.DefaultMapCommandRuleService
+import at.aau.pulverfass.shared.lobby.command.MapCommand
+import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
@@ -12,7 +15,7 @@ import kotlin.concurrent.read
  *
  * Aufrufende, die nur [LobbyStateReader] erhalten, können den State nicht
  * mutieren. Schreibzugriffe laufen ausschließlich über [apply] und damit über
- * den [LobbyEventReducer].
+ * den [LobbyEventReducer] oder die vorgeschaltete Command-Regelschicht.
  */
 interface LobbyStateProcessor : LobbyStateReader {
     /**
@@ -28,6 +31,15 @@ interface LobbyStateProcessor : LobbyStateReader {
         event: LobbyEvent,
         context: EventContext? = null,
     ): GameState
+
+    /**
+     * Validiert einen Map-Command gegen den aktuellen State und wendet die
+     * resultierenden Events atomar an.
+     */
+    fun apply(
+        command: MapCommand,
+        context: EventContext? = null,
+    ): GameState
 }
 
 /**
@@ -40,6 +52,7 @@ interface LobbyStateProcessor : LobbyStateReader {
 class DefaultLobbyStateProcessor(
     initialState: GameState,
     private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
+    private val mapCommandRuleService: MapCommandRuleService = DefaultMapCommandRuleService(),
 ) : LobbyStateProcessor {
     private val lock = ReentrantReadWriteLock()
     private var state: GameState = initialState.snapshot()
@@ -57,6 +70,25 @@ class DefaultLobbyStateProcessor(
 
         return try {
             val updated = reducer.apply(state, event, context)
+            state = updated
+            updated.snapshot()
+        } finally {
+            lock.writeLock().unlock()
+        }
+    }
+
+    override fun apply(
+        command: MapCommand,
+        context: EventContext?,
+    ): GameState {
+        lock.writeLock().lock()
+
+        return try {
+            val resultingEvents = mapCommandRuleService.createEvents(state, command)
+            val updated =
+                resultingEvents.fold(state) { currentState, event ->
+                    reducer.apply(currentState, event, context)
+                }
             state = updated
             updated.snapshot()
         } finally {

@@ -55,7 +55,12 @@ object MapGetResponseSerializer : KSerializer<MapGetResponse> {
             element<String>("mapHash")
             element<Long>("stateVersion")
             element("definition", MapDefinitionSnapshot.serializer().descriptor)
-            element("territoryStates", kotlinx.serialization.builtins.ListSerializer(MapTerritoryStateSnapshot.serializer()).descriptor)
+            element(
+                "territoryStates",
+                kotlinx.serialization.builtins.ListSerializer(
+                    MapTerritoryStateSnapshot.serializer(),
+                ).descriptor,
+            )
         }
 
     override fun serialize(
@@ -67,7 +72,12 @@ object MapGetResponseSerializer : KSerializer<MapGetResponse> {
         composite.encodeIntElement(descriptor, 1, value.schemaVersion)
         composite.encodeStringElement(descriptor, 2, value.mapHash)
         composite.encodeLongElement(descriptor, 3, value.stateVersion)
-        composite.encodeSerializableElement(descriptor, 4, MapDefinitionSnapshot.serializer(), value.definition)
+        composite.encodeSerializableElement(
+            descriptor,
+            4,
+            MapDefinitionSnapshot.serializer(),
+            value.definition,
+        )
         composite.encodeSerializableElement(
             descriptor,
             5,
@@ -88,17 +98,31 @@ object MapGetResponseSerializer : KSerializer<MapGetResponse> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> schemaVersion = composite.decodeIntElement(descriptor, 1)
                 2 -> mapHash = composite.decodeStringElement(descriptor, 2)
                 3 -> stateVersion = composite.decodeLongElement(descriptor, 3)
-                4 -> definition = composite.decodeSerializableElement(descriptor, 4, MapDefinitionSnapshot.serializer())
+                4 ->
+                    definition =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            4,
+                            MapDefinitionSnapshot.serializer(),
+                        )
                 5 ->
                     territoryStates =
                         composite.decodeSerializableElement(
                             descriptor,
                             5,
-                            kotlinx.serialization.builtins.ListSerializer(MapTerritoryStateSnapshot.serializer()),
+                            kotlinx.serialization.builtins.ListSerializer(
+                                MapTerritoryStateSnapshot.serializer(),
+                            ),
                         )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
@@ -107,12 +131,22 @@ object MapGetResponseSerializer : KSerializer<MapGetResponse> {
 
         composite.endStructure(descriptor)
         return MapGetResponse(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            schemaVersion = schemaVersion ?: throw MissingFieldException("schemaVersion", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            schemaVersion =
+                schemaVersion
+                    ?: throw MissingFieldException("schemaVersion", descriptor.serialName),
             mapHash = mapHash ?: throw MissingFieldException("mapHash", descriptor.serialName),
-            stateVersion = stateVersion ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            definition = definition ?: throw MissingFieldException("definition", descriptor.serialName),
-            territoryStates = territoryStates ?: throw MissingFieldException("territoryStates", descriptor.serialName),
+            stateVersion =
+                stateVersion
+                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
+            definition =
+                definition
+                    ?: throw MissingFieldException("definition", descriptor.serialName),
+            territoryStates =
+                territoryStates
+                    ?: throw MissingFieldException("territoryStates", descriptor.serialName),
         )
     }
 }

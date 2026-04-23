@@ -120,7 +120,10 @@ class GameStateTransportIntegrationTest {
                     playerOneSession.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(GameStatePrivateGetRequest(lobbyCode, playerOne)),
+                            data =
+                                MessageCodec.encode(
+                                    GameStatePrivateGetRequest(lobbyCode, playerOne),
+                                ),
                         ),
                     )
 
@@ -213,7 +216,10 @@ class GameStateTransportIntegrationTest {
                         ),
                     )
 
-                    val catchUp = assertIs<GameStateCatchUpResponse>(receiveAnyPayload(playerTwoSession.first))
+                    val catchUp =
+                        assertIs<GameStateCatchUpResponse>(
+                            receiveAnyPayload(playerTwoSession.first),
+                        )
                     assertEquals(lobbyCode, catchUp.lobbyCode)
                     assertEquals(4, catchUp.stateVersion)
                     assertEquals(playerTwo, catchUp.turnState.activePlayerId)
@@ -228,8 +234,16 @@ class GameStateTransportIntegrationTest {
                     assertTrue(history.single().deltas.isNotEmpty())
                     assertTrue(history.single().phaseBoundaries.isNotEmpty())
                     assertTrue(history.single().turnStateChanges.isNotEmpty())
-                    assertTrue(history.single().snapshots.any { it.trigger == RoundSnapshotTrigger.TURN_CHANGE_BROADCAST })
-                    assertTrue(history.single().snapshots.any { it.trigger == RoundSnapshotTrigger.CATCH_UP_RESPONSE })
+                    assertTrue(
+                        history.single().snapshots.any {
+                            it.trigger == RoundSnapshotTrigger.TURN_CHANGE_BROADCAST
+                        },
+                    )
+                    assertTrue(
+                        history.single().snapshots.any {
+                            it.trigger == RoundSnapshotTrigger.CATCH_UP_RESPONSE
+                        },
+                    )
 
                     playerOneSession.first.close()
                     playerTwoSession.first.close()
@@ -364,17 +378,13 @@ class GameStateTransportIntegrationTest {
         session to connected.connectionId
     }
 
-    private suspend fun receiveAnyPayload(
-        session: DefaultClientWebSocketSession,
-    ): Any {
+    private suspend fun receiveAnyPayload(session: DefaultClientWebSocketSession): Any {
         val frame = withTimeout(5_000) { session.incoming.receive() }
         assertTrue(frame is Frame.Binary)
         return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
     }
 
-    private suspend fun receivePayloadOrNull(
-        session: DefaultClientWebSocketSession,
-    ): Any? =
+    private suspend fun receivePayloadOrNull(session: DefaultClientWebSocketSession): Any? =
         withTimeoutOrNull(300) {
             val frame = session.incoming.receive()
             assertTrue(frame is Frame.Binary)
@@ -382,7 +392,10 @@ class GameStateTransportIntegrationTest {
         }
 
     private inline fun <reified T> assertIs(value: Any?): T {
-        assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")
+        assertTrue(
+            value is T,
+            "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.",
+        )
         return value as T
     }
 

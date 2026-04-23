@@ -2,8 +2,8 @@ package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode

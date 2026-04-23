@@ -68,7 +68,12 @@ class GameStatePrivateGetIntegrationTest {
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
-                initialState = privateSnapshotGameState(lobbyCode, listOf(playerOne, playerTwo), stateVersion = 7),
+                initialState =
+                    privateSnapshotGameState(
+                        lobbyCode,
+                        listOf(playerOne, playerTwo),
+                        stateVersion = 7,
+                    ),
             )
             routingService.start(serverScope)
 
@@ -90,7 +95,10 @@ class GameStatePrivateGetIntegrationTest {
                     playerOneSession.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(GameStatePrivateGetRequest(lobbyCode, playerOne)),
+                            data =
+                                MessageCodec.encode(
+                                    GameStatePrivateGetRequest(lobbyCode, playerOne),
+                                ),
                         ),
                     )
 
@@ -145,7 +153,12 @@ class GameStatePrivateGetIntegrationTest {
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
-                initialState = privateSnapshotGameState(lobbyCode, listOf(playerOne, playerTwo), stateVersion = 5),
+                initialState =
+                    privateSnapshotGameState(
+                        lobbyCode,
+                        listOf(playerOne, playerTwo),
+                        stateVersion = 5,
+                    ),
             )
             routingService.start(serverScope)
 
@@ -174,7 +187,10 @@ class GameStatePrivateGetIntegrationTest {
                     playerOneSession.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(GameStatePrivateGetRequest(lobbyCode, playerTwo)),
+                            data =
+                                MessageCodec.encode(
+                                    GameStatePrivateGetRequest(lobbyCode, playerTwo),
+                                ),
                         ),
                     )
 

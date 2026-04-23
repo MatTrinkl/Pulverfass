@@ -168,6 +168,42 @@ class LobbyRuntimeTest {
             }
         }
 
+    @Test
+    fun `accepted hook fehler werden geloggt aber nicht als event fehler behandelt`(): Unit =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyCode = LobbyCode("IJ90")
+            var accepted = 0
+            var rejected = 0
+            val runtime =
+                LobbyRuntime(
+                    lobbyCode = lobbyCode,
+                    scope = scope,
+                    hooks =
+                        LobbyRuntimeHooks(
+                            onEventAccepted = { _, _, _, _ ->
+                                accepted++
+                                throw IllegalStateException("hook failed")
+                            },
+                            onEventRejected = { _, _, _ -> rejected++ },
+                        ),
+                )
+
+            try {
+                runtime.start()
+
+                runtime.submit(PlayerJoined(lobbyCode, PlayerId(1), "Alice"))
+                waitUntilProcessed(runtime, expectedCount = 1)
+
+                assertEquals(1, accepted)
+                assertEquals(0, rejected)
+                assertEquals(1, runtime.currentState().players.size)
+            } finally {
+                runtime.shutdown()
+                scope.cancel()
+            }
+        }
+
     private suspend fun <T : Throwable> assertThrowsSuspend(
         expectedType: Class<T>,
         block: suspend () -> Unit,

@@ -65,7 +65,8 @@ object MapConfigValidator {
 
                 if (continent.territoryIds.isEmpty()) {
                     throw MapConfigValidationException(
-                        "Continent '${continent.continentId.value}' muss mindestens ein Territory enthalten.",
+                        "Continent '${continent.continentId.value}' muss " +
+                            "mindestens ein Territory enthalten.",
                     )
                 }
 
@@ -84,11 +85,16 @@ object MapConfigValidator {
                                 "'${territoryId.value}' mehrfach.",
                     )
 
-                    val existingContinent = assignedTerritories.putIfAbsent(territoryId, continent.continentId)
+                    val existingContinent =
+                        assignedTerritories.putIfAbsent(
+                            territoryId,
+                            continent.continentId,
+                        )
                     if (existingContinent != null) {
                         throw MapConfigValidationException(
                             "Territory '${territoryId.value}' ist mehreren Continents zugeordnet " +
-                                "('${existingContinent.value}' und '${continent.continentId.value}').",
+                                "('${existingContinent.value}' und " +
+                                "'${continent.continentId.value}').",
                         )
                     }
                 }

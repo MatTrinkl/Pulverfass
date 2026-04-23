@@ -32,7 +32,9 @@ data class TurnAdvanceErrorResponse(
 
 object TurnAdvanceErrorResponseSerializer : KSerializer<TurnAdvanceErrorResponse> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.TurnAdvanceErrorResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.TurnAdvanceErrorResponse",
+        ) {
             element("code", TurnAdvanceErrorCode.serializer().descriptor)
             element<String>("reason")
         }
@@ -42,7 +44,12 @@ object TurnAdvanceErrorResponseSerializer : KSerializer<TurnAdvanceErrorResponse
         value: TurnAdvanceErrorResponse,
     ) {
         val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, TurnAdvanceErrorCode.serializer(), value.code)
+        composite.encodeSerializableElement(
+            descriptor,
+            0,
+            TurnAdvanceErrorCode.serializer(),
+            value.code,
+        )
         composite.encodeStringElement(descriptor, 1, value.reason)
         composite.endStructure(descriptor)
     }
@@ -54,7 +61,13 @@ object TurnAdvanceErrorResponseSerializer : KSerializer<TurnAdvanceErrorResponse
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> code = composite.decodeSerializableElement(descriptor, 0, TurnAdvanceErrorCode.serializer())
+                0 ->
+                    code =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            TurnAdvanceErrorCode.serializer(),
+                        )
                 1 -> reason = composite.decodeStringElement(descriptor, 1)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")

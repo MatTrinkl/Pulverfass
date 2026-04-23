@@ -12,11 +12,12 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
-import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
@@ -120,35 +121,39 @@ class StartGameIntegrationTest {
                         ),
                     )
 
+                    val expectedTurnStateEvent =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = ownerId,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = ownerId,
+                        )
+                    val expectedDelta =
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    GameStartedEvent(lobbyCode = lobbyCode),
+                                    expectedTurnStateEvent,
+                                ),
+                        )
+
+                    assertEquals(expectedDelta, receivePayload(ownerSession.first))
                     assertEquals(StartGameResponse(), receivePayload(ownerSession.first))
                     assertEquals(
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(ownerSession.first),
                     )
-                    assertEquals(
-                        TurnStateUpdatedEvent(
-                            lobbyCode = lobbyCode,
-                            activePlayerId = ownerId,
-                            turnPhase = TurnPhase.REINFORCEMENTS,
-                            turnCount = 1,
-                            startPlayerId = ownerId,
-                        ),
-                        receivePayload(ownerSession.first),
-                    )
+                    assertEquals(expectedTurnStateEvent, receivePayload(ownerSession.first))
+                    assertEquals(expectedDelta, receivePayload(player2Session.first))
                     assertEquals(
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(player2Session.first),
                     )
-                    assertEquals(
-                        TurnStateUpdatedEvent(
-                            lobbyCode = lobbyCode,
-                            activePlayerId = ownerId,
-                            turnPhase = TurnPhase.REINFORCEMENTS,
-                            turnCount = 1,
-                            startPlayerId = ownerId,
-                        ),
-                        receivePayload(player2Session.first),
-                    )
+                    assertEquals(expectedTurnStateEvent, receivePayload(player2Session.first))
                     assertNull(receivePayloadOrNull(ownerSession.first))
                     assertNull(receivePayloadOrNull(player2Session.first))
                     assertEquals(2, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
@@ -271,32 +276,20 @@ class StartGameIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = run {
-        repeat(10) {
-            val frame = withTimeout(5_000) { session.incoming.receive() }
-            assertTrue(frame is Frame.Binary)
-            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-            if (payload !is GameStateDeltaEvent) {
-                return@run payload
-            }
-        }
-        throw AssertionError("Expected non-delta payload within 10 messages.")
+    ): NetworkMessagePayload {
+        val frame = withTimeout(5_000) { session.incoming.receive() }
+        assertTrue(frame is Frame.Binary)
+        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = run {
-        repeat(5) {
-            val frame =
-                withTimeoutOrNull(200) {
-                    session.incoming.receive()
-                } ?: return@run null
-            assertTrue(frame is Frame.Binary)
-            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-            if (payload !is GameStateDeltaEvent) {
-                return@run payload
-            }
-        }
-        null
+    ): NetworkMessagePayload? {
+        val frame =
+            withTimeoutOrNull(200) {
+                session.incoming.receive()
+            } ?: return null
+        assertTrue(frame is Frame.Binary)
+        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
     }
 }

@@ -3,8 +3,8 @@ package at.aau.pulverfass.shared.network.message
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse

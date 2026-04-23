@@ -10,8 +10,8 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse

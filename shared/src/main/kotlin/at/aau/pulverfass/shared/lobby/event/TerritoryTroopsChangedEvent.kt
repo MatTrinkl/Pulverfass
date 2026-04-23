@@ -33,7 +33,8 @@ data class TerritoryTroopsChangedEvent(
             "TerritoryTroopsChangedEvent.troopCount darf nicht negativ sein, war aber $troopCount."
         }
         require(stateVersion == null || stateVersion >= 0) {
-            "TerritoryTroopsChangedEvent.stateVersion darf nicht negativ sein, war aber $stateVersion."
+            "TerritoryTroopsChangedEvent.stateVersion darf nicht negativ sein, " +
+                "war aber $stateVersion."
         }
     }
 }
@@ -56,7 +57,12 @@ object TerritoryTroopsChangedEventSerializer : KSerializer<TerritoryTroopsChange
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(descriptor, 1, TerritoryId.serializer(), value.territoryId)
+        composite.encodeSerializableElement(
+            descriptor,
+            1,
+            TerritoryId.serializer(),
+            value.territoryId,
+        )
         composite.encodeIntElement(descriptor, 2, value.troopCount)
         if (value.stateVersion != null) {
             composite.encodeLongElement(descriptor, 3, value.stateVersion)
@@ -73,8 +79,20 @@ object TerritoryTroopsChangedEventSerializer : KSerializer<TerritoryTroopsChange
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> territoryId = composite.decodeSerializableElement(descriptor, 1, TerritoryId.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    territoryId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            TerritoryId.serializer(),
+                        )
                 2 -> troopCount = composite.decodeIntElement(descriptor, 2)
                 3 -> stateVersion = composite.decodeLongElement(descriptor, 3)
                 CompositeDecoder.DECODE_DONE -> break@loop
@@ -84,9 +102,15 @@ object TerritoryTroopsChangedEventSerializer : KSerializer<TerritoryTroopsChange
 
         composite.endStructure(descriptor)
         return TerritoryTroopsChangedEvent(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            territoryId = territoryId ?: throw MissingFieldException("territoryId", descriptor.serialName),
-            troopCount = troopCount ?: throw MissingFieldException("troopCount", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            territoryId =
+                territoryId
+                    ?: throw MissingFieldException("territoryId", descriptor.serialName),
+            troopCount =
+                troopCount
+                    ?: throw MissingFieldException("troopCount", descriptor.serialName),
             stateVersion = stateVersion,
         )
     }

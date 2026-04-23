@@ -59,7 +59,13 @@ object MapGetErrorResponseSerializer : KSerializer<MapGetErrorResponse> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> code = composite.decodeSerializableElement(descriptor, 0, MapGetErrorCode.serializer())
+                0 ->
+                    code =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            MapGetErrorCode.serializer(),
+                        )
                 1 -> reason = composite.decodeStringElement(descriptor, 1)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")

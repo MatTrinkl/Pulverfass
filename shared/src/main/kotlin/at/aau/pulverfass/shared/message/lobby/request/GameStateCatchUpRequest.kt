@@ -41,7 +41,9 @@ data class GameStateCatchUpRequest(
  */
 object GameStateCatchUpRequestSerializer : KSerializer<GameStateCatchUpRequest> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStateCatchUpRequest") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStateCatchUpRequest",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element<Long>("clientStateVersion")
             element("reason", GameStateCatchUpReason.serializer().descriptor, isOptional = true)
@@ -55,7 +57,12 @@ object GameStateCatchUpRequestSerializer : KSerializer<GameStateCatchUpRequest> 
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
         composite.encodeLongElement(descriptor, 1, value.clientStateVersion)
         if (value.reason != null) {
-            composite.encodeSerializableElement(descriptor, 2, GameStateCatchUpReason.serializer(), value.reason)
+            composite.encodeSerializableElement(
+                descriptor,
+                2,
+                GameStateCatchUpReason.serializer(),
+                value.reason,
+            )
         }
         composite.endStructure(descriptor)
     }
@@ -68,9 +75,21 @@ object GameStateCatchUpRequestSerializer : KSerializer<GameStateCatchUpRequest> 
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> clientStateVersion = composite.decodeLongElement(descriptor, 1)
-                2 -> reason = composite.decodeSerializableElement(descriptor, 2, GameStateCatchUpReason.serializer())
+                2 ->
+                    reason =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            GameStateCatchUpReason.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -78,9 +97,12 @@ object GameStateCatchUpRequestSerializer : KSerializer<GameStateCatchUpRequest> 
 
         composite.endStructure(descriptor)
         return GameStateCatchUpRequest(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
             clientStateVersion =
-                clientStateVersion ?: throw MissingFieldException("clientStateVersion", descriptor.serialName),
+                clientStateVersion
+                    ?: throw MissingFieldException("clientStateVersion", descriptor.serialName),
             reason = reason,
         )
     }

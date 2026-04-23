@@ -11,8 +11,14 @@ data class MapDefinition(
     val territories: List<TerritoryDefinition>,
     val continents: List<ContinentDefinition>,
 ) {
-    val territoriesById: Map<TerritoryId, TerritoryDefinition> = territories.associateBy(TerritoryDefinition::territoryId)
-    val continentsById: Map<ContinentId, ContinentDefinition> = continents.associateBy(ContinentDefinition::continentId)
+    val territoriesById: Map<TerritoryId, TerritoryDefinition> =
+        territories.associateBy(
+            TerritoryDefinition::territoryId,
+        )
+    val continentsById: Map<ContinentId, ContinentDefinition> =
+        continents.associateBy(
+            ContinentDefinition::continentId,
+        )
     val identifier: MapIdentifier = MapDefinitionHashing.identifierOf(this)
     val mapHash: String = identifier.mapHash
 }

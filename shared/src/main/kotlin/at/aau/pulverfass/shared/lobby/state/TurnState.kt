@@ -36,10 +36,12 @@ data class TurnState(
             "TurnState.pausedPlayerId darf nur gesetzt sein, wenn isPaused=true ist."
         }
         require(pausedPlayerId == null || pauseReason == TurnPauseReasons.WAITING_FOR_PLAYER) {
-            "TurnState.pausedPlayerId darf nur mit PauseReason '${TurnPauseReasons.WAITING_FOR_PLAYER}' gesetzt sein."
+            "TurnState.pausedPlayerId darf nur mit PauseReason " +
+                "'${TurnPauseReasons.WAITING_FOR_PLAYER}' gesetzt sein."
         }
         require(pauseReason != TurnPauseReasons.WAITING_FOR_PLAYER || pausedPlayerId != null) {
-            "TurnState.pausedPlayerId muss gesetzt sein, wenn pauseReason='${TurnPauseReasons.WAITING_FOR_PLAYER}' ist."
+            "TurnState.pausedPlayerId muss gesetzt sein, wenn " +
+                "pauseReason='${TurnPauseReasons.WAITING_FOR_PLAYER}' ist."
         }
         require(pausedPlayerId == null || pausedPlayerId == activePlayerId) {
             "TurnState.pausedPlayerId muss dem aktiven Spieler entsprechen."

@@ -93,16 +93,37 @@ class StartPlayerSetIntegrationTest {
             try {
                 coroutineScope {
                     val hostSession =
-                        connectSessionWithConnection(client, network, host, playersByConnection, connectionsByPlayer)
+                        connectSessionWithConnection(
+                            client,
+                            network,
+                            host,
+                            playersByConnection,
+                            connectionsByPlayer,
+                        )
                     val player2Session =
-                        connectSessionWithConnection(client, network, player2, playersByConnection, connectionsByPlayer)
+                        connectSessionWithConnection(
+                            client,
+                            network,
+                            player2,
+                            playersByConnection,
+                            connectionsByPlayer,
+                        )
                     val outsiderSession =
-                        connectSessionWithConnection(client, network, outsider, playersByConnection, connectionsByPlayer)
+                        connectSessionWithConnection(
+                            client,
+                            network,
+                            outsider,
+                            playersByConnection,
+                            connectionsByPlayer,
+                        )
 
                     hostSession.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(StartPlayerSetRequest(lobbyCode, player2, host)),
+                            data =
+                                MessageCodec.encode(
+                                    StartPlayerSetRequest(lobbyCode, player2, host),
+                                ),
                         ),
                     )
 
@@ -131,7 +152,10 @@ class StartPlayerSetIntegrationTest {
                         receivePayload(player2Session.first),
                     )
                     assertNull(receivePayloadOrNull(outsiderSession.first))
-                    assertEquals(player2, lobbyManager.getLobby(lobbyCode)?.currentState()?.configuredStartPlayerId)
+                    assertEquals(
+                        player2,
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.configuredStartPlayerId,
+                    )
 
                     hostSession.first.close()
                     player2Session.first.close()
@@ -150,7 +174,12 @@ class StartPlayerSetIntegrationTest {
             val result =
                 exerciseFailingSet(
                     lobbyCode = LobbyCode("SP12"),
-                    state = preGameState(LobbyCode("SP12"), listOf(PlayerId(1), PlayerId(2)), PlayerId(1)),
+                    state =
+                        preGameState(
+                            LobbyCode("SP12"),
+                            listOf(PlayerId(1), PlayerId(2)),
+                            PlayerId(1),
+                        ),
                     requesterPlayerId = PlayerId(2),
                     request = StartPlayerSetRequest(LobbyCode("SP12"), PlayerId(2), PlayerId(2)),
                 )
@@ -165,7 +194,12 @@ class StartPlayerSetIntegrationTest {
             val result =
                 exerciseFailingSet(
                     lobbyCode = LobbyCode("SP13"),
-                    state = preGameState(LobbyCode("SP13"), listOf(PlayerId(1), PlayerId(2)), PlayerId(1)),
+                    state =
+                        preGameState(
+                            LobbyCode("SP13"),
+                            listOf(PlayerId(1), PlayerId(2)),
+                            PlayerId(1),
+                        ),
                     requesterPlayerId = PlayerId(1),
                     request = StartPlayerSetRequest(LobbyCode("SP13"), PlayerId(99), PlayerId(1)),
                 )
@@ -181,7 +215,11 @@ class StartPlayerSetIntegrationTest {
                 exerciseFailingSet(
                     lobbyCode = LobbyCode("SP14"),
                     state =
-                        preGameState(LobbyCode("SP14"), listOf(PlayerId(1), PlayerId(2)), PlayerId(1))
+                        preGameState(
+                            LobbyCode("SP14"),
+                            listOf(PlayerId(1), PlayerId(2)),
+                            PlayerId(1),
+                        )
                             .copy(gameStarted = true, status = GameStatus.RUNNING),
                     requesterPlayerId = PlayerId(1),
                     request = StartPlayerSetRequest(LobbyCode("SP14"), PlayerId(2), PlayerId(1)),
@@ -231,7 +269,13 @@ class StartPlayerSetIntegrationTest {
         return try {
             coroutineScope {
                 val requesterSession =
-                    connectSessionWithConnection(client, network, requesterPlayerId, playersByConnection, connectionsByPlayer)
+                    connectSessionWithConnection(
+                        client,
+                        network,
+                        requesterPlayerId,
+                        playersByConnection,
+                        connectionsByPlayer,
+                    )
 
                 requesterSession.first.send(
                     Frame.Binary(
@@ -240,10 +284,13 @@ class StartPlayerSetIntegrationTest {
                     ),
                 )
 
-                val error = assertIs<StartPlayerSetErrorResponse>(receivePayload(requesterSession.first))
+                val error =
+                    assertIs<StartPlayerSetErrorResponse>(receivePayload(requesterSession.first))
                 assertNull(receivePayloadOrNull(requesterSession.first))
 
-                val snapshot = lobbyManager.getLobby(lobbyCode)?.currentState() ?: error("snapshot missing")
+                val snapshot =
+                    lobbyManager.getLobby(lobbyCode)?.currentState()
+                        ?: error("snapshot missing")
                 requesterSession.first.close()
                 error to snapshot
             }
@@ -333,7 +380,10 @@ class StartPlayerSetIntegrationTest {
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {
-        assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")
+        assertTrue(
+            value is T,
+            "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.",
+        )
         return value as T
     }
 }

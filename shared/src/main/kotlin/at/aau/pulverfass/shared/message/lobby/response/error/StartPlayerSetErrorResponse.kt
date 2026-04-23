@@ -27,7 +27,9 @@ data class StartPlayerSetErrorResponse(
 
 object StartPlayerSetErrorResponseSerializer : KSerializer<StartPlayerSetErrorResponse> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.StartPlayerSetErrorResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.StartPlayerSetErrorResponse",
+        ) {
             element("code", StartPlayerSetErrorCode.serializer().descriptor)
             element<String>("reason")
         }
@@ -37,7 +39,12 @@ object StartPlayerSetErrorResponseSerializer : KSerializer<StartPlayerSetErrorRe
         value: StartPlayerSetErrorResponse,
     ) {
         val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, StartPlayerSetErrorCode.serializer(), value.code)
+        composite.encodeSerializableElement(
+            descriptor,
+            0,
+            StartPlayerSetErrorCode.serializer(),
+            value.code,
+        )
         composite.encodeStringElement(descriptor, 1, value.reason)
         composite.endStructure(descriptor)
     }
@@ -49,7 +56,13 @@ object StartPlayerSetErrorResponseSerializer : KSerializer<StartPlayerSetErrorRe
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> code = composite.decodeSerializableElement(descriptor, 0, StartPlayerSetErrorCode.serializer())
+                0 ->
+                    code =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            StartPlayerSetErrorCode.serializer(),
+                        )
                 1 -> reason = composite.decodeStringElement(descriptor, 1)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")

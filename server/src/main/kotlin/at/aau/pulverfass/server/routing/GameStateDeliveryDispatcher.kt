@@ -94,7 +94,8 @@ class GameStateDeliveryDispatcher(
         payload: PrivateGameStatePayload,
     ) {
         require(lobbyMembers(lobbyCode).contains(payload.recipientPlayerId)) {
-            "Spieler '${payload.recipientPlayerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+            "Spieler '${payload.recipientPlayerId.value}' ist nicht Teil " +
+                "der Lobby '${lobbyCode.value}'."
         }
 
         val connectionId = connectionIdResolver(payload.recipientPlayerId) ?: return

@@ -61,8 +61,12 @@ class MessageTypeTest {
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_MAP_GET_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_MAP_GET_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_MAP_GET_ERROR_RESPONSE))
-        assertTrue(MessageType.entries.contains(MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST))
-        assertTrue(MessageType.entries.contains(MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST))
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST),
+        )
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST),
+        )
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_TURN_ADVANCE_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_TURN_ADVANCE_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_TURN_ADVANCE_ERROR_RESPONSE))
@@ -78,9 +82,13 @@ class MessageTypeTest {
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE))
-        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE))
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE),
+        )
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_RESPONSE))
-        assertTrue(MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE))
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE),
+        )
     }
 }

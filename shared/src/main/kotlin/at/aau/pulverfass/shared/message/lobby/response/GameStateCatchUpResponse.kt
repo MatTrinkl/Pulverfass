@@ -47,7 +47,9 @@ object GameStateCatchUpResponseSerializer : KSerializer<GameStateCatchUpResponse
     private val territoryStatesSerializer = ListSerializer(MapTerritoryStateSnapshot.serializer())
 
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStateCatchUpResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStateCatchUpResponse",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element<Long>("stateVersion")
             element("determinism", PublicDeterminismMetadataSnapshot.serializer().descriptor)
@@ -101,7 +103,13 @@ object GameStateCatchUpResponseSerializer : KSerializer<GameStateCatchUpResponse
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> stateVersion = composite.decodeLongElement(descriptor, 1)
                 2 ->
                     determinism =
@@ -138,12 +146,24 @@ object GameStateCatchUpResponseSerializer : KSerializer<GameStateCatchUpResponse
 
         composite.endStructure(descriptor)
         return GameStateCatchUpResponse(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            stateVersion = stateVersion ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            determinism = determinism ?: throw MissingFieldException("determinism", descriptor.serialName),
-            turnState = turnState ?: throw MissingFieldException("turnState", descriptor.serialName),
-            definition = definition ?: throw MissingFieldException("definition", descriptor.serialName),
-            territoryStates = territoryStates ?: throw MissingFieldException("territoryStates", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            stateVersion =
+                stateVersion
+                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
+            determinism =
+                determinism
+                    ?: throw MissingFieldException("determinism", descriptor.serialName),
+            turnState =
+                turnState
+                    ?: throw MissingFieldException("turnState", descriptor.serialName),
+            definition =
+                definition
+                    ?: throw MissingFieldException("definition", descriptor.serialName),
+            territoryStates =
+                territoryStates
+                    ?: throw MissingFieldException("territoryStates", descriptor.serialName),
         )
     }
 }

@@ -14,9 +14,9 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
-import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
@@ -176,9 +176,15 @@ class TurnSystemIntegrationTest {
                     assertEquals(StartGameResponse(), receivePayload(hostSession.first))
                     assertEquals(GameStartedEvent(lobbyCode), receivePayload(hostSession.first))
                     assertEquals(configuredSetupEvent, receivePayload(hostSession.first))
-                    assertEquals(GameStartedEvent(lobbyCode), receivePayload(playerTwoSession.first))
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(playerTwoSession.first),
+                    )
                     assertEquals(configuredSetupEvent, receivePayload(playerTwoSession.first))
-                    assertEquals(GameStartedEvent(lobbyCode), receivePayload(playerThreeSession.first))
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(playerThreeSession.first),
+                    )
                     assertEquals(configuredSetupEvent, receivePayload(playerThreeSession.first))
 
                     hostSession.first.send(
@@ -194,7 +200,8 @@ class TurnSystemIntegrationTest {
                                 ),
                         ),
                     )
-                    val permissionError = assertIs<TurnAdvanceErrorResponse>(receivePayload(hostSession.first))
+                    val permissionError =
+                        assertIs<TurnAdvanceErrorResponse>(receivePayload(hostSession.first))
                     assertEquals(TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER, permissionError.code)
                     assertNull(receivePayloadOrNull(playerTwoSession.first))
                     assertNull(receivePayloadOrNull(playerThreeSession.first))
@@ -202,86 +209,168 @@ class TurnSystemIntegrationTest {
                     advanceAndAssertBroadcast(
                         actor = playerTwoSession.first,
                         watchers = listOf(hostSession.first, playerThreeSession.first),
-                        request = TurnAdvanceRequest(lobbyCode, playerTwo, TurnPhase.REINFORCEMENTS),
+                        request =
+                            TurnAdvanceRequest(
+                                lobbyCode,
+                                playerTwo,
+                                TurnPhase.REINFORCEMENTS,
+                            ),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerTwo, TurnPhase.ATTACK, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerTwo,
+                                TurnPhase.ATTACK,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerTwoSession.first,
                         watchers = listOf(hostSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerTwo, TurnPhase.ATTACK),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerTwo, TurnPhase.FORTIFY, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerTwo,
+                                TurnPhase.FORTIFY,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerTwoSession.first,
                         watchers = listOf(hostSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerTwo, TurnPhase.FORTIFY),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerTwo, TurnPhase.DRAW_CARD, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerTwo,
+                                TurnPhase.DRAW_CARD,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerTwoSession.first,
                         watchers = listOf(hostSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerTwo, TurnPhase.DRAW_CARD),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerThree, TurnPhase.REINFORCEMENTS, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerThree,
+                                TurnPhase.REINFORCEMENTS,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerThreeSession.first,
                         watchers = listOf(hostSession.first, playerTwoSession.first),
-                        request = TurnAdvanceRequest(lobbyCode, playerThree, TurnPhase.REINFORCEMENTS),
+                        request =
+                            TurnAdvanceRequest(
+                                lobbyCode,
+                                playerThree,
+                                TurnPhase.REINFORCEMENTS,
+                            ),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerThree, TurnPhase.ATTACK, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerThree,
+                                TurnPhase.ATTACK,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerThreeSession.first,
                         watchers = listOf(hostSession.first, playerTwoSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerThree, TurnPhase.ATTACK),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerThree, TurnPhase.FORTIFY, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerThree,
+                                TurnPhase.FORTIFY,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerThreeSession.first,
                         watchers = listOf(hostSession.first, playerTwoSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerThree, TurnPhase.FORTIFY),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerThree, TurnPhase.DRAW_CARD, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerThree,
+                                TurnPhase.DRAW_CARD,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = playerThreeSession.first,
                         watchers = listOf(hostSession.first, playerTwoSession.first),
                         request = TurnAdvanceRequest(lobbyCode, playerThree, TurnPhase.DRAW_CARD),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.REINFORCEMENTS, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                hostId,
+                                TurnPhase.REINFORCEMENTS,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
                         watchers = listOf(playerTwoSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.REINFORCEMENTS),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.ATTACK, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                hostId,
+                                TurnPhase.ATTACK,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
                         watchers = listOf(playerTwoSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.ATTACK),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.FORTIFY, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                hostId,
+                                TurnPhase.FORTIFY,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
                         watchers = listOf(playerTwoSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.FORTIFY),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.DRAW_CARD, 1, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                hostId,
+                                TurnPhase.DRAW_CARD,
+                                1,
+                                playerTwo,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
                         watchers = listOf(playerTwoSession.first, playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.DRAW_CARD),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, playerTwo, TurnPhase.REINFORCEMENTS, 2, playerTwo),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                playerTwo,
+                                TurnPhase.REINFORCEMENTS,
+                                2,
+                                playerTwo,
+                            ),
                     )
 
                     playerThreeSession.first.send(
@@ -416,9 +505,15 @@ class TurnSystemIntegrationTest {
                     assertEquals(StartGameResponse(), receivePayload(hostSession.first))
                     assertEquals(GameStartedEvent(lobbyCode), receivePayload(hostSession.first))
                     assertEquals(initialTurnEvent, receivePayload(hostSession.first))
-                    assertEquals(GameStartedEvent(lobbyCode), receivePayload(playerTwoSession.first))
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(playerTwoSession.first),
+                    )
                     assertEquals(initialTurnEvent, receivePayload(playerTwoSession.first))
-                    assertEquals(GameStartedEvent(lobbyCode), receivePayload(playerThreeSession.first))
+                    assertEquals(
+                        GameStartedEvent(lobbyCode),
+                        receivePayload(playerThreeSession.first),
+                    )
                     assertEquals(initialTurnEvent, receivePayload(playerThreeSession.first))
 
                     disconnectPlayer(
@@ -449,7 +544,13 @@ class TurnSystemIntegrationTest {
                         watchers = listOf(playerThreeSession.first),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.FORTIFY),
                         expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.DRAW_CARD, 1, hostId),
+                            TurnStateUpdatedEvent(
+                                lobbyCode,
+                                hostId,
+                                TurnPhase.DRAW_CARD,
+                                1,
+                                hostId,
+                            ),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
@@ -490,7 +591,10 @@ class TurnSystemIntegrationTest {
                                 ),
                         ),
                     )
-                    val pausedError = assertIs<TurnAdvanceErrorResponse>(receivePayload(reconnectedPlayerTwo.first))
+                    val pausedError =
+                        assertIs<TurnAdvanceErrorResponse>(
+                            receivePayload(reconnectedPlayerTwo.first),
+                        )
                     assertEquals(TurnAdvanceErrorCode.GAME_PAUSED, pausedError.code)
 
                     routingService.onPlayerConnected(playerTwo)
@@ -575,7 +679,10 @@ class TurnSystemIntegrationTest {
     ) {
         val boundary = assertIs<PhaseBoundaryEvent>(payload)
         assertEquals(request.lobbyCode, boundary.lobbyCode)
-        assertEquals(request.expectedPhase ?: error("expectedPhase is required for boundary assertions."), boundary.previousPhase)
+        assertEquals(
+            request.expectedPhase ?: error("expectedPhase is required for boundary assertions."),
+            boundary.previousPhase,
+        )
         assertEquals(expectedUpdate.turnPhase, boundary.nextPhase)
         assertEquals(expectedUpdate.activePlayerId, boundary.activePlayerId)
         assertEquals(expectedUpdate.turnCount, boundary.turnCount)
@@ -651,7 +758,10 @@ class TurnSystemIntegrationTest {
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {
-        assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")
+        assertTrue(
+            value is T,
+            "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.",
+        )
         return value as T
     }
 

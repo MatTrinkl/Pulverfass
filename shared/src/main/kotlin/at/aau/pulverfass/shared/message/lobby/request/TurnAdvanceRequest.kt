@@ -47,7 +47,12 @@ object TurnAdvanceRequestSerializer : KSerializer<TurnAdvanceRequest> {
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
         composite.encodeSerializableElement(descriptor, 1, PlayerId.serializer(), value.playerId)
         if (value.expectedPhase != null) {
-            composite.encodeSerializableElement(descriptor, 2, TurnPhase.serializer(), value.expectedPhase)
+            composite.encodeSerializableElement(
+                descriptor,
+                2,
+                TurnPhase.serializer(),
+                value.expectedPhase,
+            )
         }
         composite.endStructure(descriptor)
     }
@@ -60,9 +65,27 @@ object TurnAdvanceRequestSerializer : KSerializer<TurnAdvanceRequest> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> playerId = composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
-                2 -> expectedPhase = composite.decodeSerializableElement(descriptor, 2, TurnPhase.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    playerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            PlayerId.serializer(),
+                        )
+                2 ->
+                    expectedPhase =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            TurnPhase.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -70,7 +93,9 @@ object TurnAdvanceRequestSerializer : KSerializer<TurnAdvanceRequest> {
 
         composite.endStructure(descriptor)
         return TurnAdvanceRequest(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
             playerId = playerId ?: throw MissingFieldException("playerId", descriptor.serialName),
             expectedPhase = expectedPhase,
         )

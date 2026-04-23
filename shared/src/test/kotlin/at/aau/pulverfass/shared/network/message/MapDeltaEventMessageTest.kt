@@ -24,7 +24,11 @@ class MapDeltaEventMessageTest {
             )
 
         val serialized = json.encodeToString(TerritoryOwnerChangedEvent.serializer(), event)
-        val deserialized = json.decodeFromString(TerritoryOwnerChangedEvent.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                TerritoryOwnerChangedEvent.serializer(),
+                serialized,
+            )
 
         assertTrue(serialized.contains("stateVersion"))
         assertEquals(event, deserialized)
@@ -41,7 +45,11 @@ class MapDeltaEventMessageTest {
             )
 
         val serialized = json.encodeToString(TerritoryTroopsChangedEvent.serializer(), event)
-        val deserialized = json.decodeFromString(TerritoryTroopsChangedEvent.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                TerritoryTroopsChangedEvent.serializer(),
+                serialized,
+            )
 
         assertTrue(serialized.contains("stateVersion"))
         assertEquals(event, deserialized)

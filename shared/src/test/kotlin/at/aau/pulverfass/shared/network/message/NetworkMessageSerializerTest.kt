@@ -22,10 +22,10 @@ import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -459,7 +459,11 @@ class NetworkMessageSerializerTest {
     @Test
     fun `should deserialize turn state get request payload for turn state get request type`() {
         val payload = TurnStateGetRequest(lobbyCode = LobbyCode("TS12"))
-        val bytes = NetworkMessageSerializer.serializePayload(TurnStateGetRequest.serializer(), payload)
+        val bytes =
+            NetworkMessageSerializer.serializePayload(
+                TurnStateGetRequest.serializer(),
+                payload,
+            )
 
         val result =
             NetworkMessageSerializer.deserializePayload(
@@ -513,8 +517,17 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should deserialize start player set request payload for start player set request type`() {
-        val payload = StartPlayerSetRequest(lobbyCode = LobbyCode("SP12"), startPlayerId = PlayerId(2), requesterPlayerId = PlayerId(1))
-        val bytes = NetworkMessageSerializer.serializePayload(StartPlayerSetRequest.serializer(), payload)
+        val payload =
+            StartPlayerSetRequest(
+                lobbyCode = LobbyCode("SP12"),
+                startPlayerId = PlayerId(2),
+                requesterPlayerId = PlayerId(1),
+            )
+        val bytes =
+            NetworkMessageSerializer.serializePayload(
+                StartPlayerSetRequest.serializer(),
+                payload,
+            )
 
         val result =
             NetworkMessageSerializer.deserializePayload(

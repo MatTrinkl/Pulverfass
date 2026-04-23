@@ -13,16 +13,14 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
-import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
-import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
-import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
-import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
@@ -30,8 +28,8 @@ import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
-import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -41,8 +39,8 @@ import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -54,9 +52,9 @@ import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorRespo
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
@@ -93,7 +91,10 @@ class MainServerLobbyRoutingService(
     private val gameStateDelivery =
         GameStateDeliveryDispatcher(
             sendPayload = network::send,
-            lobbyMembers = { lobbyCode -> lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty() },
+            lobbyMembers = {
+                    lobbyCode ->
+                lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
+            },
             connectionIdResolver = connectionIdResolver,
         )
     private val publicGameStateBuilder = PublicGameStateBuilder()
@@ -612,8 +613,9 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: MapGetRequest,
     ): MapGetResponse {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         val playerId = request.context.playerId
 
@@ -631,8 +633,9 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: GameStateCatchUpRequest,
     ): GameStateCatchUpResponse {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         val playerId = request.context.playerId
 
@@ -646,7 +649,8 @@ class MainServerLobbyRoutingService(
         val currentVersion = state.stateVersion
         val diff = currentVersion - payload.clientStateVersion
         logger.info(
-            "GameState catch-up served: lobbyCode={} playerId={} requestedVersion={} currentVersion={} versionDiff={} reason={} recentRounds={}",
+            "GameState catch-up served: lobbyCode={} playerId={} requestedVersion={} " +
+                "currentVersion={} versionDiff={} reason={} recentRounds={}",
             payload.lobbyCode.value,
             playerId.value,
             payload.clientStateVersion,
@@ -663,8 +667,9 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: GameStatePrivateGetRequest,
     ): GameStatePrivateGetResponse {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         val contextPlayerId = request.context.playerId
 
@@ -705,9 +710,11 @@ class MainServerLobbyRoutingService(
                 MapGetErrorCode.NOT_IN_GAME -> {
                     val playerId = request.context.playerId
                     if (playerId == null) {
-                        "Connection ist keinem Spieler in Lobby '${payload.lobbyCode.value}' zugeordnet."
+                        "Connection ist keinem Spieler in Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
                     } else {
-                        "Spieler '${playerId.value}' ist nicht Teil von Lobby '${payload.lobbyCode.value}'."
+                        "Spieler '${playerId.value}' ist nicht Teil von " +
+                            "Lobby '${payload.lobbyCode.value}'."
                     }
                 }
                 MapGetErrorCode.MAP_NOT_READY ->
@@ -740,13 +747,16 @@ class MainServerLobbyRoutingService(
                 GameStateCatchUpErrorCode.NOT_IN_GAME -> {
                     val playerId = request.context.playerId
                     if (playerId == null) {
-                        "Connection ist keinem Spieler in Lobby '${payload.lobbyCode.value}' zugeordnet."
+                        "Connection ist keinem Spieler in Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
                     } else {
-                        "Spieler '${playerId.value}' ist nicht Teil von Lobby '${payload.lobbyCode.value}'."
+                        "Spieler '${playerId.value}' ist nicht Teil von " +
+                            "Lobby '${payload.lobbyCode.value}'."
                     }
                 }
                 GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
-                    "Catch-up-Snapshot für Lobby '${payload.lobbyCode.value}' ist noch nicht verfügbar."
+                    "Catch-up-Snapshot für Lobby '${payload.lobbyCode.value}' " +
+                        "ist noch nicht verfügbar."
             }
 
         return GameStateCatchUpErrorResponse(code = code, reason = reason)
@@ -769,13 +779,16 @@ class MainServerLobbyRoutingService(
                 GameStatePrivateGetErrorCode.GAME_NOT_FOUND ->
                     "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
                 GameStatePrivateGetErrorCode.NOT_IN_GAME ->
-                    "Spieler '${payload.playerId.value}' ist nicht Teil der Lobby '${payload.lobbyCode.value}'."
+                    "Spieler '${payload.playerId.value}' ist nicht Teil der " +
+                        "Lobby '${payload.lobbyCode.value}'."
                 GameStatePrivateGetErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler fuer Lobby '${payload.lobbyCode.value}' zugeordnet."
+                        "Connection ist keinem Spieler fuer Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
                     } else {
-                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                        "Requester '${payload.playerId.value}' passt nicht " +
+                            "zur aktuellen Connection '${contextPlayerId.value}'."
                     }
                 }
             }
@@ -787,11 +800,14 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: TurnAdvanceRequest,
     ): TurnStateUpdatedEvent {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         val contextPlayerId = request.context.playerId
-        val currentTurnState = state.resolvedTurnState ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
+        val currentTurnState =
+            state.resolvedTurnState
+                ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
         if (contextPlayerId == null || contextPlayerId != payload.playerId) {
             throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
@@ -829,15 +845,19 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: StartPlayerSetRequest,
     ): StartPlayerConfigured {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         val contextPlayerId = request.context.playerId
 
         if (contextPlayerId == null || contextPlayerId != payload.requesterPlayerId) {
             throw IllegalArgumentException("REQUESTER_MISMATCH")
         }
-        if (state.gameStarted || state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING) {
+        if (
+            state.gameStarted ||
+            state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING
+        ) {
             throw IllegalStateException("GAME_ALREADY_STARTED")
         }
         if (state.lobbyOwner != payload.requesterPlayerId) {
@@ -855,12 +875,14 @@ class MainServerLobbyRoutingService(
     }
 
     private fun buildTurnStateGetResponse(payload: TurnStateGetRequest): TurnStateGetResponse {
-        val lobby = lobbyManager.getLobby(payload.lobbyCode)
-            ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
         return TurnStateGetResponse.fromGameState(state).also { response ->
             logger.info(
-                "Turn state snapshot served: lobbyCode={} activePlayerId={} phase={} turnCount={} paused={}",
+                "Turn state snapshot served: lobbyCode={} activePlayerId={} " +
+                    "phase={} turnCount={} paused={}",
                 response.lobbyCode.value,
                 response.activePlayerId.value,
                 response.turnPhase.name,
@@ -888,14 +910,20 @@ class MainServerLobbyRoutingService(
                 TurnAdvanceErrorCode.GAME_NOT_FOUND ->
                     "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
                 TurnAdvanceErrorCode.GAME_PAUSED ->
-                    "Lobby '${payload.lobbyCode.value}' ist pausiert; Turn-Wechsel ist aktuell nicht erlaubt."
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
+                        "Turn-Wechsel ist aktuell nicht erlaubt."
                 TurnAdvanceErrorCode.PHASE_MISMATCH -> {
                     val expectedPhase = payload.expectedPhase
-                    val currentPhase = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.activeTurnPhase
+                    val currentPhase =
+                        lobbyManager.getLobby(
+                            payload.lobbyCode,
+                        )?.currentState()?.activeTurnPhase
                     if (expectedPhase == null || currentPhase == null) {
-                        "Die erwartete Phase stimmt nicht mit dem autoritativen Serverzustand überein."
+                        "Die erwartete Phase stimmt nicht mit dem " +
+                            "autoritativen Serverzustand überein."
                     } else {
-                        "Erwartete Phase '${expectedPhase.name}', aktueller Serverzustand ist '${currentPhase.name}'."
+                        "Erwartete Phase '${expectedPhase.name}', aktueller " +
+                            "Serverzustand ist '${currentPhase.name}'."
                     }
                 }
                 TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> {
@@ -904,13 +932,17 @@ class MainServerLobbyRoutingService(
                     val contextPlayerId = request.context.playerId
                     when {
                         contextPlayerId == null ->
-                            "Connection ist keinem aktiven Spieler für Lobby '${payload.lobbyCode.value}' zugeordnet."
+                            "Connection ist keinem aktiven Spieler für Lobby " +
+                                "'${payload.lobbyCode.value}' zugeordnet."
                         contextPlayerId != payload.playerId ->
-                            "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection."
+                            "Requester '${payload.playerId.value}' passt nicht " +
+                                "zur aktuellen Connection."
                         activePlayer == null ->
-                            "Für Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver Spieler gesetzt."
+                            "Für Lobby '${payload.lobbyCode.value}' ist " +
+                                "aktuell kein aktiver Spieler gesetzt."
                         else ->
-                            "Nur der aktive Spieler '${activePlayer.value}' darf den Turn-State fortschalten."
+                            "Nur der aktive Spieler '${activePlayer.value}' " +
+                                "darf den Turn-State fortschalten."
                     }
                 }
             }
@@ -937,17 +969,23 @@ class MainServerLobbyRoutingService(
                 StartPlayerSetErrorCode.GAME_NOT_FOUND ->
                     "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
                 StartPlayerSetErrorCode.NOT_HOST ->
-                    "Nur der Lobby Owner darf den Startspieler für Lobby '${payload.lobbyCode.value}' setzen."
+                    "Nur der Lobby Owner darf den Startspieler für Lobby " +
+                        "'${payload.lobbyCode.value}' setzen."
                 StartPlayerSetErrorCode.PLAYER_NOT_IN_LOBBY ->
-                    "Spieler '${payload.startPlayerId.value}' ist nicht Teil der Lobby '${payload.lobbyCode.value}'."
+                    "Spieler '${payload.startPlayerId.value}' ist nicht Teil " +
+                        "der Lobby '${payload.lobbyCode.value}'."
                 StartPlayerSetErrorCode.GAME_ALREADY_STARTED ->
-                    "Der Startspieler kann für Lobby '${payload.lobbyCode.value}' nach Spielstart nicht mehr geändert werden."
+                    "Der Startspieler kann für Lobby " +
+                        "'${payload.lobbyCode.value}' nach Spielstart nicht " +
+                        "mehr geändert werden."
                 StartPlayerSetErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler für Lobby '${payload.lobbyCode.value}' zugeordnet."
+                        "Connection ist keinem Spieler für Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
                     } else {
-                        "Requester '${payload.requesterPlayerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                        "Requester '${payload.requesterPlayerId.value}' passt " +
+                            "nicht zur aktuellen Connection '${contextPlayerId.value}'."
                     }
                 }
             }
@@ -982,11 +1020,18 @@ class MainServerLobbyRoutingService(
         previousState: GameState,
         currentState: GameState,
     ) {
-        val publicDelta = publicGameStateBuilder.buildDelta(lobbyCode, event, previousState, currentState)
+        val publicDelta =
+            publicGameStateBuilder.buildDelta(
+                lobbyCode,
+                event,
+                previousState,
+                currentState,
+            )
         if (publicDelta != null) {
             val currentTurnCount = currentState.resolvedTurnState?.turnCount
             logger.info(
-                "Public delta broadcast: lobbyCode={} playerId={} fromVersion={} toVersion={} stateVersion={} turnCount={} eventCount={}",
+                "Public delta broadcast: lobbyCode={} playerId={} fromVersion={} " +
+                    "toVersion={} stateVersion={} turnCount={} eventCount={}",
                 lobbyCode.value,
                 currentState.resolvedTurnState?.activePlayerId?.value,
                 publicDelta.fromVersion,
@@ -1015,7 +1060,7 @@ class MainServerLobbyRoutingService(
                     event.copy(stateVersion = currentState.stateVersion)
                 }
                 else -> return
-        }
+            }
         gameStateDelivery.broadcastPublicState(lobbyCode, broadcastPayload)
     }
 
@@ -1033,9 +1078,15 @@ class MainServerLobbyRoutingService(
     private fun currentTurnState(lobbyCode: LobbyCode): TurnState? =
         lobbyManager.getLobby(lobbyCode)?.currentState()?.turnState
 
-    fun roundHistory(lobbyCode: LobbyCode): List<RoundHistory> = roundHistoryBuffer(lobbyCode).history()
+    fun roundHistory(lobbyCode: LobbyCode): List<RoundHistory> =
+        roundHistoryBuffer(
+            lobbyCode,
+        ).history()
 
-    fun describeRoundHistory(lobbyCode: LobbyCode): String = roundHistoryBuffer(lobbyCode).describe()
+    fun describeRoundHistory(lobbyCode: LobbyCode): String =
+        roundHistoryBuffer(
+            lobbyCode,
+        ).describe()
 
     private suspend fun broadcastPhaseBoundaryIfChanged(
         lobbyCode: LobbyCode,
@@ -1059,7 +1110,8 @@ class MainServerLobbyRoutingService(
             )
 
         logger.info(
-            "Phase boundary broadcast: lobbyCode={} playerId={} stateVersion={} previousPhase={} nextPhase={} turnCount={}",
+            "Phase boundary broadcast: lobbyCode={} playerId={} stateVersion={} " +
+                "previousPhase={} nextPhase={} turnCount={}",
             lobbyCode.value,
             currentTurnState.activePlayerId.value,
             currentState.stateVersion,
@@ -1086,7 +1138,8 @@ class MainServerLobbyRoutingService(
         }
 
         logger.info(
-            "Turn state changed: lobbyCode={} activePlayerId={} phase={} turnCount={} paused={} pausedPlayerId={}",
+            "Turn state changed: lobbyCode={} activePlayerId={} phase={} " +
+                "turnCount={} paused={} pausedPlayerId={}",
             lobbyCode.value,
             currentTurnState.activePlayerId.value,
             currentTurnState.turnPhase.name,
@@ -1121,7 +1174,8 @@ class MainServerLobbyRoutingService(
 
         val payload = publicGameStateBuilder.buildSnapshotBroadcast(currentState)
         logger.info(
-            "Public snapshot broadcast: lobbyCode={} playerId={} stateVersion={} turnCount={} mapHash={}",
+            "Public snapshot broadcast: lobbyCode={} playerId={} stateVersion={} " +
+                "turnCount={} mapHash={}",
             lobbyCode.value,
             currentTurnState.activePlayerId.value,
             payload.stateVersion,
@@ -1168,7 +1222,8 @@ class MainServerLobbyRoutingService(
             pausedPlayerId = pausedPlayerId,
         )
 
-    private fun isPlayerConnected(playerId: PlayerId): Boolean = connectionIdResolver(playerId) != null
+    private fun isPlayerConnected(playerId: PlayerId): Boolean =
+        connectionIdResolver(playerId) != null
 
     private fun roundHistoryBuffer(lobbyCode: LobbyCode): RoundHistoryBuffer =
         roundHistoryByLobby.computeIfAbsent(lobbyCode) { RoundHistoryBuffer() }

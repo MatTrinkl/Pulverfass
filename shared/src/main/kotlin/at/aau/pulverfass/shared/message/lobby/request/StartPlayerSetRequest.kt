@@ -28,7 +28,9 @@ data class StartPlayerSetRequest(
 
 object StartPlayerSetRequestSerializer : KSerializer<StartPlayerSetRequest> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.StartPlayerSetRequest") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.StartPlayerSetRequest",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("startPlayerId", PlayerId.serializer().descriptor)
             element("requesterPlayerId", PlayerId.serializer().descriptor)
@@ -40,8 +42,18 @@ object StartPlayerSetRequestSerializer : KSerializer<StartPlayerSetRequest> {
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(descriptor, 1, PlayerId.serializer(), value.startPlayerId)
-        composite.encodeSerializableElement(descriptor, 2, PlayerId.serializer(), value.requesterPlayerId)
+        composite.encodeSerializableElement(
+            descriptor,
+            1,
+            PlayerId.serializer(),
+            value.startPlayerId,
+        )
+        composite.encodeSerializableElement(
+            descriptor,
+            2,
+            PlayerId.serializer(),
+            value.requesterPlayerId,
+        )
         composite.endStructure(descriptor)
     }
 
@@ -53,9 +65,27 @@ object StartPlayerSetRequestSerializer : KSerializer<StartPlayerSetRequest> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> startPlayerId = composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
-                2 -> requesterPlayerId = composite.decodeSerializableElement(descriptor, 2, PlayerId.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    startPlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            PlayerId.serializer(),
+                        )
+                2 ->
+                    requesterPlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            PlayerId.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -63,9 +93,15 @@ object StartPlayerSetRequestSerializer : KSerializer<StartPlayerSetRequest> {
 
         composite.endStructure(descriptor)
         return StartPlayerSetRequest(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            startPlayerId = startPlayerId ?: throw MissingFieldException("startPlayerId", descriptor.serialName),
-            requesterPlayerId = requesterPlayerId ?: throw MissingFieldException("requesterPlayerId", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            startPlayerId =
+                startPlayerId
+                    ?: throw MissingFieldException("startPlayerId", descriptor.serialName),
+            requesterPlayerId =
+                requesterPlayerId
+                    ?: throw MissingFieldException("requesterPlayerId", descriptor.serialName),
         )
     }
 }

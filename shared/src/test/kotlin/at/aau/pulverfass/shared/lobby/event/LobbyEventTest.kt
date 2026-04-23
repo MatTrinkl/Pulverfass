@@ -3,8 +3,8 @@ package at.aau.pulverfass.shared.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test

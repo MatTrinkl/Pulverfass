@@ -2,10 +2,10 @@ package at.aau.pulverfass.shared.map.config
 
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import java.security.MessageDigest
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
 
 /**
  * Stabiler Identifier einer normalisierten Map-Definition.

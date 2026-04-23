@@ -5,8 +5,8 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.GameState
-import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
@@ -157,7 +157,10 @@ class MapDefinitionHashingTest {
                     ),
             )
 
-        assertEquals(MapDefinitionHashing.canonicalJson(first), MapDefinitionHashing.canonicalJson(second))
+        assertEquals(
+            MapDefinitionHashing.canonicalJson(first),
+            MapDefinitionHashing.canonicalJson(second),
+        )
         assertEquals(first.mapHash, second.mapHash)
     }
 
@@ -178,7 +181,10 @@ class MapDefinitionHashingTest {
                     determinism = PublicDeterminismMetadataSnapshot.from(definition),
                     turnState = PublicTurnStateSnapshot.from(gameState.resolvedTurnState!!),
                     definition = MapDefinitionSnapshot.from(definition),
-                    territoryStates = gameState.allTerritoryStates().map(MapTerritoryStateSnapshot::from),
+                    territoryStates =
+                        gameState.allTerritoryStates().map(
+                            MapTerritoryStateSnapshot::from,
+                        ),
                 ),
             )
 

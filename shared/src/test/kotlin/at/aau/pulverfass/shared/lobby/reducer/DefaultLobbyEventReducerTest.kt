@@ -3,8 +3,10 @@ package at.aau.pulverfass.shared.lobby.reducer
 import at.aau.pulverfass.shared.event.CorrelationId
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -21,11 +23,9 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
-import at.aau.pulverfass.shared.ids.ContinentId
-import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition

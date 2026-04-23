@@ -60,7 +60,11 @@ class GameStateSnapshotBroadcastMessageTest {
             )
 
         val serialized = json.encodeToString(GameStateSnapshotBroadcast.serializer(), payload)
-        val deserialized = json.decodeFromString(GameStateSnapshotBroadcast.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                GameStateSnapshotBroadcast.serializer(),
+                serialized,
+            )
 
         assertTrue(serialized.contains("determinism"))
         assertTrue(serialized.contains("turnState"))

@@ -110,7 +110,12 @@ class RoundHistoryBuffer(
 
         round(roundIndex).apply {
             includeRange(fromVersion, toVersion)
-            deltas += RoundDeltaMetadata(fromVersion = fromVersion, toVersion = toVersion, eventCount = eventCount)
+            deltas +=
+                RoundDeltaMetadata(
+                    fromVersion = fromVersion,
+                    toVersion = toVersion,
+                    eventCount = eventCount,
+                )
         }
     }
 
@@ -131,7 +136,11 @@ class RoundHistoryBuffer(
     ) {
         round(event.turnCount).apply {
             includeVersion(stateVersion)
-            turnStateChanges += RoundTurnStateChange.from(stateVersion = stateVersion, event = event)
+            turnStateChanges +=
+                RoundTurnStateChange.from(
+                    stateVersion = stateVersion,
+                    event = event,
+                )
         }
     }
 
@@ -156,7 +165,12 @@ class RoundHistoryBuffer(
     @Synchronized
     fun describe(): String =
         history().joinToString(separator = " | ") { history ->
-            "round=${history.roundIndex} versions=${history.startStateVersion}..${history.endStateVersion} deltas=${history.deltas.size} boundaries=${history.phaseBoundaries.size} turnUpdates=${history.turnStateChanges.size} snapshots=${history.snapshots.size}"
+            "round=${history.roundIndex} " +
+                "versions=${history.startStateVersion}..${history.endStateVersion} " +
+                "deltas=${history.deltas.size} " +
+                "boundaries=${history.phaseBoundaries.size} " +
+                "turnUpdates=${history.turnStateChanges.size} " +
+                "snapshots=${history.snapshots.size}"
         }.ifBlank {
             "empty"
         }
@@ -196,10 +210,12 @@ class RoundHistoryBuffer(
             end: Long,
         ) {
             require(start >= 1) {
-                "RoundHistoryBuffer.startStateVersion darf nicht kleiner als 1 sein, war aber $start."
+                "RoundHistoryBuffer.startStateVersion darf nicht kleiner " +
+                    "als 1 sein, war aber $start."
             }
             require(end >= start) {
-                "RoundHistoryBuffer.endStateVersion darf nicht kleiner als startStateVersion sein, war aber $end < $start."
+                "RoundHistoryBuffer.endStateVersion darf nicht kleiner als " +
+                    "startStateVersion sein, war aber $end < $start."
             }
             startStateVersion = minOf(startStateVersion ?: start, start)
             endStateVersion = maxOf(endStateVersion ?: end, end)
@@ -214,10 +230,16 @@ class RoundHistoryBuffer(
                 roundIndex = roundIndex,
                 startStateVersion =
                     startStateVersion
-                        ?: error("RoundHistory für Runde $roundIndex wurde ohne stateVersion-Bereich aufgebaut."),
+                        ?: error(
+                            "RoundHistory für Runde $roundIndex wurde ohne " +
+                                "stateVersion-Bereich aufgebaut.",
+                        ),
                 endStateVersion =
                     endStateVersion
-                        ?: error("RoundHistory für Runde $roundIndex wurde ohne stateVersion-Bereich aufgebaut."),
+                        ?: error(
+                            "RoundHistory für Runde $roundIndex wurde ohne " +
+                                "stateVersion-Bereich aufgebaut.",
+                        ),
                 deltas = deltas.toList(),
                 phaseBoundaries = phaseBoundaries.toList(),
                 turnStateChanges = turnStateChanges.toList(),

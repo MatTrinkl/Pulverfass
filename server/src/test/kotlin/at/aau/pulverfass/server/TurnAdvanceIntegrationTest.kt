@@ -11,8 +11,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
-import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -194,7 +194,10 @@ class TurnAdvanceIntegrationTest {
                     )
                     assertNull(receivePayloadOrNull(outsiderSession.first))
                     assertNull(receivePayloadOrNull(playerOneSession.first))
-                    assertEquals(TurnPhase.ATTACK, lobbyManager.getLobby(lobbyCode)?.currentState()?.activeTurnPhase)
+                    assertEquals(
+                        TurnPhase.ATTACK,
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.activeTurnPhase,
+                    )
 
                     playerOneSession.first.close()
                     playerTwoSession.first.close()
@@ -305,7 +308,10 @@ class TurnAdvanceIntegrationTest {
                         ),
                         receiveAnyPayload(playerOneSession.first),
                     )
-                    assertEquals(TurnAdvanceResponse(lobbyCode), receiveAnyPayload(playerOneSession.first))
+                    assertEquals(
+                        TurnAdvanceResponse(lobbyCode),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
@@ -498,11 +504,17 @@ class TurnAdvanceIntegrationTest {
                         receiveAnyPayload(playerTwoSession.first),
                     )
 
-                    val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerTwoSession.first))
+                    val snapshot =
+                        assertIs<GameStateSnapshotBroadcast>(
+                            receiveAnyPayload(playerTwoSession.first),
+                        )
                     assertEquals(lobbyCode, snapshot.lobbyCode)
                     assertEquals(1, snapshot.stateVersion)
                     assertEquals(defaultMapDefinition().mapHash, snapshot.determinism.mapHash)
-                    assertEquals(defaultMapDefinition().schemaVersion, snapshot.determinism.schemaVersion)
+                    assertEquals(
+                        defaultMapDefinition().schemaVersion,
+                        snapshot.determinism.schemaVersion,
+                    )
                     assertEquals(playerTwo, snapshot.turnState.activePlayerId)
                     assertEquals(TurnPhase.REINFORCEMENTS, snapshot.turnState.turnPhase)
                     assertEquals(1, snapshot.turnState.turnCount)
@@ -677,7 +689,9 @@ class TurnAdvanceIntegrationTest {
                     )
 
                     assertNull(receivePayloadOrNull(playerOneSession.first))
-                    val snapshot = lobbyManager.getLobby(lobbyCode)?.currentState() ?: error("snapshot missing")
+                    val snapshot =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
                     assertEquals(playerOne, snapshot.activePlayer)
                     assertEquals(false, snapshot.turnState?.isPaused)
 
@@ -779,7 +793,10 @@ class TurnAdvanceIntegrationTest {
                         ),
                     )
 
-                    assertEquals(TurnAdvanceResponse(lobbyCode), receivePayload(playerOneSession.first))
+                    assertEquals(
+                        TurnAdvanceResponse(lobbyCode),
+                        receivePayload(playerOneSession.first),
+                    )
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
@@ -804,10 +821,15 @@ class TurnAdvanceIntegrationTest {
                         ),
                         receivePayload(playerOneSession.first),
                     )
-                    val snapshot = lobbyManager.getLobby(lobbyCode)?.currentState() ?: error("snapshot missing")
+                    val snapshot =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
                     assertEquals(playerTwo, snapshot.activePlayer)
                     assertEquals(true, snapshot.turnState?.isPaused)
-                    assertEquals(TurnPauseReasons.WAITING_FOR_PLAYER, snapshot.turnState?.pauseReason)
+                    assertEquals(
+                        TurnPauseReasons.WAITING_FOR_PLAYER,
+                        snapshot.turnState?.pauseReason,
+                    )
                     assertEquals(playerTwo, snapshot.turnState?.pausedPlayerId)
 
                     playerOneSession.first.close()
@@ -904,7 +926,9 @@ class TurnAdvanceIntegrationTest {
                     assertEquals(expectedEvent, receivePayload(playerOneSession.first))
                     assertEquals(expectedEvent, receivePayload(playerTwoSession.first))
 
-                    val snapshot = lobbyManager.getLobby(lobbyCode)?.currentState() ?: error("snapshot missing")
+                    val snapshot =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
                     assertEquals(playerTwo, snapshot.activePlayer)
                     assertEquals(false, snapshot.turnState?.isPaused)
                     assertEquals(null, snapshot.turnState?.pausedPlayerId)
@@ -974,10 +998,13 @@ class TurnAdvanceIntegrationTest {
                     ),
                 )
 
-                val error = assertIs<TurnAdvanceErrorResponse>(receivePayload(requesterSession.first))
+                val error =
+                    assertIs<TurnAdvanceErrorResponse>(receivePayload(requesterSession.first))
                 assertNull(receivePayloadOrNull(requesterSession.first))
 
-                val snapshot = lobbyManager.getLobby(lobbyCode)?.currentState() ?: error("snapshot missing")
+                val snapshot =
+                    lobbyManager.getLobby(lobbyCode)?.currentState()
+                        ?: error("snapshot missing")
                 requesterSession.first.close()
                 error to snapshot
             }
@@ -1096,9 +1123,13 @@ class TurnAdvanceIntegrationTest {
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {
-        assertTrue(value is T, "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.")
+        assertTrue(
+            value is T,
+            "Expected ${T::class.simpleName}, but was ${value?.let { it::class.simpleName }}.",
+        )
         return value as T
     }
 
-    private fun defaultMapDefinition() = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
+    private fun defaultMapDefinition() =
+        at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
 }

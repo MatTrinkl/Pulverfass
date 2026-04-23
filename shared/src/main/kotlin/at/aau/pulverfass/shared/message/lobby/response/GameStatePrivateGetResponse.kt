@@ -51,7 +51,9 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
     private val stringListSerializer = ListSerializer(String.serializer())
 
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStatePrivateGetResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStatePrivateGetResponse",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("recipientPlayerId", PlayerId.serializer().descriptor)
             element<Long>("stateVersion")
@@ -65,10 +67,20 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(descriptor, 1, PlayerId.serializer(), value.recipientPlayerId)
+        composite.encodeSerializableElement(
+            descriptor,
+            1,
+            PlayerId.serializer(),
+            value.recipientPlayerId,
+        )
         composite.encodeLongElement(descriptor, 2, value.stateVersion)
         composite.encodeSerializableElement(descriptor, 3, stringListSerializer, value.handCards)
-        composite.encodeSerializableElement(descriptor, 4, stringListSerializer, value.secretObjectives)
+        composite.encodeSerializableElement(
+            descriptor,
+            4,
+            stringListSerializer,
+            value.secretObjectives,
+        )
         composite.endStructure(descriptor)
     }
 
@@ -82,12 +94,24 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 ->
                     recipientPlayerId =
                         composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
                 2 -> stateVersion = composite.decodeLongElement(descriptor, 2)
-                3 -> handCards = composite.decodeSerializableElement(descriptor, 3, stringListSerializer)
+                3 ->
+                    handCards =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            3,
+                            stringListSerializer,
+                        )
                 4 ->
                     secretObjectives =
                         composite.decodeSerializableElement(descriptor, 4, stringListSerializer)
@@ -98,18 +122,28 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
 
         composite.endStructure(descriptor)
         return GameStatePrivateGetResponse(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
             recipientPlayerId =
-                recipientPlayerId ?: throw MissingFieldException("recipientPlayerId", descriptor.serialName),
-            stateVersion = stateVersion ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            handCards = handCards ?: throw MissingFieldException("handCards", descriptor.serialName),
+                recipientPlayerId
+                    ?: throw MissingFieldException("recipientPlayerId", descriptor.serialName),
+            stateVersion =
+                stateVersion
+                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
+            handCards =
+                handCards
+                    ?: throw MissingFieldException("handCards", descriptor.serialName),
             secretObjectives =
-                secretObjectives ?: throw MissingFieldException("secretObjectives", descriptor.serialName),
+                secretObjectives
+                    ?: throw MissingFieldException("secretObjectives", descriptor.serialName),
         )
     }
 }
 
-internal fun GameState.toGameStatePrivateGetResponse(recipientPlayerId: PlayerId): GameStatePrivateGetResponse {
+internal fun GameState.toGameStatePrivateGetResponse(
+    recipientPlayerId: PlayerId,
+): GameStatePrivateGetResponse {
     require(hasPlayer(recipientPlayerId)) {
         "Spieler '${recipientPlayerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
     }

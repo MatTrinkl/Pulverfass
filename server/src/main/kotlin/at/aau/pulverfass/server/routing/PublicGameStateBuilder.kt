@@ -38,7 +38,9 @@ class PublicGameStateBuilder {
     fun buildSnapshot(gameState: GameState): PublicGameStateSnapshot {
         val resolvedTurnState =
             gameState.resolvedTurnState
-                ?: throw IllegalStateException("GameState enthält keinen TurnState für einen Snapshot.")
+                ?: throw IllegalStateException(
+                    "GameState enthält keinen TurnState für einen Snapshot.",
+                )
         val mapProjection = buildMapProjection(gameState)
 
         return PublicGameStateSnapshot(
@@ -113,8 +115,12 @@ class PublicGameStateBuilder {
 
         val nonPublicEvents = payloads.filterNot { it is PublicGameEvent }
         require(nonPublicEvents.isEmpty()) {
-            val leakedTypes = nonPublicEvents.joinToString { it::class.simpleName ?: it::class.qualifiedName ?: "unknown" }
-            "GameStateDeltaEvent darf nur PublicGameEvent enthalten. Nicht-oeffentliche Payloads: $leakedTypes."
+            val leakedTypes =
+                nonPublicEvents.joinToString {
+                    it::class.simpleName ?: it::class.qualifiedName ?: "unknown"
+                }
+            "GameStateDeltaEvent darf nur PublicGameEvent enthalten. " +
+                "Nicht-oeffentliche Payloads: $leakedTypes."
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -153,8 +159,14 @@ class PublicGameStateBuilder {
             }
 
             when (event) {
-                is TerritoryOwnerChangedEvent -> add(event.copy(stateVersion = currentState.stateVersion))
-                is TerritoryTroopsChangedEvent -> add(event.copy(stateVersion = currentState.stateVersion))
+                is TerritoryOwnerChangedEvent ->
+                    add(
+                        event.copy(stateVersion = currentState.stateVersion),
+                    )
+                is TerritoryTroopsChangedEvent ->
+                    add(
+                        event.copy(stateVersion = currentState.stateVersion),
+                    )
                 is TurnStateUpdatedEvent -> add(event)
                 else -> {
                     if (previousState.turnState != currentState.turnState) {
@@ -184,7 +196,9 @@ class PublicGameStateBuilder {
     private fun buildMapProjection(gameState: GameState): PublicMapProjection {
         val definition =
             gameState.mapDefinition
-                ?: throw IllegalStateException("GameState enthält keine MapDefinition für einen Snapshot.")
+                ?: throw IllegalStateException(
+                    "GameState enthält keine MapDefinition für einen Snapshot.",
+                )
 
         return PublicMapProjection(
             determinism = PublicDeterminismMetadataSnapshot.from(definition),

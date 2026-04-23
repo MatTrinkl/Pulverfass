@@ -182,7 +182,12 @@ class GameStateTest {
         assertEquals(playerOne, state.ownerOf(TerritoryId("alpha")))
         assertEquals(5, state.troopCountOf(TerritoryId("alpha")))
         assertEquals(5, state.troopsOn(TerritoryId("alpha")))
-        assertEquals(listOf(TerritoryId("alpha")), state.territoriesOwnedBy(playerOne).map { it.territoryId })
+        assertEquals(
+            listOf(TerritoryId("alpha")),
+            state.territoriesOwnedBy(playerOne).map {
+                it.territoryId
+            },
+        )
     }
 
     @Test

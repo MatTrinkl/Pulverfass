@@ -50,7 +50,11 @@ class StartPlayerSetMessageTest {
             )
 
         val serialized = json.encodeToString(StartPlayerSetErrorResponse.serializer(), response)
-        val deserialized = json.decodeFromString(StartPlayerSetErrorResponse.serializer(), serialized)
+        val deserialized =
+            json.decodeFromString(
+                StartPlayerSetErrorResponse.serializer(),
+                serialized,
+            )
 
         assertTrue(serialized.contains("NOT_HOST"))
         assertEquals(response, deserialized)

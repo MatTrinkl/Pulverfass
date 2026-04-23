@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.LobbyStateReader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import org.slf4j.LoggerFactory
 
 /**
  * Zentrale Lifecycle- und Kapselungseinheit für genau eine Lobby.
@@ -21,6 +22,10 @@ class LobbyRuntime private constructor(
     private val eventLoop: LobbyEventLoop,
     private val hooks: LobbyRuntimeHooks = LobbyRuntimeHooks(),
 ) : LobbyStateReader by eventLoop {
+    companion object {
+        private val logger = LoggerFactory.getLogger(LobbyRuntime::class.java)
+    }
+
     constructor(
         lobbyCode: LobbyCode,
         initialState: GameState = GameState.initial(lobbyCode),
@@ -69,17 +74,29 @@ class LobbyRuntime private constructor(
         context: EventContext? = null,
     ) {
         hooks.onEventEnqueued(lobbyCode, event, context)
+        val processed =
+            try {
+                eventLoop.submit(event, context)
+            } catch (cause: Throwable) {
+                hooks.onEventRejected(lobbyCode, event, cause)
+                throw cause
+            }
+
         try {
-            val processed = eventLoop.submit(event, context)
             hooks.onEventAccepted(
                 lobbyCode,
                 processed.event,
                 processed.beforeState,
                 processed.afterState,
             )
-        } catch (cause: Throwable) {
-            hooks.onEventRejected(lobbyCode, event, cause)
-            throw cause
+        } catch (cause: Exception) {
+            logger.warn(
+                "Accepted-event hook failed for lobby {} and event {}. " +
+                    "State mutation was already applied.",
+                lobbyCode.value,
+                processed.event::class.simpleName,
+                cause,
+            )
         }
     }
 
@@ -118,7 +135,12 @@ data class LobbyRuntimeHooks(
     /** Wird unmittelbar vor dem technischen Enqueue ausgelöst. */
     val onEventEnqueued: (LobbyCode, LobbyEvent, EventContext?) -> Unit = { _, _, _ -> },
     /** Wird nach erfolgreicher Eventverarbeitung ausgelöst. */
-    val onEventAccepted: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit = { _, _, _, _ -> },
+    val onEventAccepted: suspend (
+        LobbyCode,
+        LobbyEvent,
+        GameState,
+        GameState,
+    ) -> Unit = { _, _, _, _ -> },
     /** Wird bei Verarbeitungsfehlern ausgelöst. */
     val onEventRejected: (LobbyCode, LobbyEvent, Throwable) -> Unit = { _, _, _ -> },
 )

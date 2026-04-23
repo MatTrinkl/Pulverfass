@@ -32,7 +32,9 @@ data class GameStateDeltaEvent(
             "GameStateDeltaEvent.fromVersion darf nicht kleiner als 1 sein, war aber $fromVersion."
         }
         require(toVersion >= fromVersion) {
-            "GameStateDeltaEvent.toVersion darf nicht kleiner als fromVersion sein, war aber fromVersion=$fromVersion toVersion=$toVersion."
+            "GameStateDeltaEvent.toVersion darf nicht kleiner als " +
+                "fromVersion sein, war aber fromVersion=$fromVersion " +
+                "toVersion=$toVersion."
         }
         require(events.isNotEmpty()) {
             "GameStateDeltaEvent.events darf nicht leer sein."
@@ -41,7 +43,8 @@ data class GameStateDeltaEvent(
 }
 
 object GameStateDeltaEventSerializer : KSerializer<GameStateDeltaEvent> {
-    private val serializedEventListSerializer = ListSerializer(SerializedPublicGameEvent.serializer())
+    private val serializedEventListSerializer =
+        ListSerializer(SerializedPublicGameEvent.serializer())
 
     override val descriptor =
         buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStateDeltaEvent") {
@@ -77,10 +80,22 @@ object GameStateDeltaEventSerializer : KSerializer<GameStateDeltaEvent> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> fromVersion = composite.decodeLongElement(descriptor, 1)
                 2 -> toVersion = composite.decodeLongElement(descriptor, 2)
-                3 -> events = composite.decodeSerializableElement(descriptor, 3, serializedEventListSerializer)
+                3 ->
+                    events =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            3,
+                            serializedEventListSerializer,
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -88,9 +103,15 @@ object GameStateDeltaEventSerializer : KSerializer<GameStateDeltaEvent> {
 
         composite.endStructure(descriptor)
         return GameStateDeltaEvent(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            fromVersion = fromVersion ?: throw MissingFieldException("fromVersion", descriptor.serialName),
-            toVersion = toVersion ?: throw MissingFieldException("toVersion", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            fromVersion =
+                fromVersion
+                    ?: throw MissingFieldException("fromVersion", descriptor.serialName),
+            toVersion =
+                toVersion
+                    ?: throw MissingFieldException("toVersion", descriptor.serialName),
             events =
                 events
                     ?.map(::deserializePublicGameEvent)
@@ -107,7 +128,9 @@ object GameStateDeltaEventSerializer : KSerializer<GameStateDeltaEvent> {
     private fun deserializePublicGameEvent(event: SerializedPublicGameEvent): PublicGameEvent {
         val payload = NetworkPayloadRegistry.deserializePayload(event.messageType, event.payload)
         require(payload is PublicGameEvent) {
-            "MessageType '${event.messageType.name}' ist kein PublicGameEvent und darf nicht in GameStateDeltaEvent verwendet werden."
+            "MessageType '${event.messageType.name}' ist kein " +
+                "PublicGameEvent und darf nicht in GameStateDeltaEvent " +
+                "verwendet werden."
         }
         return payload
     }

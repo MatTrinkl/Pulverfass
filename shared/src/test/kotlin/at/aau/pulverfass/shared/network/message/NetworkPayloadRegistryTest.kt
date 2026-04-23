@@ -25,12 +25,12 @@ import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
-import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse

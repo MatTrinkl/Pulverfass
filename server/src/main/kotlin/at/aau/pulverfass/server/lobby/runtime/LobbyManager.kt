@@ -23,7 +23,9 @@ class LobbyManager(
     private val reducerFactory: (LobbyCode) -> LobbyEventReducer = { DefaultLobbyEventReducer() },
     private val queueCapacity: Int = Channel.BUFFERED,
     private val hooksFactory: (LobbyCode) -> LobbyRuntimeHooks = { LobbyRuntimeHooks() },
-    private val initialStateFactory: (LobbyCode) -> GameState = { lobbyCode -> GameState.initial(lobbyCode) },
+    private val initialStateFactory: (
+        LobbyCode,
+    ) -> GameState = { lobbyCode -> GameState.initial(lobbyCode) },
 ) {
     private val acceptedEventListeners =
         CopyOnWriteArrayList<suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit>()
@@ -64,7 +66,10 @@ class LobbyManager(
      * Findet die aktive Lobby eines Spielers, falls dieser aktuell Mitglied ist.
      */
     fun findLobbyCodeByPlayer(playerId: PlayerId): LobbyCode? =
-        lobbies.entries.firstOrNull { (_, runtime) -> runtime.currentState().hasPlayer(playerId) }?.key
+        lobbies.entries.firstOrNull {
+                (_, runtime) ->
+            runtime.currentState().hasPlayer(playerId)
+        }?.key
 
     /**
      * Leitet ein Event an die zugehörige laufende Lobby weiter.
@@ -101,7 +106,9 @@ class LobbyManager(
         activeRuntimes.forEach { runtime -> runtime.shutdown() }
     }
 
-    fun registerAcceptedEventListener(listener: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit) {
+    fun registerAcceptedEventListener(
+        listener: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit,
+    ) {
         acceptedEventListeners.add(listener)
     }
 

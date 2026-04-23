@@ -3,8 +3,8 @@ package at.aau.pulverfass.shared.message.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
-import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
@@ -51,7 +51,9 @@ object GameStateSnapshotBroadcastSerializer : KSerializer<GameStateSnapshotBroad
     private val territoryStatesSerializer = ListSerializer(MapTerritoryStateSnapshot.serializer())
 
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.GameStateSnapshotBroadcast") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.GameStateSnapshotBroadcast",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element<Long>("stateVersion")
             element("determinism", PublicDeterminismMetadataSnapshot.serializer().descriptor)
@@ -105,7 +107,13 @@ object GameStateSnapshotBroadcastSerializer : KSerializer<GameStateSnapshotBroad
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> stateVersion = composite.decodeLongElement(descriptor, 1)
                 2 ->
                     determinism =
@@ -142,12 +150,24 @@ object GameStateSnapshotBroadcastSerializer : KSerializer<GameStateSnapshotBroad
 
         composite.endStructure(descriptor)
         return GameStateSnapshotBroadcast(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            stateVersion = stateVersion ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            determinism = determinism ?: throw MissingFieldException("determinism", descriptor.serialName),
-            turnState = turnState ?: throw MissingFieldException("turnState", descriptor.serialName),
-            definition = definition ?: throw MissingFieldException("definition", descriptor.serialName),
-            territoryStates = territoryStates ?: throw MissingFieldException("territoryStates", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            stateVersion =
+                stateVersion
+                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
+            determinism =
+                determinism
+                    ?: throw MissingFieldException("determinism", descriptor.serialName),
+            turnState =
+                turnState
+                    ?: throw MissingFieldException("turnState", descriptor.serialName),
+            definition =
+                definition
+                    ?: throw MissingFieldException("definition", descriptor.serialName),
+            territoryStates =
+                territoryStates
+                    ?: throw MissingFieldException("territoryStates", descriptor.serialName),
         )
     }
 }

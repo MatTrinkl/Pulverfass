@@ -41,7 +41,9 @@ data class TurnStateGetResponse(
         fun fromGameState(gameState: GameState): TurnStateGetResponse {
             val resolvedTurnState =
                 gameState.resolvedTurnState
-                    ?: throw IllegalStateException("GameState enthält keinen TurnState für einen Snapshot.")
+                    ?: throw IllegalStateException(
+                        "GameState enthält keinen TurnState für einen Snapshot.",
+                    )
 
             return TurnStateGetResponse(
                 lobbyCode = gameState.lobbyCode,
@@ -62,7 +64,9 @@ data class TurnStateGetResponse(
  */
 object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
     override val descriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.TurnStateGetResponse") {
+        buildClassSerialDescriptor(
+            "at.aau.pulverfass.shared.network.message.TurnStateGetResponse",
+        ) {
             element("lobbyCode", LobbyCode.serializer().descriptor)
             element("activePlayerId", PlayerId.serializer().descriptor)
             element("turnPhase", TurnPhase.serializer().descriptor)
@@ -79,16 +83,31 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
     ) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(descriptor, 1, PlayerId.serializer(), value.activePlayerId)
+        composite.encodeSerializableElement(
+            descriptor,
+            1,
+            PlayerId.serializer(),
+            value.activePlayerId,
+        )
         composite.encodeSerializableElement(descriptor, 2, TurnPhase.serializer(), value.turnPhase)
         composite.encodeIntElement(descriptor, 3, value.turnCount)
-        composite.encodeSerializableElement(descriptor, 4, PlayerId.serializer(), value.startPlayerId)
+        composite.encodeSerializableElement(
+            descriptor,
+            4,
+            PlayerId.serializer(),
+            value.startPlayerId,
+        )
         composite.encodeBooleanElement(descriptor, 5, value.isPaused)
         if (value.pauseReason != null) {
             composite.encodeStringElement(descriptor, 6, value.pauseReason)
         }
         if (value.pausedPlayerId != null) {
-            composite.encodeSerializableElement(descriptor, 7, PlayerId.serializer(), value.pausedPlayerId)
+            composite.encodeSerializableElement(
+                descriptor,
+                7,
+                PlayerId.serializer(),
+                value.pausedPlayerId,
+            )
         }
         composite.endStructure(descriptor)
     }
@@ -106,14 +125,44 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
-                1 -> activePlayerId = composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
-                2 -> turnPhase = composite.decodeSerializableElement(descriptor, 2, TurnPhase.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
+                1 ->
+                    activePlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            1,
+                            PlayerId.serializer(),
+                        )
+                2 ->
+                    turnPhase =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            TurnPhase.serializer(),
+                        )
                 3 -> turnCount = composite.decodeIntElement(descriptor, 3)
-                4 -> startPlayerId = composite.decodeSerializableElement(descriptor, 4, PlayerId.serializer())
+                4 ->
+                    startPlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            4,
+                            PlayerId.serializer(),
+                        )
                 5 -> isPaused = composite.decodeBooleanElement(descriptor, 5)
                 6 -> pauseReason = composite.decodeStringElement(descriptor, 6)
-                7 -> pausedPlayerId = composite.decodeSerializableElement(descriptor, 7, PlayerId.serializer())
+                7 ->
+                    pausedPlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            7,
+                            PlayerId.serializer(),
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -121,11 +170,21 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
 
         composite.endStructure(descriptor)
         return TurnStateGetResponse(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            activePlayerId = activePlayerId ?: throw MissingFieldException("activePlayerId", descriptor.serialName),
-            turnPhase = turnPhase ?: throw MissingFieldException("turnPhase", descriptor.serialName),
-            turnCount = turnCount ?: throw MissingFieldException("turnCount", descriptor.serialName),
-            startPlayerId = startPlayerId ?: throw MissingFieldException("startPlayerId", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            activePlayerId =
+                activePlayerId
+                    ?: throw MissingFieldException("activePlayerId", descriptor.serialName),
+            turnPhase =
+                turnPhase
+                    ?: throw MissingFieldException("turnPhase", descriptor.serialName),
+            turnCount =
+                turnCount
+                    ?: throw MissingFieldException("turnCount", descriptor.serialName),
+            startPlayerId =
+                startPlayerId
+                    ?: throw MissingFieldException("startPlayerId", descriptor.serialName),
             isPaused = isPaused,
             pauseReason = pauseReason,
             pausedPlayerId = pausedPlayerId,

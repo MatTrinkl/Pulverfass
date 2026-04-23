@@ -69,12 +69,17 @@ class PublicGameStateBuilderTest {
                     lobbyCode = LobbyCode("PGB1"),
                     fromVersion = 4,
                     toVersion = 4,
-                    payloads = listOf(FakePublicEvent("ok"), FakePrivateEvent(PlayerId(2), "secret")),
+                    payloads =
+                        listOf(
+                            FakePublicEvent("ok"),
+                            FakePrivateEvent(PlayerId(2), "secret"),
+                        ),
                 )
             }
 
         assertEquals(
-            "GameStateDeltaEvent darf nur PublicGameEvent enthalten. Nicht-oeffentliche Payloads: FakePrivateEvent.",
+            "GameStateDeltaEvent darf nur PublicGameEvent enthalten. " +
+                "Nicht-oeffentliche Payloads: FakePrivateEvent.",
             exception.message,
         )
     }

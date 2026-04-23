@@ -68,9 +68,19 @@ object PhaseBoundaryEventSerializer : KSerializer<PhaseBoundaryEvent> {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
         composite.encodeLongElement(descriptor, 1, value.stateVersion)
-        composite.encodeSerializableElement(descriptor, 2, TurnPhase.serializer(), value.previousPhase)
+        composite.encodeSerializableElement(
+            descriptor,
+            2,
+            TurnPhase.serializer(),
+            value.previousPhase,
+        )
         composite.encodeSerializableElement(descriptor, 3, TurnPhase.serializer(), value.nextPhase)
-        composite.encodeSerializableElement(descriptor, 4, PlayerId.serializer(), value.activePlayerId)
+        composite.encodeSerializableElement(
+            descriptor,
+            4,
+            PlayerId.serializer(),
+            value.activePlayerId,
+        )
         composite.encodeIntElement(descriptor, 5, value.turnCount)
         composite.endStructure(descriptor)
     }
@@ -86,11 +96,35 @@ object PhaseBoundaryEventSerializer : KSerializer<PhaseBoundaryEvent> {
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                0 ->
+                    lobbyCode =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            0,
+                            LobbyCode.serializer(),
+                        )
                 1 -> stateVersion = composite.decodeLongElement(descriptor, 1)
-                2 -> previousPhase = composite.decodeSerializableElement(descriptor, 2, TurnPhase.serializer())
-                3 -> nextPhase = composite.decodeSerializableElement(descriptor, 3, TurnPhase.serializer())
-                4 -> activePlayerId = composite.decodeSerializableElement(descriptor, 4, PlayerId.serializer())
+                2 ->
+                    previousPhase =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            2,
+                            TurnPhase.serializer(),
+                        )
+                3 ->
+                    nextPhase =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            3,
+                            TurnPhase.serializer(),
+                        )
+                4 ->
+                    activePlayerId =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            4,
+                            PlayerId.serializer(),
+                        )
                 5 -> turnCount = composite.decodeIntElement(descriptor, 5)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
@@ -99,12 +133,24 @@ object PhaseBoundaryEventSerializer : KSerializer<PhaseBoundaryEvent> {
 
         composite.endStructure(descriptor)
         return PhaseBoundaryEvent(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            stateVersion = stateVersion ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            previousPhase = previousPhase ?: throw MissingFieldException("previousPhase", descriptor.serialName),
-            nextPhase = nextPhase ?: throw MissingFieldException("nextPhase", descriptor.serialName),
-            activePlayerId = activePlayerId ?: throw MissingFieldException("activePlayerId", descriptor.serialName),
-            turnCount = turnCount ?: throw MissingFieldException("turnCount", descriptor.serialName),
+            lobbyCode =
+                lobbyCode
+                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            stateVersion =
+                stateVersion
+                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
+            previousPhase =
+                previousPhase
+                    ?: throw MissingFieldException("previousPhase", descriptor.serialName),
+            nextPhase =
+                nextPhase
+                    ?: throw MissingFieldException("nextPhase", descriptor.serialName),
+            activePlayerId =
+                activePlayerId
+                    ?: throw MissingFieldException("activePlayerId", descriptor.serialName),
+            turnCount =
+                turnCount
+                    ?: throw MissingFieldException("turnCount", descriptor.serialName),
         )
     }
 }

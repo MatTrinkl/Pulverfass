@@ -43,7 +43,11 @@ class MapConfigLoaderTest {
         val alphaEdges = definition.territoriesById.getValue(TerritoryId("alpha")).edges
 
         assertEquals(2, alphaEdges.size)
-        assertTrue(alphaEdges.map { it.targetId }.containsAll(listOf(TerritoryId("beta"), TerritoryId("gamma"))))
+        assertTrue(
+            alphaEdges.map {
+                it.targetId
+            }.containsAll(listOf(TerritoryId("beta"), TerritoryId("gamma"))),
+        )
     }
 
     @Test
@@ -136,7 +140,9 @@ class MapConfigLoaderTest {
                 )
             }
 
-        assertTrue(exception.message.orEmpty().contains("referenziert unbekanntes Territory 'missing'"))
+        assertTrue(
+            exception.message.orEmpty().contains("referenziert unbekanntes Territory 'missing'"),
+        )
     }
 
     @Test

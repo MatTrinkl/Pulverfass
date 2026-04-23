@@ -1,8 +1,8 @@
 package at.aau.pulverfass.shared.map.config
 
-import java.io.InputStream
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import java.io.InputStream
 
 /**
  * Lädt Map-Konfigurationen aus JSON-Strings oder Klassenpfad-Ressourcen.
