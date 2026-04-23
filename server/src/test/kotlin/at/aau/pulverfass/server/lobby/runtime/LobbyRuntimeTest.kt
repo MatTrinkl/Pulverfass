@@ -136,7 +136,7 @@ class LobbyRuntimeTest {
     }
 
     @Test
-    fun `runtime meldet ablehnung ueber hooks und verhindert doppelten start`(): Unit =
+    fun `runtime meldet ablehnung über hooks und verhindert doppelten start`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val lobbyCode = LobbyCode("GH78")

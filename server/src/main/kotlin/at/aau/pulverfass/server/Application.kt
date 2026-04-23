@@ -123,9 +123,9 @@ fun Application.module(network: ServerNetwork = ServerNetwork()) {
 /**
  * Produktionsverdrahtung mit aktiver Lobby-Routing-Pipeline.
  *
- * Im Gegensatz zu [module] wird hier zusÃ¤tzlich die Routing-Service-Schicht
- * gestartet, damit Create/Join/Leave-Requests tatsÃ¤chlich in den Lobby-Layer
- * gelangen und Antworten an Clients zurÃ¼ckflieÃŸen.
+ * Im Gegensatz zu [module] wird hier zusätzlich die Routing-Service-Schicht
+ * gestartet, damit Create/Join/Leave-Requests tatsächlich in den Lobby-Layer
+ * gelangen und Antworten an Clients zurückfließen.
  */
 fun Application.moduleWithLobbyRuntime(network: ServerNetwork = ServerNetwork()) {
     module(network)

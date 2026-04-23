@@ -19,7 +19,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
  * - Player optional über ConnectionId oder EntityId finden
  *
  */
-object PlayerManager {
+internal class PlayerManager {
     private val players: MutableMap<PlayerId, Player> = mutableMapOf()
 
     /**
