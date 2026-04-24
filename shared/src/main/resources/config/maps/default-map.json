@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "territories": [
+    {
+      "territoryId": "argentinien",
+      "edges": [
+        { "targetId": "brasilien" },
+        { "targetId": "andengemeinschaft" }
+      ]
+    },
+    {
+      "territoryId": "brasilien",
+      "edges": [
+        { "targetId": "argentinien" },
+        { "targetId": "andengemeinschaft" },
+        { "targetId": "sahara" }
+      ]
+    },
+    {
+      "territoryId": "mittelamerika",
+      "edges": [
+        { "targetId": "andengemeinschaft" },
+        { "targetId": "usa" }
+      ]
+    },
+    {
+      "territoryId": "usa",
+      "edges": [
+        { "targetId": "mittelamerika" },
+        { "targetId": "kanada" }
+      ]
+    },
+    {
+      "territoryId": "andengemeinschaft",
+      "edges": [
+        { "targetId": "argentinien" },
+        { "targetId": "brasilien" },
+        { "targetId": "mittelamerika" }
+      ]
+    },
+    {
+      "territoryId": "alaska",
+      "edges": [
+        { "targetId": "kanada" },
+        { "targetId": "sibirien" }
+      ]
+    },
+    {
+      "territoryId": "kanada",
+      "edges": [
+        { "targetId": "alaska" },
+        { "targetId": "usa" },
+        { "targetId": "groenland" }
+      ]
+    },
+    {
+      "territoryId": "groenland",
+      "edges": [
+        { "targetId": "kanada" },
+        { "targetId": "grossbritannien" }
+      ]
+    },
+    {
+      "territoryId": "grossbritannien",
+      "edges": [
+        { "targetId": "groenland" },
+        { "targetId": "westeuropa" },
+        { "targetId": "skandinavien" }
+      ]
+    },
+    {
+      "territoryId": "westeuropa",
+      "edges": [
+        { "targetId": "grossbritannien" },
+        { "targetId": "sahara" },
+        { "targetId": "mitteleuropa" }
+      ]
+    },
+    {
+      "territoryId": "skandinavien",
+      "edges": [
+        { "targetId": "mitteleuropa" },
+        { "targetId": "grossbritannien" },
+        { "targetId": "russland" }
+      ]
+    },
+    {
+      "territoryId": "mitteleuropa",
+      "edges": [
+        { "targetId": "westeuropa" },
+        { "targetId": "skandinavien" },
+        { "targetId": "russland" },
+        { "targetId": "naher_osten" }
+      ]
+    },
+    {
+      "territoryId": "russland",
+      "edges": [
+        { "targetId": "mitteleuropa" },
+        { "targetId": "skandinavien" },
+        { "targetId": "sibirien" },
+        { "targetId": "china" },
+        { "targetId": "naher_osten" }
+      ]
+    },
+    {
+      "territoryId": "naher_osten",
+      "edges": [
+        { "targetId": "mitteleuropa" },
+        { "targetId": "aegypten" },
+        { "targetId": "zentral_afrika" },
+        { "targetId": "ferner_osten" },
+        { "targetId": "china" },
+        { "targetId": "russland" }
+      ]
+    },
+    {
+      "territoryId": "sibirien",
+      "edges": [
+        { "targetId": "russland" },
+        { "targetId": "china" },
+        { "targetId": "japan" },
+        { "targetId": "alaska" }
+      ]
+    },
+    {
+      "territoryId": "china",
+      "edges": [
+        { "targetId": "russland" },
+        { "targetId": "sibirien" },
+        { "targetId": "japan" },
+        { "targetId": "ferner_osten" },
+        { "targetId": "naher_osten" }
+      ]
+    },
+    {
+      "territoryId": "japan",
+      "edges": [
+        { "targetId": "china" },
+        { "targetId": "sibirien" }
+      ]
+    },
+    {
+      "territoryId": "ferner_osten",
+      "edges": [
+        { "targetId": "naher_osten" },
+        { "targetId": "china" },
+        { "targetId": "australien" }
+      ]
+    },
+    {
+      "territoryId": "australien",
+      "edges": [
+        { "targetId": "ferner_osten" }
+      ]
+    },
+    {
+      "territoryId": "aegypten",
+      "edges": [
+        { "targetId": "sahara" },
+        { "targetId": "zentral_afrika" },
+        { "targetId": "naher_osten" }
+      ]
+    },
+    {
+      "territoryId": "sahara",
+      "edges": [
+        { "targetId": "brasilien" },
+        { "targetId": "westeuropa" },
+        { "targetId": "aegypten" },
+        { "targetId": "zentral_afrika" }
+      ]
+    },
+    {
+      "territoryId": "zentral_afrika",
+      "edges": [
+        { "targetId": "sahara" },
+        { "targetId": "aegypten" },
+        { "targetId": "sued_afrika" },
+        { "targetId": "naher_osten" }
+      ]
+    },
+    {
+      "territoryId": "sued_afrika",
+      "edges": [
+        { "targetId": "zentral_afrika" }
+      ]
+    }
+  ],
+  "continents": [
+    {
+      "continentId": "suedamerika",
+      "territoryIds": [
+        "argentinien",
+        "brasilien",
+        "andengemeinschaft"
+      ],
+      "bonusValue": 2
+    },
+    {
+      "continentId": "nordamerika",
+      "territoryIds": [
+        "mittelamerika",
+        "usa",
+        "alaska",
+        "kanada",
+        "groenland"
+      ],
+      "bonusValue": 3
+    },
+    {
+      "continentId": "europa",
+      "territoryIds": [
+        "grossbritannien",
+        "westeuropa",
+        "skandinavien",
+        "mitteleuropa"
+      ],
+      "bonusValue": 2
+    },
+    {
+      "continentId": "afrika",
+      "territoryIds": [
+        "aegypten",
+        "sahara",
+        "zentral_afrika",
+        "sued_afrika"
+      ],
+      "bonusValue": 2
+    },
+    {
+      "continentId": "asien",
+      "territoryIds": [
+        "russland",
+        "naher_osten",
+        "sibirien",
+        "china",
+        "japan",
+        "ferner_osten"
+      ],
+      "bonusValue": 4
+    },
+    {
+      "continentId": "ozeanien",
+      "territoryIds": [
+        "australien"
+      ],
+      "bonusValue": 1
+    }
+  ]
+}

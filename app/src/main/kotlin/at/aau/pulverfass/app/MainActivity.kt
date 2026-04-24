@@ -26,16 +26,19 @@ import at.aau.pulverfass.app.ui.screens.LobbyScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 
-// haupteinstiegspunkt der android app
+/**
+ * Compose-basierter Einstiegspunkt der Android-App.
+ *
+ * Die Activity initialisiert aktuell genau eine [LobbyController]-Instanz,
+ * verdrahtet die Navigationsziele des Lobby-Flows und gibt den Controller beim
+ * Verlassen der Composition wieder frei.
+ */
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // aktiviert die darstellung bis zum bildschirmrand
         enableEdgeToEdge()
         setContent {
-            // wendet das app design an
             AndroidAppTheme {
-                // verwaltet die navigation zwischen den bildschirmen
                 val navController = rememberNavController()
                 val lobbyController = remember { LobbyController() }
 

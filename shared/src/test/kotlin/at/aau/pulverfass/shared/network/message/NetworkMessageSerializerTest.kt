@@ -2,17 +2,42 @@ package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.MessageHeader
 import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
@@ -245,6 +270,300 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should deserialize map get request payload for map get request type`() {
+        val payload = MapGetRequest(lobbyCode = LobbyCode("MN34"))
+        val bytes = NetworkMessageSerializer.serializePayload(MapGetRequest.serializer(), payload)
+
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_MAP_GET_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered map get response by runtime type`() {
+        val payload =
+            MapGetResponse(
+                lobbyCode = LobbyCode("MN34"),
+                schemaVersion = 1,
+                mapHash = "hash",
+                stateVersion = 4,
+                definition =
+                    MapDefinitionSnapshot(
+                        territories =
+                            listOf(
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = TerritoryId("alpha"),
+                                    edges = listOf(MapTerritoryEdgeSnapshot(TerritoryId("beta"))),
+                                ),
+                            ),
+                        continents = emptyList(),
+                    ),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(
+                            territoryId = TerritoryId("alpha"),
+                            ownerId = PlayerId(1),
+                            troopCount = 5,
+                        ),
+                    ),
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_MAP_GET_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered map get error by runtime type`() {
+        val payload = MapGetErrorResponse(MapGetErrorCode.GAME_NOT_FOUND, "Lobby nicht gefunden.")
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered territory owner changed broadcast by runtime type`() {
+        val payload =
+            TerritoryOwnerChangedEvent(
+                lobbyCode = LobbyCode("OP56"),
+                territoryId = TerritoryId("alpha"),
+                ownerId = PlayerId(3),
+                stateVersion = 5,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered territory troops changed broadcast by runtime type`() {
+        val payload =
+            TerritoryTroopsChangedEvent(
+                lobbyCode = LobbyCode("QR78"),
+                territoryId = TerritoryId("beta"),
+                troopCount = 7,
+                stateVersion = 6,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should deserialize turn advance request payload for turn advance request type`() {
+        val payload =
+            TurnAdvanceRequest(
+                lobbyCode = LobbyCode("TA12"),
+                playerId = PlayerId(5),
+                expectedPhase = TurnPhase.ATTACK,
+            )
+        val bytes =
+            NetworkMessageSerializer.serializePayload(TurnAdvanceRequest.serializer(), payload)
+
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_ADVANCE_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered turn advance response by runtime type`() {
+        val payload = TurnAdvanceResponse(lobbyCode = LobbyCode("TA34"))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_ADVANCE_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered turn advance error by runtime type`() {
+        val payload =
+            TurnAdvanceErrorResponse(
+                code = TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER,
+                reason = "Nur der aktive Spieler '1' darf den Turn-State fortschalten.",
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_ADVANCE_ERROR_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered turn state updated broadcast by runtime type`() {
+        val payload =
+            TurnStateUpdatedEvent(
+                lobbyCode = LobbyCode("TA56"),
+                activePlayerId = PlayerId(1),
+                turnPhase = TurnPhase.FORTIFY,
+                turnCount = 2,
+                startPlayerId = PlayerId(1),
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_STATE_UPDATED_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should deserialize turn state get request payload for turn state get request type`() {
+        val payload = TurnStateGetRequest(lobbyCode = LobbyCode("TS12"))
+        val bytes =
+            NetworkMessageSerializer.serializePayload(
+                TurnStateGetRequest.serializer(),
+                payload,
+            )
+
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_STATE_GET_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered turn state get response by runtime type`() {
+        val payload =
+            TurnStateGetResponse(
+                lobbyCode = LobbyCode("TS34"),
+                activePlayerId = PlayerId(2),
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                turnCount = 9,
+                startPlayerId = PlayerId(1),
+                isPaused = true,
+                pauseReason = "sync-pause",
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_STATE_GET_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered turn state get error by runtime type`() {
+        val payload =
+            TurnStateGetErrorResponse(
+                code = TurnStateGetErrorCode.TURN_STATE_NOT_READY,
+                reason = "Turn-State fuer diese Lobby ist noch nicht verfuegbar.",
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_TURN_STATE_GET_ERROR_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should deserialize start player set request payload for start player set request type`() {
+        val payload =
+            StartPlayerSetRequest(
+                lobbyCode = LobbyCode("SP12"),
+                startPlayerId = PlayerId(2),
+                requesterPlayerId = PlayerId(1),
+            )
+        val bytes =
+            NetworkMessageSerializer.serializePayload(
+                StartPlayerSetRequest.serializer(),
+                payload,
+            )
+
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_START_PLAYER_SET_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered start player set response by runtime type`() {
+        val payload = StartPlayerSetResponse(LobbyCode("SP34"), PlayerId(8))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_START_PLAYER_SET_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered start player set error by runtime type`() {
+        val payload =
+            StartPlayerSetErrorResponse(
+                code = StartPlayerSetErrorCode.NOT_HOST,
+                reason = "Nur der Lobby Owner darf den Startspieler setzen.",
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE,
                 bytes,
             )
 

@@ -3,11 +3,13 @@ package at.aau.pulverfass.server
 import at.aau.pulverfass.server.ids.IdFactory
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.network.Network
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -139,7 +141,18 @@ internal fun Application.module(transport: ServerWebSocketTransport) {
 
 private fun Application.installLobbyRuntime(network: ServerNetwork) {
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val lobbyManager = LobbyManager(serverScope)
+    val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
+    val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
+    val lobbyManager =
+        LobbyManager(
+            scope = serverScope,
+            initialStateFactory = { lobbyCode ->
+                GameState.initial(
+                    lobbyCode = lobbyCode,
+                    mapDefinition = defaultMapDefinition,
+                )
+            },
+        )
     val router =
         MainServerRouter(
             lobbyManager = lobbyManager,
@@ -166,12 +179,14 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                     val playerId = PlayerId(nextPlayerId.getAndIncrement())
                     playersByConnection[event.connectionId] = playerId
                     connectionsByPlayer[playerId] = event.connectionId
+                    routingService.onPlayerConnected(playerId)
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {
                     val removedPlayer = playersByConnection.remove(event.connectionId)
                     if (removedPlayer != null) {
                         connectionsByPlayer.remove(removedPlayer)
+                        routingService.onPlayerDisconnected(removedPlayer)
                     }
                 }
 

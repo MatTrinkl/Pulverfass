@@ -8,9 +8,19 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -18,13 +28,18 @@ import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
@@ -53,6 +68,662 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainServerLobbyRoutingIntegrationTest {
+    @Test
+    fun `map get request returns full snapshot for requesting client`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("MP12")
+            val playerId = PlayerId(1)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState = createMappedGameState(lobbyCode, playerId),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    sessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(MapGetRequest(lobbyCode)),
+                        ),
+                    )
+
+                    val payload = receivePayload(sessionAndConnection.first)
+                    val response = assertIs<MapGetResponse>(payload)
+
+                    assertEquals(lobbyCode, response.lobbyCode)
+                    assertEquals(1, response.schemaVersion)
+                    assertEquals(defaultMapDefinition().mapHash, response.mapHash)
+                    assertEquals(3, response.stateVersion)
+                    assertEquals(23, response.definition.territories.size)
+                    assertEquals(23, response.territoryStates.size)
+                    assertEquals(
+                        PlayerId(1),
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .ownerId,
+                    )
+                    assertEquals(
+                        5,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .troopCount,
+                    )
+                    assertTrue(
+                        response.definition.territories
+                            .first { it.territoryId == TerritoryId("brasilien") }
+                            .edges
+                            .any { it.targetId == TerritoryId("sahara") },
+                    )
+
+                    sessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `module with lobby runtime loads default map at startup and returns it via map get`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val session = client.webSocketSession("/ws")
+
+                try {
+                    session.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(CreateLobbyRequest),
+                        ),
+                    )
+                    val createResponse = assertIs<CreateLobbyResponse>(receivePayload(session))
+
+                    session.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    JoinLobbyRequest(createResponse.lobbyCode, "Alice"),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        JoinLobbyResponse(createResponse.lobbyCode),
+                        receivePayload(session),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(
+                            lobbyCode = createResponse.lobbyCode,
+                            playerId = PlayerId(1),
+                            playerDisplayName = "Alice",
+                            isHost = true,
+                        ),
+                        receivePayload(session),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = createResponse.lobbyCode,
+                            activePlayerId = PlayerId(1),
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = PlayerId(1),
+                        ),
+                        receivePayload(session),
+                    )
+
+                    session.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(MapGetRequest(createResponse.lobbyCode)),
+                        ),
+                    )
+
+                    val response = assertIs<MapGetResponse>(receivePayload(session))
+
+                    assertEquals(createResponse.lobbyCode, response.lobbyCode)
+                    assertEquals(1, response.schemaVersion)
+                    assertEquals(defaultMapDefinition().mapHash, response.mapHash)
+                    assertEquals(1, response.stateVersion)
+                    assertEquals(23, response.definition.territories.size)
+                    assertEquals(6, response.definition.continents.size)
+                    assertEquals(23, response.territoryStates.size)
+                    assertTrue(
+                        response.territoryStates.all { it.ownerId == null && it.troopCount == 0 },
+                    )
+                    assertTrue(
+                        response.definition.territories
+                            .first { it.territoryId == TerritoryId("brasilien") }
+                            .edges
+                            .any { it.targetId == TerritoryId("sahara") },
+                    )
+                } finally {
+                    session.close()
+                }
+            }
+        }
+
+    @Test
+    fun `reconnect can recover consistent map snapshot after missed events`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("RC12")
+            val playerId = PlayerId(1)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    GameState.initial(
+                        lobbyCode = lobbyCode,
+                        mapDefinition = defaultMapDefinition(),
+                        players = listOf(playerId),
+                        playerDisplayNames = mapOf(playerId to "Reconnect"),
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val firstSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    firstSessionAndConnection.first.close()
+                    playersByConnection.remove(firstSessionAndConnection.second)
+                    connectionsByPlayer.remove(playerId)
+
+                    lobbyManager.submit(
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode = lobbyCode,
+                            territoryId = TerritoryId("argentinien"),
+                            ownerId = playerId,
+                        ),
+                    )
+                    lobbyManager.submit(
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyCode,
+                            territoryId = TerritoryId("argentinien"),
+                            troopCount = 6,
+                        ),
+                    )
+
+                    val reconnectedSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    reconnectedSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(MapGetRequest(lobbyCode)),
+                        ),
+                    )
+
+                    val response =
+                        assertIs<MapGetResponse>(
+                            receivePayload(reconnectedSessionAndConnection.first),
+                        )
+
+                    assertEquals(lobbyCode, response.lobbyCode)
+                    assertEquals(2, response.stateVersion)
+                    assertEquals(defaultMapDefinition().mapHash, response.mapHash)
+                    assertEquals(
+                        playerId,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .ownerId,
+                    )
+                    assertEquals(
+                        6,
+                        response.territoryStates
+                            .first { it.territoryId == TerritoryId("argentinien") }
+                            .troopCount,
+                    )
+
+                    reconnectedSessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `map state events are broadcast to lobby members only in order with state version`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyA = LobbyCode("DL12")
+            val lobbyB = LobbyCode("DL34")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val playerThree = PlayerId(3)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyA,
+                initialState =
+                    GameState.initial(
+                        lobbyCode = lobbyA,
+                        mapDefinition = defaultMapDefinition(),
+                        players = listOf(playerOne, playerTwo),
+                        playerDisplayNames =
+                            mapOf(
+                                playerOne to "Alice",
+                                playerTwo to "Bob",
+                            ),
+                    ),
+            )
+            lobbyManager.createLobby(
+                lobbyCode = lobbyB,
+                initialState =
+                    GameState.initial(
+                        lobbyCode = lobbyB,
+                        mapDefinition = defaultMapDefinition(),
+                        players = listOf(playerThree),
+                        playerDisplayNames = mapOf(playerThree to "Carol"),
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionOneAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val sessionTwoAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val sessionThreeAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerThree,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    lobbyManager.submit(
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            ownerId = playerOne,
+                        ),
+                    )
+                    lobbyManager.submit(
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            troopCount = 7,
+                        ),
+                    )
+
+                    assertEquals(
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            ownerId = playerOne,
+                            stateVersion = 1,
+                        ),
+                        receivePayload(sessionOneAndConnection.first),
+                    )
+                    assertEquals(
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            troopCount = 7,
+                            stateVersion = 2,
+                        ),
+                        receivePayload(sessionOneAndConnection.first),
+                    )
+
+                    assertEquals(
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            ownerId = playerOne,
+                            stateVersion = 1,
+                        ),
+                        receivePayload(sessionTwoAndConnection.first),
+                    )
+                    assertEquals(
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyA,
+                            territoryId = TerritoryId("argentinien"),
+                            troopCount = 7,
+                            stateVersion = 2,
+                        ),
+                        receivePayload(sessionTwoAndConnection.first),
+                    )
+
+                    assertNull(receivePayloadOrNull(sessionThreeAndConnection.first))
+
+                    sessionOneAndConnection.first.close()
+                    sessionTwoAndConnection.first.close()
+                    sessionThreeAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `turn advance request broadcasts game state delta with correct version range`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("DG12")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    GameState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        playerDisplayNames =
+                            mapOf(
+                                playerOne to "Alice",
+                                playerTwo to "Bob",
+                            ),
+                        activePlayer = playerOne,
+                        configuredStartPlayerId = playerOne,
+                        turnOrder = listOf(playerOne, playerTwo),
+                        turnNumber = 1,
+                        turnState =
+                            TurnState(
+                                activePlayerId = playerOne,
+                                turnPhase = TurnPhase.REINFORCEMENTS,
+                                turnCount = 1,
+                                startPlayerId = playerOne,
+                            ),
+                        gameStarted = true,
+                        status = GameStatus.RUNNING,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionOneAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val sessionTwoAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    sessionOneAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TurnAdvanceRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        expectedPhase = TurnPhase.REINFORCEMENTS,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val requesterDelta =
+                        receivePayloadOfType<GameStateDeltaEvent>(sessionOneAndConnection.first)
+                    val otherPlayerDelta =
+                        receivePayloadOfType<GameStateDeltaEvent>(sessionTwoAndConnection.first)
+
+                    val expectedEvent =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+                    val expectedDelta =
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events = listOf(expectedEvent),
+                        )
+
+                    assertEquals(expectedDelta, requesterDelta)
+                    assertEquals(expectedDelta, otherPlayerDelta)
+
+                    sessionOneAndConnection.first.close()
+                    sessionTwoAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `map get request returns error for unknown lobby`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = PlayerId(1),
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    sessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(MapGetRequest(LobbyCode("ZZ99"))),
+                        ),
+                    )
+
+                    val payload = receivePayload(sessionAndConnection.first)
+                    val error = assertIs<MapGetErrorResponse>(payload)
+
+                    assertEquals(MapGetErrorCode.GAME_NOT_FOUND, error.code)
+                    assertEquals("Lobby 'ZZ99' wurde nicht gefunden.", error.reason)
+
+                    sessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     @Test
     fun `server websocket packets werden über router in mehrere lobbys korrekt verteilt`() =
         testApplication {
@@ -315,6 +986,16 @@ class MainServerLobbyRoutingIntegrationTest {
                         PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                         receivePayload(sessionA1AndConnection.first),
                     )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyA,
+                            activePlayerId = PlayerId(1),
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = PlayerId(1),
+                        ),
+                        receivePayload(sessionA1AndConnection.first),
+                    )
 
                     sessionB1AndConnection.first.send(
                         Frame.Binary(
@@ -328,6 +1009,16 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
+                        receivePayload(sessionB1AndConnection.first),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyB,
+                            activePlayerId = PlayerId(3),
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = PlayerId(3),
+                        ),
                         receivePayload(sessionB1AndConnection.first),
                     )
 
@@ -443,6 +1134,16 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
                     receivePayload(sessionA1AndConnection.first)
                     receivePayload(sessionA1AndConnection.first)
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyA,
+                            activePlayerId = PlayerId(1),
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = PlayerId(1),
+                        ),
+                        receivePayload(sessionA1AndConnection.first),
+                    )
 
                     sessionA2AndConnection.first.send(
                         Frame.Binary(
@@ -463,6 +1164,16 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
                     receivePayload(sessionB1AndConnection.first)
                     receivePayload(sessionB1AndConnection.first)
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyB,
+                            activePlayerId = PlayerId(3),
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = PlayerId(3),
+                        ),
+                        receivePayload(sessionB1AndConnection.first),
+                    )
 
                     sessionA2AndConnection.first.send(
                         Frame.Binary(
@@ -899,22 +1610,55 @@ class MainServerLobbyRoutingIntegrationTest {
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload {
-        val frame =
-            withTimeout(5_000) {
-                session.incoming.receive()
+        repeat(10) {
+            val payload = receiveAnyPayload(session)
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
             }
-
-        val binary = assertIs<Frame.Binary>(frame)
-        return MessageCodec.decodePayload(binary.readBytes())
+        }
+        throw AssertionError("Expected non-delta payload within 10 messages.")
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload? {
+        repeat(5) {
+            val frame =
+                withTimeoutOrNull(200) {
+                    session.incoming.receive()
+                } ?: return null
+
+            val binary = assertIs<Frame.Binary>(frame)
+            val payload = MessageCodec.decodePayload(binary.readBytes())
+            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
+                return payload
+            }
+        }
+        return null
+    }
+
+    private suspend inline fun <reified T : NetworkMessagePayload> receivePayloadOfType(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+        maxMessages: Int = 5,
+    ): T {
+        repeat(maxMessages) {
+            val payload = receiveAnyPayload(session)
+            if (payload is T) {
+                return payload
+            }
+        }
+        throw AssertionError(
+            "Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.",
+        )
+    }
+
+    private suspend fun receiveAnyPayload(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ): NetworkMessagePayload {
         val frame =
-            withTimeoutOrNull(500) {
+            withTimeout(5_000) {
                 session.incoming.receive()
-            } ?: return null
+            }
 
         val binary = assertIs<Frame.Binary>(frame)
         return MessageCodec.decodePayload(binary.readBytes())
@@ -946,13 +1690,43 @@ class MainServerLobbyRoutingIntegrationTest {
         players: List<PlayerId>,
         displayNames: Map<PlayerId, String>,
     ): GameState =
-        GameState(
-            lobbyCode = lobbyCode,
-            lobbyOwner = ownerId,
-            players = players,
-            playerDisplayNames = displayNames,
-            activePlayer = players.firstOrNull(),
-            turnOrder = players,
-            status = GameStatus.WAITING_FOR_PLAYERS,
+        GameState
+            .initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = players,
+                playerDisplayNames = displayNames,
+            ).copy(
+                lobbyOwner = ownerId,
+                activePlayer = players.firstOrNull(),
+                turnOrder = players,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+    private fun createMappedGameState(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ): GameState {
+        val reducer = DefaultLobbyEventReducer()
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = listOf(playerId),
+                playerDisplayNames = mapOf(playerId to "Host"),
+            )
+
+        return reducer.apply(
+            reducer.apply(
+                reducer.apply(
+                    baseState,
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("argentinien"), playerId),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("argentinien"), 5),
+            ),
+            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("brasilien"), 2),
         )
+    }
+
+    private fun defaultMapDefinition() = MapConfigLoader.loadDefault()
 }

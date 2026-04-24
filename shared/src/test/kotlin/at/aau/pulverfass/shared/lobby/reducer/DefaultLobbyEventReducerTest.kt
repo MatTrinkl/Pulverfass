@@ -3,8 +3,10 @@ package at.aau.pulverfass.shared.lobby.reducer
 import at.aau.pulverfass.shared.event.CorrelationId
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -12,11 +14,22 @@ import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
+import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.SystemTick
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.map.config.ContinentDefinition
+import at.aau.pulverfass.shared.map.config.MapDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -46,7 +59,10 @@ class DefaultLobbyEventReducerTest {
         assertEquals(listOf(playerId), updatedState.players)
         assertEquals(listOf(playerId), updatedState.turnOrder)
         assertEquals(playerId, updatedState.activePlayer)
+        assertEquals(TurnPhase.REINFORCEMENTS, updatedState.turnState?.turnPhase)
+        assertEquals(1, updatedState.turnState?.turnCount)
         assertEquals(GameStatus.WAITING_FOR_PLAYERS, updatedState.status)
+        assertEquals(1, updatedState.stateVersion)
         assertEquals(1, updatedState.processedEventCount)
         assertEquals(context, updatedState.lastEventContext)
     }
@@ -62,14 +78,30 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(firstPlayer, secondPlayer),
                 activePlayer = firstPlayer,
                 turnOrder = listOf(firstPlayer, secondPlayer),
+                turnState =
+                    TurnState(
+                        activePlayerId = firstPlayer,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = firstPlayer,
+                    ),
                 status = GameStatus.RUNNING,
             )
 
-        val updatedState = reducer.apply(runningState, TurnEnded(lobbyCode, firstPlayer))
+        val afterAttack = reducer.apply(runningState, TurnEnded(lobbyCode, firstPlayer))
+        val afterFortify = reducer.apply(afterAttack, TurnEnded(lobbyCode, firstPlayer))
+        val afterDrawCard = reducer.apply(afterFortify, TurnEnded(lobbyCode, firstPlayer))
+        val switchedPlayer = reducer.apply(afterDrawCard, TurnEnded(lobbyCode, firstPlayer))
 
-        assertEquals(secondPlayer, updatedState.activePlayer)
-        assertEquals(1, updatedState.turnNumber)
-        assertEquals(GameStatus.RUNNING, updatedState.status)
+        assertEquals(firstPlayer, afterAttack.activePlayer)
+        assertEquals(TurnPhase.ATTACK, afterAttack.turnState?.turnPhase)
+        assertEquals(TurnPhase.FORTIFY, afterFortify.turnState?.turnPhase)
+        assertEquals(TurnPhase.DRAW_CARD, afterDrawCard.turnState?.turnPhase)
+        assertEquals(secondPlayer, switchedPlayer.activePlayer)
+        assertEquals(TurnPhase.REINFORCEMENTS, switchedPlayer.turnState?.turnPhase)
+        assertEquals(1, switchedPlayer.turnState?.turnCount)
+        assertEquals(1, switchedPlayer.turnNumber)
+        assertEquals(GameStatus.RUNNING, switchedPlayer.status)
     }
 
     @Test
@@ -149,10 +181,42 @@ class DefaultLobbyEventReducerTest {
         assertEquals(GameStatus.CLOSED, closed.status)
         assertEquals("done", closed.closedReason)
         assertNull(closed.activePlayer)
+        assertNull(closed.turnState)
         assertEquals(baseState.players, ticked.players)
         assertEquals(baseState.turnOrder, timedOut.turnOrder)
+        assertEquals(1, ticked.stateVersion)
+        assertEquals(1, timedOut.stateVersion)
         assertEquals(1, ticked.processedEventCount)
         assertEquals(1, timedOut.processedEventCount)
+    }
+
+    @Test
+    fun `state version increases strictly with each reducer apply`() {
+        val lobbyCode = LobbyCode("SV34")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        val afterFirstAdvance = reducer.apply(baseState, TurnEnded(lobbyCode, playerOne))
+        val afterSecondAdvance = reducer.apply(afterFirstAdvance, TurnEnded(lobbyCode, playerOne))
+
+        assertEquals(0, baseState.stateVersion)
+        assertEquals(1, afterFirstAdvance.stateVersion)
+        assertEquals(2, afterSecondAdvance.stateVersion)
     }
 
     @Test
@@ -177,8 +241,9 @@ class DefaultLobbyEventReducerTest {
                 duplicateState,
                 PlayerJoined(lobbyCode, playerTwo, "Player 2"),
             )
-        assertEquals(GameStatus.RUNNING, runningState.status)
+        assertEquals(GameStatus.WAITING_FOR_PLAYERS, runningState.status)
         assertEquals(playerOne, runningState.activePlayer)
+        assertEquals(TurnPhase.REINFORCEMENTS, runningState.turnState?.turnPhase)
 
         val closedState = duplicateState.copy(status = GameStatus.CLOSED)
         val finishedState = duplicateState.copy(status = GameStatus.FINISHED)
@@ -222,11 +287,12 @@ class DefaultLobbyEventReducerTest {
                 noActivePlayerState,
                 PlayerLeft(lobbyCode, playerThree),
             )
-        assertNull(removingWithoutActive.activePlayer)
+        assertEquals(playerOne, removingWithoutActive.activePlayer)
 
         val removingActive = reducer.apply(baseState, PlayerLeft(lobbyCode, playerTwo))
-        assertEquals(playerOne, removingActive.activePlayer)
+        assertEquals(playerThree, removingActive.activePlayer)
         assertEquals(listOf(playerOne, playerThree), removingActive.turnOrder)
+        assertEquals(TurnPhase.REINFORCEMENTS, removingActive.turnState?.turnPhase)
 
         val singlePlayerState =
             GameState(
@@ -234,6 +300,13 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
             )
         val emptied = reducer.apply(singlePlayerState, PlayerLeft(lobbyCode, playerOne))
         assertNull(emptied.activePlayer)
@@ -262,18 +335,220 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(playerOne, playerTwo),
                 turnOrder = listOf(playerOne, playerTwo),
                 activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
                 status = GameStatus.RUNNING,
             )
 
         assertThrows(InvalidLobbyEventException::class.java) {
             reducer.apply(
-                runningState.copy(activePlayer = playerTwo),
+                runningState.copy(
+                    activePlayer = playerTwo,
+                    turnState = runningState.turnState?.copy(activePlayerId = playerTwo),
+                ),
                 TurnEnded(lobbyCode, playerOne),
             )
         }
         assertThrows(InvalidLobbyEventException::class.java) {
-            reducer.apply(runningState.copy(activePlayer = null), TurnEnded(lobbyCode, playerOne))
+            reducer.apply(
+                runningState.copy(activePlayer = null, turnState = null),
+                TurnEnded(lobbyCode, playerOne),
+            )
         }
+    }
+
+    @Test
+    fun `turn ended increments round count only when start player becomes active again`() {
+        val lobbyCode = LobbyCode("OP58")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        var state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        repeat(4) {
+            state = reducer.apply(state, TurnEnded(lobbyCode, playerOne))
+        }
+        assertEquals(playerTwo, state.activePlayer)
+        assertEquals(1, state.turnState?.turnCount)
+
+        repeat(4) {
+            state = reducer.apply(state, TurnEnded(lobbyCode, playerTwo))
+        }
+        assertEquals(playerOne, state.activePlayer)
+        assertEquals(2, state.turnState?.turnCount)
+        assertEquals(2, state.turnNumber)
+    }
+
+    @Test
+    fun `turn state updated event applies all fields atomically`() {
+        val lobbyCode = LobbyCode("TS62")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        val updated =
+            reducer.apply(
+                baseState,
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerTwo,
+                    turnPhase = TurnPhase.FORTIFY,
+                    turnCount = 2,
+                    startPlayerId = playerOne,
+                    isPaused = true,
+                    pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                    pausedPlayerId = playerTwo,
+                ),
+            )
+
+        assertEquals(playerTwo, updated.activePlayer)
+        assertEquals(2, updated.turnNumber)
+        assertEquals(playerTwo, updated.turnState?.activePlayerId)
+        assertEquals(TurnPhase.FORTIFY, updated.turnState?.turnPhase)
+        assertEquals(2, updated.turnState?.turnCount)
+        assertEquals(playerOne, updated.turnState?.startPlayerId)
+        assertEquals(true, updated.turnState?.isPaused)
+        assertEquals(TurnPauseReasons.WAITING_FOR_PLAYER, updated.turnState?.pauseReason)
+        assertEquals(playerTwo, updated.turnState?.pausedPlayerId)
+    }
+
+    @Test
+    fun `turn state updated event rejects invalid player and decreasing turn count`() {
+        val lobbyCode = LobbyCode("TS64")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnNumber = 3,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 3,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        val unknownPlayerException =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    baseState,
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(99),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 4,
+                        startPlayerId = playerOne,
+                    ),
+                )
+            }
+        assertEquals(
+            "TurnStateUpdatedEvent.activePlayerId '99' ist nicht Teil der Lobby '$lobbyCode'.",
+            unknownPlayerException.message,
+        )
+
+        val backwardsException =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    baseState,
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = playerTwo,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 2,
+                        startPlayerId = playerOne,
+                    ),
+                )
+            }
+        assertEquals(
+            "TurnStateUpdatedEvent.turnCount darf nicht rückwärts laufen: aktuell=3, neu=2.",
+            backwardsException.message,
+        )
+
+        val pausedMismatchException =
+            assertThrows(IllegalArgumentException::class.java) {
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerTwo,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 4,
+                    startPlayerId = playerOne,
+                    isPaused = true,
+                    pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                    pausedPlayerId = playerOne,
+                )
+            }
+        assertEquals(
+            "TurnStateUpdatedEvent.pausedPlayerId muss dem aktiven Spieler entsprechen.",
+            pausedMismatchException.message,
+        )
+    }
+
+    @Test
+    fun `turn state respects stable player order during wrap around`() {
+        val lobbyCode = LobbyCode("OP60")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val playerThree = PlayerId(3)
+        var state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo, playerThree),
+                turnOrder = listOf(playerOne, playerTwo, playerThree),
+                activePlayer = playerThree,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerThree,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 3,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        state = reducer.apply(state, TurnEnded(lobbyCode, playerThree))
+
+        assertEquals(playerOne, state.activePlayer)
+        assertEquals(TurnPhase.REINFORCEMENTS, state.turnState?.turnPhase)
+        assertEquals(4, state.turnState?.turnCount)
     }
 
     @Test
@@ -377,6 +652,7 @@ class DefaultLobbyEventReducerTest {
         assertEquals(listOf(owner, thirdPlayer), updated.players)
         assertEquals(listOf(owner, thirdPlayer), updated.turnOrder)
         assertEquals(thirdPlayer, updated.activePlayer)
+        assertEquals(TurnPhase.REINFORCEMENTS, updated.turnState?.turnPhase)
         assertEquals(GameStatus.RUNNING, updated.status)
     }
 
@@ -425,7 +701,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `game started transitions status to running`() {
+    fun `game started transitions status to running and initializes first turn`() {
         val lobbyCode = LobbyCode("GS01")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
@@ -442,6 +718,14 @@ class DefaultLobbyEventReducerTest {
         val started = reducer.apply(stateWithOwner, GameStarted(lobbyCode))
 
         assertEquals(GameStatus.RUNNING, started.status)
+        assertEquals(true, started.gameStarted)
+        assertEquals(owner, started.activePlayer)
+        assertEquals(owner, started.turnState?.activePlayerId)
+        assertEquals(TurnPhase.REINFORCEMENTS, started.turnState?.turnPhase)
+        assertEquals(1, started.turnState?.turnCount)
+        assertEquals(owner, started.turnState?.startPlayerId)
+        assertEquals(false, started.turnState?.isPaused)
+        assertEquals(null, started.turnState?.pauseReason)
     }
 
     @Test
@@ -464,7 +748,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `game started requires waiting for players status`() {
+    fun `game started requires not already started`() {
         val lobbyCode = LobbyCode("GS03")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
@@ -473,8 +757,10 @@ class DefaultLobbyEventReducerTest {
                 lobbyCode = lobbyCode,
                 lobbyOwner = owner,
                 players = listOf(owner, player2),
+                configuredStartPlayerId = owner,
                 turnOrder = listOf(owner, player2),
                 activePlayer = owner,
+                gameStarted = true,
                 status = GameStatus.RUNNING,
             )
 
@@ -482,4 +768,257 @@ class DefaultLobbyEventReducerTest {
             reducer.apply(stateAlreadyRunning, GameStarted(lobbyCode))
         }
     }
+
+    @Test
+    fun `start player configured updates setup turn state before game start`() {
+        val lobbyCode = LobbyCode("SP01")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
+        val preGameState =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2),
+                configuredStartPlayerId = owner,
+                turnOrder = listOf(owner, player2),
+                activePlayer = owner,
+                turnState =
+                    TurnState(
+                        activePlayerId = owner,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = owner,
+                    ),
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        val updated =
+            reducer.apply(
+                preGameState,
+                StartPlayerConfigured(
+                    lobbyCode = lobbyCode,
+                    startPlayerId = player2,
+                    requesterPlayerId = owner,
+                ),
+            )
+
+        assertEquals(player2, updated.configuredStartPlayerId)
+        assertEquals(player2, updated.activePlayer)
+        assertEquals(player2, updated.turnState?.activePlayerId)
+        assertEquals(player2, updated.turnState?.startPlayerId)
+        assertEquals(TurnPhase.REINFORCEMENTS, updated.turnState?.turnPhase)
+        assertEquals(GameStatus.WAITING_FOR_PLAYERS, updated.status)
+    }
+
+    @Test
+    fun `start player configured rejects non member and after started`() {
+        val lobbyCode = LobbyCode("SP02")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
+        val preGameState =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2),
+                configuredStartPlayerId = owner,
+                turnOrder = listOf(owner, player2),
+                activePlayer = owner,
+                turnState =
+                    TurnState(
+                        activePlayerId = owner,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = owner,
+                    ),
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                preGameState,
+                StartPlayerConfigured(
+                    lobbyCode = lobbyCode,
+                    startPlayerId = PlayerId(99),
+                    requesterPlayerId = owner,
+                ),
+            )
+        }
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                preGameState.copy(gameStarted = true, status = GameStatus.RUNNING),
+                StartPlayerConfigured(
+                    lobbyCode = lobbyCode,
+                    startPlayerId = player2,
+                    requesterPlayerId = owner,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `game started uses configured start player as initial active player`() {
+        val lobbyCode = LobbyCode("SP03")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
+        val preGameState =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2),
+                configuredStartPlayerId = player2,
+                turnOrder = listOf(owner, player2),
+                activePlayer = player2,
+                turnState =
+                    TurnState(
+                        activePlayerId = player2,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = player2,
+                    ),
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        val started = reducer.apply(preGameState, GameStarted(lobbyCode))
+
+        assertEquals(GameStatus.RUNNING, started.status)
+        assertEquals(true, started.gameStarted)
+        assertEquals(player2, started.activePlayer)
+        assertEquals(player2, started.turnState?.activePlayerId)
+        assertEquals(player2, started.turnState?.startPlayerId)
+    }
+
+    @Test
+    fun `territory owner changed aktualisiert owner`() {
+        val lobbyCode = LobbyCode("TM10")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val updated =
+            reducer.apply(
+                initialState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+            )
+
+        assertEquals(playerOne, updated.territoryOwnerOf(TerritoryId("alpha")))
+    }
+
+    @Test
+    fun `territory troops changed aktualisiert troop count`() {
+        val lobbyCode = LobbyCode("TM12")
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+            )
+
+        val updated =
+            reducer.apply(
+                initialState,
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 7),
+            )
+
+        assertEquals(7, updated.troopCountOf(TerritoryId("alpha")))
+    }
+
+    @Test
+    fun `territory event mit unknown territory fuehrt zu fail`() {
+        val lobbyCode = LobbyCode("TM14")
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(PlayerId(1)),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    initialState,
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("missing"), PlayerId(1)),
+                )
+            }
+
+        assertEquals(
+            "Territory 'missing' ist nicht Teil der Map von Lobby '$lobbyCode'.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `bonus query reagiert korrekt auf event sequenz`() {
+        val lobbyCode = LobbyCode("TM16")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+
+        val afterAlpha =
+            reducer.apply(
+                initialState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+            )
+        val afterBeta =
+            reducer.apply(
+                afterAlpha,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+            )
+        val afterGamma =
+            reducer.apply(
+                afterBeta,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("gamma"), playerTwo),
+            )
+
+        assertEquals(playerOne, afterBeta.continentOwner(ContinentId("north")))
+        assertEquals(3, afterBeta.bonusFor(playerOne))
+        assertNull(afterBeta.continentOwner(ContinentId("south")))
+        assertEquals(playerTwo, afterGamma.continentOwner(ContinentId("south")))
+        assertEquals(1, afterGamma.bonusFor(playerTwo))
+    }
+
+    private fun sampleMapDefinition(): MapDefinition =
+        MapDefinition(
+            schemaVersion = 1,
+            territories =
+                listOf(
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("alpha"),
+                        edges =
+                            listOf(
+                                TerritoryEdgeDefinition(TerritoryId("beta")),
+                                TerritoryEdgeDefinition(TerritoryId("gamma")),
+                            ),
+                    ),
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("beta"),
+                        edges = listOf(TerritoryEdgeDefinition(TerritoryId("alpha"))),
+                    ),
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("gamma"),
+                        edges = listOf(TerritoryEdgeDefinition(TerritoryId("alpha"))),
+                    ),
+                ),
+            continents =
+                listOf(
+                    ContinentDefinition(
+                        continentId = ContinentId("north"),
+                        territoryIds = listOf(TerritoryId("alpha"), TerritoryId("beta")),
+                        bonusValue = 3,
+                    ),
+                    ContinentDefinition(
+                        continentId = ContinentId("south"),
+                        territoryIds = listOf(TerritoryId("gamma")),
+                        bonusValue = 1,
+                    ),
+                ),
+        )
 }

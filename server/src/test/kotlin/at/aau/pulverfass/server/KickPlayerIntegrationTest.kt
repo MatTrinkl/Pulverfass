@@ -8,12 +8,16 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
@@ -137,6 +141,23 @@ class KickPlayerIntegrationTest {
                         ),
                     )
 
+                    val expectedTurnStateEvent =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = ownerId,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = ownerId,
+                        )
+                    val expectedDelta =
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events = listOf(expectedTurnStateEvent),
+                        )
+
+                    assertEquals(expectedDelta, receivePayload(ownerSession.first))
                     assertEquals(KickPlayerResponse(), receivePayload(ownerSession.first))
                     assertEquals(
                         PlayerKickedLobbyEvent(
@@ -146,6 +167,8 @@ class KickPlayerIntegrationTest {
                         ),
                         receivePayload(ownerSession.first),
                     )
+                    assertEquals(expectedTurnStateEvent, receivePayload(ownerSession.first))
+                    assertEquals(expectedDelta, receivePayload(otherSession.first))
                     assertEquals(
                         PlayerKickedLobbyEvent(
                             lobbyCode = lobbyCode,
@@ -154,7 +177,10 @@ class KickPlayerIntegrationTest {
                         ),
                         receivePayload(otherSession.first),
                     )
+                    assertEquals(expectedTurnStateEvent, receivePayload(otherSession.first))
                     assertNull(receivePayloadOrNull(targetSession.first))
+                    assertNull(receivePayloadOrNull(ownerSession.first))
+                    assertNull(receivePayloadOrNull(otherSession.first))
                     assertEquals(
                         listOf(ownerId, otherPlayerId),
                         lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
@@ -317,16 +343,20 @@ class KickPlayerIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = run {
+    ): NetworkMessagePayload {
         val frame = assertIs<Frame.Binary>(withTimeout(5_000) { session.incoming.receive() })
-        MessageCodec.decodePayload(frame.readBytes())
+        return MessageCodec.decodePayload(frame.readBytes())
     }
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ) = withTimeoutOrNull(500) {
-        val frame = assertIs<Frame.Binary>(session.incoming.receive())
-        MessageCodec.decodePayload(frame.readBytes())
+    ): NetworkMessagePayload? {
+        val frame =
+            withTimeoutOrNull(200) {
+                session.incoming.receive()
+            } ?: return null
+        val binary = assertIs<Frame.Binary>(frame)
+        return MessageCodec.decodePayload(binary.readBytes())
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {

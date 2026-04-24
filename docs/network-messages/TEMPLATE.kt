@@ -3,14 +3,14 @@
 // ============================================================================
 // This is a complete working template for any NetworkMessage payload.
 // Replace "ExampleRequest" with your actual payload class name everywhere.
-// See docs/NETWORK_MESSAGES.md for detailed explanation.
+// See docs/network-messages/CONVENTIONS.md for detailed explanation.
 // ============================================================================
 
-package at.aau.pulverfass.shared.network.message.request
+package at.aau.pulverfass.shared.message.lobby.request
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -61,7 +61,7 @@ object ExampleRequestSerializer : KSerializer<ExampleRequest> {
     // ========================================================================
     
     override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.request.ExampleRequest") {
+        buildClassSerialDescriptor("at.aau.pulverfass.shared.message.lobby.request.ExampleRequest") {
             // IMPORTANT: Order is FINAL. Never change this list.
             // New fields: ALWAYS add at the end.
             // Removed fields: Keep entry but mark as deprecated (DO NOT remove).
@@ -173,7 +173,7 @@ data class SimpleRequest(
 
 object SimpleRequestSerializer : KSerializer<SimpleRequest> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.request.SimpleRequest"
+        "at.aau.pulverfass.shared.message.lobby.request.SimpleRequest"
     ) {
         element("lobbyCode", LobbyCode.serializer().descriptor)
     }
@@ -214,7 +214,7 @@ data class ReasonRequest(
 
 object ReasonRequestSerializer : KSerializer<ReasonRequest> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.request.ReasonRequest"
+        "at.aau.pulverfass.shared.message.lobby.request.ReasonRequest"
     ) {
         element("lobbyCode", LobbyCode.serializer().descriptor)
         element("reason", String.serializer().descriptor)  // String descriptor
@@ -257,7 +257,7 @@ object SimpleResponse : NetworkMessagePayload
 
 object SimpleResponseSerializer : KSerializer<SimpleResponse> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.response.SimpleResponse"
+        "at.aau.pulverfass.shared.message.lobby.response.SimpleResponse"
     ) {
         // No elements for empty payload
     }
@@ -293,7 +293,7 @@ data class PlayerListRequest(
 
 object PlayerListRequestSerializer : KSerializer<PlayerListRequest> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.request.PlayerListRequest"
+        "at.aau.pulverfass.shared.message.lobby.request.PlayerListRequest"
     ) {
         element("lobbyCode", LobbyCode.serializer().descriptor)
         element("playerIds", serializer<List<PlayerId>>().descriptor)  // List descriptor
@@ -331,5 +331,5 @@ object PlayerListRequestSerializer : KSerializer<PlayerListRequest> {
 
 VARIATION 5: Response with different field types
 ==================================================
-See docs/NETWORK_MESSAGES.md for "Referenzimplementierungen" section.
+See docs/network-messages/CONVENTIONS.md for "Referenzimplementierungen" section.
 */

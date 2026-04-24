@@ -29,19 +29,42 @@ class ClientNetwork(
         }
     }
 
+    /**
+     * Baut eine technische WebSocket-Verbindung zum Server auf.
+     *
+     * Ein erneuter Aufruf delegiert an den Transport, der eine bestehende
+     * Verbindung vor einem Reconnect selbst sauber trennt.
+     */
     suspend fun connect(serverUrl: String) {
         transport.connect(serverUrl)
     }
 
+    /**
+     * Trennt die aktuelle Verbindung.
+     *
+     * Der optionale [reason] wird nur an den Transport weitergereicht und
+     * beeinflusst keine fachliche Client-State-Maschine.
+     */
     suspend fun disconnect(reason: String? = null) {
         transport.disconnect(reason)
     }
 
+    /**
+     * Serialisiert eine fachliche Payload in das binäre Protokollformat und
+     * sendet sie über die einzige vom Android-Client unterstützte Verbindung.
+     *
+     * @throws IllegalStateException wenn der zugrunde liegende Transport keine
+     * aktive Verbindung hält
+     */
     suspend fun sendPayload(payload: NetworkMessagePayload) {
         val bytes = MessageCodec.encode(payload)
         sender.send(CLIENT_CONNECTION_ID, bytes)
     }
 
+    /**
+     * Gibt Transportressourcen frei und beendet die Lebensdauer dieses
+     * Netzwerkstacks.
+     */
     fun close() {
         transport.close()
     }

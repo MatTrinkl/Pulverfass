@@ -87,6 +87,78 @@ enum class MessageType(val id: Int) {
 
     /** Broadcast, dass das Spiel gestartet wurde. */
     LOBBY_GAME_STARTED_BROADCAST(25),
+
+    /** Anfrage nach einem vollständigen Map-Snapshot. */
+    LOBBY_MAP_GET_REQUEST(26),
+
+    /** Erfolgsantwort mit vollständigem Map-Snapshot. */
+    LOBBY_MAP_GET_RESPONSE(27),
+
+    /** Fehlantwort auf eine Map-Snapshot-Anfrage. */
+    LOBBY_MAP_GET_ERROR_RESPONSE(28),
+
+    /** Delta-Broadcast einer Owner-Änderung auf der Map. */
+    LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST(29),
+
+    /** Delta-Broadcast einer Truppenänderung auf der Map. */
+    LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST(30),
+
+    /** Anfrage, den aktuellen Turn-State zum nächsten Schritt fortzuschalten. */
+    LOBBY_TURN_ADVANCE_REQUEST(31),
+
+    /** Erfolgreiche Antwort auf eine Turn-Advance-Anfrage. */
+    LOBBY_TURN_ADVANCE_RESPONSE(32),
+
+    /** Fehlantwort auf eine Turn-Advance-Anfrage. */
+    LOBBY_TURN_ADVANCE_ERROR_RESPONSE(33),
+
+    /** Broadcast eines autoritativ aktualisierten Turn-States. */
+    LOBBY_TURN_STATE_UPDATED_BROADCAST(34),
+
+    /** Anfrage nach einem vollständigen Turn-State-Snapshot. */
+    LOBBY_TURN_STATE_GET_REQUEST(35),
+
+    /** Erfolgsantwort mit vollständigem Turn-State-Snapshot. */
+    LOBBY_TURN_STATE_GET_RESPONSE(36),
+
+    /** Fehlantwort auf eine Turn-State-Snapshot-Anfrage. */
+    LOBBY_TURN_STATE_GET_ERROR_RESPONSE(37),
+
+    /** Anfrage, den Startspieler im Lobby-Setup festzulegen. */
+    LOBBY_START_PLAYER_SET_REQUEST(38),
+
+    /** Erfolgreiche Antwort auf das Setzen des Startspielers. */
+    LOBBY_START_PLAYER_SET_RESPONSE(39),
+
+    /** Fehlantwort auf das Setzen des Startspielers. */
+    LOBBY_START_PLAYER_SET_ERROR_RESPONSE(40),
+
+    /** Öffentliches Delta des GameStates für eine Lobby. */
+    LOBBY_GAME_STATE_DELTA_BROADCAST(41),
+
+    /** Marker für den Abschluss einer Turn-Phase und den Beginn der nächsten. */
+    LOBBY_PHASE_BOUNDARY_BROADCAST(42),
+
+    /** Vollständiger öffentlicher GameState-Snapshot bei Spielerwechsel. */
+    LOBBY_GAME_STATE_SNAPSHOT_BROADCAST(43),
+
+    /** Anfrage nach einem privaten, spielerspezifischen GameState-Snapshot. */
+    LOBBY_GAME_STATE_PRIVATE_GET_REQUEST(44),
+
+    /** Erfolgsantwort mit privatem, spielerspezifischem GameState-Snapshot. */
+    LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE(45),
+
+    /** Fehlantwort auf eine private GameState-Snapshot-Anfrage. */
+    LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE(46),
+
+    /** Anfrage nach einem vollständigen Catch-up-Snapshot bei erkanntem Desync. */
+    LOBBY_GAME_STATE_CATCH_UP_REQUEST(47),
+
+    /** Erfolgsantwort mit vollständigem öffentlichem Catch-up-Snapshot. */
+    LOBBY_GAME_STATE_CATCH_UP_RESPONSE(48),
+
+    /** Fehlantwort auf eine Catch-up-Snapshot-Anfrage. */
+    LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE(49),
     ;
 
     companion object {

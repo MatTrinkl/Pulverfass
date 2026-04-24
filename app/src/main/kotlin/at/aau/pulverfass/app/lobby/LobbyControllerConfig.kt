@@ -1,8 +1,15 @@
 package at.aau.pulverfass.app.lobby
 
+/**
+ * Konfigurations- und Textsammlung für den aktuellen [LobbyController].
+ *
+ * Die Klasse bündelt bewusst sowohl technische Defaults als auch UI-nahe
+ * Status- und Fehlermeldungen für den derzeit kleinen App-Scope. Für größere
+ * Features wäre eine spätere Trennung in Infrastruktur- und UI-Konfiguration
+ * sinnvoll, aktuell existiert aber nur ein gemeinsamer Konfigurationspunkt.
+ */
 data class LobbyControllerConfig(
     val defaultServerUrl: String = "ws://10.0.2.2:8080/ws",
-    val loginPasswordTemplate: String = "android-template",
     val disconnectReason: String = "Client disconnected",
     val lobbyCodeLength: Int = 4,
     val statusNotConnected: String = "Nicht verbunden",
