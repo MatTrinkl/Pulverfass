@@ -28,82 +28,82 @@ import org.junit.jupiter.api.Test
  * - Fehlerfälle (Exceptions)
  */
 class PlayerManagerTest {
+    private lateinit var playerManager: PlayerManager
+
     @BeforeEach
     fun setUp() {
-        // vor jedem Test wird der Manager geleert
-        PlayerManager.clear()
+        playerManager = PlayerManager()
     }
 
     @Test
     fun `register sollte player speichern`() {
         val player = Player(PlayerId(1), "Max")
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertEquals(player, PlayerManager.get(PlayerId(1)))
+        assertEquals(player, playerManager.get(PlayerId(1)))
     }
 
     @Test
     fun `register sollte exception werfen wenn playerId bereits existiert`() {
         val player = Player(PlayerId(1), "Max")
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
         assertThrows(DuplicatePlayerIdException::class.java) {
-            PlayerManager.register(player)
+            playerManager.register(player)
         }
     }
 
     @Test
     fun `get sollte null liefern wenn player nicht existiert`() {
-        assertNull(PlayerManager.get(PlayerId(999)))
+        assertNull(playerManager.get(PlayerId(999)))
     }
 
     @Test
     fun `require sollte player liefern wenn er existiert`() {
         val player = Player(PlayerId(2), "Anna")
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertEquals(player, PlayerManager.require(PlayerId(2)))
+        assertEquals(player, playerManager.require(PlayerId(2)))
     }
 
     @Test
     fun `require sollte exception werfen wenn player nicht existiert`() {
         assertThrows(PlayerNotFoundException::class.java) {
-            PlayerManager.require(PlayerId(999))
+            playerManager.require(PlayerId(999))
         }
     }
 
     @Test
     fun `remove sollte player entfernen und zurückgeben`() {
         val player = Player(PlayerId(3), "Tom")
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        val removed = PlayerManager.remove(PlayerId(3))
+        val removed = playerManager.remove(PlayerId(3))
 
         assertEquals(player, removed)
-        assertFalse(PlayerManager.contains(PlayerId(3)))
+        assertFalse(playerManager.contains(PlayerId(3)))
     }
 
     @Test
     fun `remove sollte null liefern wenn player nicht existiert`() {
-        assertNull(PlayerManager.remove(PlayerId(404)))
+        assertNull(playerManager.remove(PlayerId(404)))
     }
 
     @Test
     fun `contains sollte true liefern wenn player existiert`() {
         val player = Player(PlayerId(4), "Mia")
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertTrue(PlayerManager.contains(PlayerId(4)))
+        assertTrue(playerManager.contains(PlayerId(4)))
     }
 
     @Test
     fun `contains sollte false liefern wenn player nicht existiert`() {
-        assertFalse(PlayerManager.contains(PlayerId(500)))
+        assertFalse(playerManager.contains(PlayerId(500)))
     }
 
-    // ConnectionId Tests
     @Test
     fun `getByConnectionId sollte passenden player liefern`() {
         val player =
@@ -113,9 +113,9 @@ class PlayerManagerTest {
                 connectionId = ConnectionId(10),
             )
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        val result = PlayerManager.getByConnectionId(ConnectionId(10))
+        val result = playerManager.getByConnectionId(ConnectionId(10))
         assertEquals(player, result)
     }
 
@@ -128,9 +128,9 @@ class PlayerManagerTest {
                 connectionId = ConnectionId(10),
             )
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertNull(PlayerManager.getByConnectionId(ConnectionId(999)))
+        assertNull(playerManager.getByConnectionId(ConnectionId(999)))
     }
 
     @Test
@@ -148,15 +148,14 @@ class PlayerManagerTest {
                 connectionId = ConnectionId(20),
             )
 
-        PlayerManager.register(first)
-        PlayerManager.register(second)
+        playerManager.register(first)
+        playerManager.register(second)
 
-        val result = PlayerManager.getByConnectionId(ConnectionId(20))
+        val result = playerManager.getByConnectionId(ConnectionId(20))
 
         assertEquals(second, result)
     }
 
-    // EntityId Tests
     @Test
     fun `getByEntityId sollte passenden player liefern`() {
         val player =
@@ -166,9 +165,9 @@ class PlayerManagerTest {
                 entityId = EntityId(30),
             )
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertEquals(player, PlayerManager.getByEntityId(EntityId(30)))
+        assertEquals(player, playerManager.getByEntityId(EntityId(30)))
     }
 
     @Test
@@ -180,9 +179,9 @@ class PlayerManagerTest {
                 entityId = EntityId(40),
             )
 
-        PlayerManager.register(player)
+        playerManager.register(player)
 
-        assertNull(PlayerManager.getByEntityId(EntityId(999)))
+        assertNull(playerManager.getByEntityId(EntityId(999)))
     }
 
     @Test
@@ -200,10 +199,10 @@ class PlayerManagerTest {
                 entityId = EntityId(60),
             )
 
-        PlayerManager.register(first)
-        PlayerManager.register(second)
+        playerManager.register(first)
+        playerManager.register(second)
 
-        val result = PlayerManager.getByEntityId(EntityId(60))
+        val result = playerManager.getByEntityId(EntityId(60))
 
         assertEquals(second, result)
     }
@@ -213,10 +212,10 @@ class PlayerManagerTest {
         val first = Player(PlayerId(1), "A")
         val second = Player(PlayerId(2), "B")
 
-        PlayerManager.register(first)
-        PlayerManager.register(second)
+        playerManager.register(first)
+        playerManager.register(second)
 
-        val result = PlayerManager.allPlayerIds()
+        val result = playerManager.allPlayerIds()
 
         assertEquals(2, result.size)
         assertTrue(result.contains(PlayerId(1)))
@@ -228,10 +227,10 @@ class PlayerManagerTest {
         val first = Player(PlayerId(13), "A")
         val second = Player(PlayerId(14), "B")
 
-        PlayerManager.register(first)
-        PlayerManager.register(second)
+        playerManager.register(first)
+        playerManager.register(second)
 
-        val result = PlayerManager.all()
+        val result = playerManager.all()
 
         assertEquals(2, result.size)
         assertTrue(result.contains(first))
@@ -240,14 +239,14 @@ class PlayerManagerTest {
 
     @Test
     fun `clear sollte alle player entfernen`() {
-        PlayerManager.register(Player(PlayerId(15), "A"))
-        PlayerManager.register(Player(PlayerId(16), "B"))
+        playerManager.register(Player(PlayerId(15), "A"))
+        playerManager.register(Player(PlayerId(16), "B"))
 
-        PlayerManager.clear()
+        playerManager.clear()
 
-        assertTrue(PlayerManager.all().isEmpty())
-        assertFalse(PlayerManager.contains(PlayerId(15)))
-        assertFalse(PlayerManager.contains(PlayerId(16)))
+        assertTrue(playerManager.all().isEmpty())
+        assertFalse(playerManager.contains(PlayerId(15)))
+        assertFalse(playerManager.contains(PlayerId(16)))
     }
 
     @Test
@@ -265,10 +264,10 @@ class PlayerManagerTest {
                 connectionId = ConnectionId(10),
             )
 
-        PlayerManager.register(first)
+        playerManager.register(first)
 
         assertThrows(DuplicateConnectionIdException::class.java) {
-            PlayerManager.register(second)
+            playerManager.register(second)
         }
     }
 
@@ -287,10 +286,10 @@ class PlayerManagerTest {
                 entityId = EntityId(20),
             )
 
-        PlayerManager.register(first)
+        playerManager.register(first)
 
         assertThrows(DuplicatePlayerEntityIdException::class.java) {
-            PlayerManager.register(second)
+            playerManager.register(second)
         }
     }
 }

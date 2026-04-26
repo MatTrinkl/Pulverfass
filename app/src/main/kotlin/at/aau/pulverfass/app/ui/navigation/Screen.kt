@@ -11,6 +11,9 @@ sealed class Screen(val route: String) {
     // route für warteraum
     object WaitingRoom : Screen("waiting_room")
 
+    // route für spielvorbereitung
+    object LoadGame : Screen("load_game")
+
     // route für hauptspiel
     object Game : Screen("game")
 }
