@@ -30,6 +30,7 @@ import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
+import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -705,6 +706,59 @@ class DefaultLobbyEventReducerTest {
         val lobbyCode = LobbyCode("GS01")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
+        val player3 = PlayerId(3)
+        val seed = 123L
+        val random = Random(seed)
+        val expectedTurnOrder = listOf(owner, player2, player3).shuffled(random)
+        val expectedTerritoryOwners =
+            sampleMapDefinition()
+                .territories
+                .map { territory -> territory.territoryId }
+                .shuffled(random)
+                .mapIndexed { index, territoryId ->
+                    territoryId to expectedTurnOrder[index % expectedTurnOrder.size]
+                }.toMap()
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, player2, player3),
+                turnOrder = listOf(owner, player2, player3),
+                activePlayer = owner,
+                mapDefinition = sampleMapDefinition(),
+                territoryStates =
+                    sampleMapDefinition().territories.associate { territory ->
+                        territory.territoryId to TerritoryState(territory.territoryId)
+                    },
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        val started = reducer.apply(stateWithOwner, GameStarted(lobbyCode, randomSeed = seed))
+
+        assertEquals(GameStatus.RUNNING, started.status)
+        assertEquals(true, started.gameStarted)
+        assertEquals(expectedTurnOrder, started.turnOrder)
+        assertEquals(expectedTurnOrder.first(), started.activePlayer)
+        assertEquals(expectedTurnOrder.first(), started.turnState?.activePlayerId)
+        assertEquals(TurnPhase.REINFORCEMENTS, started.turnState?.turnPhase)
+        assertEquals(1, started.turnState?.turnCount)
+        assertEquals(expectedTurnOrder.first(), started.turnState?.startPlayerId)
+        assertEquals(false, started.turnState?.isPaused)
+        assertEquals(null, started.turnState?.pauseReason)
+        assertEquals(34, started.setupTroopsToPlaceFor(owner))
+        assertEquals(34, started.setupTroopsToPlaceFor(player2))
+        assertEquals(34, started.setupTroopsToPlaceFor(player3))
+        started.allTerritoryStates().forEach { territoryState ->
+            assertEquals(expectedTerritoryOwners[territoryState.territoryId], territoryState.ownerId)
+            assertEquals(1, territoryState.troopCount)
+        }
+    }
+
+    @Test
+    fun `game started requires at least 3 players`() {
+        val lobbyCode = LobbyCode("GS02")
+        val owner = PlayerId(1)
+        val player2 = PlayerId(2)
         val stateWithOwner =
             GameState(
                 lobbyCode = lobbyCode,
@@ -712,33 +766,11 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(owner, player2),
                 turnOrder = listOf(owner, player2),
                 activePlayer = owner,
-                status = GameStatus.WAITING_FOR_PLAYERS,
-            )
-
-        val started = reducer.apply(stateWithOwner, GameStarted(lobbyCode))
-
-        assertEquals(GameStatus.RUNNING, started.status)
-        assertEquals(true, started.gameStarted)
-        assertEquals(owner, started.activePlayer)
-        assertEquals(owner, started.turnState?.activePlayerId)
-        assertEquals(TurnPhase.REINFORCEMENTS, started.turnState?.turnPhase)
-        assertEquals(1, started.turnState?.turnCount)
-        assertEquals(owner, started.turnState?.startPlayerId)
-        assertEquals(false, started.turnState?.isPaused)
-        assertEquals(null, started.turnState?.pauseReason)
-    }
-
-    @Test
-    fun `game started requires minimum 2 players`() {
-        val lobbyCode = LobbyCode("GS02")
-        val owner = PlayerId(1)
-        val stateWithOwner =
-            GameState(
-                lobbyCode = lobbyCode,
-                lobbyOwner = owner,
-                players = listOf(owner),
-                turnOrder = listOf(owner),
-                activePlayer = owner,
+                mapDefinition = sampleMapDefinition(),
+                territoryStates =
+                    sampleMapDefinition().territories.associate { territory ->
+                        territory.territoryId to TerritoryState(territory.territoryId)
+                    },
                 status = GameStatus.WAITING_FOR_PLAYERS,
             )
 
@@ -752,14 +784,20 @@ class DefaultLobbyEventReducerTest {
         val lobbyCode = LobbyCode("GS03")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
+        val player3 = PlayerId(3)
         val stateAlreadyRunning =
             GameState(
                 lobbyCode = lobbyCode,
                 lobbyOwner = owner,
-                players = listOf(owner, player2),
+                players = listOf(owner, player2, player3),
                 configuredStartPlayerId = owner,
-                turnOrder = listOf(owner, player2),
+                turnOrder = listOf(owner, player2, player3),
                 activePlayer = owner,
+                mapDefinition = sampleMapDefinition(),
+                territoryStates =
+                    sampleMapDefinition().territories.associate { territory ->
+                        territory.territoryId to TerritoryState(territory.territoryId)
+                    },
                 gameStarted = true,
                 status = GameStatus.RUNNING,
             )
@@ -861,14 +899,20 @@ class DefaultLobbyEventReducerTest {
         val lobbyCode = LobbyCode("SP03")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
+        val player3 = PlayerId(3)
         val preGameState =
             GameState(
                 lobbyCode = lobbyCode,
                 lobbyOwner = owner,
-                players = listOf(owner, player2),
+                players = listOf(owner, player2, player3),
                 configuredStartPlayerId = player2,
-                turnOrder = listOf(owner, player2),
+                turnOrder = listOf(owner, player2, player3),
                 activePlayer = player2,
+                mapDefinition = sampleMapDefinition(),
+                territoryStates =
+                    sampleMapDefinition().territories.associate { territory ->
+                        territory.territoryId to TerritoryState(territory.territoryId)
+                    },
                 turnState =
                     TurnState(
                         activePlayerId = player2,

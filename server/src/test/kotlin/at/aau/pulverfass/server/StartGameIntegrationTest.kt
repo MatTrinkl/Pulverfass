@@ -12,8 +12,9 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
-import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -44,15 +46,16 @@ import java.util.concurrent.ConcurrentHashMap
 
 class StartGameIntegrationTest {
     @Test
-    fun `start game request broadcasts game started and turn state to all players`() =
+    fun `start game request broadcasts delta response and public start events to all players`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val lobbyManager = LobbyManager(serverScope)
+            val startSeed = 77L
             val router =
                 MainServerRouter(
                     lobbyManager = lobbyManager,
-                    mapper = DefaultNetworkToLobbyEventMapper(),
+                    mapper = DefaultNetworkToLobbyEventMapper(gameStartSeedProvider = { startSeed }),
                 )
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
@@ -60,16 +63,22 @@ class StartGameIntegrationTest {
             val lobbyCode = LobbyCode("STG1")
             val ownerId = PlayerId(1)
             val player2Id = PlayerId(2)
+            val player3Id = PlayerId(3)
+            val players = listOf(ownerId, player2Id, player3Id)
+            val expectedTurnOrder = players.shuffled(Random(startSeed))
+            val expectedStartPlayer = ownerId
             lobbyManager.createLobby(
                 lobbyCode,
-                GameState(
+                GameState.initial(
                     lobbyCode = lobbyCode,
-                    lobbyOwner = ownerId,
-                    players = listOf(ownerId, player2Id),
-                    playerDisplayNames = mapOf(ownerId to "Owner", player2Id to "Player 2"),
-                    activePlayer = ownerId,
-                    turnOrder = listOf(ownerId, player2Id),
-                    status = GameStatus.WAITING_FOR_PLAYERS,
+                    mapDefinition = defaultMapDefinition(),
+                    players = players,
+                    playerDisplayNames =
+                        mapOf(
+                            ownerId to "Owner",
+                            player2Id to "Player 2",
+                            player3Id to "Player 3",
+                        ),
                 ),
             )
 
@@ -112,6 +121,14 @@ class StartGameIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
+                    val player3Session =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = player3Id,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
 
                     val startRequest = StartGameRequest(lobbyCode = lobbyCode)
                     ownerSession.first.send(
@@ -124,10 +141,10 @@ class StartGameIntegrationTest {
                     val expectedTurnStateEvent =
                         TurnStateUpdatedEvent(
                             lobbyCode = lobbyCode,
-                            activePlayerId = ownerId,
+                            activePlayerId = expectedStartPlayer,
                             turnPhase = TurnPhase.REINFORCEMENTS,
                             turnCount = 1,
-                            startPlayerId = ownerId,
+                            startPlayerId = expectedStartPlayer,
                         )
                     val expectedDelta =
                         GameStateDeltaEvent(
@@ -154,12 +171,37 @@ class StartGameIntegrationTest {
                         receivePayload(player2Session.first),
                     )
                     assertEquals(expectedTurnStateEvent, receivePayload(player2Session.first))
+                    assertEquals(
+                        expectedDelta,
+                        receivePayload(player3Session.first),
+                    )
+                    assertEquals(
+                        GameStartedEvent(lobbyCode = lobbyCode),
+                        receivePayload(player3Session.first),
+                    )
+                    assertEquals(expectedTurnStateEvent, receivePayload(player3Session.first))
                     assertNull(receivePayloadOrNull(ownerSession.first))
                     assertNull(receivePayloadOrNull(player2Session.first))
-                    assertEquals(2, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
+                    assertNull(receivePayloadOrNull(player3Session.first))
+
+                    val currentState = lobbyManager.getLobby(lobbyCode)?.currentState()
+                    assertEquals(players, currentState?.players)
+                    assertTrue(currentState?.gameStarted == true)
+                    assertEquals(GameStatus.RUNNING, currentState?.status)
+                    assertEquals(expectedTurnOrder, currentState?.turnOrder)
+                    assertEquals(expectedStartPlayer, currentState?.activePlayer)
+                    assertEquals(expectedTurnStateEvent.turnCount, currentState?.turnNumber)
+                    assertEquals(expectedStartPlayer, currentState?.configuredStartPlayerId)
+                    assertEquals(1L, currentState?.stateVersion)
+                    assertTrue(
+                        currentState
+                            ?.allTerritoryStates()
+                            ?.all { territory -> territory.ownerId != null && territory.troopCount == 1 } == true,
+                    )
 
                     ownerSession.first.close()
                     player2Session.first.close()
+                    player3Session.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -184,16 +226,14 @@ class StartGameIntegrationTest {
 
             val lobbyCode = LobbyCode("STG2")
             val ownerId = PlayerId(1)
+            val player2Id = PlayerId(2)
             lobbyManager.createLobby(
                 lobbyCode,
-                GameState(
+                GameState.initial(
                     lobbyCode = lobbyCode,
-                    lobbyOwner = ownerId,
-                    players = listOf(ownerId),
-                    playerDisplayNames = mapOf(ownerId to "Owner"),
-                    activePlayer = ownerId,
-                    turnOrder = listOf(ownerId),
-                    status = GameStatus.WAITING_FOR_PLAYERS,
+                    mapDefinition = defaultMapDefinition(),
+                    players = listOf(ownerId, player2Id),
+                    playerDisplayNames = mapOf(ownerId to "Owner", player2Id to "Player 2"),
                 ),
             )
 
@@ -240,7 +280,7 @@ class StartGameIntegrationTest {
                     val decoded = receivePayload(ownerSession.first)
                     assertTrue(decoded is StartGameErrorResponse)
                     assertNull(receivePayloadOrNull(ownerSession.first))
-                    assertEquals(1, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
+                    assertEquals(2, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
 
                     ownerSession.first.close()
                 }
@@ -292,4 +332,6 @@ class StartGameIntegrationTest {
         assertTrue(frame is Frame.Binary)
         return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
     }
+
+    private fun defaultMapDefinition() = MapConfigLoader.loadDefault()
 }

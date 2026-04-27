@@ -363,6 +363,22 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
+                lobbyCode = LobbyCode("XY56"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                setupTroopsToPlaceByPlayer = emptyMap(),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("XY78"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                setupTroopsToPlaceByPlayer = mapOf(playerOne to -1),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
                 lobbyCode = LobbyCode("XZ56"),
                 mapDefinition = sampleMapDefinition(),
             )

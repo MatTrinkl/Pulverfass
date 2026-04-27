@@ -34,6 +34,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
+ * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
  */
 data class GameState(
     val lobbyCode: LobbyCode,
@@ -54,6 +55,7 @@ data class GameState(
     val lastInvalidActionReason: String? = null,
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
+    val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
 ) {
     init {
         require(turnNumber >= 0) {
@@ -70,6 +72,12 @@ data class GameState(
         }
         require(playerDisplayNames.keys == players.toSet()) {
             "GameState.playerDisplayNames muss genau für alle Spieler Einträge enthalten."
+        }
+        require(setupTroopsToPlaceByPlayer.keys == players.toSet()) {
+            "GameState.setupTroopsToPlaceByPlayer muss genau für alle Spieler Einträge enthalten."
+        }
+        require(setupTroopsToPlaceByPlayer.values.all { it >= 0 }) {
+            "GameState.setupTroopsToPlaceByPlayer darf keine negativen Werte enthalten."
         }
         require(turnOrder == turnOrder.distinct()) {
             "GameState.turnOrder darf keine Duplikate enthalten."
@@ -168,6 +176,20 @@ data class GameState(
      * Prüft, ob bereits eine Map-Definition im State vorhanden ist.
      */
     fun hasMap(): Boolean = mapDefinition != null
+
+    /**
+     * Liefert die verbleibenden Starttruppen eines Spielers.
+     */
+    fun setupTroopsToPlaceFor(playerId: PlayerId): Int =
+        setupTroopsToPlaceByPlayer[playerId]
+            ?: throw IllegalArgumentException(
+                "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'.",
+            )
+
+    /**
+     * Prüft, ob im Start-Setup noch Truppen platziert werden müssen.
+     */
+    fun hasPendingSetupTroops(): Boolean = setupTroopsToPlaceByPlayer.values.any { it > 0 }
 
     /**
      * Liefert alle Laufzeit-Territorien in stabiler Map-Reihenfolge.

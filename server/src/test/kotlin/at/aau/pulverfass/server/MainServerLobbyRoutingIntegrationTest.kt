@@ -1531,17 +1531,19 @@ class MainServerLobbyRoutingIntegrationTest {
                     waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 5)
 
                     lobbyManager.removeLobby(lobbyCode)
+                    val offlineThirdPlayerId = PlayerId(999)
                     lobbyManager.createLobby(
                         lobbyCode = lobbyCode,
                         initialState =
                             createPreGameState(
                                 lobbyCode = lobbyCode,
                                 ownerId = hostId,
-                                players = listOf(hostId, joinerAId),
+                                players = listOf(hostId, joinerAId, offlineThirdPlayerId),
                                 displayNames =
                                     mapOf(
                                         hostId to "Host",
                                         joinerAId to "JoinerA",
+                                        offlineThirdPlayerId to "OfflineThird",
                                     ),
                             ),
                     )
@@ -1568,7 +1570,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertNull(receivePayloadOrNull(kickedPlayerSessionAndConnection.first))
 
                     assertEquals(
-                        listOf(hostId, joinerAId),
+                        listOf(hostId, joinerAId, offlineThirdPlayerId),
                         lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
                     )
 

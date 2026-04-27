@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DefaultNetworkToLobbyEventMapperTest {
-    private val mapper = DefaultNetworkToLobbyEventMapper()
+    private val mapper = DefaultNetworkToLobbyEventMapper(gameStartSeedProvider = { 4242L })
 
     @Test
     fun `join request wird korrekt auf domain event gemappt`() {
@@ -239,7 +239,7 @@ class DefaultNetworkToLobbyEventMapperTest {
         assertEquals(lobbyCode, mapped.lobbyCode)
         assertEquals(request.context, mapped.context)
         assertEquals(1, mapped.events.size)
-        assertEquals(GameStarted(lobbyCode), mapped.events.single())
+        assertEquals(GameStarted(lobbyCode, randomSeed = 4242L), mapped.events.single())
     }
 
     private fun receivedPacket(

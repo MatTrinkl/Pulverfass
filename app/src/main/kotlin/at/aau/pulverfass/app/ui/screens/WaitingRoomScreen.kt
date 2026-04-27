@@ -165,7 +165,7 @@ private fun HostActions(
 ) {
     // nur der host kann das spiel starten wenn genug spieler da sind
     if (isHost) {
-        val canStart = playersCount >= 2
+        val canStart = playersCount >= 3
         Button(
             onClick = onStartGame,
             modifier = Modifier.fillMaxWidth(0.4f),

@@ -17,7 +17,7 @@
     <string name="players">Spieler</string>
     <string name="host_tag">(Host)</string>
     <string name="start_game">Spiel starten</string>
-    <string name="need_players">Mindestens 2 Spieler benötigt</string>
+    <string name="need_players">Mindestens 3 Spieler benötigt</string>
     <string name="leave_lobby">Lobby verlassen</string>
     <string name="game_personal_player_label">Dein Spieler</string>
     <string name="game_phase_label">Phase</string>

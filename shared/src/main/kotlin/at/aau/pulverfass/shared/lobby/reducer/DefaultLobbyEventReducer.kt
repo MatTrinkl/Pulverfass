@@ -18,6 +18,7 @@ import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
@@ -79,7 +80,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                         startPlayerId = event.startPlayerId,
                         requesterPlayerId = event.requesterPlayerId,
                     )
-                is GameStarted -> onGameStarted(state)
+                is GameStarted -> onGameStarted(state, event)
                 is SystemTick -> state
                 is TerritoryOwnerChangedEvent -> onTerritoryOwnerChanged(state, event)
                 is TerritoryTroopsChangedEvent -> onTerritoryTroopsChanged(state, event)
@@ -113,6 +114,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 players = updatedPlayers,
                 playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
                 lobbyOwner = updatedLobbyOwner,
+                setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 status = updatedStatus,
@@ -160,6 +162,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 playerDisplayNames = state.playerDisplayNames - playerId,
                 lobbyOwner = updatedLobbyOwner,
                 activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -213,6 +216,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 players = updatedPlayers,
                 playerDisplayNames = state.playerDisplayNames - targetPlayerId,
                 activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -349,10 +353,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         )
     }
 
-    private fun onGameStarted(state: GameState): GameState {
-        if (state.players.size < 2) {
+    private fun onGameStarted(
+        state: GameState,
+        event: GameStarted,
+    ): GameState {
+        if (!GameStartPreparation.isSupportedPlayerCount(state.players.size)) {
             throw InvalidLobbyEventException(
-                "Spiel kann nicht mit weniger als 2 Spielern gestartet werden, " +
+                "Spiel kann nur mit 3 bis 6 Spielern gestartet werden, " +
                     "waren aber ${state.players.size}.",
             )
         }
@@ -367,10 +374,18 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "Spiel kann nicht aus Status '${state.status}' gestartet werden.",
             )
         }
+        requireMapLoaded(state)
+
+        val preparedStart =
+            try {
+                GameStartPreparation.prepare(state, event.randomSeed)
+            } catch (cause: IllegalArgumentException) {
+                throw InvalidLobbyEventException(cause.message ?: "Spielstart konnte nicht vorbereitet werden.")
+            }
 
         val initializedTurnState =
             TurnStateMachine.prepareSetupState(
-                turnOrder = state.turnOrder,
+                turnOrder = preparedStart.randomizedTurnOrder,
                 preferredStartPlayerId = state.configuredStartPlayerId,
             )
         val runningState =
@@ -378,6 +393,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 gameStarted = true,
                 status = GameStatus.RUNNING,
+                turnOrder = preparedStart.randomizedTurnOrder,
+                territoryStates = preparedStart.preparedTerritoryStates,
+                setupTroopsToPlaceByPlayer = preparedStart.setupTroopsToPlaceByPlayer,
             )
 
         return initializedTurnState?.let {
