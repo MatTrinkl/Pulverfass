@@ -1,9 +1,12 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.connection.ConnectionManager
 import at.aau.pulverfass.server.receive.PacketReceiver
 import at.aau.pulverfass.server.send.PacketSender
+import at.aau.pulverfass.server.session.SessionManager
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
@@ -25,9 +28,17 @@ import org.slf4j.LoggerFactory
 class ServerNetwork(
     internal val transport: ServerWebSocketTransport = ServerWebSocketTransport(),
     internal val packetReceiver: PacketReceiver = PacketReceiver(),
+    internal val connectionManager: ConnectionManager = transport.connectionManager,
+    internal val sessionManager: SessionManager = SessionManager(),
 ) : Network<ConnectionId> {
+    init {
+        require(connectionManager === transport.connectionManager) {
+            "ServerNetwork erwartet denselben ConnectionManager wie der Transport."
+        }
+    }
+
     private val logger = LoggerFactory.getLogger(ServerNetwork::class.java)
-    private val sender: PacketSender = PacketSender(transport)
+    private val sender: PacketSender = PacketSender(connectionManager)
     private val _events = MutableSharedFlow<Network.Event<ConnectionId>>(extraBufferCapacity = 64)
 
     /**
@@ -50,6 +61,11 @@ class ServerNetwork(
         session: DefaultWebSocketServerSession,
     ) {
         transport.onConnected(connectionId, session)
+        val createdSession = sessionManager.createSession(connectionId)
+        sender.send(
+            connectionId = connectionId,
+            bytes = MessageCodec.encode(ConnectionResponse(createdSession.sessionToken)),
+        )
         _events.emit(Network.Event.Connected(connectionId))
     }
 
@@ -103,6 +119,7 @@ class ServerNetwork(
         connectionId: ConnectionId,
         reason: String?,
     ) {
+        sessionManager.detachConnection(connectionId)
         transport.onDisconnected(connectionId, reason)
         _events.emit(Network.Event.Disconnected(connectionId, reason))
     }

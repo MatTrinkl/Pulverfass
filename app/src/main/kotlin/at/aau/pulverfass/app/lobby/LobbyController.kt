@@ -101,6 +101,12 @@ class LobbyController(
         }
 
         scope.launch {
+            network.sessionToken.collect { sessionToken ->
+                _state.update { it.copy(sessionToken = sessionToken?.value) }
+            }
+        }
+
+        scope.launch {
             network.packetReceiver.packets.collect { packet ->
                 _state.update { it.copy(lastMessageType = packet.header.type.name) }
 

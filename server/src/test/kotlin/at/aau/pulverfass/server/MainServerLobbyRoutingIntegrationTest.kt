@@ -8,8 +8,10 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -26,7 +28,6 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -37,12 +38,9 @@ import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -880,20 +878,12 @@ class MainServerLobbyRoutingIntegrationTest {
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
         connectionsByPlayer: ConcurrentHashMap<PlayerId, ConnectionId>,
     ) = coroutineScope {
-        val connectedDeferred =
-            async {
-                withTimeout(5_000) {
-                    network.events
-                        .filterIsInstance<Network.Event.Connected<ConnectionId>>()
-                        .first()
-                }
-            }
-
         val session = client.webSocketSession("/ws")
-        val connected = connectedDeferred.await()
-        playersByConnection[connected.connectionId] = playerId
-        connectionsByPlayer[playerId] = connected.connectionId
-        session to connected.connectionId
+        val sessionToken = discardConnectionHandshake(session)
+        val connectionId = awaitConnectionId(network, sessionToken)
+        playersByConnection[connectionId] = playerId
+        connectionsByPlayer[playerId] = connectionId
+        session to connectionId
     }
 
     private suspend fun receivePayload(
@@ -938,6 +928,30 @@ class MainServerLobbyRoutingIntegrationTest {
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
         return value as T
+    }
+
+    private suspend fun discardConnectionHandshake(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ): SessionToken {
+        val payload = receivePayload(session)
+        val response = assertIs<ConnectionResponse>(payload)
+        return response.sessionToken
+    }
+
+    private suspend fun awaitConnectionId(
+        network: ServerNetwork,
+        sessionToken: SessionToken,
+    ): ConnectionId {
+        return withTimeout(5_000) {
+            var connectionId: ConnectionId? = null
+            while (connectionId == null) {
+                connectionId = network.sessionManager.getByToken(sessionToken)?.connectionId
+                if (connectionId == null) {
+                    delay(5)
+                }
+            }
+            connectionId
+        }
     }
 
     private fun createPreGameState(
