@@ -114,7 +114,7 @@ class ScreenComposableTest {
 
         composeTestRule.onNodeWithText("Spiel wird vorbereitet").assertIsDisplayed()
         composeTestRule.onNodeWithText(
-            "Karte und Demo-Spielzustand werden geladen.",
+            "Karte und Spielzustand werden geladen.",
         ).assertIsDisplayed()
 
         composeTestRule.mainClock.advanceTimeBy(1_100)
@@ -164,20 +164,24 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_shows_dynamic_map_ui_and_reacts_to_actions() {
-        composeTestRule.setContent {
-            AndroidAppTheme {
-                GameScreen()
+        val controller = LobbyController()
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreen(controller = controller)
+                }
             }
-        }
 
-        composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Verstärken")
-        composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 7")
-        composeTestRule.onNodeWithText("Karten").performClick()
-        composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Warten")
+            composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 1")
+            composeTestRule.onNodeWithText("Karten").performClick()
+            composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+        } finally {
+            controller.close()
+        }
     }
 }

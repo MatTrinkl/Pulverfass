@@ -31,10 +31,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Lädt aktuell die Demo-Karte vor dem eigentlichen Spielscreen.
+ * Lädt die Kartenassets vor dem eigentlichen Spielscreen.
  *
- * Später kann hier derselbe Einstieg für echten Game-State aus Lobby, Server
- * und Shared-Modul verwendet werden.
+ * Der fachliche GameState kommt bereits über den wiederverwendeten
+ * [at.aau.pulverfass.app.lobby.LobbyController].
  */
 @Composable
 fun LoadGameScreen(

@@ -2,11 +2,15 @@ package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
 import io.ktor.server.engine.ApplicationEngine
@@ -24,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.net.ServerSocket
+import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -173,6 +178,80 @@ class LobbyControllerTest {
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
                 assertFalse(state.isHost)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `start game should send backend request and trigger catch up after game started event`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("S123")
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is StartGameRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(StartGameResponse()),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(GameStartedEvent(payload.lobbyCode)),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.startGame()
+                waitUntil { seenPayloads.any { it is StartGameRequest } }
+                waitUntil { controller.state.value.gameStarted }
+                waitUntil { seenPayloads.any { it is GameStateCatchUpRequest } }
+
+                assertTrue(controller.state.value.gameState.isCatchingUp)
             } finally {
                 controller.close()
                 server.close()

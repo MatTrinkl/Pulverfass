@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
                                 )
                             }
                             composable(Screen.Game.route) {
-                                GameScreen()
+                                GameScreen(controller = lobbyController)
                             }
                         }
                     }

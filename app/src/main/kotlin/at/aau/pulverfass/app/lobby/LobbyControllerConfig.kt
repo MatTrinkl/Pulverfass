@@ -25,5 +25,11 @@ data class LobbyControllerConfig(
     val errorCreateFailed: String = "Create request fehlgeschlagen",
     val errorJoinFailed: String = "Join request fehlgeschlagen",
     val errorLobbyCodeLength: String = "Lobbycode muss 4-stellig sein",
+    val errorLobbyMissing: String = "Keine aktive Lobby gefunden",
+    val errorStartGameFailed: String = "Spielstart fehlgeschlagen",
+    val errorCatchUpFailed: String = "Spielstand konnte nicht synchronisiert werden",
+    val errorPlayerIdMissing: String = "Eigene Spieler-ID fehlt noch",
+    val errorTurnAdvanceNotAllowed: String = "Du kannst die aktuelle Phase nicht beenden",
+    val errorTurnAdvanceFailed: String = "Phasenwechsel fehlgeschlagen",
     val errorUnknown: String = "Unbekannter Fehler",
 )

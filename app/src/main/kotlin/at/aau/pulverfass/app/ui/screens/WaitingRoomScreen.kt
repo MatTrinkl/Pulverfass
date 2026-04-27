@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,7 +28,7 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 
-// bildschirm für den warteraum vor spielbeginn
+// Bildschirm für den Warteraum vor Spielbeginn.
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
@@ -37,30 +38,52 @@ fun WaitingRoomScreen(
     playerName: String,
 ) {
     val state by controller.state.collectAsState()
-    val players = if (state.playerNames.isEmpty()) listOf(playerName) else state.playerNames
+    val effectivePlayerName = state.playerName.ifBlank { playerName }
+    val effectiveIsHost = state.isHost || isHost
+    val players =
+        if (state.players.isEmpty()) {
+            listOf(WaitingRoomPlayerUi(displayName = effectivePlayerName, isHost = effectiveIsHost))
+        } else {
+            state.players.map {
+                WaitingRoomPlayerUi(displayName = it.displayName, isHost = it.isHost)
+            }
+        }
+
+    LaunchedEffect(state.gameStarted) {
+        if (state.gameStarted) {
+            navController.navigate(Screen.LoadGame.route)
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        WaitingRoomHeader(lobbyCode, isHost)
+        WaitingRoomHeader(lobbyCode, effectiveIsHost)
 
         Spacer(modifier = Modifier.height(24.dp))
 
         PlayerListCard(
             players = players,
-            playerName = playerName,
-            isHost = isHost,
             modifier = Modifier.fillMaxWidth(0.7f).weight(1f),
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         HostActions(
-            isHost = isHost,
+            isHost = effectiveIsHost,
             playersCount = players.size,
-            onStartGame = { navController.navigate(Screen.LoadGame.route) },
+            onStartGame = controller::startGame,
         )
+
+        state.errorText?.let { errorText ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -71,18 +94,23 @@ fun WaitingRoomScreen(
             },
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
-            // ermöglicht das verlassen der aktuellen lobby
+            // Ermöglicht das Verlassen der aktuellen Lobby.
             Text(stringResource(id = R.string.leave_lobby))
         }
     }
 }
+
+private data class WaitingRoomPlayerUi(
+    val displayName: String,
+    val isHost: Boolean,
+)
 
 @Composable
 private fun WaitingRoomHeader(
     lobbyCode: String,
     isHost: Boolean,
 ) {
-    // zeigt die eindeutige lobby id an
+    // Zeigt die eindeutige Lobby-ID an.
     Text(
         text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
         style = MaterialTheme.typography.displaySmall,
@@ -92,7 +120,6 @@ private fun WaitingRoomHeader(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    // unterscheidet zwischen host & normalen spielern
     val hostStatusText =
         if (isHost) {
             stringResource(id = R.string.you_are_host)
@@ -108,12 +135,10 @@ private fun WaitingRoomHeader(
 
 @Composable
 private fun PlayerListCard(
-    players: List<String>,
-    playerName: String,
-    isHost: Boolean,
+    players: List<WaitingRoomPlayerUi>,
     modifier: Modifier = Modifier,
 ) {
-    // kartenansicht für die auflistung aller teilnehmer
+    // Kartenansicht für die Auflistung aller Teilnehmer.
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -125,8 +150,8 @@ private fun PlayerListCard(
             LazyColumn {
                 items(players) { player ->
                     PlayerRow(
-                        player = player,
-                        isHostPlayer = isHost && player == playerName,
+                        player = player.displayName,
+                        isHostPlayer = player.isHost,
                     )
                 }
             }
@@ -139,7 +164,7 @@ private fun PlayerRow(
     player: String,
     isHostPlayer: Boolean,
 ) {
-    // zeigt einen einzelnen spieler in einer zeile an
+    // Zeigt einen einzelnen Spieler in einer Zeile an.
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -147,7 +172,6 @@ private fun PlayerRow(
         Text(text = player, style = MaterialTheme.typography.bodyLarge)
         if (isHostPlayer) {
             Spacer(modifier = Modifier.width(8.dp))
-            // markiert den host in der liste
             Text(
                 text = stringResource(id = R.string.host_tag),
                 style = MaterialTheme.typography.labelSmall,
@@ -163,7 +187,7 @@ private fun HostActions(
     playersCount: Int,
     onStartGame: () -> Unit,
 ) {
-    // nur der host kann das spiel starten wenn genug spieler da sind
+    // Nur der Host kann das Spiel starten, wenn genug Spieler da sind.
     if (isHost) {
         val canStart = playersCount >= 3
         Button(
@@ -174,7 +198,6 @@ private fun HostActions(
             Text(stringResource(id = R.string.start_game))
         }
         if (!canStart) {
-            // hinweis falls die mindestanzahl an spielern nicht erreicht ist
             Text(
                 text = stringResource(id = R.string.need_players),
                 style = MaterialTheme.typography.labelSmall,

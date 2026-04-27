@@ -84,7 +84,7 @@ data class GameMapRegion(
 )
 
 /**
- * Hält den reinen Frontend-Zustand einer Region für die Demoansicht.
+ * Hält den reinen Frontend-Zustand einer Region für die Kartenansicht.
  */
 data class GameMapRegionState(
     val ownerPlayerId: String,
@@ -122,7 +122,7 @@ private data class TerritoryRenderAssets(
 )
 
 /**
- * Statische Frontend-Daten für die aktuelle Demo-Karte.
+ * Statische Frontend-Daten für die aktuelle Spielkarte.
  *
  * Die Territories liegen bewusst im App-Modul, bis fachliche Kartendaten aus
  * den anderen Modulen kommen. Die präzisen Grenzen kommen jetzt aus Bildern

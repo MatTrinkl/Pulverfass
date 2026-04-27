@@ -8,7 +8,7 @@
     <string name="join_lobby">Lobby beitreten</string>
     <string name="open_map_playground">Karte direkt testen</string>
     <string name="load_game_title">Spiel wird vorbereitet</string>
-    <string name="load_game_description">Karte und Demo-Spielzustand werden geladen.</string>
+    <string name="load_game_description">Karte und Spielzustand werden geladen.</string>
     <string name="enter_waiting_room">Warteraum betreten</string>
     <string name="cancel">Abbrechen</string>
     <string name="lobby_id">Lobby</string>
@@ -27,10 +27,13 @@
     <string name="game_action_reinforce">Verstärken</string>
     <string name="game_action_attack">Angriff</string>
     <string name="game_action_move">Verschieben</string>
+    <string name="game_action_draw_card">Karte ziehen</string>
+    <string name="game_action_waiting">Warten</string>
     <string name="game_cards_button">Karten</string>
     <string name="game_cards_hide">Karten zu</string>
-    <string name="game_end_round_button">Runde beenden</string>
+    <string name="game_end_round_button">Phase beenden</string>
     <string name="game_cards_title">Kartenhand</string>
+    <string name="game_cards_empty">Keine Karten</string>
     <string name="game_cards_demo_infantry">Infanterie ×2</string>
     <string name="game_cards_demo_cavalry">Kavallerie ×1</string>
     <string name="game_cards_demo_artillery">Artillerie ×1</string>
