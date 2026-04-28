@@ -39,9 +39,7 @@
     <string name="game_end_round_button">Phase beenden</string>
     <string name="game_cards_title">Kartenhand</string>
     <string name="game_cards_empty">Keine Karten</string>
-    <string name="game_cards_demo_infantry">Infanterie ×2</string>
-    <string name="game_cards_demo_cavalry">Kavallerie ×1</string>
-    <string name="game_cards_demo_artillery">Artillerie ×1</string>
+    <string name="game_cards_unknown">Unbekannte Karte</string>
     <string name="server_url">Server URL</string>
     <string name="connection_status">Status</string>
     <string name="last_message_type">Letzte Message</string>

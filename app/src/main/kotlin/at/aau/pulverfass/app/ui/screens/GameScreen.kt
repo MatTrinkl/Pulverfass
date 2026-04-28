@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -91,7 +94,7 @@ fun GameScreen(controller: LobbyController) {
 }
 
 @Composable
-private fun GameScreenContent(
+internal fun GameScreenContent(
     players: List<GamePlayerUi>,
     localPlayerId: PlayerId?,
     uiState: GameUiState,
@@ -394,8 +397,8 @@ private fun CardsSidebar(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            CardsOverview(
-                player = player,
+            PrivateHandPanel(
+                playerName = player.name,
                 handCards = handCards,
                 modifier =
                     Modifier
@@ -580,49 +583,108 @@ private fun PlayerAvatar(
 }
 
 @Composable
-private fun CardsOverview(
-    player: GamePlayerUi,
+internal fun PrivateHandPanel(
+    playerName: String,
     handCards: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.testTag("game_cards_panel"),
-        shape = RoundedCornerShape(18.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = stringResource(id = R.string.game_cards_title),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = HudContentColor,
+    val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
+    val handCardItems =
+        remember(handCards, unknownCardLabel) {
+            buildHandCardItems(
+                handCards = handCards,
+                unknownCardLabel = unknownCardLabel,
             )
-            Text(
-                text = player.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = HudContentColor,
-            )
+        }
 
-            if (handCards.isEmpty()) {
-                Text(
-                    text = stringResource(id = R.string.game_cards_empty),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            } else {
-                handCards.forEach { card ->
-                    Text(
-                        text = card,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+    Column(
+        modifier = modifier.testTag("game_cards_panel"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_cards_title),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = HudContentColor,
+        )
+        Text(
+            text = playerName,
+            style = MaterialTheme.typography.labelMedium,
+            color = HudContentColor,
+        )
+
+        if (handCardItems.isEmpty()) {
+            Text(
+                text = stringResource(id = R.string.game_cards_empty),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .testTag("game_cards_list"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(
+                    items = handCardItems,
+                    key = HandCardItemUi::stableKey,
+                ) { item ->
+                    HandCardRow(item = item)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HandCardRow(item: HandCardItemUi) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceMutedColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = item.label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = HudContentColor,
+        )
+    }
+}
+
+internal data class HandCardItemUi(
+    val stableKey: String,
+    val label: String,
+)
+
+/**
+ * Erzeugt Listeneinträge mit stabilen Keys aus dem privaten Hand-Snapshot.
+ *
+ * Das Backend liefert aktuell nur Kartenlabels ohne Karten-ID. Der Key nutzt
+ * deshalb Label plus laufende Duplikatnummer, damit gleiche Karten mehrfach
+ * ohne LazyList-Key-Kollision angezeigt werden.
+ */
+internal fun buildHandCardItems(
+    handCards: List<String>,
+    unknownCardLabel: String,
+): List<HandCardItemUi> {
+    val occurrencesByLabel = mutableMapOf<String, Int>()
+
+    return handCards.map { card ->
+        val label = card.trim().ifBlank { unknownCardLabel }
+        val occurrenceIndex = occurrencesByLabel.getOrDefault(label, 0)
+        occurrencesByLabel[label] = occurrenceIndex + 1
+
+        HandCardItemUi(
+            stableKey = "$label#$occurrenceIndex",
+            label = label,
+        )
     }
 }
 
