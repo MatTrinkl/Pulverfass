@@ -18,4 +18,9 @@ interface Connection {
      * Sendet rohe Bytes an diese Verbindung.
      */
     suspend fun send(bytes: ByteArray)
+
+    /**
+     * Schließt diese Verbindung kontrolliert serverseitig.
+     */
+    suspend fun close(reason: String?)
 }

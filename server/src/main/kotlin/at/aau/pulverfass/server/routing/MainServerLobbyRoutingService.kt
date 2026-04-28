@@ -3,6 +3,7 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -45,6 +46,7 @@ class MainServerLobbyRoutingService(
     private val network: ServerNetwork,
     private val router: MainServerRouter,
     private val lobbyManager: LobbyManager,
+    private val sessionContextRegistry: SessionContextRegistry? = null,
     private val playerIdResolver: (ConnectionId) -> PlayerId?,
     private val connectionIdResolver: (PlayerId) -> ConnectionId? = { null },
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
@@ -184,6 +186,13 @@ class MainServerLobbyRoutingService(
         val playerId = request.context.playerId ?: return
         val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
         val members = lobbyState.players
+        resolveSessionToken(request.connectionId)?.let { sessionToken ->
+            sessionContextRegistry?.updateLobbyContext(
+                sessionToken = sessionToken,
+                lobbyCode = payload.lobbyCode,
+                playerDisplayName = payload.playerDisplayName,
+            )
+        }
 
         members
             .filter { existingPlayerId -> existingPlayerId != playerId }
@@ -223,6 +232,9 @@ class MainServerLobbyRoutingService(
         network.send(request.connectionId, LeaveLobbyResponse(payload.lobbyCode))
 
         val playerId = request.context.playerId ?: return
+        resolveSessionToken(request.connectionId)?.let { sessionToken ->
+            sessionContextRegistry?.clearLobbyContext(sessionToken)
+        }
         val lobby = lobbyManager.getLobby(payload.lobbyCode) ?: return
         val lobbyState = lobby.currentState()
         val members = lobbyState.players
@@ -246,6 +258,9 @@ class MainServerLobbyRoutingService(
         payload: KickPlayerRequest,
     ) {
         network.send(request.connectionId, KickPlayerResponse())
+        sessionContextRegistry
+            ?.sessionTokenForPlayer(payload.targetPlayerId)
+            ?.let(sessionContextRegistry::clearLobbyContext)
 
         val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
         val event =
@@ -321,6 +336,9 @@ class MainServerLobbyRoutingService(
             }
         }
     }
+
+    private fun resolveSessionToken(connectionId: ConnectionId) =
+        network.sessionManager.getByConnectionId(connectionId)?.sessionToken
 
     /**
      * Stoppt die Paketverarbeitung kontrolliert.

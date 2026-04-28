@@ -101,14 +101,32 @@ class ConnectionManagerTest {
 
         assertEquals(ConnectionId(99), exception.connectionId)
     }
+
+    @Test
+    fun `close removes and closes connection`() =
+        runBlocking {
+            val manager = ConnectionManager()
+            val connection = FakeConnection(ConnectionId(40))
+            manager.register(connection)
+
+            manager.close(ConnectionId(40), "Reconnect")
+
+            assertNull(manager.get(ConnectionId(40)))
+            assertEquals("Reconnect", connection.closeReason)
+        }
 }
 
 private class FakeConnection(
     override val connectionId: ConnectionId,
 ) : Connection {
     val sentPayloads = mutableListOf<ByteArray>()
+    var closeReason: String? = null
 
     override suspend fun send(bytes: ByteArray) {
         sentPayloads += bytes.copyOf()
+    }
+
+    override suspend fun close(reason: String?) {
+        closeReason = reason
     }
 }

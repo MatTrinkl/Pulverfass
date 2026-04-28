@@ -4,9 +4,13 @@ import at.aau.pulverfass.server.connection.ConnectionManager
 import at.aau.pulverfass.server.receive.PacketReceiver
 import at.aau.pulverfass.server.send.PacketSender
 import at.aau.pulverfass.server.session.SessionManager
+import at.aau.pulverfass.server.session.SessionReconnectContext
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
@@ -40,6 +44,8 @@ class ServerNetwork(
     private val logger = LoggerFactory.getLogger(ServerNetwork::class.java)
     private val sender: PacketSender = PacketSender(connectionManager)
     private val _events = MutableSharedFlow<Network.Event<ConnectionId>>(extraBufferCapacity = 64)
+    private var reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null }
+    private var onSessionRemoved: (SessionToken) -> Unit = {}
 
     /**
      * High-Level-Eventstrom des Servers.
@@ -48,6 +54,17 @@ class ServerNetwork(
      * Fehler, aber keine Low-Level-WebSocket-Frames.
      */
     override val events: SharedFlow<Network.Event<ConnectionId>> = _events.asSharedFlow()
+
+    /**
+     * Installiert optionale Hooks für Reconnect-Kontext und Session-Cleanup.
+     */
+    fun installReconnectHooks(
+        reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null },
+        onSessionRemoved: (SessionToken) -> Unit = {},
+    ) {
+        this.reconnectContextProvider = reconnectContextProvider
+        this.onSessionRemoved = onSessionRemoved
+    }
 
     /**
      * Registriert eine neue WebSocket-Verbindung im Transport und emittiert das
@@ -98,7 +115,11 @@ class ServerNetwork(
         }
 
         try {
-            val payload = MessageCodec.decodePayload(bytes)
+            val payload = MessageCodec.decodePayload(receivedPacket)
+            if (payload is ReconnectRequest) {
+                handleReconnect(connectionId, payload)
+                return
+            }
             _events.emit(Network.Event.MessageReceived(connectionId, payload))
         } catch (cause: NetworkException) {
             logger.warn(
@@ -147,5 +168,86 @@ class ServerNetwork(
         payload: NetworkMessagePayload,
     ) {
         sender.send(connectionId, MessageCodec.encode(payload))
+    }
+
+    private suspend fun handleReconnect(
+        connectionId: ConnectionId,
+        payload: ReconnectRequest,
+    ) {
+        val reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
+        if (reconnectError != null) {
+            sendReconnectResponse(
+                connectionId = connectionId,
+                payload =
+                    ReconnectResponse(
+                        success = false,
+                        errorCode = reconnectError,
+                    ),
+            )
+            return
+        }
+
+        val currentSession = sessionManager.requireByConnectionId(connectionId)
+        val previousConnectionId = sessionManager.getByToken(payload.sessionToken)?.connectionId
+
+        if (currentSession.sessionToken == payload.sessionToken) {
+            sendReconnectResponse(
+                connectionId = connectionId,
+                payload = createReconnectSuccessResponse(payload.sessionToken),
+            )
+            return
+        }
+
+        val removedSession = sessionManager.removeByConnectionId(connectionId)
+        removedSession?.let { removed -> onSessionRemoved(removed.sessionToken) }
+        sessionManager.bindExisting(payload.sessionToken, connectionId)
+
+        if (previousConnectionId != null && previousConnectionId != connectionId) {
+            closeConnectionForReconnect(previousConnectionId)
+        }
+
+        sendReconnectResponse(
+            connectionId = connectionId,
+            payload = createReconnectSuccessResponse(payload.sessionToken),
+        )
+    }
+
+    private suspend fun closeConnectionForReconnect(connectionId: ConnectionId) {
+        runCatching {
+            connectionManager.close(
+                connectionId = connectionId,
+                reason = RECONNECT_REPLACED_REASON,
+            )
+        }.onFailure { cause ->
+            logger.warn(
+                "Failed to close superseded connection {} during reconnect",
+                connectionId.value,
+                cause,
+            )
+        }
+    }
+
+    private suspend fun sendReconnectResponse(
+        connectionId: ConnectionId,
+        payload: ReconnectResponse,
+    ) {
+        sender.send(
+            connectionId = connectionId,
+            bytes = MessageCodec.encode(payload),
+        )
+    }
+
+    private fun createReconnectSuccessResponse(sessionToken: SessionToken): ReconnectResponse {
+        val context = reconnectContextProvider(sessionToken)
+        return ReconnectResponse(
+            success = true,
+            playerId = context?.playerId,
+            lobbyCode = context?.lobbyCode,
+            playerDisplayName = context?.playerDisplayName,
+        )
+    }
+
+    private companion object {
+        const val RECONNECT_REPLACED_REASON = "Connection replaced by reconnect."
     }
 }
