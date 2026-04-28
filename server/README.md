@@ -91,4 +91,3 @@ Das Servermodul stellt einen Ktor-Server mit WebSocket-Unterstützung bereit.
   - erzeugt `DecodedNetworkRequest`
   - ruft `MainServerRouter.handle(...)` auf
 - Damit bleibt der Transportpfad von Lobby-Domainlogik getrennt.
-
