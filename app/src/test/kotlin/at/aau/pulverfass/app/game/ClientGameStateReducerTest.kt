@@ -78,7 +78,7 @@ class ClientGameStateReducerTest {
         val delta =
             GameStateDeltaEvent(
                 lobbyCode = lobbyCode,
-                fromVersion = 2,
+                fromVersion = 1,
                 toVersion = 2,
                 events =
                     listOf(
@@ -105,6 +105,32 @@ class ClientGameStateReducerTest {
         assertEquals(8, result.state.regionStates.getValue("brazil").troopCount)
         assertEquals(bobId, result.state.activePlayerId)
         assertEquals(TurnPhase.ATTACK, result.state.turnPhase)
+    }
+
+    @Test
+    fun `duplicate delta is ignored without requesting catch up`() {
+        val base = GameUiState(stateVersion = 3)
+        val delta =
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = 2,
+                toVersion = 3,
+                events =
+                    listOf(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = bobId,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = aliceId,
+                        ),
+                    ),
+            )
+
+        val result = ClientGameStateReducer.applyDelta(base, delta, players)
+
+        assertFalse(result.needsCatchUp)
+        assertEquals(base, result.state)
     }
 
     @Test
@@ -136,6 +162,53 @@ class ClientGameStateReducerTest {
         assertTrue(result.needsCatchUp)
         assertTrue(result.state.isDesynced)
         assertTrue(result.state.isCatchingUp)
+    }
+
+    @Test
+    fun `reinforcement selection accepts only own territories`() {
+        val ownRegion = "brazil"
+        val enemyRegion = "argentina"
+        val state =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(
+                                territoryId = TerritoryId("brasilien"),
+                                ownerId = aliceId,
+                                troopCount = 3,
+                            ),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(
+                                territoryId = TerritoryId("argentinien"),
+                                ownerId = bobId,
+                                troopCount = 2,
+                            ),
+                    ),
+            )
+
+        val rejected =
+            ClientGameStateReducer.selectRegion(
+                current = state,
+                regionId = enemyRegion,
+                localPlayerId = aliceId,
+            )
+        val accepted =
+            ClientGameStateReducer.selectRegion(
+                current = state,
+                regionId = ownRegion,
+                localPlayerId = aliceId,
+            )
+
+        assertEquals(null, rejected.selectedRegionId)
+        assertEquals(
+            "In der Verstärkungsphase kannst du nur eigene Gebiete auswählen.",
+            rejected.selectionMessage,
+        )
+        assertEquals(ownRegion, accepted.selectedRegionId)
+        assertEquals(ownRegion, accepted.selectionFromRegionId)
     }
 
     private fun mapDefinition(vararg territoryIds: String): MapDefinitionSnapshot =

@@ -6,8 +6,11 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
@@ -252,6 +255,65 @@ class LobbyControllerTest {
                 waitUntil { seenPayloads.any { it is GameStateCatchUpRequest } }
 
                 assertTrue(controller.state.value.gameState.isCatchingUp)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `refresh game state should request public turn and private snapshots`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("R123")
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.refreshGameState()
+
+                waitUntil { seenPayloads.any { it is MapGetRequest } }
+                waitUntil { seenPayloads.any { it is TurnStateGetRequest } }
+                waitUntil { seenPayloads.any { it is GameStatePrivateGetRequest } }
             } finally {
                 controller.close()
                 server.close()

@@ -52,6 +52,7 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
+import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
@@ -79,9 +80,12 @@ fun GameScreen(controller: LobbyController) {
         players = players,
         localPlayerId = lobbyState.ownPlayerId,
         uiState = lobbyState.gameState,
+        isConnected = lobbyState.isConnected,
+        pendingCommandKeys = lobbyState.pendingCommandKeys,
         onRegionSelected = controller::selectGameRegion,
         onToggleCards = controller::toggleCards,
         onAdvanceTurn = controller::advanceTurn,
+        onRefreshGameState = controller::refreshGameState,
         mapPainter = mapPainter,
     )
 }
@@ -91,15 +95,32 @@ private fun GameScreenContent(
     players: List<GamePlayerUi>,
     localPlayerId: PlayerId?,
     uiState: GameUiState,
+    isConnected: Boolean,
+    pendingCommandKeys: Set<LobbyCommandKey>,
     onRegionSelected: (String) -> Unit,
     onToggleCards: () -> Unit,
     onAdvanceTurn: () -> Unit,
+    onRefreshGameState: () -> Unit,
     mapPainter: Painter,
 ) {
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
-    val activePlayer =
-        players.firstOrNull { it.playerId == uiState.activePlayerId }
-            ?: personalPlayer
+    val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
+    val isRefreshPending =
+        pendingCommandKeys.any {
+            it == LobbyCommandKey.MAP_GET ||
+                it == LobbyCommandKey.TURN_STATE_GET ||
+                it == LobbyCommandKey.CATCH_UP
+        }
+    val statusMessage =
+        when {
+            !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
+            uiState.isCatchingUp -> stringResource(id = R.string.game_sync_catching_up)
+            uiState.isDesynced ->
+                uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
+            uiState.lastSyncError != null -> uiState.lastSyncError
+            uiState.selectionMessage != null -> uiState.selectionMessage
+            else -> null
+        }
 
     Box(
         modifier =
@@ -113,7 +134,9 @@ private fun GameScreenContent(
             regionStates = uiState.regionStates,
             selectedRegionId = uiState.selectedRegionId,
             onRegionSelected = { region ->
-                onRegionSelected(region.id)
+                if (canUseGameActions) {
+                    onRegionSelected(region.id)
+                }
             },
             options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
             modifier = Modifier.fillMaxSize(),
@@ -128,6 +151,26 @@ private fun GameScreenContent(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth(),
         )
+
+        if (statusMessage != null) {
+            GameStatusBanner(
+                message = statusMessage,
+                canRefresh = isConnected && !isRefreshPending,
+                isRefreshPending = isRefreshPending,
+                onRefreshGameState = onRefreshGameState,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = TopBarHeight)
+                        .fillMaxWidth(),
+            )
+        }
+
+        if (uiState.isCatchingUp) {
+            SyncProgressOverlay(
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
 
         CardsSidebar(
             player = personalPlayer,
@@ -154,7 +197,10 @@ private fun GameScreenContent(
 
         BottomActionClusters(
             currentPhase = uiState.turnPhase,
-            canAdvanceTurn = uiState.canRequestTurnAdvance(localPlayerId),
+            canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
+            canAdvanceTurn =
+                uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                    !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE),
             cardsVisible = uiState.cardsVisible,
             onToggleCards = onToggleCards,
             onAdvanceTurn = onAdvanceTurn,
@@ -163,6 +209,78 @@ private fun GameScreenContent(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding(),
+        )
+    }
+}
+
+@Composable
+private fun GameStatusBanner(
+    message: String,
+    canRefresh: Boolean,
+    isRefreshPending: Boolean,
+    onRefreshGameState: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.testTag("game_sync_banner"),
+        shape = RoundedCornerShape(0.dp),
+        color = HudSurfaceMutedColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = HudContentColor,
+            )
+            FilledTonalButton(
+                onClick = onRefreshGameState,
+                enabled = canRefresh,
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.testTag("game_sync_reload_button"),
+            ) {
+                Text(
+                    text =
+                        if (isRefreshPending) {
+                            stringResource(id = R.string.game_sync_reload_pending)
+                        } else {
+                            stringResource(id = R.string.game_sync_reload)
+                        },
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncProgressOverlay(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.testTag("game_sync_overlay"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_sync_catching_up),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = HudContentColor,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -511,6 +629,7 @@ private fun CardsOverview(
 @Composable
 private fun BottomActionClusters(
     currentPhase: TurnPhase?,
+    canUseLocalInput: Boolean,
     canAdvanceTurn: Boolean,
     cardsVisible: Boolean,
     onToggleCards: () -> Unit,
@@ -543,6 +662,7 @@ private fun BottomActionClusters(
                     },
                 onClick = onToggleCards,
                 selected = false,
+                enabled = canUseLocalInput,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
             )
 

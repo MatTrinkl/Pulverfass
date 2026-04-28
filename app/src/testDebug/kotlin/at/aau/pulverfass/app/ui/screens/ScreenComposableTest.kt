@@ -7,7 +7,6 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -178,8 +177,9 @@ class ScreenComposableTest {
             composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Warten")
             composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 1")
-            composeTestRule.onNodeWithText("Karten").performClick()
-            composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_sync_banner").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Verbindung getrennt. Aktionen sind gesperrt.")
+                .assertIsDisplayed()
         } finally {
             controller.close()
         }

@@ -1,9 +1,11 @@
 package at.aau.pulverfass.app.game
 
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -84,7 +86,7 @@ object ClientGameStateReducer {
         delta: GameStateDeltaEvent,
         players: List<LobbyPlayerUi>,
     ): DeltaApplyResult {
-        if (delta.toVersion < current.stateVersion) {
+        if (delta.toVersion <= current.stateVersion) {
             return DeltaApplyResult(state = current, needsCatchUp = false)
         }
         if (!canApplyDelta(localVersion = current.stateVersion, delta = delta)) {
@@ -130,6 +132,9 @@ object ClientGameStateReducer {
             turnPhase = event.nextPhase,
             turnCount = event.turnCount,
             selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
             isCatchingUp = false,
             isDesynced = false,
             lastSyncError = null,
@@ -165,7 +170,44 @@ object ClientGameStateReducer {
     fun selectRegion(
         current: GameUiState,
         regionId: String,
-    ): GameUiState = current.copy(selectedRegionId = regionId)
+        localPlayerId: PlayerId?,
+    ): GameUiState {
+        val territoryId = GameMapTerritoryMapper.toTerritoryId(regionId)
+        val territory = current.territoryStates[territoryId]
+
+        if (
+            current.turnPhase == TurnPhase.REINFORCEMENTS &&
+            (localPlayerId == null || territory?.ownerId != localPlayerId)
+        ) {
+            return current.copy(
+                selectionMessage =
+                    "In der Verstärkungsphase kannst du nur eigene Gebiete auswählen.",
+            )
+        }
+
+        return when {
+            current.selectionFromRegionId == null ->
+                current.copy(
+                    selectedRegionId = regionId,
+                    selectionFromRegionId = regionId,
+                    selectionToRegionId = null,
+                    selectionMessage = "Ausgangsgebiet ausgewählt.",
+                )
+            current.selectionFromRegionId == regionId ->
+                current.copy(
+                    selectedRegionId = null,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
+                )
+            else ->
+                current.copy(
+                    selectedRegionId = regionId,
+                    selectionToRegionId = regionId,
+                    selectionMessage = "Zielgebiet ausgewählt.",
+                )
+        }
+    }
 
     fun toggleCards(current: GameUiState): GameUiState =
         current.copy(cardsVisible = !current.cardsVisible)
@@ -195,6 +237,9 @@ object ClientGameStateReducer {
                     pauseReason = turnState.pauseReason,
                     pausedPlayerId = turnState.pausedPlayerId,
                     selectedRegionId = null,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
                 ),
             stateVersion = stateVersion,
             determinism = determinism,
@@ -244,6 +289,9 @@ object ClientGameStateReducer {
                     pauseReason = event.pauseReason,
                     pausedPlayerId = event.pausedPlayerId,
                     selectedRegionId = null,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
                     lastSyncError = null,
                 )
             is TerritoryOwnerChangedEvent ->
@@ -297,9 +345,8 @@ object ClientGameStateReducer {
         localVersion: Long,
         delta: GameStateDeltaEvent,
     ): Boolean =
-        delta.fromVersion == localVersion ||
-            (localVersion == 0L && delta.fromVersion == 1L) ||
-            delta.fromVersion == localVersion + 1
+        delta.fromVersion == localVersion &&
+            delta.toVersion > localVersion
 }
 
 /**

@@ -28,8 +28,11 @@ data class LobbyControllerConfig(
     val errorLobbyMissing: String = "Keine aktive Lobby gefunden",
     val errorStartGameFailed: String = "Spielstart fehlgeschlagen",
     val errorCatchUpFailed: String = "Spielstand konnte nicht synchronisiert werden",
+    val errorMapGetFailed: String = "Kartenzustand konnte nicht geladen werden",
+    val errorTurnStateGetFailed: String = "Zugstatus konnte nicht geladen werden",
     val errorPlayerIdMissing: String = "Eigene Spieler-ID fehlt noch",
     val errorTurnAdvanceNotAllowed: String = "Du kannst die aktuelle Phase nicht beenden",
     val errorTurnAdvanceFailed: String = "Phasenwechsel fehlgeschlagen",
+    val errorDisconnectedDuringGame: String = "Verbindung getrennt. Aktionen sind gesperrt.",
     val errorUnknown: String = "Unbekannter Fehler",
 )

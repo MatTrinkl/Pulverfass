@@ -17,8 +17,10 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
@@ -76,6 +78,7 @@ class LobbyController(
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
     private val playersById = linkedMapOf<Long, LobbyPlayerUi>()
+    private val commandDispatcher = LobbyCommandDispatcher(network::sendPayload)
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
@@ -94,6 +97,14 @@ class LobbyController(
                             )
                         }
                         executePendingLobbyActionIfAny()
+                        if (state.value.gameStarted) {
+                            requestGameCatchUp(
+                                reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                                syncMessage =
+                                    "Verbindung wiederhergestellt. " +
+                                        "Spielstand wird geprüft.",
+                            )
+                        }
                     }
 
                     is Disconnected -> {
@@ -102,6 +113,15 @@ class LobbyController(
                                 isConnected = false,
                                 isConnecting = false,
                                 statusText = config.statusDisconnected,
+                                gameState =
+                                    it.gameState.copy(
+                                        lastSyncError =
+                                            if (it.gameStarted) {
+                                                config.errorDisconnectedDuringGame
+                                            } else {
+                                                it.gameState.lastSyncError
+                                            },
+                                    ),
                             )
                         }
                         clearPendingLobbyAction()
@@ -114,6 +134,16 @@ class LobbyController(
                                 isConnecting = false,
                                 statusText = config.statusConnectionError,
                                 errorText = event.cause.message ?: config.errorTransportUnknown,
+                                gameState =
+                                    it.gameState.copy(
+                                        lastSyncError =
+                                            if (it.gameStarted) {
+                                                event.cause.message
+                                                    ?: config.errorTransportUnknown
+                                            } else {
+                                                it.gameState.lastSyncError
+                                            },
+                                    ),
                             )
                         }
                         clearPendingLobbyAction()
@@ -133,16 +163,14 @@ class LobbyController(
                 }.onSuccess { payload ->
                     handlePayload(payload)
                 }.onFailure { error ->
-                    _state.update { it.copy(errorText = error.message ?: config.errorPacketDecode) }
+                    handlePacketDecodeFailure(error)
                 }
             }
         }
 
         scope.launch {
             network.packetReceiver.errors.collect { error ->
-                _state.update {
-                    it.copy(errorText = error.message ?: config.errorPacketDecode)
-                }
+                handlePacketDecodeFailure(error)
             }
         }
     }
@@ -254,9 +282,13 @@ class LobbyController(
         val lobbyCode = state.value.activeLobbyCode ?: return
         scope.launch {
             runCatching {
-                network.sendPayload(
-                    LeaveLobbyRequest(
-                        lobbyCode = parseLobbyCode(lobbyCode),
+                sendCommand(
+                    LobbyCommand(
+                        key = LobbyCommandKey.LEAVE_LOBBY,
+                        payload =
+                            LeaveLobbyRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                            ),
                     ),
                 )
             }
@@ -270,6 +302,7 @@ class LobbyController(
                 ownPlayerId = null,
                 gameStarted = false,
                 gameState = GameUiState(),
+                pendingCommandKeys = emptySet(),
             )
         }
         playersById.clear()
@@ -283,9 +316,14 @@ class LobbyController(
         }
 
         scope.launch {
-            runCatching {
-                network.sendPayload(StartGameRequest(lobbyCode = parseLobbyCode(lobbyCode)))
-            }.onFailure { error ->
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.START_GAME,
+                        payload = StartGameRequest(lobbyCode = parseLobbyCode(lobbyCode)),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorStartGameFailed)
                 }
@@ -295,23 +333,36 @@ class LobbyController(
 
     fun requestGameCatchUp(
         reason: GameStateCatchUpReason = GameStateCatchUpReason.AFTER_RECONNECT,
+        syncMessage: String? = null,
     ) {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode ?: return
 
         _state.update {
-            it.copy(gameState = it.gameState.copy(isCatchingUp = true, lastSyncError = null))
+            it.copy(
+                gameState =
+                    it.gameState.copy(
+                        isCatchingUp = true,
+                        isDesynced = reason != GameStateCatchUpReason.AFTER_RECONNECT,
+                        lastSyncError = syncMessage,
+                    ),
+            )
         }
         scope.launch {
-            runCatching {
-                network.sendPayload(
-                    GameStateCatchUpRequest(
-                        lobbyCode = parseLobbyCode(lobbyCode),
-                        clientStateVersion = snapshot.gameState.stateVersion,
-                        reason = reason,
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CATCH_UP,
+                        payload =
+                            GameStateCatchUpRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                clientStateVersion = snapshot.gameState.stateVersion,
+                                reason = reason,
+                            ),
+                        retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
                     ),
-                )
-            }.onFailure { error ->
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 _state.update {
                     it.copy(
                         errorText = error.message ?: config.errorCatchUpFailed,
@@ -332,13 +383,74 @@ class LobbyController(
         val playerId = snapshot.ownPlayerId ?: return
 
         scope.launch {
-            runCatching {
-                network.sendPayload(
-                    GameStatePrivateGetRequest(
-                        lobbyCode = parseLobbyCode(lobbyCode),
-                        playerId = playerId,
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.PRIVATE_STATE,
+                        payload =
+                            GameStatePrivateGetRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                        retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
                     ),
-                )
+                keepPendingUntilResponse = true,
+            )
+        }
+    }
+
+    fun refreshGameState() {
+        val lobbyCode = state.value.activeLobbyCode
+        if (lobbyCode == null) {
+            _state.update { it.copy(errorText = config.errorLobbyMissing) }
+            return
+        }
+
+        _state.update {
+            it.copy(
+                gameState =
+                    it.gameState.copy(
+                        isCatchingUp = true,
+                        isDesynced = false,
+                        lastSyncError = null,
+                    ),
+            )
+        }
+        requestMapSnapshot()
+        requestTurnState()
+        requestPrivateGameState()
+    }
+
+    private fun requestMapSnapshot() {
+        val lobbyCode = state.value.activeLobbyCode ?: return
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.MAP_GET,
+                        payload = MapGetRequest(lobbyCode = parseLobbyCode(lobbyCode)),
+                        retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                updateGameError(error.message ?: config.errorMapGetFailed)
+            }
+        }
+    }
+
+    private fun requestTurnState() {
+        val lobbyCode = state.value.activeLobbyCode ?: return
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.TURN_STATE_GET,
+                        payload = TurnStateGetRequest(lobbyCode = parseLobbyCode(lobbyCode)),
+                        retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                updateGameError(error.message ?: config.errorTurnStateGetFailed)
             }
         }
     }
@@ -351,21 +463,25 @@ class LobbyController(
             _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
             return
         }
-        if (!snapshot.gameState.canRequestTurnAdvance(playerId)) {
+        if (!snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected)) {
             _state.update { it.copy(errorText = config.errorTurnAdvanceNotAllowed) }
             return
         }
 
         scope.launch {
-            runCatching {
-                network.sendPayload(
-                    TurnAdvanceRequest(
-                        lobbyCode = parseLobbyCode(lobbyCode),
-                        playerId = playerId,
-                        expectedPhase = snapshot.gameState.turnPhase,
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.TURN_ADVANCE,
+                        payload =
+                            TurnAdvanceRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                expectedPhase = snapshot.gameState.turnPhase,
+                            ),
                     ),
-                )
-            }.onFailure { error ->
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorTurnAdvanceFailed)
                 }
@@ -375,7 +491,14 @@ class LobbyController(
 
     fun selectGameRegion(regionId: String) {
         _state.update {
-            it.copy(gameState = ClientGameStateReducer.selectRegion(it.gameState, regionId))
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.selectRegion(
+                        current = it.gameState,
+                        regionId = regionId,
+                        localPlayerId = it.ownPlayerId,
+                    ),
+            )
         }
     }
 
@@ -385,15 +508,75 @@ class LobbyController(
         }
     }
 
+    private suspend fun sendCommand(
+        command: LobbyCommand,
+        keepPendingUntilResponse: Boolean = false,
+    ): Result<Unit> {
+        if (state.value.pendingCommandKeys.contains(command.key)) {
+            return Result.success(Unit)
+        }
+
+        _state.update {
+            it.copy(pendingCommandKeys = it.pendingCommandKeys + command.key)
+        }
+        val result =
+            runCatching {
+                commandDispatcher.send(command)
+            }
+        if (!keepPendingUntilResponse || result.isFailure) {
+            clearPendingCommand(command.key)
+        }
+        return result
+    }
+
+    private fun clearPendingCommand(commandKey: LobbyCommandKey) {
+        _state.update {
+            it.copy(pendingCommandKeys = it.pendingCommandKeys - commandKey)
+        }
+    }
+
+    private fun handlePacketDecodeFailure(error: Throwable) {
+        val message = error.message ?: config.errorPacketDecode
+        _state.update {
+            it.copy(
+                errorText = message,
+                gameState =
+                    if (it.gameStarted) {
+                        it.gameState.copy(
+                            isCatchingUp = true,
+                            isDesynced = true,
+                            lastSyncError = config.errorPacketDecode,
+                        )
+                    } else {
+                        it.gameState
+                    },
+            )
+        }
+        if (state.value.gameStarted) {
+            requestGameCatchUp(
+                reason = GameStateCatchUpReason.OUT_OF_ORDER,
+                syncMessage = config.errorPacketDecode,
+            )
+        }
+    }
+
     private fun handlePayload(payload: NetworkMessagePayload) {
         when (payload) {
-            is CreateLobbyResponse -> handleCreateLobbyResponse(payload)
+            is CreateLobbyResponse -> {
+                clearPendingCommand(LobbyCommandKey.CREATE_LOBBY)
+                handleCreateLobbyResponse(payload)
+            }
             is CreateLobbyErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CREATE_LOBBY)
                 pendingCreateCallback = null
                 _state.update { it.copy(errorText = payload.reason) }
             }
-            is JoinLobbyResponse -> handleJoinLobbyResponse(payload)
+            is JoinLobbyResponse -> {
+                clearPendingCommand(LobbyCommandKey.JOIN_LOBBY)
+                handleJoinLobbyResponse(payload)
+            }
             is JoinLobbyErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.JOIN_LOBBY)
                 pendingJoinCallback = null
                 _state.update { it.copy(errorText = payload.reason) }
             }
@@ -406,21 +589,36 @@ class LobbyController(
                 playersById.remove(payload.targetPlayerId.value)
                 publishPlayers()
             }
-            is StartGameResponse -> handleStartGameResponse(payload)
-            is StartGameErrorResponse -> updateGameError(payload.reason)
+            is StartGameResponse -> {
+                clearPendingCommand(LobbyCommandKey.START_GAME)
+                handleStartGameResponse(payload)
+            }
+            is StartGameErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.START_GAME)
+                updateGameError(payload.reason)
+            }
             is GameStartedEvent -> handleGameStarted(payload)
-            is MapGetResponse ->
+            is MapGetResponse -> {
+                clearPendingCommand(LobbyCommandKey.MAP_GET)
                 applyGameState { current, players ->
                     ClientGameStateReducer.applyMapGetResponse(current, payload, players)
                 }
-            is MapGetErrorResponse -> updateGameError(payload.reason)
+            }
+            is MapGetErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.MAP_GET)
+                updateGameError(GameErrorTextMapper.map(payload))
+            }
             is GameStateCatchUpResponse -> {
+                clearPendingCommand(LobbyCommandKey.CATCH_UP)
                 applyGameState { current, players ->
                     ClientGameStateReducer.applyCatchUpResponse(current, payload, players)
                 }
                 requestPrivateGameState()
             }
-            is GameStateCatchUpErrorResponse -> updateGameError(payload.reason)
+            is GameStateCatchUpErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CATCH_UP)
+                updateGameError(GameErrorTextMapper.map(payload))
+            }
             is GameStateSnapshotBroadcast ->
                 applyGameState { current, players ->
                     ClientGameStateReducer.applySnapshotBroadcast(current, payload, players)
@@ -430,18 +628,34 @@ class LobbyController(
                 applyGameState { current, _ ->
                     ClientGameStateReducer.applyPhaseBoundary(current, payload)
                 }
-            is TurnStateGetResponse ->
+            is TurnStateGetResponse -> {
+                clearPendingCommand(LobbyCommandKey.TURN_STATE_GET)
                 applyGameState { current, _ ->
                     ClientGameStateReducer.applyTurnStateGetResponse(current, payload)
                 }
-            is TurnAdvanceResponse -> _state.update { it.copy(errorText = null) }
-            is TurnAdvanceErrorResponse -> updateGameError(payload.reason)
-            is TurnStateGetErrorResponse -> updateGameError(payload.reason)
-            is GameStatePrivateGetResponse ->
+            }
+            is TurnAdvanceResponse -> {
+                clearPendingCommand(LobbyCommandKey.TURN_ADVANCE)
+                _state.update { it.copy(errorText = null) }
+            }
+            is TurnAdvanceErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.TURN_ADVANCE)
+                updateGameError(GameErrorTextMapper.map(payload))
+            }
+            is TurnStateGetErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.TURN_STATE_GET)
+                updateGameError(GameErrorTextMapper.map(payload))
+            }
+            is GameStatePrivateGetResponse -> {
+                clearPendingCommand(LobbyCommandKey.PRIVATE_STATE)
                 applyGameState { current, _ ->
                     ClientGameStateReducer.applyPrivateGetResponse(current, payload)
                 }
-            is GameStatePrivateGetErrorResponse -> updateGameError(payload.reason)
+            }
+            is GameStatePrivateGetErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.PRIVATE_STATE)
+                updateGameError(GameErrorTextMapper.map(payload))
+            }
         }
     }
 
@@ -495,7 +709,10 @@ class LobbyController(
 
         _state.update { it.copy(gameState = result.state) }
         if (result.needsCatchUp) {
-            requestGameCatchUp(GameStateCatchUpReason.MISSING_DELTA)
+            requestGameCatchUp(
+                reason = GameStateCatchUpReason.MISSING_DELTA,
+                syncMessage = result.state.lastSyncError,
+            )
         }
     }
 
@@ -543,9 +760,14 @@ class LobbyController(
 
     private fun submitCreateLobbyRequest() {
         scope.launch {
-            runCatching {
-                network.sendPayload(CreateLobbyRequest)
-            }.onFailure { error ->
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CREATE_LOBBY,
+                        payload = CreateLobbyRequest,
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 pendingCreateCallback = null
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorCreateFailed)
@@ -556,14 +778,18 @@ class LobbyController(
 
     private fun submitJoinLobbyRequest(snapshot: LobbyUiState = state.value) {
         scope.launch {
-            runCatching {
-                network.sendPayload(
-                    JoinLobbyRequest(
-                        lobbyCode = parseLobbyCode(snapshot.lobbyCode),
-                        playerDisplayName = snapshot.playerName,
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.JOIN_LOBBY,
+                        payload =
+                            JoinLobbyRequest(
+                                lobbyCode = parseLobbyCode(snapshot.lobbyCode),
+                                playerDisplayName = snapshot.playerName,
+                            ),
                     ),
-                )
-            }.onFailure { error ->
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 pendingJoinCallback = null
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorJoinFailed)
@@ -585,14 +811,18 @@ class LobbyController(
         }
 
         scope.launch {
-            runCatching {
-                network.sendPayload(
-                    JoinLobbyRequest(
-                        lobbyCode = payload.lobbyCode,
-                        playerDisplayName = state.value.playerName,
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.JOIN_LOBBY,
+                        payload =
+                            JoinLobbyRequest(
+                                lobbyCode = payload.lobbyCode,
+                                playerDisplayName = state.value.playerName,
+                            ),
                     ),
-                )
-            }.onFailure { error ->
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
                 pendingCreateCallback = null
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorJoinFailed)
@@ -638,6 +868,7 @@ class LobbyController(
                 ownPlayerId = null,
                 gameStarted = false,
                 gameState = GameUiState(),
+                pendingCommandKeys = emptySet(),
             )
         }
     }
@@ -646,6 +877,7 @@ class LobbyController(
         pendingLobbyAction = null
         pendingCreateCallback = null
         pendingJoinCallback = null
+        _state.update { it.copy(pendingCommandKeys = emptySet()) }
     }
 
     private fun publishPlayers() {

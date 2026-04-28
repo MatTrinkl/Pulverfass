@@ -52,9 +52,16 @@ object GameMapTerritoryMapper {
             "zentral_afrika" to "central_africa",
             "sued_afrika" to "south_africa",
         )
+    private val androidRegionIdToServer =
+        serverToAndroidRegionId.entries.associate { (territoryId, regionId) ->
+            regionId to territoryId
+        }
 
     fun toAndroidRegionId(territoryId: TerritoryId): String? =
         serverToAndroidRegionId[territoryId.value] ?: territoryId.value
+
+    fun toTerritoryId(regionId: String): TerritoryId =
+        TerritoryId(androidRegionIdToServer[regionId] ?: regionId)
 }
 
 fun lobbyPlayersToGamePlayers(players: List<LobbyPlayerUi>): List<GamePlayerUi> =

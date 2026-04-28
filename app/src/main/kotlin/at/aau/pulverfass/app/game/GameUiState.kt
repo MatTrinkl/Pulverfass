@@ -26,6 +26,9 @@ data class GameUiState(
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
     val selectedRegionId: String? = null,
+    val selectionFromRegionId: String? = null,
+    val selectionToRegionId: String? = null,
+    val selectionMessage: String? = null,
     val cardsVisible: Boolean = false,
     val definitionTerritoryIds: List<TerritoryId> = emptyList(),
     val territoryStates: Map<TerritoryId, GameTerritoryUiState> = emptyMap(),
@@ -34,13 +37,23 @@ data class GameUiState(
     val secretObjectives: List<String> = emptyList(),
     val lastSyncError: String? = null,
 ) {
-    fun canRequestTurnAdvance(localPlayerId: PlayerId?): Boolean =
+    fun canUseGameActions(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
         localPlayerId != null &&
             activePlayerId == localPlayerId &&
-            turnPhase != null &&
+            isConnected &&
             !isPaused &&
             !isCatchingUp &&
             !isDesynced
+
+    fun canRequestTurnAdvance(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
+            turnPhase != null
 }
 
 /**

@@ -29,6 +29,11 @@
     <string name="game_action_move">Verschieben</string>
     <string name="game_action_draw_card">Karte ziehen</string>
     <string name="game_action_waiting">Warten</string>
+    <string name="game_sync_reconnecting">Verbindung getrennt. Aktionen sind gesperrt.</string>
+    <string name="game_sync_catching_up">Spielstand wird synchronisiert</string>
+    <string name="game_sync_desynced">Spielstand nicht synchron</string>
+    <string name="game_sync_reload">Neu laden</string>
+    <string name="game_sync_reload_pending">Lädt</string>
     <string name="game_cards_button">Karten</string>
     <string name="game_cards_hide">Karten zu</string>
     <string name="game_end_round_button">Phase beenden</string>
