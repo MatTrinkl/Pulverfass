@@ -84,4 +84,12 @@ class ReconnectRequestTest {
             decoded.sessionToken,
         )
     }
+
+    @Test
+    fun `descriptor should use stable shared network message serial name`() {
+        assertEquals(
+            "at.aau.pulverfass.shared.network.message.ReconnectRequest",
+            ReconnectRequestSerializer.descriptor.serialName,
+        )
+    }
 }

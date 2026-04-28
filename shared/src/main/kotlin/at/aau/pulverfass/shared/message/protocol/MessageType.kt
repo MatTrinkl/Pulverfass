@@ -16,7 +16,7 @@ enum class MessageType(val id: Int) {
     /** Login-Anfrage eines Clients an den Server. */
     CONNECTION_REQUEST(1),
 
-    /** Antwort des Servers auf eine Login-Anfrage. */
+    /** Technische Initialantwort des Servers nach erfolgreichem WebSocket-Connect. */
     CONNECTION_RESPONSE(2),
 
     /** Anfrage zum Wiederverbinden einer bestehenden Session. */

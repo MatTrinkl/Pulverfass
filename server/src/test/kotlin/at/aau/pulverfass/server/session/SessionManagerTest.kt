@@ -283,4 +283,28 @@ class SessionManagerTest {
         assertNull(manager.getByConnectionId(ConnectionId(40)))
         assertNull(manager.getByToken(created.sessionToken))
     }
+
+    @Test
+    fun `createSession should purge retired detached sessions opportunistically`() {
+        var now = 20_000L
+        val tokens =
+            listOf(
+                SessionToken("123e4567-e89b-12d3-a456-426614174030"),
+                SessionToken("123e4567-e89b-12d3-a456-426614174031"),
+            ).iterator()
+        val manager =
+            SessionManager(
+                sessionTtlMillis = 100L,
+                nowEpochMillis = { now },
+                tokenFactory = { tokens.next() },
+            )
+        val expired = manager.createSession(ConnectionId(41))
+        manager.detachConnection(ConnectionId(41))
+        now = 20_200L
+
+        val fresh = manager.createSession(ConnectionId(42))
+
+        assertNull(manager.getByToken(expired.sessionToken))
+        assertEquals(fresh, manager.getByConnectionId(ConnectionId(42)))
+    }
 }

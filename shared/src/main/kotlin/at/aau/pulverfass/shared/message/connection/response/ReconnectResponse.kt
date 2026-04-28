@@ -55,7 +55,7 @@ data class ReconnectResponse(
 object ReconnectResponseSerializer : KSerializer<ReconnectResponse> {
     override val descriptor =
         buildClassSerialDescriptor(
-            "at.aau.pulverfass.shared.message.connection.response.ReconnectResponse",
+            "at.aau.pulverfass.shared.network.message.ReconnectResponse",
         ) {
             element<Boolean>("success")
             element("errorCode", ReconnectErrorCode.serializer().descriptor, isOptional = true)

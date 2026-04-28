@@ -115,7 +115,7 @@ class ServerNetwork(
         }
 
         try {
-            val payload = MessageCodec.decodePayload(bytes)
+            val payload = MessageCodec.decodePayload(receivedPacket)
             if (payload is ReconnectRequest) {
                 handleReconnect(connectionId, payload)
                 return

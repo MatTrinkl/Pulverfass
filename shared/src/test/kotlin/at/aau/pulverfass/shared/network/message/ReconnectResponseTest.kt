@@ -121,4 +121,12 @@ class ReconnectResponseTest {
             ReconnectResponse(success = false)
         }
     }
+
+    @Test
+    fun `descriptor should use stable shared network message serial name`() {
+        assertEquals(
+            "at.aau.pulverfass.shared.network.message.ReconnectResponse",
+            ReconnectResponseSerializer.descriptor.serialName,
+        )
+    }
 }

@@ -37,6 +37,8 @@ class SessionManager(
      */
     fun createSession(connectionId: ConnectionId): Session {
         synchronized(lifecycleLock) {
+            purgeRetiredSessions()
+
             if (tokensByConnection.containsKey(connectionId)) {
                 throw DuplicateConnectionIdException(connectionId)
             }
@@ -68,6 +70,8 @@ class SessionManager(
         connectionId: ConnectionId,
     ): Session =
         synchronized(lifecycleLock) {
+            purgeRetiredSessions()
+
             if (tokensByConnection.containsKey(connectionId)) {
                 throw DuplicateConnectionIdException(connectionId)
             }
@@ -162,6 +166,28 @@ class SessionManager(
             sessionsByToken[sessionToken] = detached
             detached
         }
+
+    /**
+     * Entfernt abgelaufene oder bereits invalidierte Sessions ohne aktive
+     * Verbindung opportunistisch aus den internen Indizes.
+     */
+    private fun purgeRetiredSessions() {
+        val now = nowEpochMillis()
+        val retiredTokens =
+            sessionsByToken
+                .filterValues { session ->
+                    !session.isConnected &&
+                        when {
+                            session.isRevoked ->
+                                now - (session.revokedAtEpochMillis ?: now) >= sessionTtlMillis
+                            session.isExpired(now) ->
+                                now - session.expiresAtEpochMillis >= sessionTtlMillis
+                            else -> false
+                        }
+                }.keys
+
+        retiredTokens.forEach(sessionsByToken::remove)
+    }
 
     private fun expiresAtEpochMillis(): Long = nowEpochMillis() + sessionTtlMillis
 

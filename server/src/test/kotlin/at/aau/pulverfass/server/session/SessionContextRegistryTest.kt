@@ -66,4 +66,20 @@ class SessionContextRegistryTest {
         assertNull(registry.playerIdForSession(sessionToken))
         assertNull(registry.sessionTokenForPlayer(PlayerId(4)))
     }
+
+    @Test
+    fun `assignPlayer should remove stale session context for reassigned player`() {
+        val registry = SessionContextRegistry()
+        val previousSessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174304")
+        val newSessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174305")
+        registry.assignPlayer(previousSessionToken, PlayerId(5))
+        registry.updateLobbyContext(previousSessionToken, LobbyCode("GH78"), "Dora")
+
+        registry.assignPlayer(newSessionToken, PlayerId(5))
+
+        assertNull(registry.contextFor(previousSessionToken))
+        assertNull(registry.playerIdForSession(previousSessionToken))
+        assertEquals(newSessionToken, registry.sessionTokenForPlayer(PlayerId(5)))
+        assertEquals(PlayerId(5), registry.playerIdForSession(newSessionToken))
+    }
 }

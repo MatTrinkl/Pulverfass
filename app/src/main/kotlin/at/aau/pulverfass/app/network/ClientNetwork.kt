@@ -41,6 +41,10 @@ class ClientNetwork(
 
         scope.launch {
             packetReceiver.packets.collect { packet ->
+                if (_sessionToken.value != null) {
+                    return@collect
+                }
+
                 val payload =
                     runCatching { MessageCodec.decodePayload(packet) }.getOrNull()
                         ?: return@collect

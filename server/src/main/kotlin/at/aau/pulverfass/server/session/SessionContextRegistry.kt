@@ -21,6 +21,11 @@ class SessionContextRegistry {
         playerId: PlayerId,
     ) {
         synchronized(lifecycleLock) {
+            val previousSessionToken = sessionsByPlayer[playerId]
+            if (previousSessionToken != null && previousSessionToken != sessionToken) {
+                contextsBySession.remove(previousSessionToken)
+            }
+
             val current = contextsBySession[sessionToken] ?: SessionReconnectContext()
             current.playerId?.let { previousPlayerId ->
                 if (previousPlayerId != playerId) {

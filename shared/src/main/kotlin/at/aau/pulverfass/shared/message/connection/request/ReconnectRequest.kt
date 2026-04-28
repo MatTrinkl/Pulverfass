@@ -30,7 +30,7 @@ data class ReconnectRequest(
 object ReconnectRequestSerializer : KSerializer<ReconnectRequest> {
     override val descriptor =
         buildClassSerialDescriptor(
-            "at.aau.pulverfass.shared.message.connection.request.ReconnectRequest",
+            "at.aau.pulverfass.shared.network.message.ReconnectRequest",
         ) {
             element("sessionToken", SessionToken.serializer().descriptor)
         }
