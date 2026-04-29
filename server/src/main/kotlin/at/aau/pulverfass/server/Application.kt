@@ -5,10 +5,10 @@ import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
-import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.network.Network
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -30,7 +30,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 private const val DEFAULT_HOST = "0.0.0.0"
@@ -141,30 +140,34 @@ internal fun Application.module(transport: ServerWebSocketTransport) {
 private fun Application.installLobbyRuntime(network: ServerNetwork) {
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val lobbyManager = LobbyManager(serverScope)
+    val sessionContextRegistry = SessionContextRegistry()
     val router =
         MainServerRouter(
             lobbyManager = lobbyManager,
             mapper = DefaultNetworkToLobbyEventMapper(),
         )
 
-    val playersBySession = ConcurrentHashMap<SessionToken, PlayerId>()
-    val sessionsByPlayer = ConcurrentHashMap<PlayerId, SessionToken>()
-    val sessionsByConnection = ConcurrentHashMap<ConnectionId, SessionToken>()
     val nextPlayerId = AtomicLong(1)
+    network.installReconnectHooks(
+        reconnectContextProvider = sessionContextRegistry::contextFor,
+        onSessionRemoved = sessionContextRegistry::removeSession,
+    )
 
     val routingService =
         MainServerLobbyRoutingService(
             network = network,
             router = router,
             lobbyManager = lobbyManager,
+            sessionContextRegistry = sessionContextRegistry,
             playerIdResolver = { connectionId ->
                 network.sessionManager
                     .getByConnectionId(connectionId)
                     ?.sessionToken
-                    ?.let(playersBySession::get)
+                    ?.let(sessionContextRegistry::playerIdForSession)
             },
             connectionIdResolver = { playerId ->
-                sessionsByPlayer[playerId]
+                sessionContextRegistry
+                    .sessionTokenForPlayer(playerId)
                     ?.let(network.sessionManager::getByToken)
                     ?.connectionId
             },
@@ -175,17 +178,10 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
-                    val playerId = PlayerId(nextPlayerId.getAndIncrement())
-                    sessionsByConnection[event.connectionId] = session.sessionToken
-                    playersBySession[session.sessionToken] = playerId
-                    sessionsByPlayer[playerId] = session.sessionToken
-                }
-
-                is Network.Event.Disconnected<ConnectionId> -> {
-                    val sessionToken =
-                        sessionsByConnection.remove(event.connectionId) ?: return@collect
-                    val playerId = playersBySession.remove(sessionToken) ?: return@collect
-                    sessionsByPlayer.remove(playerId)
+                    if (sessionContextRegistry.playerIdForSession(session.sessionToken) == null) {
+                        val playerId = PlayerId(nextPlayerId.getAndIncrement())
+                        sessionContextRegistry.assignPlayer(session.sessionToken, playerId)
+                    }
                 }
 
                 else -> Unit

@@ -4,7 +4,10 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -137,6 +140,38 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.CONNECTION_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered reconnect request by runtime type`() {
+        val payload = ReconnectRequest(SessionToken("123e4567-e89b-12d3-a456-426614174103"))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RECONNECT_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered reconnect response by runtime type`() {
+        val payload =
+            ReconnectResponse(
+                success = false,
+                errorCode = ReconnectErrorCode.TOKEN_INVALID,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RECONNECT_RESPONSE,
                 bytes,
             )
 

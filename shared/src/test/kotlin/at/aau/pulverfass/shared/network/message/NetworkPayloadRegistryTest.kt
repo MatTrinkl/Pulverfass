@@ -4,7 +4,10 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -37,6 +40,39 @@ class NetworkPayloadRegistryTest {
             """{"sessionToken":"123e4567-e89b-12d3-a456-426614174101"}""",
             serialized,
         )
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for reconnect request`() {
+        val payload = ReconnectRequest(SessionToken("123e4567-e89b-12d3-a456-426614174102"))
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.CONNECTION_RECONNECT_REQUEST, messageType)
+        assertEquals(
+            """{"sessionToken":"123e4567-e89b-12d3-a456-426614174102"}""",
+            serialized,
+        )
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for reconnect response`() {
+        val payload =
+            ReconnectResponse(
+                success = false,
+                errorCode = ReconnectErrorCode.TOKEN_REVOKED,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.CONNECTION_RECONNECT_RESPONSE, messageType)
+        assertEquals("""{"success":false,"errorCode":"TOKEN_REVOKED"}""", serialized)
         assertEquals(payload, deserialized)
     }
 

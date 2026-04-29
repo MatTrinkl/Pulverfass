@@ -5,13 +5,16 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -871,6 +874,137 @@ class MainServerLobbyRoutingIntegrationTest {
             }
         }
 
+    @Test
+    fun `reconnect restores lobby context and routes broadcasts to new connection`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val sessionContextRegistry = SessionContextRegistry()
+            network.installReconnectHooks(
+                reconnectContextProvider = sessionContextRegistry::contextFor,
+                onSessionRemoved = sessionContextRegistry::removeSession,
+            )
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    sessionContextRegistry = sessionContextRegistry,
+                    playerIdResolver = { connectionId ->
+                        network.sessionManager
+                            .getByConnectionId(connectionId)
+                            ?.sessionToken
+                            ?.let(sessionContextRegistry::playerIdForSession)
+                    },
+                    connectionIdResolver = { playerId ->
+                        sessionContextRegistry
+                            .sessionTokenForPlayer(playerId)
+                            ?.let(network.sessionManager::getByToken)
+                            ?.connectionId
+                    },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("RJ42")
+            lobbyManager.createLobby(lobbyCode)
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val aliceSession = client.webSocketSession("/ws")
+                    val aliceToken = discardConnectionHandshake(aliceSession)
+                    val aliceConnectionId = awaitConnectionId(network, aliceToken)
+                    sessionContextRegistry.assignPlayer(aliceToken, PlayerId(1))
+
+                    aliceSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                        ),
+                    )
+                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        receivePayload(aliceSession),
+                    )
+
+                    aliceSession.close()
+                    awaitDetachedSession(network, aliceToken)
+
+                    val reconnectingSession = client.webSocketSession("/ws")
+                    discardConnectionHandshake(reconnectingSession)
+                    reconnectingSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(ReconnectRequest(aliceToken)),
+                        ),
+                    )
+
+                    val reconnectResponse =
+                        assertIs<ReconnectResponse>(
+                            receivePayload(reconnectingSession),
+                        )
+                    val reboundConnectionId = awaitConnectionId(network, aliceToken)
+
+                    assertEquals(
+                        ReconnectResponse(
+                            success = true,
+                            playerId = PlayerId(1),
+                            lobbyCode = lobbyCode,
+                            playerDisplayName = "Alice",
+                        ),
+                        reconnectResponse,
+                    )
+                    assertTrue(aliceConnectionId != reboundConnectionId)
+
+                    val bobSession = client.webSocketSession("/ws")
+                    val bobToken = discardConnectionHandshake(bobSession)
+                    sessionContextRegistry.assignPlayer(bobToken, PlayerId(2))
+                    bobSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                        ),
+                    )
+
+                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        receivePayload(bobSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        receivePayload(bobSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        receivePayload(reconnectingSession),
+                    )
+
+                    reconnectingSession.close()
+                    bobSession.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,
@@ -951,6 +1085,17 @@ class MainServerLobbyRoutingIntegrationTest {
                 }
             }
             connectionId
+        }
+    }
+
+    private suspend fun awaitDetachedSession(
+        network: ServerNetwork,
+        sessionToken: SessionToken,
+    ) {
+        withTimeout(5_000) {
+            while (network.sessionManager.getByToken(sessionToken)?.connectionId != null) {
+                delay(5)
+            }
         }
     }
 
