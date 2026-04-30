@@ -62,6 +62,9 @@ private val MapOverlayInverseColor = Color.White
  *
  * Die Koordinaten liegen unabhängig von der Bildschirmgröße im Bereich `0..1`
  * und referenzieren Positionen relativ zur kompletten Kartenbildfläche.
+ *
+ * @param x horizontale Position relativ zur Kartenbreite
+ * @param y vertikale Position relativ zur Kartenhöhe
  */
 data class MapPoint(
     val x: Float,
@@ -74,6 +77,12 @@ data class MapPoint(
  * [maskResId] verweist auf die transparente Territory-Maske. [idMapColorRgb]
  * ist die exakte RGB-Farbe aus `map_region_id.png`, die für Hitdetection
  * verwendet wird. Andere Farben werden bewusst ignoriert.
+ *
+ * @param id Android-interne Region-ID der Bitmap-Assets
+ * @param name lesbarer Gebietsname für UI und Debugging
+ * @param maskResId transparente Maske des Gebiets
+ * @param idMapColorRgb eindeutige RGB-Farbe in der technischen ID-Map
+ * @param fallbackAnchor Ersatzposition für Labels, falls eine Maske leer ist
  */
 data class GameMapRegion(
     val id: String,
@@ -85,6 +94,11 @@ data class GameMapRegion(
 
 /**
  * Hält den reinen Frontend-Zustand einer Region für die Kartenansicht.
+ *
+ * @param ownerPlayerId Spieler-ID des Besitzers oder `neutral`
+ * @param ownerName Anzeigename des Besitzers
+ * @param troopCount sichtbare Truppenanzahl
+ * @param accentColor Farbe des Besitzers für die Territory-Maske
  */
 data class GameMapRegionState(
     val ownerPlayerId: String,
@@ -95,6 +109,9 @@ data class GameMapRegionState(
 
 /**
  * Aktueller Viewport der Karte aus Zoomstufe und Verschiebung.
+ *
+ * @param scale aktuelle Zoomstufe
+ * @param offset aktuelle Verschiebung der Karte im Bildschirmraum
  */
 data class MapViewportState(
     val scale: Float = 1f,
@@ -103,6 +120,10 @@ data class MapViewportState(
 
 /**
  * Abgeleitete Layoutdaten für die Kartenprojektion im aktuellen Canvas.
+ *
+ * @param viewportSize Größe der sichtbaren Compose-Fläche
+ * @param mapSize Größe der eingepassten Karte vor Zoom
+ * @param mapOrigin linke obere Position der eingepassten Karte im Viewport
  */
 data class MapLayoutMetrics(
     val viewportSize: Size,
@@ -110,12 +131,32 @@ data class MapLayoutMetrics(
     val mapOrigin: Offset,
 )
 
+/**
+ * Konfiguration für die konkrete Karteninstanz.
+ *
+ * [backgroundPainter] ist das sichtbare Weltkartenbild. [regionIdMapResId] ist
+ * dagegen eine technische, unsichtbare Farbhitmap: Jeder klickbare Bereich hat
+ * dort eine eindeutige RGB-Farbe. Dadurch muss die App beim Tippen keine
+ * komplexen Polygone testen, sondern liest genau einen Pixel aus.
+ *
+ * @param backgroundPainter sichtbares Kartenbild
+ * @param aspectRatio Seitenverhältnis der Kartenassets
+ * @param regionIdMapResId technische Farbhitmap für Hitdetection
+ */
 data class InteractiveGameMapOptions(
     val backgroundPainter: Painter? = null,
     val aspectRatio: Float = PulverfassMapDefaults.aspectRatio,
     @param:DrawableRes val regionIdMapResId: Int = R.drawable.map_region_id,
 )
 
+/**
+ * Vorberechnete Bitmap-Daten für eine Compose-Renderphase.
+ *
+ * [overlay] enthält alle Territory-Masken bereits eingefärbt und zusammengelegt.
+ * [anchors] sind automatisch berechnete Schwerpunkte der Masken und dienen als
+ * Position für Truppenzähler. Das verhindert, dass Labels von Hand gepflegt
+ * werden müssen, solange die Masken sauber sind.
+ */
 private data class TerritoryRenderAssets(
     val overlay: ImageBitmap,
     val anchors: Map<String, MapPoint>,
@@ -284,6 +325,13 @@ object PulverfassMapDefaults {
 /**
  * Rendert die interaktive Spielkarte mit Hintergrundbild, einfärbbaren
  * Territory-Masken, Region-ID-Hitmap und Truppenzählern.
+ *
+ * @param regions bekannte Kartenregionen mit Masken und ID-Farben
+ * @param selectedRegionId aktuell ausgewählte Android-Region-ID
+ * @param onRegionSelected Callback nach erfolgreicher Farbhitmap-Selektion
+ * @param modifier Compose-Modifier der Kartenfläche
+ * @param regionStates serverbasierter Zustand pro Android-Region-ID
+ * @param options Render- und Hitmap-Konfiguration
  */
 @Composable
 fun InteractiveGameMap(
@@ -298,14 +346,29 @@ fun InteractiveGameMap(
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     val context = LocalContext.current
     val resources = context.resources
+
+    /*
+     * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
+     * Tap -> Kartenpixel -> RGB-Farbe -> GameMapRegion.
+     */
     val regionIdBitmap =
         remember(resources, options.regionIdMapResId) {
             BitmapFactory.decodeResource(resources, options.regionIdMapResId)
         }
+
+    /*
+     * Die Owner-Farben kommen aus dem serverautoritativen GameState. Für noch
+     * neutrale oder unbekannte Territories bleibt die Karte bewusst grau.
+     */
     val regionTintColors =
         regions.associate { region ->
             region.id to (regionStates[region.id]?.accentColor ?: Color(0xFF8F8F8F))
         }
+
+    /*
+     * Masken werden nur neu zusammengesetzt, wenn sich Regionliste oder Farben
+     * ändern. Zoom/Pan löst dadurch kein teures Bitmap-Rebuild aus.
+     */
     val territoryRenderAssets =
         remember(resources, regions, regionTintColors) {
             buildTerritoryRenderAssets(
@@ -332,6 +395,12 @@ fun InteractiveGameMap(
                     .fillMaxSize()
                     .onSizeChanged { viewportSize = it }
                     .pointerInput(regions, layoutMetrics, viewportState, regionIdBitmap) {
+                        /*
+                         * Die sichtbare Karte und die technische ID-Map teilen
+                         * sich dasselbe Koordinatensystem. Darum genügt eine
+                         * Rückprojektion vom Bildschirmpunkt auf den Pixel der
+                         * ID-Map, um das angetippte Territory eindeutig zu finden.
+                         */
                         detectTapGestures { tapOffset ->
                             val tappedRegion =
                                 findRegionAtScreenPoint(
@@ -348,6 +417,11 @@ fun InteractiveGameMap(
                         }
                     }
                     .pointerInput(layoutMetrics) {
+                        /*
+                         * Pan und Pinch-Zoom verändern ausschließlich den
+                         * Viewport. Die fachliche Auswahl bleibt im Reducer und
+                         * wird nicht mit Gestenlogik vermischt.
+                         */
                         detectTransformGestures(
                             panZoomLock = false,
                         ) { centroid, pan, zoom, _ ->
@@ -392,6 +466,11 @@ fun InteractiveGameMap(
                     labelPosition.isFinite() &&
                     labelPosition.isWithin(layoutMetrics.viewportSize)
                 ) {
+                    /*
+                     * Der Counter liegt als Compose-Element über dem Canvas,
+                     * damit Text nicht in die Bitmap gerendert werden muss und
+                     * Test-Tags für UI-Tests stabil bleiben.
+                     */
                     RegionTroopCounter(
                         state = regionStates[region.id],
                         isSelected = region.id == selectedRegionId,
@@ -417,6 +496,10 @@ fun InteractiveGameMap(
  *
  * Die Karte wird mit festem Seitenverhältnis so skaliert, dass sie den
  * gesamten Viewport abdeckt.
+ *
+ * @param viewportSize verfügbare Pixelgröße des Compose-Containers
+ * @param aspectRatio Seitenverhältnis der Karte
+ * @return berechnete Größe und Position der Karte im Container
  */
 internal fun createMapLayoutMetrics(
     viewportSize: IntSize,
@@ -459,6 +542,13 @@ internal fun createMapLayoutMetrics(
  *
  * Die Berechnung hält den Kartenpunkt unter dem Gesture-Centroid beim Zoomen
  * möglichst stabil. Das reduziert das typische Wegspringen der Karte.
+ *
+ * @param current bisheriger Viewport
+ * @param centroid Mittelpunkt der aktuellen Multitouch-Geste
+ * @param pan Verschiebung seit dem letzten Gesture-Frame
+ * @param zoomChange Zoomfaktor seit dem letzten Gesture-Frame
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @return neuer geklemmter Viewport
  */
 internal fun updateViewportForGesture(
     current: MapViewportState,
@@ -488,6 +578,23 @@ internal fun updateViewportForGesture(
 
 /**
  * Ermittelt die Region unter einem Bildschirmpunkt über die technische ID-Map.
+ *
+ * Ablauf der Farbauswahl:
+ * 1. Bildschirmkoordinate in normalisierte Kartenkoordinate zurückrechnen.
+ * 2. Normalisierte Kartenkoordinate auf Pixel der ID-Map übertragen.
+ * 3. RGB-Wert des Pixels lesen.
+ * 4. RGB-Wert exakt mit [GameMapRegion.idMapColorRgb] vergleichen.
+ *
+ * Antialiasing-Farben oder transparente Ränder werden nicht toleriert. Das ist
+ * Absicht: Nur die eigens gepflegte ID-Map entscheidet, nicht die sichtbare
+ * Weltkarte mit ihren Verläufen und Linien.
+ *
+ * @param regions bekannte Kartenregionen mit technischen RGB-Schlüsseln
+ * @param tapPoint Tap-Position im Bildschirmraum der Compose-Fläche
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param viewportState aktueller Zoom- und Pan-Zustand
+ * @param regionIdBitmap unsichtbare Farbhitmap
+ * @return angetippte Region oder `null`, wenn der Tap außerhalb liegt
  */
 internal fun findRegionAtScreenPoint(
     regions: List<GameMapRegion>,
@@ -510,6 +617,11 @@ internal fun findRegionAtScreenPoint(
 
 /**
  * Transformiert einen Bildschirmpunkt in normalisierte Kartenkoordinaten.
+ *
+ * @param screenPoint Position im Bildschirmraum der Compose-Fläche
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param viewportState aktueller Zoom- und Pan-Zustand
+ * @return normalisierte Kartenposition oder `null` außerhalb der Karte
  */
 internal fun screenOffsetToNormalizedMapPoint(
     screenPoint: Offset,
@@ -533,6 +645,20 @@ internal fun screenOffsetToNormalizedMapPoint(
     return MapPoint(normalizedX, normalizedY)
 }
 
+/**
+ * Wandelt einen Bildschirmtap in einen konkreten Bitmap-Pixel um.
+ *
+ * Diese Funktion ist der eigentliche "Raycast" der 2D-Karte. Statt einen Strahl
+ * in eine 3D-Szene zu schicken, projizieren wir den Eingabepunkt rückwärts durch
+ * Zoom, Pan und Kartenlayout auf das Quellbild. Das Ergebnis ist ein einzelner
+ * Pixel in `map_region_id.png`.
+ *
+ * @param screenPoint Position im Bildschirmraum der Compose-Fläche
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param viewportState aktueller Zoom- und Pan-Zustand
+ * @param imageSize Größe des Zielbildes, meistens der ID-Map
+ * @return Pixelkoordinate im Zielbild oder `null` außerhalb der Karte
+ */
 internal fun screenOffsetToImagePixel(
     screenPoint: Offset,
     layoutMetrics: MapLayoutMetrics,
@@ -551,6 +677,17 @@ internal fun screenOffsetToImagePixel(
     return IntOffset(pixelX, pixelY)
 }
 
+/**
+ * Sucht die Region, deren technische ID-Farbe exakt zum gelesenen Pixel passt.
+ *
+ * Es wird nur RGB verglichen, Alpha wird vorher maskiert. Dadurch funktionieren
+ * ID-Map-Bilder zuverlässig, egal ob Android beim Laden intern einen Alpha-Kanal
+ * ergänzt.
+ *
+ * @param regions bekannte Kartenregionen
+ * @param pixelRgb gelesener RGB-Wert aus der ID-Map
+ * @return passende Region oder `null` bei unbekannter Farbe
+ */
 internal fun findRegionByIdColor(
     regions: List<GameMapRegion>,
     pixelRgb: Int,
@@ -561,6 +698,11 @@ internal fun findRegionByIdColor(
 
 /**
  * Transformiert einen normalisierten Kartenpunkt in Bildschirmkoordinaten.
+ *
+ * @param point normalisierte Kartenposition
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param viewportState aktueller Zoom- und Pan-Zustand
+ * @return Bildschirmposition für Overlays
  */
 internal fun mapPointToScreenOffset(
     point: MapPoint,
@@ -585,6 +727,11 @@ internal fun mapPointToScreenOffset(
 
 /**
  * Begrenzt die Kartenverschiebung auf den sichtbaren Kartenbereich.
+ *
+ * @param offset gewünschte Verschiebung
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param scale aktuelle Zoomstufe
+ * @return erlaubte Verschiebung innerhalb der Kartenränder
  */
 internal fun clampOffset(
     offset: Offset,
@@ -600,6 +747,10 @@ internal fun clampOffset(
 
 /**
  * Liefert die erlaubten Minimal- und Maximalwerte für den Kartenoffset.
+ *
+ * @param layoutMetrics aktuelle Kartenprojektion
+ * @param scale aktuelle Zoomstufe
+ * @return Paar aus minimalem und maximalem Offset
  */
 internal fun calculateOffsetBounds(
     layoutMetrics: MapLayoutMetrics,
@@ -625,6 +776,14 @@ internal fun calculateOffsetBounds(
         Offset(horizontalBounds.second, verticalBounds.second)
 }
 
+/**
+ * Berechnet den Schwerpunkt einer Alpha-Maske als normalisierten Kartenpunkt.
+ *
+ * @param width Breite der Maske in Pixeln
+ * @param height Höhe der Maske in Pixeln
+ * @param alphaAt Zugriff auf den Alpha-Wert eines Maskenpixels
+ * @return Schwerpunkt der sichtbaren Pixel oder `null` bei leerer Maske
+ */
 internal fun calculateMaskCenter(
     width: Int,
     height: Int,
@@ -633,6 +792,12 @@ internal fun calculateMaskCenter(
     require(width > 0)
     require(height > 0)
 
+    /*
+     * Schwerpunkt der sichtbaren Maskenpixel. Das ist robuster als manuelle
+     * Labelkoordinaten, weil neue Masken automatisch sinnvolle Counterpositionen
+     * liefern. Einzelne Ausreißer an der Küste fallen durch die Mittelung kaum
+     * ins Gewicht.
+     */
     var visibleCount = 0L
     var sumX = 0.0
     var sumY = 0.0
@@ -775,10 +940,20 @@ private fun buildTerritoryRenderAssets(
     var overlayPixels = IntArray(targetWidth * targetHeight)
     val anchors = mutableMapOf<String, MapPoint>()
 
+    /*
+     * Jede Territory-Maske ist ein transparentes Bild, dessen sichtbare Pixel
+     * genau das Gebiet beschreiben. Beim Rebuild färben wir diese Pixel mit der
+     * aktuellen Owner-Farbe ein und schreiben sie in ein gemeinsames Overlay.
+     */
     regions.forEach { region ->
         val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
         try {
             if (bitmap.width != targetWidth || bitmap.height != targetHeight) {
+                /*
+                 * Fallback für Asset-Sets mit abweichender Zielgröße. In der
+                 * aktuellen Karte sollten alle Masken gleich groß sein; falls
+                 * nicht, bleibt der Renderer trotzdem konsistent.
+                 */
                 targetWidth = bitmap.width
                 targetHeight = bitmap.height
                 overlayPixels = IntArray(targetWidth * targetHeight)
@@ -794,6 +969,11 @@ private fun buildTerritoryRenderAssets(
             var sumY = 0.0
             var index = 0
 
+            /*
+             * Alpha kommt aus der Maske, RGB aus dem GameState. So bleiben
+             * Küsten/Antialiasing der Maske erhalten, während Besitzwechsel nur
+             * die Farbe austauschen.
+             */
             for (y in 0 until bitmap.height) {
                 for (x in 0 until bitmap.width) {
                     val alpha = (maskPixels[index] ushr 24) and 0xFF

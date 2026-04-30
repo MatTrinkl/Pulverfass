@@ -63,6 +63,10 @@ import kotlinx.coroutines.launch
  * Der Controller verbindet den LobbyScreen mit der technischen
  * WebSocket-Pipeline und kapselt Statusverwaltung, Fehlerbehandlung
  * sowie Create/Join-Flow inklusive Lobby-Playerliste.
+ *
+ * @param scope CoroutineScope für Transport, Decoder und ausgehende Requests
+ * @param network technische WebSocket- und Packet-Schicht
+ * @param config zentrale Texte und Retry-Grenzen für den Lobby-Flow
  */
 class LobbyController(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -83,11 +87,22 @@ class LobbyController(
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
+    /*
+     * Die Lobby-Playerliste kommt als einzelne Join/Leave/Kick-Events. Eine Map
+     * nach PlayerId verhindert Duplikate und erlaubt späteres Publizieren als
+     * geordnete UI-Liste.
+     */
     private val playersById = linkedMapOf<Long, LobbyPlayerUi>()
     private val commandDispatcher = LobbyCommandDispatcher(network::sendPayload)
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
+
+    /*
+     * Reconnect-Zustand getrennt vom UI-State: Die UI darf sehen, dass reconnectet
+     * wird, aber nicht den provisorischen neuen Token überschreiben. Der alte
+     * Token wird hier gehalten, bis der Server die Session bestätigt.
+     */
     private var reconnectJob: Job? = null
     private var reconnectSessionToken: SessionToken? = null
     private var awaitingReconnectResponse = false
@@ -95,6 +110,11 @@ class LobbyController(
 
     init {
         scope.launch {
+            /*
+             * Transportevents beschreiben nur Socket-Lifecycle. Fachliche
+             * Entscheidungen wie "Reconnect starten" oder "Pending Create senden"
+             * liegen bewusst hier im Controller.
+             */
             network.transport.events.collect { event ->
                 when (event) {
                     is Connected -> handleConnected()
@@ -121,12 +141,22 @@ class LobbyController(
         }
 
         scope.launch {
+            /*
+             * ClientNetwork speichert nur den ersten technischen Session-Token.
+             * Während eines Reconnects darf ein provisorischer neuer Token die
+             * alte fachliche Session nicht ersetzen.
+             */
             network.sessionToken.collect { sessionToken ->
                 _state.update { it.copy(sessionToken = sessionToken?.value) }
             }
         }
 
         scope.launch {
+            /*
+             * Alle fachlichen Pakete laufen durch denselben Decoder. Danach
+             * entscheidet handlePayload, ob das Paket Lobby, Reconnect oder Game
+             * betrifft.
+             */
             network.packetReceiver.packets.collect { packet ->
                 _state.update { it.copy(lastMessageType = packet.header.type.name) }
 
@@ -309,6 +339,13 @@ class LobbyController(
         }
     }
 
+    /**
+     * Fordert einen autoritativen Full Snapshot für die aktuelle Lobby an.
+     *
+     * @param reason Grund für den Catch-up, damit der Server und Tests den Pfad
+     * nachvollziehen können
+     * @param syncMessage optionale UI-Meldung während der Synchronisierung
+     */
     fun requestGameCatchUp(
         reason: GameStateCatchUpReason = GameStateCatchUpReason.AFTER_RECONNECT,
         syncMessage: String? = null,
@@ -355,6 +392,13 @@ class LobbyController(
         }
     }
 
+    /**
+     * Lädt den privaten Spielerteil nach.
+     *
+     * Der öffentliche Snapshot enthält Karte, Besitzer, Truppen und TurnState.
+     * Handkarten und geheime Ziele sind dagegen Spieler-spezifisch und werden
+     * getrennt angefordert, damit private Daten nicht in Broadcasts landen.
+     */
     fun requestPrivateGameState() {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode ?: return
@@ -468,6 +512,11 @@ class LobbyController(
     }
 
     fun selectGameRegion(regionId: String) {
+        /*
+         * Die Karte liefert nur eine Android-Region-ID. Die fachliche Validierung
+         * passiert im Reducer, weil dort TurnPhase, Owner und lokaler Spieler
+         * gemeinsam verfügbar sind.
+         */
         _state.update {
             it.copy(
                 gameState =
@@ -792,6 +841,11 @@ class LobbyController(
     }
 
     private fun handlePayload(payload: NetworkMessagePayload) {
+        /*
+         * Der Controller ist der zentrale Demultiplexer für Server-Payloads:
+         * technische Connection-Payloads bleiben hier, Lobby-Events pflegen die
+         * Playerliste und Game-Payloads werden an den GameStateReducer delegiert.
+         */
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)

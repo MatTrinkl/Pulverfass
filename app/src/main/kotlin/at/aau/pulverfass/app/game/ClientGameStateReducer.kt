@@ -28,6 +28,14 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
  * Territory-Updates schreiben immer zuerst den shared-basierten Zustand.
  */
 object ClientGameStateReducer {
+    /**
+     * Übernimmt den initialen oder manuell angeforderten Map-Snapshot.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param response autoritative Map-Antwort des Servers
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen
+     * @return aktualisierter UI-State oder der alte State bei veraltetem Snapshot
+     */
     fun applyMapGetResponse(
         current: GameUiState,
         response: MapGetResponse,
@@ -81,6 +89,19 @@ object ClientGameStateReducer {
             players = players,
         )
 
+    /**
+     * Wendet ein öffentliches Delta auf den lokalen State an.
+     *
+     * Deltas dürfen nur angewendet werden, wenn ihre `fromVersion` exakt zur
+     * lokalen [GameUiState.stateVersion] passt. Bei jeder Lücke wird bewusst kein
+     * Teilupdate geraten, sondern Catch-up angefordert, damit die Karte wieder
+     * vollständig serverautoritativen Zustand bekommt.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param delta serverseitiges Delta mit Versionsfenster
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen
+     * @return neuer State plus Hinweis, ob ein Catch-up nötig ist
+     */
     fun applyDelta(
         current: GameUiState,
         delta: GameStateDeltaEvent,
@@ -118,6 +139,17 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Aktualisiert reine Turn-/Phaseninformationen aus einem Boundary-Event.
+     *
+     * Eine Phasengrenze beendet die lokale Territory-Auswahl, weil ein zuvor
+     * ausgewähltes `from/to` in der nächsten Phase fachlich anders interpretiert
+     * werden könnte.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param event serverseitiger Phasenwechsel
+     * @return aktualisierter UI-State
+     */
     fun applyPhaseBoundary(
         current: GameUiState,
         event: PhaseBoundaryEvent,
@@ -167,6 +199,18 @@ object ClientGameStateReducer {
             lastSyncError = null,
         )
 
+    /**
+     * Verarbeitet die Auswahl einer Kartenregion nach einem Tap.
+     *
+     * Die UI liefert Android-Region-IDs aus der Farbhitmap. Der Reducer übersetzt
+     * diese ID zuerst in die fachliche [TerritoryId], prüft dann den aktuellen
+     * TurnState und hält anschließend die einfache `from/to`-Auswahl.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param regionId Android-Region-ID aus der Karten-Hitdetection
+     * @param localPlayerId eigener Spieler, falls der Server ihn schon bestätigt hat
+     * @return aktualisierter Auswahlzustand
+     */
     fun selectRegion(
         current: GameUiState,
         regionId: String,
@@ -212,6 +256,13 @@ object ClientGameStateReducer {
     fun toggleCards(current: GameUiState): GameUiState =
         current.copy(cardsVisible = !current.cardsVisible)
 
+    /**
+     * Ersetzt öffentliche Map-, Turn- und Determinismusdaten vollständig.
+     *
+     * Full Snapshots sind der sichere Zielzustand nach Spielstart, Reconnect und
+     * Desync-Recovery. Darum wird lokale Auswahl verworfen und die UI danach als
+     * synchron markiert.
+     */
     private fun applyFullSnapshot(
         current: GameUiState,
         stateVersion: Long,

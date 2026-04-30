@@ -40,6 +40,12 @@ class ClientNetwork(
         }
 
         scope.launch {
+            /*
+             * Der Server sendet direkt nach dem WebSocket-Connect eine
+             * ConnectionResponse. Wir speichern nur den ersten Token, weil ein
+             * späterer Reconnect zunächst wieder einen provisorischen Token
+             * erhält, fachlich aber den alten Token weiterverwenden muss.
+             */
             packetReceiver.packets.collect { packet ->
                 if (_sessionToken.value != null) {
                     return@collect

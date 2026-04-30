@@ -28,7 +28,15 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 
-// Bildschirm für den Warteraum vor Spielbeginn.
+/**
+ * Bildschirm für den Warteraum vor Spielbeginn.
+ *
+ * @param navController Navigation in den Spielbildschirm nach Startsignal
+ * @param controller gemeinsamer LobbyController der laufenden WebSocket-Session
+ * @param lobbyCode Lobbycode aus der Navigation als Fallback-Anzeige
+ * @param isHost Host-Flag aus der Navigation als Fallback-Anzeige
+ * @param playerName Spielername aus der Navigation als Fallback-Anzeige
+ */
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
@@ -94,7 +102,6 @@ fun WaitingRoomScreen(
             },
             modifier = Modifier.fillMaxWidth(0.4f),
         ) {
-            // Ermöglicht das Verlassen der aktuellen Lobby.
             Text(stringResource(id = R.string.leave_lobby))
         }
     }
@@ -110,7 +117,6 @@ private fun WaitingRoomHeader(
     lobbyCode: String,
     isHost: Boolean,
 ) {
-    // Zeigt die eindeutige Lobby-ID an.
     Text(
         text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
         style = MaterialTheme.typography.displaySmall,
@@ -138,7 +144,6 @@ private fun PlayerListCard(
     players: List<WaitingRoomPlayerUi>,
     modifier: Modifier = Modifier,
 ) {
-    // Kartenansicht für die Auflistung aller Teilnehmer.
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -164,7 +169,6 @@ private fun PlayerRow(
     player: String,
     isHostPlayer: Boolean,
 ) {
-    // Zeigt einen einzelnen Spieler in einer Zeile an.
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -187,7 +191,11 @@ private fun HostActions(
     playersCount: Int,
     onStartGame: () -> Unit,
 ) {
-    // Nur der Host kann das Spiel starten, wenn genug Spieler da sind.
+    /*
+     * Die App spiegelt hier nur die offensichtliche Startbedingung. Der Server
+     * validiert den Spielstart weiterhin endgültig, damit manipulierte Clients
+     * keine Lobby in einen ungültigen Zustand bringen können.
+     */
     if (isHost) {
         val canStart = playersCount >= 3
         Button(

@@ -26,6 +26,12 @@ private val NeutralTerritoryColor = Color(0xFF8F8F8F)
  * einer Stelle, bis beide Seiten dieselben IDs verwenden.
  */
 object GameMapTerritoryMapper {
+    /*
+     * Diese Tabelle ist die aktuelle Brücke zwischen Backend und Bildassets.
+     * Links stehen die TerritoryIds aus shared/server, rechts die IDs der
+     * Android-Masken und der Farbhitmap. Sobald beide Seiten dieselben IDs
+     * verwenden, kann diese Übersetzung entfallen.
+     */
     private val serverToAndroidRegionId =
         mapOf(
             "argentinien" to "argentina",
@@ -64,6 +70,12 @@ object GameMapTerritoryMapper {
         TerritoryId(androidRegionIdToServer[regionId] ?: regionId)
 }
 
+/**
+ * Erzeugt die Spielerprojektion für HUD, Sidebar und Kartenfarben.
+ *
+ * @param players Lobby-Spieler aus dem Controller
+ * @return UI-Spieler mit stabiler Farbe und Avatar-Kürzel
+ */
 fun lobbyPlayersToGamePlayers(players: List<LobbyPlayerUi>): List<GamePlayerUi> =
     players.mapIndexed { index, player ->
         GamePlayerUi(
@@ -91,6 +103,11 @@ fun buildRegionStates(
     territoryStates: Map<TerritoryId, GameTerritoryUiState>,
     players: List<LobbyPlayerUi>,
 ): Map<String, GameMapRegionState> {
+    /*
+     * Der Renderer kennt nur Android-Region-IDs. Deshalb ist dies der letzte
+     * Schritt vor der UI: fachliche TerritoryStates werden auf sichtbare
+     * Regionen, Ownernamen, Truppenzahlen und Farben reduziert.
+     */
     val playersById = lobbyPlayersToGamePlayers(players).associateBy { it.playerId }
     return territoryStates.values.mapNotNull { territory ->
         val regionId =

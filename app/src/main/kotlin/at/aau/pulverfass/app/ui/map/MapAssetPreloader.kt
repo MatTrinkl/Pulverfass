@@ -15,7 +15,11 @@ import kotlinx.coroutines.withContext
  * kompletten Pixel-Daten in den Speicher zu laden.
  */
 object MapAssetPreloader {
-    // Enthält Weltkarte, Farb-ID-Karte und alle Territory-Masken der Spielkarte.
+    /*
+     * Enthält Weltkarte, Farb-ID-Karte und alle Territory-Masken der Spielkarte.
+     * Wenn eines davon fehlt, wäre entweder das Rendering oder die farbbasierte
+     * Region-Selektion unzuverlässig.
+     */
     private val mapAssetIds: List<Int> =
         listOf(
             R.drawable.map_world,

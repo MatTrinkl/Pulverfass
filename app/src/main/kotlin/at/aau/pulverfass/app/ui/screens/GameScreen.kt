@@ -73,6 +73,12 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 
+/**
+ * Einstiegspunkt des Spielbildschirms.
+ *
+ * @param controller gemeinsamer LobbyController, der Lobby-, Netzwerk- und
+ * GameState verwaltet
+ */
 @Composable
 fun GameScreen(controller: LobbyController) {
     val lobbyState by controller.state.collectAsState()
@@ -93,6 +99,20 @@ fun GameScreen(controller: LobbyController) {
     )
 }
 
+/**
+ * Baut das eigentliche Game-Layout aus Karte, HUD, Seitenteilen und Aktionen.
+ *
+ * @param players sichtbare Spieler im Spiel
+ * @param localPlayerId eigener Spieler für Gating und Highlighting
+ * @param uiState serverbasierter GameState für Karte und HUD
+ * @param isConnected aktueller Verbindungszustand
+ * @param pendingCommandKeys ausstehende Requests für Button-Sperren
+ * @param onRegionSelected Callback für erfolgreiche Kartenauswahl
+ * @param onToggleCards Callback zum Ein-/Ausblenden der privaten Hand
+ * @param onAdvanceTurn Callback für den aktuell vorhandenen TurnAdvance-Request
+ * @param onRefreshGameState Callback für manuelles Snapshot-Refresh
+ * @param mapPainter sichtbares Kartenbild
+ */
 @Composable
 internal fun GameScreenContent(
     players: List<GamePlayerUi>,
@@ -108,12 +128,24 @@ internal fun GameScreenContent(
 ) {
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
+
+    /*
+     * Refresh-Pending bündelt die drei Snapshot-Requests, aus denen der aktuelle
+     * öffentliche und private Spielstand besteht. Der Reload-Button bleibt
+     * gesperrt, bis diese Runde abgeschlossen ist.
+     */
     val isRefreshPending =
         pendingCommandKeys.any {
             it == LobbyCommandKey.MAP_GET ||
                 it == LobbyCommandKey.TURN_STATE_GET ||
                 it == LobbyCommandKey.CATCH_UP
         }
+
+    /*
+     * Priorität der Statusanzeige: Verbindungsausfall schlägt Catch-up,
+     * Catch-up schlägt Desync, danach kommen konkrete Fehler und zuletzt reine
+     * Auswahlhinweise. So sieht der Nutzer immer den dringendsten Zustand.
+     */
     val statusMessage =
         when {
             !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
@@ -137,6 +169,11 @@ internal fun GameScreenContent(
             regionStates = uiState.regionStates,
             selectedRegionId = uiState.selectedRegionId,
             onRegionSelected = { region ->
+                /*
+                 * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
+                 * werden aber nur weitergereicht, wenn der lokale Spieler gerade
+                 * handeln darf und der Client synchron verbunden ist.
+                 */
                 if (canUseGameActions) {
                     onRegionSelected(region.id)
                 }

@@ -37,6 +37,13 @@ data class GameUiState(
     val secretObjectives: List<String> = emptyList(),
     val lastSyncError: String? = null,
 ) {
+    /**
+     * Prüft, ob lokale Spielaktionen aktuell sinnvoll angeboten werden dürfen.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn UI-Aktionen für den aktiven Spieler erlaubt sind
+     */
     fun canUseGameActions(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
@@ -48,6 +55,13 @@ data class GameUiState(
             !isCatchingUp &&
             !isDesynced
 
+    /**
+     * Prüft speziell den derzeit vorhandenen generischen Phasenwechsel-Button.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn ein `TurnAdvanceRequest` abgeschickt werden darf
+     */
     fun canRequestTurnAdvance(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,

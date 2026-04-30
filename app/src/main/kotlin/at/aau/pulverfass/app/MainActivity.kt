@@ -50,7 +50,12 @@ class MainActivity : AppCompatActivity() {
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
-                        // definiert alle verfügbaren routen & ziele
+                        /*
+                         * Definiert alle aktuell verfügbaren Routen und Ziele.
+                         * Der LobbyController bleibt absichtlich oberhalb des
+                         * NavHost, damit Lobby, Warteraum und Spielbildschirm
+                         * dieselbe WebSocket-Verbindung teilen.
+                         */
                         NavHost(
                             navController = navController,
                             startDestination = Screen.Load.route,
@@ -67,7 +72,12 @@ class MainActivity : AppCompatActivity() {
                             composable(Screen.LoadGame.route) {
                                 LoadGameScreen(navController = navController)
                             }
-                            // warteraum mit übergabe von parametern wie lobbycode & name
+                            /*
+                             * Warteraum mit Parametern aus der Navigation.
+                             * Der Controller ist trotzdem die Quelle der Wahrheit;
+                             * die Argumente sind nur ein Fallback für direkte
+                             * Navigation und UI-Rekonstruktion.
+                             */
                             composable(
                                 route =
                                     Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
