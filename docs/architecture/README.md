@@ -18,6 +18,8 @@ Dieser Ordner beschreibt die aktuell implementierten Kernsysteme des Projekts. D
   Technische Integration von Shared Codec, ServerNetwork, Router und App-Netzwerkpfad.
 - `client-systems.md`
   Entwickleranleitung für die derzeit vorhandenen Android-Client-Systeme.
+- `reconnect-session-flow.md`
+  SessionToken-basierter Reconnect-Ablauf.
 
 ## Lesereihenfolge
 
@@ -30,6 +32,7 @@ Für einen Gesamteinstieg:
 5. `game-state-visibility.md`
 6. `network-api-integration.md`
 7. `client-systems.md`
+8. `reconnect-session-flow.md`
 
 ## Status
 

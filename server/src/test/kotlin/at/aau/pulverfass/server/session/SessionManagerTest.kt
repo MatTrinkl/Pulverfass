@@ -1,0 +1,310 @@
+package at.aau.pulverfass.server.session
+
+import at.aau.pulverfass.server.ids.DuplicateConnectionIdException
+import at.aau.pulverfass.server.ids.SessionConnectionNotFoundException
+import at.aau.pulverfass.server.ids.SessionTokenNotFoundException
+import at.aau.pulverfass.shared.ids.ConnectionId
+import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class SessionManagerTest {
+    @Test
+    fun `createSession should bind token to connection with ttl`() {
+        var now = 1_000L
+        val manager =
+            SessionManager(
+                sessionTtlMillis = 500L,
+                nowEpochMillis = { now },
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174010")
+                },
+            )
+
+        val session = manager.createSession(ConnectionId(1))
+
+        assertEquals(
+            SessionToken("123e4567-e89b-12d3-a456-426614174010"),
+            session.sessionToken,
+        )
+        assertEquals(ConnectionId(1), session.connectionId)
+        assertEquals(1_500L, session.expiresAtEpochMillis)
+        assertTrue(session.isConnected)
+        assertEquals(session, manager.getByConnectionId(ConnectionId(1)))
+    }
+
+    @Test
+    fun `detachConnection should keep session token but remove active binding`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174011")
+                },
+            )
+        val session = manager.createSession(ConnectionId(2))
+
+        val detached = manager.detachConnection(ConnectionId(2))
+
+        assertEquals(session.sessionToken, detached?.sessionToken)
+        assertNull(detached?.connectionId)
+        assertFalse(detached?.isConnected ?: true)
+        assertNull(manager.getByConnectionId(ConnectionId(2)))
+        assertEquals(detached, manager.getByToken(session.sessionToken))
+    }
+
+    @Test
+    fun `bindExisting should reattach existing session to new connection and refresh ttl`() {
+        var now = 5_000L
+        val manager =
+            SessionManager(
+                sessionTtlMillis = 300L,
+                nowEpochMillis = { now },
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174012")
+                },
+            )
+        val created = manager.createSession(ConnectionId(3))
+        manager.detachConnection(ConnectionId(3))
+        now = 5_100L
+
+        val rebound = manager.bindExisting(created.sessionToken, ConnectionId(4))
+
+        assertEquals(created.sessionToken, rebound.sessionToken)
+        assertEquals(ConnectionId(4), rebound.connectionId)
+        assertEquals(5_400L, rebound.expiresAtEpochMillis)
+        assertEquals(rebound, manager.getByConnectionId(ConnectionId(4)))
+    }
+
+    @Test
+    fun `createSession should retry when token factory returns duplicate token`() {
+        val duplicateToken = SessionToken("123e4567-e89b-12d3-a456-426614174020")
+        val freshToken = SessionToken("123e4567-e89b-12d3-a456-426614174021")
+        val tokens =
+            listOf(duplicateToken, duplicateToken, freshToken).iterator()
+        val manager = SessionManager(tokenFactory = { tokens.next() })
+
+        val first = manager.createSession(ConnectionId(30))
+        val second = manager.createSession(ConnectionId(31))
+
+        assertEquals(duplicateToken, first.sessionToken)
+        assertEquals(freshToken, second.sessionToken)
+        assertEquals(second, manager.getByToken(freshToken))
+    }
+
+    @Test
+    fun `bindExisting should move active binding from old connection to new connection`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174022")
+                },
+            )
+        val created = manager.createSession(ConnectionId(32))
+
+        val rebound = manager.bindExisting(created.sessionToken, ConnectionId(33))
+
+        assertNull(manager.getByConnectionId(ConnectionId(32)))
+        assertEquals(rebound, manager.getByConnectionId(ConnectionId(33)))
+        assertEquals(rebound, manager.getByToken(created.sessionToken))
+    }
+
+    @Test
+    fun `createSession should reject duplicate connection binding`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174013")
+                },
+            )
+        manager.createSession(ConnectionId(5))
+
+        assertThrows(DuplicateConnectionIdException::class.java) {
+            manager.createSession(ConnectionId(5))
+        }
+    }
+
+    @Test
+    fun `bindExisting should reject duplicate target connection and keep current binding`() {
+        val tokens =
+            listOf(
+                SessionToken("123e4567-e89b-12d3-a456-426614174015"),
+                SessionToken("123e4567-e89b-12d3-a456-426614174016"),
+            ).iterator()
+        val manager = SessionManager(tokenFactory = { tokens.next() })
+        val first = manager.createSession(ConnectionId(6))
+        val second = manager.createSession(ConnectionId(7))
+
+        assertThrows(DuplicateConnectionIdException::class.java) {
+            manager.bindExisting(first.sessionToken, ConnectionId(7))
+        }
+
+        assertEquals(first, manager.getByConnectionId(ConnectionId(6)))
+        assertEquals(second, manager.getByConnectionId(ConnectionId(7)))
+    }
+
+    @Test
+    fun `requireByConnectionId should throw for unknown connection`() {
+        val manager = SessionManager()
+
+        assertThrows(SessionConnectionNotFoundException::class.java) {
+            manager.requireByConnectionId(ConnectionId(99))
+        }
+    }
+
+    @Test
+    fun `require methods should return the existing session`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174023")
+                },
+            )
+        val created = manager.createSession(ConnectionId(34))
+
+        assertEquals(created, manager.requireByConnectionId(ConnectionId(34)))
+        assertEquals(created, manager.requireByToken(created.sessionToken))
+    }
+
+    @Test
+    fun `requireByToken should throw for unknown token`() {
+        val manager = SessionManager()
+
+        assertThrows(SessionTokenNotFoundException::class.java) {
+            manager.requireByToken(SessionToken("123e4567-e89b-12d3-a456-426614174014"))
+        }
+    }
+
+    @Test
+    fun `bindExisting should throw for unknown token without changing existing connection map`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174024")
+                },
+            )
+        val existing = manager.createSession(ConnectionId(35))
+
+        assertThrows(SessionTokenNotFoundException::class.java) {
+            manager.bindExisting(
+                SessionToken("123e4567-e89b-12d3-a456-426614174025"),
+                ConnectionId(36),
+            )
+        }
+
+        assertEquals(existing, manager.getByConnectionId(ConnectionId(35)))
+        assertNull(manager.getByConnectionId(ConnectionId(36)))
+    }
+
+    @Test
+    fun `detachConnection should return null for unknown connection`() {
+        val manager = SessionManager()
+
+        val detached = manager.detachConnection(ConnectionId(37))
+
+        assertNull(detached)
+    }
+
+    @Test
+    fun `invalidate should revoke session and clear active binding`() {
+        var now = 2_000L
+        val manager =
+            SessionManager(
+                nowEpochMillis = { now },
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174026")
+                },
+            )
+        val created = manager.createSession(ConnectionId(38))
+        now = 2_500L
+
+        val invalidated = manager.invalidate(created.sessionToken)
+
+        assertNotNull(invalidated)
+        assertTrue(invalidated?.isRevoked == true)
+        assertNull(invalidated?.connectionId)
+        assertEquals(2_500L, invalidated?.revokedAtEpochMillis)
+        assertNull(manager.getByConnectionId(ConnectionId(38)))
+        assertEquals(
+            ReconnectErrorCode.TOKEN_REVOKED,
+            manager.reconnectErrorFor(created.sessionToken),
+        )
+    }
+
+    @Test
+    fun `reconnectErrorFor should return invalid for unknown token`() {
+        val manager = SessionManager()
+
+        val result =
+            manager.reconnectErrorFor(
+                SessionToken("123e4567-e89b-12d3-a456-426614174027"),
+            )
+
+        assertEquals(ReconnectErrorCode.TOKEN_INVALID, result)
+    }
+
+    @Test
+    fun `reconnectErrorFor should return expired after ttl`() {
+        var now = 10_000L
+        val manager =
+            SessionManager(
+                sessionTtlMillis = 100L,
+                nowEpochMillis = { now },
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174028")
+                },
+            )
+        val created = manager.createSession(ConnectionId(39))
+        now = 10_100L
+
+        val result = manager.reconnectErrorFor(created.sessionToken)
+
+        assertEquals(ReconnectErrorCode.TOKEN_EXPIRED, result)
+    }
+
+    @Test
+    fun `removeByConnectionId should remove provisional session fully`() {
+        val manager =
+            SessionManager(
+                tokenFactory = {
+                    SessionToken("123e4567-e89b-12d3-a456-426614174029")
+                },
+            )
+        val created = manager.createSession(ConnectionId(40))
+
+        val removed = manager.removeByConnectionId(ConnectionId(40))
+
+        assertEquals(created, removed)
+        assertNull(manager.getByConnectionId(ConnectionId(40)))
+        assertNull(manager.getByToken(created.sessionToken))
+    }
+
+    @Test
+    fun `createSession should purge retired detached sessions opportunistically`() {
+        var now = 20_000L
+        val tokens =
+            listOf(
+                SessionToken("123e4567-e89b-12d3-a456-426614174030"),
+                SessionToken("123e4567-e89b-12d3-a456-426614174031"),
+            ).iterator()
+        val manager =
+            SessionManager(
+                sessionTtlMillis = 100L,
+                nowEpochMillis = { now },
+                tokenFactory = { tokens.next() },
+            )
+        val expired = manager.createSession(ConnectionId(41))
+        manager.detachConnection(ConnectionId(41))
+        now = 20_200L
+
+        val fresh = manager.createSession(ConnectionId(42))
+
+        assertNull(manager.getByToken(expired.sessionToken))
+        assertEquals(fresh, manager.getByConnectionId(ConnectionId(42)))
+    }
+}

@@ -2,12 +2,17 @@ package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.codec.NetworkMessageSerializer
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -146,6 +151,52 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.LOBBY_JOIN_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered connection response by runtime type`() {
+        val payload = ConnectionResponse(SessionToken("123e4567-e89b-12d3-a456-426614174102"))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered reconnect request by runtime type`() {
+        val payload = ReconnectRequest(SessionToken("123e4567-e89b-12d3-a456-426614174103"))
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RECONNECT_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered reconnect response by runtime type`() {
+        val payload =
+            ReconnectResponse(
+                success = false,
+                errorCode = ReconnectErrorCode.TOKEN_INVALID,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.CONNECTION_RECONNECT_RESPONSE,
                 bytes,
             )
 
@@ -580,12 +631,12 @@ class NetworkMessageSerializerTest {
         val exception =
             assertThrows(UnsupportedPayloadTypeException::class.java) {
                 NetworkMessageSerializer.deserializePayload(
-                    MessageType.CONNECTION_RESPONSE,
+                    MessageType.HEARTBEAT,
                     payloadBytes,
                 )
             }
 
-        assertEquals("Unsupported payload type: CONNECTION_RESPONSE", exception.message)
+        assertEquals("Unsupported payload type: HEARTBEAT", exception.message)
     }
 
     @Test

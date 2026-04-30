@@ -3,6 +3,7 @@ package at.aau.pulverfass.server.ids
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.EntityId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 
 /**
  * Wird geworfen, wenn eine EntityId doppelt registriert wird.
@@ -54,13 +55,40 @@ class PlayerNotFoundException(
 ) : NoSuchElementException("Kein Player mit der ID $playerId gefunden.")
 
 /**
- * Wird geworfen, wenn eine ConnectionId bereits einem anderen Player zugeordnet ist.
+ * Wird geworfen, wenn eine ConnectionId bereits registriert ist.
  *
  * @param connectionId die betroffene ConnectionId
  */
 class DuplicateConnectionIdException(
     val connectionId: ConnectionId,
-) : IllegalStateException("Die Connection ID $connectionId ist bereits einem Player zugeordnet.")
+) : IllegalStateException("Die Connection ID $connectionId ist bereits registriert.")
+
+/**
+ * Wird geworfen, wenn zu einer ConnectionId keine aktive Verbindung gefunden wird.
+ *
+ * @param connectionId die gesuchte ConnectionId
+ */
+class ConnectionNotFoundException(
+    val connectionId: ConnectionId,
+) : NoSuchElementException("Keine aktive Connection mit der ID $connectionId gefunden.")
+
+/**
+ * Wird geworfen, wenn zu einer aktiven Connection keine Session gefunden wird.
+ *
+ * @param connectionId die gesuchte ConnectionId
+ */
+class SessionConnectionNotFoundException(
+    val connectionId: ConnectionId,
+) : NoSuchElementException("Keine Session für die Connection ID $connectionId gefunden.")
+
+/**
+ * Wird geworfen, wenn zu einem SessionToken keine Session gefunden wird.
+ *
+ * @param sessionToken der gesuchte SessionToken
+ */
+class SessionTokenNotFoundException(
+    val sessionToken: SessionToken,
+) : NoSuchElementException("Keine Session mit dem Token $sessionToken gefunden.")
 
 /**
  * Wird geworfen, wenn eine EntityId bereits einem anderen Player zugeordnet ist.

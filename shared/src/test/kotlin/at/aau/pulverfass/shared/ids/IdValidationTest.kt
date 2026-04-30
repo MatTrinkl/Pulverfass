@@ -26,6 +26,13 @@ class IdValidationTest {
     }
 
     @Test
+    fun `sessionToken muss uuid format haben`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SessionToken("not-a-uuid")
+        }
+    }
+
+    @Test
     fun `gameId darf nicht negativ sein`() {
         assertThrows(IllegalArgumentException::class.java) {
             GameId(-5)

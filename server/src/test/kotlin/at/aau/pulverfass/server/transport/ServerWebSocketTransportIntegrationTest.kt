@@ -2,6 +2,8 @@ package at.aau.pulverfass.server.transport
 
 import at.aau.pulverfass.server.WebSocketPolicy
 import at.aau.pulverfass.server.module
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import at.aau.pulverfass.shared.network.transport.Connected
 import at.aau.pulverfass.shared.network.transport.Disconnected
@@ -121,6 +123,7 @@ class ServerWebSocketTransportIntegrationTest {
 
                 val session = client.webSocketSession("/ws")
                 val connected = connectedEvent.await()
+                discardConnectionHandshake(session)
 
                 session.send(Frame.Binary(fin = true, data = inboundPayload))
 
@@ -209,6 +212,7 @@ class ServerWebSocketTransportIntegrationTest {
 
                 val session = client.webSocketSession("/ws")
                 val connected = connectedEvent.await()
+                discardConnectionHandshake(session)
 
                 transport.send(connected.connectionId, payload)
 
@@ -259,4 +263,16 @@ class ServerWebSocketTransportIntegrationTest {
                 assertNull(binaryEvent.await())
             }
         }
+
+    private suspend fun discardConnectionHandshake(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ) {
+        val frame =
+            withTimeout(5_000) {
+                session.incoming.receive()
+            }
+        assertTrue(frame is Frame.Binary)
+        val payload = MessageCodec.decodePayload(frame.readBytes())
+        assertTrue(payload is ConnectionResponse)
+    }
 }

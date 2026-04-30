@@ -2,6 +2,8 @@ package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -14,6 +16,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
 import io.ktor.server.engine.ApplicationEngine
@@ -53,6 +56,7 @@ class LobbyControllerTest {
             assertFalse(state.isConnected)
             assertEquals("Nicht verbunden", state.statusText)
             assertNull(state.errorText)
+            assertNull(state.sessionToken)
             assertNull(state.lastMessageType)
             assertTrue(state.playerNames.isEmpty())
         } finally {
@@ -80,7 +84,12 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("AB12")
             val server =
-                startProtocolServer { payload, outgoing ->
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174200"),
+                        ),
+                ) { payload, outgoing ->
                     when (payload) {
                         CreateLobbyRequest -> {
                             outgoing.send(
@@ -123,6 +132,10 @@ class LobbyControllerTest {
                 }
 
                 waitUntil { controller.state.value.isConnected }
+                waitUntil {
+                    controller.state.value.sessionToken ==
+                        "123e4567-e89b-12d3-a456-426614174200"
+                }
                 waitUntil { readyLobbyCode == lobbyCode.value }
                 waitUntil { controller.state.value.playerNames.contains("Alice") }
 
@@ -142,7 +155,12 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("Z9Y8")
             val server =
-                startProtocolServer { payload, outgoing ->
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174201"),
+                        ),
+                ) { payload, outgoing ->
                     if (payload is JoinLobbyRequest) {
                         outgoing.send(
                             Frame.Binary(
@@ -175,6 +193,10 @@ class LobbyControllerTest {
                 }
 
                 waitUntil { controller.state.value.isConnected }
+                waitUntil {
+                    controller.state.value.sessionToken ==
+                        "123e4567-e89b-12d3-a456-426614174201"
+                }
                 waitUntil { readyLobbyCode == lobbyCode.value }
                 waitUntil { controller.state.value.playerNames.contains("Bob") }
 
@@ -335,6 +357,7 @@ class LobbyControllerTest {
     }
 
     private fun startProtocolServer(
+        onOpenPayload: NetworkMessagePayload? = null,
         onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
     ): TestWebSocketServer {
         repeat(5) { attempt ->
@@ -344,6 +367,14 @@ class LobbyControllerTest {
                     install(WebSockets)
                     routing {
                         webSocket("/ws") {
+                            if (onOpenPayload != null) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(onOpenPayload),
+                                    ),
+                                )
+                            }
                             for (frame in incoming) {
                                 if (frame is Frame.Binary) {
                                     val payload = MessageCodec.decodePayload(frame.readBytes())

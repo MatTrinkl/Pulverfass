@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server.transport
 
+import at.aau.pulverfass.server.ids.ConnectionNotFoundException
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.network.transport.TransportError
 import io.ktor.server.application.ApplicationCall
@@ -34,11 +35,14 @@ class ServerWebSocketTransportTest {
             val transport = ServerWebSocketTransport()
 
             val exception =
-                assertThrowsSuspend(IllegalArgumentException::class.java) {
+                assertThrowsSuspend(ConnectionNotFoundException::class.java) {
                     transport.send(ConnectionId(99), byteArrayOf(1, 2, 3))
                 }
 
-            assertEquals("Unknown connection: ConnectionId(value=99)", exception.message)
+            assertEquals(
+                "Keine aktive Connection mit der ID ConnectionId(value=99) gefunden.",
+                exception.message,
+            )
         }
 
     @Test

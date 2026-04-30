@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server.transport
 
+import at.aau.pulverfass.server.connection.ConnectionManager
+import at.aau.pulverfass.server.connection.WebSocketConnection
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import at.aau.pulverfass.shared.network.transport.Connected
@@ -7,24 +9,22 @@ import at.aau.pulverfass.shared.network.transport.Disconnected
 import at.aau.pulverfass.shared.network.transport.TransportError
 import at.aau.pulverfass.shared.network.transport.TransportEvent
 import io.ktor.server.websocket.DefaultWebSocketServerSession
-import io.ktor.websocket.Frame
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Technische Transport-Schicht für serverseitige WebSocket-Verbindungen.
  *
- * Die Klasse verwaltet aktive Sessions anhand ihrer [ConnectionId], emittiert
- * reine Connection- und Binary-Events und erlaubt das Senden roher ByteArrays
- * an bekannte Verbindungen. Fachliche Auswertung oder Dekodierung gehört
- * ausdrücklich nicht in diese Schicht.
+ * Die Klasse emittiert reine Connection- und Binary-Events, während die
+ * Registrierung aktiver Verbindungen an den [ConnectionManager] delegiert wird.
+ * Fachliche Auswertung oder Dekodierung gehört ausdrücklich nicht in diese Schicht.
  */
-class ServerWebSocketTransport {
+class ServerWebSocketTransport(
+    val connectionManager: ConnectionManager = ConnectionManager(),
+) {
     private val logger = LoggerFactory.getLogger(ServerWebSocketTransport::class.java)
-    private val sessions = ConcurrentHashMap<ConnectionId, DefaultWebSocketServerSession>()
     private val _events = MutableSharedFlow<TransportEvent>(extraBufferCapacity = 64)
 
     /**
@@ -39,7 +39,7 @@ class ServerWebSocketTransport {
         connectionId: ConnectionId,
         session: DefaultWebSocketServerSession,
     ) {
-        sessions[connectionId] = session
+        connectionManager.register(WebSocketConnection(connectionId, session))
         logger.info("Accepted websocket connection {}", connectionId.value)
         _events.emit(Connected(connectionId))
     }
@@ -66,7 +66,7 @@ class ServerWebSocketTransport {
         connectionId: ConnectionId,
         reason: String?,
     ) {
-        sessions.remove(connectionId)
+        connectionManager.remove(connectionId)
         logger.info("Closed websocket connection {} with reason '{}'", connectionId.value, reason)
         _events.emit(Disconnected(connectionId, reason))
     }
@@ -85,15 +85,14 @@ class ServerWebSocketTransport {
     /**
      * Sendet rohe Bytes als Binary Frame an eine bekannte Verbindung.
      *
-     * @throws IllegalArgumentException wenn die Verbindung nicht mehr registriert ist
+     * @throws at.aau.pulverfass.server.ids.ConnectionNotFoundException wenn die
+     * Verbindung nicht mehr registriert ist
      */
     suspend fun send(
         connectionId: ConnectionId,
         bytes: ByteArray,
     ) {
-        val session =
-            sessions[connectionId]
-                ?: throw IllegalArgumentException("Unknown connection: $connectionId")
+        val connection = connectionManager.require(connectionId)
 
         logger.debug(
             "Sending binary websocket frame to connection {} ({} bytes)",
@@ -102,7 +101,7 @@ class ServerWebSocketTransport {
         )
 
         try {
-            session.send(Frame.Binary(fin = true, data = bytes.copyOf()))
+            connection.send(bytes)
         } catch (cause: Throwable) {
             onError(connectionId, cause)
             throw cause

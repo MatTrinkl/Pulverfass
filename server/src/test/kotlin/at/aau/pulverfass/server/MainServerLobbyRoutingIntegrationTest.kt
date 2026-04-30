@@ -5,9 +5,11 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -18,6 +20,9 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -41,7 +46,6 @@ import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorRespo
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -52,12 +56,9 @@ import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -1586,6 +1587,137 @@ class MainServerLobbyRoutingIntegrationTest {
             }
         }
 
+    @Test
+    fun `reconnect restores lobby context and routes broadcasts to new connection`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val sessionContextRegistry = SessionContextRegistry()
+            network.installReconnectHooks(
+                reconnectContextProvider = sessionContextRegistry::contextFor,
+                onSessionRemoved = sessionContextRegistry::removeSession,
+            )
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    sessionContextRegistry = sessionContextRegistry,
+                    playerIdResolver = { connectionId ->
+                        network.sessionManager
+                            .getByConnectionId(connectionId)
+                            ?.sessionToken
+                            ?.let(sessionContextRegistry::playerIdForSession)
+                    },
+                    connectionIdResolver = { playerId ->
+                        sessionContextRegistry
+                            .sessionTokenForPlayer(playerId)
+                            ?.let(network.sessionManager::getByToken)
+                            ?.connectionId
+                    },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("RJ42")
+            lobbyManager.createLobby(lobbyCode)
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val aliceSession = client.webSocketSession("/ws")
+                    val aliceToken = discardConnectionHandshake(aliceSession)
+                    val aliceConnectionId = awaitConnectionId(network, aliceToken)
+                    sessionContextRegistry.assignPlayer(aliceToken, PlayerId(1))
+
+                    aliceSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                        ),
+                    )
+                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        receivePayload(aliceSession),
+                    )
+
+                    aliceSession.close()
+                    awaitDetachedSession(network, aliceToken)
+
+                    val reconnectingSession = client.webSocketSession("/ws")
+                    discardConnectionHandshake(reconnectingSession)
+                    reconnectingSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(ReconnectRequest(aliceToken)),
+                        ),
+                    )
+
+                    val reconnectResponse =
+                        assertIs<ReconnectResponse>(
+                            receivePayload(reconnectingSession),
+                        )
+                    val reboundConnectionId = awaitConnectionId(network, aliceToken)
+
+                    assertEquals(
+                        ReconnectResponse(
+                            success = true,
+                            playerId = PlayerId(1),
+                            lobbyCode = lobbyCode,
+                            playerDisplayName = "Alice",
+                        ),
+                        reconnectResponse,
+                    )
+                    assertTrue(aliceConnectionId != reboundConnectionId)
+
+                    val bobSession = client.webSocketSession("/ws")
+                    val bobToken = discardConnectionHandshake(bobSession)
+                    sessionContextRegistry.assignPlayer(bobToken, PlayerId(2))
+                    bobSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                        ),
+                    )
+
+                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        receivePayload(bobSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        receivePayload(bobSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        receivePayload(reconnectingSession),
+                    )
+
+                    reconnectingSession.close()
+                    bobSession.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,
@@ -1593,20 +1725,12 @@ class MainServerLobbyRoutingIntegrationTest {
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
         connectionsByPlayer: ConcurrentHashMap<PlayerId, ConnectionId>,
     ) = coroutineScope {
-        val connectedDeferred =
-            async {
-                withTimeout(5_000) {
-                    network.events
-                        .filterIsInstance<Network.Event.Connected<ConnectionId>>()
-                        .first()
-                }
-            }
-
         val session = client.webSocketSession("/ws")
-        val connected = connectedDeferred.await()
-        playersByConnection[connected.connectionId] = playerId
-        connectionsByPlayer[playerId] = connected.connectionId
-        session to connected.connectionId
+        val sessionToken = discardConnectionHandshake(session)
+        val connectionId = awaitConnectionId(network, sessionToken)
+        playersByConnection[connectionId] = playerId
+        connectionsByPlayer[playerId] = connectionId
+        session to connectionId
     }
 
     private suspend fun receivePayload(
@@ -1684,6 +1808,41 @@ class MainServerLobbyRoutingIntegrationTest {
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
         return value as T
+    }
+
+    private suspend fun discardConnectionHandshake(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+    ): SessionToken {
+        val payload = receivePayload(session)
+        val response = assertIs<ConnectionResponse>(payload)
+        return response.sessionToken
+    }
+
+    private suspend fun awaitConnectionId(
+        network: ServerNetwork,
+        sessionToken: SessionToken,
+    ): ConnectionId {
+        return withTimeout(5_000) {
+            var connectionId: ConnectionId? = null
+            while (connectionId == null) {
+                connectionId = network.sessionManager.getByToken(sessionToken)?.connectionId
+                if (connectionId == null) {
+                    delay(5)
+                }
+            }
+            connectionId
+        }
+    }
+
+    private suspend fun awaitDetachedSession(
+        network: ServerNetwork,
+        sessionToken: SessionToken,
+    ) {
+        withTimeout(5_000) {
+            while (network.sessionManager.getByToken(sessionToken)?.connectionId != null) {
+                delay(5)
+            }
+        }
     }
 
     private fun createPreGameState(

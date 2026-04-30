@@ -8,6 +8,26 @@ Das Modul `:server` stellt den Ktor-WebSocket-Server, die Lobby-Runtime und die 
 ./gradlew :server:run
 ```
 
+- Das Ktor-Plugin `WebSockets` wird in `Application.module()` installiert.
+- Der WebSocket-Endpunkt ist unter `/ws` verfügbar.
+- `ConnectionManager` verwaltet aktive technische Verbindungen zentral und stellt `send`, `sendMany` und `broadcast`
+  bereit.
+- `SessionManager` verwaltet stabile Session-Tokens über Verbindungswechsel hinweg und bildet die Grundlage für
+  spätere Reconnect-Flows.
+- Die serverseitige Transport-Schicht `ServerWebSocketTransport` registriert und deregistriert WebSocket-Sessions über
+  den `ConnectionManager` und emittiert technische Transport-Events.
+- Pro Verbindung wird serverseitig eine `ConnectionId` vergeben.
+- Nach erfolgreichem Connect sendet der Server automatisch eine `CONNECTION_RESPONSE` mit einem `SessionToken` an den
+  Client.
+- Transport-Events werden als `SharedFlow` emittiert: `Connected`, `BinaryMessageReceived`, `Disconnected` und optional
+  `TransportError`.
+- Binary Frames werden als rohe ByteArrays weitergereicht und können über `send(connectionId, bytes)` auch wieder an
+  bestehende Verbindungen gesendet werden.
+- Für den technischen Outbound-Pfad verpackt der shared `PacketSendAdapter` ein `SerializedPacket` über `PacketCodec`
+  in Wire-Bytes; der serverseitige `PacketSender` liefert diese Bytes via `ServerWebSocketTransport` aus.
+- Text Frames werden in Serie 1 aktiv gemäß `WebSocketPolicy` abgelehnt: Der Server schließt die Verbindung mit
+  `CANNOT_ACCEPT` und der Nachricht `Text frames are not supported on /ws.`.
+
 Der produktive Einstiegspunkt ist:
 - `at.aau.pulverfass.server.ApplicationKt`
 
@@ -56,6 +76,9 @@ WebSocket /ws
 - `LobbyManager`
 - `LobbyRuntime`
 - `LobbyEventLoop`
+- `MainServerLobbyRoutingService`
+- `SessionManager`
+- `SessionContextRegistry`
 
 ### Eigenschaften
 
@@ -134,7 +157,7 @@ Direkt oder indirekt verdrahtet sind aktuell unter anderem:
 
 ## Aktuelle Grenzen
 
-- Spieleridentität ist aktuell an die WebSocket-Verbindung gekoppelt; es gibt noch kein persistentes Session-/Auth-System.
+- Reconnect nutzt stabile Session-Tokens, ist aber noch kein vollständiges Auth-System.
 - Der Server hält eine Default-Map im Speicher; Multi-Map-Management ist noch nicht implementiert.
 - Der `RoundHistoryBuffer` dient Diagnosezwecken und ist noch kein öffentliches Replay-API.
 - Persistente Speicherung von Lobbys oder Event-Logs ist derzeit nicht vorhanden.

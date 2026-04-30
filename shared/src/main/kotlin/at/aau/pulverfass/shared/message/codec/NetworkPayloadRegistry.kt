@@ -3,6 +3,9 @@ package at.aau.pulverfass.shared.message.codec
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -56,6 +59,9 @@ import kotlinx.serialization.json.Json
 internal object NetworkPayloadRegistry {
     private val payloadTypeByClass =
         mapOf<Class<out NetworkMessagePayload>, MessageType>(
+            ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
+            ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
+            ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
             CreateLobbyRequest::class.java to MessageType.LOBBY_CREATE_REQUEST,
             CreateLobbyErrorResponse::class.java to MessageType.LOBBY_CREATE_ERROR_RESPONSE,
             CreateLobbyResponse::class.java to MessageType.LOBBY_CREATE_RESPONSE,
@@ -117,6 +123,9 @@ internal object NetworkPayloadRegistry {
 
     private val payloadSerializerByClass =
         mapOf<Class<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
+            ConnectionResponse::class.java to encodeWith(ConnectionResponse.serializer()),
+            ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
+            ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
             CreateLobbyRequest::class.java to encodeWith(CreateLobbyRequest.serializer()),
             CreateLobbyErrorResponse::class.java to
                 encodeWith(CreateLobbyErrorResponse.serializer()),
@@ -177,6 +186,11 @@ internal object NetworkPayloadRegistry {
 
     private val payloadDeserializerByType =
         mapOf<MessageType, (String) -> NetworkMessagePayload>(
+            MessageType.CONNECTION_RESPONSE to decodeWith(ConnectionResponse.serializer()),
+            MessageType.CONNECTION_RECONNECT_REQUEST to
+                decodeWith(ReconnectRequest.serializer()),
+            MessageType.CONNECTION_RECONNECT_RESPONSE to
+                decodeWith(ReconnectResponse.serializer()),
             MessageType.LOBBY_CREATE_REQUEST to decodeWith(CreateLobbyRequest.serializer()),
             MessageType.LOBBY_CREATE_ERROR_RESPONSE to
                 decodeWith(CreateLobbyErrorResponse.serializer()),

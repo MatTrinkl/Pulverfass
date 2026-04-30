@@ -20,6 +20,7 @@ data class LobbyUiState(
     val isHost: Boolean = false,
     val statusText: String = "Nicht verbunden",
     val errorText: String? = null,
+    val sessionToken: String? = null,
     val lastMessageType: String? = null,
     val ownPlayerId: PlayerId? = null,
     val players: List<LobbyPlayerUi> = emptyList(),

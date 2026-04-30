@@ -6,6 +6,7 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -31,7 +32,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 private const val DEFAULT_HOST = "0.0.0.0"
@@ -153,41 +153,61 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                 )
             },
         )
+    val sessionContextRegistry = SessionContextRegistry()
     val router =
         MainServerRouter(
             lobbyManager = lobbyManager,
             mapper = DefaultNetworkToLobbyEventMapper(),
         )
 
-    val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
-    val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
     val nextPlayerId = AtomicLong(1)
+    network.installReconnectHooks(
+        reconnectContextProvider = sessionContextRegistry::contextFor,
+        onSessionRemoved = sessionContextRegistry::removeSession,
+    )
 
     val routingService =
         MainServerLobbyRoutingService(
             network = network,
             router = router,
             lobbyManager = lobbyManager,
-            playerIdResolver = { connectionId -> playersByConnection[connectionId] },
-            connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+            sessionContextRegistry = sessionContextRegistry,
+            playerIdResolver = { connectionId ->
+                network.sessionManager
+                    .getByConnectionId(connectionId)
+                    ?.sessionToken
+                    ?.let(sessionContextRegistry::playerIdForSession)
+            },
+            connectionIdResolver = { playerId ->
+                sessionContextRegistry
+                    .sessionTokenForPlayer(playerId)
+                    ?.let(network.sessionManager::getByToken)
+                    ?.connectionId
+            },
         )
 
     serverScope.launch {
         network.events.collect { event ->
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
-                    val playerId = PlayerId(nextPlayerId.getAndIncrement())
-                    playersByConnection[event.connectionId] = playerId
-                    connectionsByPlayer[playerId] = event.connectionId
+                    val session = network.sessionManager.requireByConnectionId(event.connectionId)
+                    val playerId =
+                        sessionContextRegistry.playerIdForSession(session.sessionToken)
+                            ?: PlayerId(nextPlayerId.getAndIncrement()).also { assignedPlayerId ->
+                                sessionContextRegistry.assignPlayer(
+                                    sessionToken = session.sessionToken,
+                                    playerId = assignedPlayerId,
+                                )
+                            }
                     routingService.onPlayerConnected(playerId)
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {
-                    val removedPlayer = playersByConnection.remove(event.connectionId)
-                    if (removedPlayer != null) {
-                        connectionsByPlayer.remove(removedPlayer)
-                        routingService.onPlayerDisconnected(removedPlayer)
-                    }
+                    network.sessionManager
+                        .getByConnectionId(event.connectionId)
+                        ?.sessionToken
+                        ?.let(sessionContextRegistry::playerIdForSession)
+                        ?.let { playerId -> routingService.onPlayerDisconnected(playerId) }
                 }
 
                 else -> Unit
@@ -218,9 +238,8 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
 ) {
     val connectionId = IdFactory.nextConnectionId()
 
-    network.onConnected(connectionId, this)
-
     try {
+        network.onConnected(connectionId, this)
         for (frame in incoming) {
             when (frame) {
                 is Frame.Binary -> network.onBinaryMessage(connectionId, frame.data.copyOf())
