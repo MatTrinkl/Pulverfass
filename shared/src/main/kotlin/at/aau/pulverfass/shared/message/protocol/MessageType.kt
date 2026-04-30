@@ -20,10 +20,10 @@ enum class MessageType(val id: Int) {
     CONNECTION_RESPONSE(2),
 
     /** Anfrage zum Wiederverbinden einer bestehenden Session. */
-    CONNECTION_RECONNECT_REQUEST(26),
+    CONNECTION_RECONNECT_REQUEST(50),
 
     /** Antwort des Servers auf einen Reconnect-Versuch. */
-    CONNECTION_RECONNECT_RESPONSE(27),
+    CONNECTION_RECONNECT_RESPONSE(51),
 
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),

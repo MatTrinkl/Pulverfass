@@ -14,14 +14,13 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
-import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -37,12 +36,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.random.Random
 
 class StartGameIntegrationTest {
     @Test
@@ -55,7 +54,10 @@ class StartGameIntegrationTest {
             val router =
                 MainServerRouter(
                     lobbyManager = lobbyManager,
-                    mapper = DefaultNetworkToLobbyEventMapper(gameStartSeedProvider = { startSeed }),
+                    mapper =
+                        DefaultNetworkToLobbyEventMapper(
+                            gameStartSeedProvider = { startSeed },
+                        ),
                 )
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
@@ -196,7 +198,9 @@ class StartGameIntegrationTest {
                     assertTrue(
                         currentState
                             ?.allTerritoryStates()
-                            ?.all { territory -> territory.ownerId != null && territory.troopCount == 1 } == true,
+                            ?.all { territory ->
+                                territory.ownerId != null && territory.troopCount == 1
+                            } == true,
                     )
 
                     ownerSession.first.close()

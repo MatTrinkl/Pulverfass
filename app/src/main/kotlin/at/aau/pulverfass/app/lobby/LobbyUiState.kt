@@ -16,6 +16,7 @@ data class LobbyUiState(
     val activeLobbyCode: String? = null,
     val isJoining: Boolean = false,
     val isConnecting: Boolean = false,
+    val isReconnecting: Boolean = false,
     val isConnected: Boolean = false,
     val isHost: Boolean = false,
     val statusText: String = "Nicht verbunden",

@@ -74,7 +74,11 @@ class LobbyRuntimeRegistryTest {
                 assertNotNull(snapshot)
 
                 assertEquals(listOf(firstPlayer, secondPlayer, thirdPlayer), snapshot?.players)
-                assertTrue(snapshot?.turnOrder?.containsAll(listOf(firstPlayer, secondPlayer, thirdPlayer)) == true)
+                assertTrue(
+                    snapshot
+                        ?.turnOrder
+                        ?.containsAll(listOf(firstPlayer, secondPlayer, thirdPlayer)) == true,
+                )
                 assertEquals(TurnPhase.ATTACK, snapshot?.turnState?.turnPhase)
                 assertEquals(GameStatus.RUNNING, snapshot?.status)
                 assertEquals(1, snapshot?.turnNumber)

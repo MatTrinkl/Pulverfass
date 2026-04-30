@@ -23,6 +23,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -30,11 +31,11 @@ import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
-import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import kotlin.random.Random
 
 class DefaultLobbyEventReducerTest {
     private val reducer = DefaultLobbyEventReducer()
@@ -749,7 +750,10 @@ class DefaultLobbyEventReducerTest {
         assertEquals(34, started.setupTroopsToPlaceFor(player2))
         assertEquals(34, started.setupTroopsToPlaceFor(player3))
         started.allTerritoryStates().forEach { territoryState ->
-            assertEquals(expectedTerritoryOwners[territoryState.territoryId], territoryState.ownerId)
+            assertEquals(
+                expectedTerritoryOwners[territoryState.territoryId],
+                territoryState.ownerId,
+            )
             assertEquals(1, territoryState.troopCount)
         }
     }

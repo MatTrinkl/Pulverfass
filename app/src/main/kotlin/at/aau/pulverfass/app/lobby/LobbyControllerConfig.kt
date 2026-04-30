@@ -12,12 +12,16 @@ data class LobbyControllerConfig(
     val defaultServerUrl: String = "ws://10.0.2.2:8080/ws",
     val disconnectReason: String = "Client disconnected",
     val lobbyCodeLength: Int = 4,
+    val reconnectMaxAttempts: Int = 5,
+    val reconnectRetryDelayMillis: Long = 750L,
     val statusNotConnected: String = "Nicht verbunden",
     val statusConnecting: String = "Verbinde...",
+    val statusReconnecting: String = "Verbinde erneut...",
     val statusConnected: String = "Verbunden",
     val statusDisconnected: String = "Getrennt",
     val statusConnectionError: String = "Verbindungsfehler",
     val statusConnectionFailed: String = "Verbindung fehlgeschlagen",
+    val statusReconnectFailed: String = "Reconnect fehlgeschlagen",
     val errorPlayerNameRequired: String = "Bitte zuerst einen Spielernamen eingeben",
     val errorConnectFirst: String = "Bitte zuerst mit dem Server verbinden",
     val errorTransportUnknown: String = "Unbekannter Transportfehler",
@@ -33,6 +37,18 @@ data class LobbyControllerConfig(
     val errorPlayerIdMissing: String = "Eigene Spieler-ID fehlt noch",
     val errorTurnAdvanceNotAllowed: String = "Du kannst die aktuelle Phase nicht beenden",
     val errorTurnAdvanceFailed: String = "Phasenwechsel fehlgeschlagen",
-    val errorDisconnectedDuringGame: String = "Verbindung getrennt. Aktionen sind gesperrt.",
+    val errorDisconnectedDuringGame: String =
+        "Verbindung getrennt. Reconnect wird vorbereitet.",
+    val errorReconnectFailed: String = "Session konnte nicht wiederhergestellt werden",
+    val errorReconnectTokenMissing: String = "Session-Token für Reconnect fehlt",
     val errorUnknown: String = "Unbekannter Fehler",
-)
+) {
+    init {
+        require(reconnectMaxAttempts > 0) {
+            "reconnectMaxAttempts muss positiv sein."
+        }
+        require(reconnectRetryDelayMillis >= 0L) {
+            "reconnectRetryDelayMillis darf nicht negativ sein."
+        }
+    }
+}

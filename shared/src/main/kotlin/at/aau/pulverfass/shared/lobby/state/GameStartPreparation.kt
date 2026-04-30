@@ -20,7 +20,8 @@ internal object GameStartPreparation {
             6 to 20,
         )
 
-    fun isSupportedPlayerCount(playerCount: Int): Boolean = initialTroopsByPlayerCount.containsKey(playerCount)
+    fun isSupportedPlayerCount(playerCount: Int): Boolean =
+        initialTroopsByPlayerCount.containsKey(playerCount)
 
     fun initialTroopsPerPlayer(playerCount: Int): Int? = initialTroopsByPlayerCount[playerCount]
 
@@ -57,7 +58,8 @@ internal object GameStartPreparation {
         val maxTerritoriesPerPlayer = territoryCountsByPlayer.values.maxOrNull() ?: 0
         require(initialTroops >= maxTerritoriesPerPlayer) {
             "Map kann mit $playerCount Spielern nicht vorbereitet werden: " +
-                "$maxTerritoriesPerPlayer Territorien pro Spieler überschreiten die $initialTroops Starttruppen."
+                "$maxTerritoriesPerPlayer Territorien pro Spieler " +
+                "überschreiten die $initialTroops Starttruppen."
         }
 
         val preparedTerritoryStates =

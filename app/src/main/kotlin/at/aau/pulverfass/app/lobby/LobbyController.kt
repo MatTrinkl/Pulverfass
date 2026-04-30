@@ -4,6 +4,10 @@ import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.network.ClientNetwork
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
+import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -44,7 +48,9 @@ import at.aau.pulverfass.shared.network.transport.Disconnected
 import at.aau.pulverfass.shared.network.transport.TransportError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,71 +88,31 @@ class LobbyController(
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
+    private var reconnectJob: Job? = null
+    private var reconnectSessionToken: SessionToken? = null
+    private var awaitingReconnectResponse = false
+    private var manualDisconnectRequested = false
 
     init {
         scope.launch {
             network.transport.events.collect { event ->
                 when (event) {
-                    is Connected -> {
-                        _state.update {
-                            it.copy(
-                                isConnected = true,
-                                isConnecting = false,
-                                statusText = config.statusConnected,
-                                errorText = null,
-                            )
-                        }
-                        executePendingLobbyActionIfAny()
-                        if (state.value.gameStarted) {
-                            requestGameCatchUp(
-                                reason = GameStateCatchUpReason.AFTER_RECONNECT,
-                                syncMessage =
-                                    "Verbindung wiederhergestellt. " +
-                                        "Spielstand wird geprüft.",
-                            )
-                        }
-                    }
+                    is Connected -> handleConnected()
 
-                    is Disconnected -> {
-                        _state.update {
-                            it.copy(
-                                isConnected = false,
-                                isConnecting = false,
-                                statusText = config.statusDisconnected,
-                                gameState =
-                                    it.gameState.copy(
-                                        lastSyncError =
-                                            if (it.gameStarted) {
-                                                config.errorDisconnectedDuringGame
-                                            } else {
-                                                it.gameState.lastSyncError
-                                            },
-                                    ),
-                            )
-                        }
-                        clearPendingLobbyAction()
-                    }
+                    is Disconnected ->
+                        handleConnectionLost(
+                            statusText = config.statusDisconnected,
+                            errorText = null,
+                            gameErrorText = config.errorDisconnectedDuringGame,
+                        )
 
                     is TransportError -> {
-                        _state.update {
-                            it.copy(
-                                isConnected = false,
-                                isConnecting = false,
-                                statusText = config.statusConnectionError,
-                                errorText = event.cause.message ?: config.errorTransportUnknown,
-                                gameState =
-                                    it.gameState.copy(
-                                        lastSyncError =
-                                            if (it.gameStarted) {
-                                                event.cause.message
-                                                    ?: config.errorTransportUnknown
-                                            } else {
-                                                it.gameState.lastSyncError
-                                            },
-                                    ),
-                            )
-                        }
-                        clearPendingLobbyAction()
+                        val message = event.cause.message ?: config.errorTransportUnknown
+                        handleConnectionLost(
+                            statusText = config.statusConnectionError,
+                            errorText = message,
+                            gameErrorText = message,
+                        )
                     }
 
                     else -> Unit
@@ -198,12 +164,13 @@ class LobbyController(
     }
 
     fun connect() {
+        manualDisconnectRequested = false
         val snapshot = state.value
         if (snapshot.playerName.isBlank()) {
             _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
-        if (snapshot.isConnected || snapshot.isConnecting) {
+        if (snapshot.isConnected || snapshot.isConnecting || snapshot.isReconnecting) {
             return
         }
 
@@ -211,6 +178,7 @@ class LobbyController(
             _state.update {
                 it.copy(
                     isConnecting = true,
+                    isReconnecting = false,
                     statusText = config.statusConnecting,
                     errorText = null,
                 )
@@ -223,6 +191,7 @@ class LobbyController(
                     it.copy(
                         isConnected = false,
                         isConnecting = false,
+                        isReconnecting = false,
                         statusText = config.statusConnectionFailed,
                         errorText = error.message ?: config.errorUnknown,
                     )
@@ -233,6 +202,8 @@ class LobbyController(
     }
 
     fun disconnect() {
+        manualDisconnectRequested = true
+        cancelReconnect()
         scope.launch {
             runCatching { network.disconnect(config.disconnectReason) }
         }
@@ -281,6 +252,7 @@ class LobbyController(
     }
 
     fun close() {
+        cancelReconnect()
         network.close()
     }
 
@@ -541,6 +513,259 @@ class LobbyController(
         }
     }
 
+    /**
+     * Behandelt den technischen Verbindungsaufbau aus Sicht der Lobby.
+     *
+     * Bei einem normalen Connect darf der Pending-Create- oder Join-Flow sofort
+     * weiterlaufen. Bei einem Reconnect bleibt die UI dagegen gesperrt, bis der
+     * Server die alte Session explizit wieder an diese neue Verbindung gebunden
+     * hat.
+     */
+    private fun handleConnected() {
+        val token = reconnectSessionToken
+        if (awaitingReconnectResponse && token != null) {
+            _state.update {
+                it.copy(
+                    isConnected = false,
+                    isConnecting = false,
+                    isReconnecting = true,
+                    statusText = config.statusReconnecting,
+                    errorText = null,
+                )
+            }
+            submitReconnectRequest(token)
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isConnected = true,
+                isConnecting = false,
+                isReconnecting = false,
+                statusText = config.statusConnected,
+                errorText = null,
+            )
+        }
+        executePendingLobbyActionIfAny()
+        if (state.value.gameStarted) {
+            requestGameCatchUp(
+                reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                syncMessage =
+                    "Verbindung wiederhergestellt. " +
+                        "Spielstand wird geprüft.",
+            )
+        }
+    }
+
+    /**
+     * Startet nach einem unerwarteten Verbindungsverlust den fachlichen
+     * Reconnect, solange noch ein Session-Token und ein Lobby-Kontext vorhanden
+     * sind. Manuelles Trennen bleibt davon ausgenommen, damit der Disconnect-
+     * Button keine automatische Wiederverbindung auslöst.
+     */
+    private fun handleConnectionLost(
+        statusText: String,
+        errorText: String?,
+        gameErrorText: String,
+    ) {
+        val snapshot = state.value
+        _state.update {
+            it.copy(
+                isConnected = false,
+                isConnecting = false,
+                statusText = statusText,
+                errorText = errorText,
+                pendingCommandKeys = emptySet(),
+                gameState =
+                    it.gameState.copy(
+                        lastSyncError =
+                            if (it.gameStarted) {
+                                gameErrorText
+                            } else {
+                                it.gameState.lastSyncError
+                            },
+                    ),
+            )
+        }
+
+        if (!canReconnect(snapshot)) {
+            clearPendingLobbyAction()
+            return
+        }
+
+        beginReconnect(snapshot)
+    }
+
+    private fun canReconnect(snapshot: LobbyUiState): Boolean =
+        !manualDisconnectRequested &&
+            snapshot.sessionToken != null &&
+            (snapshot.activeLobbyCode != null || snapshot.gameStarted)
+
+    /**
+     * Merkt sich den alten Token vor dem technischen Neuverbinden.
+     *
+     * Der Server sendet bei jedem neuen WebSocket zunächst einen frischen
+     * provisorischen Token. Für den eigentlichen Reconnect muss der Client aber
+     * den alten Token verwenden, weil nur daran Spieler und Lobby hängen.
+     */
+    private fun beginReconnect(snapshot: LobbyUiState) {
+        if (reconnectJob?.isActive == true || awaitingReconnectResponse) {
+            return
+        }
+
+        val token =
+            runCatching { SessionToken(snapshot.sessionToken ?: "") }
+                .getOrNull()
+        if (token == null) {
+            _state.update {
+                it.copy(
+                    isReconnecting = false,
+                    statusText = config.statusReconnectFailed,
+                    errorText = config.errorReconnectTokenMissing,
+                )
+            }
+            clearPendingLobbyAction()
+            return
+        }
+
+        reconnectSessionToken = token
+        awaitingReconnectResponse = true
+        reconnectJob =
+            scope.launch {
+                repeat(config.reconnectMaxAttempts) { attempt ->
+                    if (attempt > 0) {
+                        delay(config.reconnectRetryDelayMillis)
+                    }
+
+                    _state.update {
+                        it.copy(
+                            isConnected = false,
+                            isConnecting = true,
+                            isReconnecting = true,
+                            statusText = config.statusReconnecting,
+                            errorText = null,
+                        )
+                    }
+
+                    runCatching {
+                        network.connect(snapshot.serverUrl)
+                    }.onSuccess {
+                        return@launch
+                    }.onFailure { error ->
+                        _state.update {
+                            it.copy(
+                                isConnected = false,
+                                isConnecting = false,
+                                isReconnecting = true,
+                                errorText = error.message ?: config.errorUnknown,
+                            )
+                        }
+                    }
+                }
+
+                awaitingReconnectResponse = false
+                reconnectSessionToken = null
+                _state.update {
+                    it.copy(
+                        isConnected = false,
+                        isConnecting = false,
+                        isReconnecting = false,
+                        statusText = config.statusReconnectFailed,
+                        errorText = config.errorReconnectFailed,
+                    )
+                }
+                clearPendingLobbyAction()
+            }
+    }
+
+    private fun submitReconnectRequest(sessionToken: SessionToken) {
+        scope.launch {
+            runCatching {
+                network.sendPayload(ReconnectRequest(sessionToken))
+            }.onFailure { error ->
+                awaitingReconnectResponse = false
+                reconnectSessionToken = null
+                _state.update {
+                    it.copy(
+                        isConnected = false,
+                        isConnecting = false,
+                        isReconnecting = false,
+                        statusText = config.statusReconnectFailed,
+                        errorText = error.message ?: config.errorReconnectFailed,
+                    )
+                }
+                clearPendingLobbyAction()
+            }
+        }
+    }
+
+    private fun handleConnectionResponse(payload: ConnectionResponse) {
+        if (state.value.sessionToken == null) {
+            _state.update { it.copy(sessionToken = payload.sessionToken.value) }
+        }
+    }
+
+    private fun handleReconnectResponse(payload: ReconnectResponse) {
+        awaitingReconnectResponse = false
+        reconnectSessionToken = null
+
+        if (!payload.success) {
+            _state.update {
+                it.copy(
+                    isConnected = false,
+                    isConnecting = false,
+                    isReconnecting = false,
+                    statusText = config.statusReconnectFailed,
+                    errorText = payload.errorCode?.name ?: config.errorReconnectFailed,
+                )
+            }
+            clearPendingLobbyAction()
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isConnected = true,
+                isConnecting = false,
+                isReconnecting = false,
+                statusText = config.statusConnected,
+                errorText = null,
+                activeLobbyCode = payload.lobbyCode?.value ?: it.activeLobbyCode,
+                lobbyCode = payload.lobbyCode?.value ?: it.lobbyCode,
+                playerName = payload.playerDisplayName ?: it.playerName,
+                ownPlayerId = payload.playerId ?: it.ownPlayerId,
+                gameState =
+                    it.gameState.copy(
+                        isCatchingUp = it.gameStarted,
+                        isDesynced = false,
+                        lastSyncError = null,
+                    ),
+            )
+        }
+
+        if (state.value.gameStarted) {
+            requestGameCatchUp(
+                reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                syncMessage =
+                    "Session wiederhergestellt. " +
+                        "Spielstand wird synchronisiert.",
+            )
+        }
+    }
+
+    private fun cancelReconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectSessionToken = null
+        awaitingReconnectResponse = false
+        _state.update {
+            it.copy(
+                isConnecting = false,
+                isReconnecting = false,
+            )
+        }
+    }
+
     private fun handlePacketDecodeFailure(error: Throwable) {
         val message = error.message ?: config.errorPacketDecode
         _state.update {
@@ -568,6 +793,8 @@ class LobbyController(
 
     private fun handlePayload(payload: NetworkMessagePayload) {
         when (payload) {
+            is ConnectionResponse -> handleConnectionResponse(payload)
+            is ReconnectResponse -> handleReconnectResponse(payload)
             is CreateLobbyResponse -> {
                 clearPendingCommand(LobbyCommandKey.CREATE_LOBBY)
                 handleCreateLobbyResponse(payload)

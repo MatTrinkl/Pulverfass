@@ -17,8 +17,8 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
-import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
+import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
@@ -380,7 +380,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             try {
                 GameStartPreparation.prepare(state, event.randomSeed)
             } catch (cause: IllegalArgumentException) {
-                throw InvalidLobbyEventException(cause.message ?: "Spielstart konnte nicht vorbereitet werden.")
+                throw InvalidLobbyEventException(
+                    cause.message ?: "Spielstart konnte nicht vorbereitet werden.",
+                )
             }
 
         val initializedTurnState =
