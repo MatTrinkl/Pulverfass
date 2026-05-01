@@ -17,7 +17,6 @@ import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -27,12 +26,8 @@ import io.ktor.websocket.close
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -218,17 +213,9 @@ class TurnStateGetIntegrationTest {
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,
     ) = coroutineScope {
-        val connectedDeferred =
-            async {
-                withTimeout(5_000) {
-                    network.events
-                        .filterIsInstance<Network.Event.Connected<ConnectionId>>()
-                        .first()
-                }
-            }
-
         val session = client.webSocketSession("/ws")
-        session to connectedDeferred.await().connectionId
+        val sessionToken = receiveTestConnectionToken(session)
+        session to awaitTestConnectionId(network, sessionToken)
     }
 
     private suspend fun receivePayload(

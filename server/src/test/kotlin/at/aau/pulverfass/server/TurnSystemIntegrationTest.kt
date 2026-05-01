@@ -26,7 +26,6 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
@@ -37,12 +36,8 @@ import io.ktor.websocket.close
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -701,20 +696,12 @@ class TurnSystemIntegrationTest {
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
         connectionsByPlayer: ConcurrentHashMap<PlayerId, ConnectionId>,
     ) = coroutineScope {
-        val connectedDeferred =
-            async {
-                withTimeout(5_000) {
-                    network.events
-                        .filterIsInstance<Network.Event.Connected<ConnectionId>>()
-                        .first()
-                }
-            }
-
         val session = client.webSocketSession("/ws")
-        val connected = connectedDeferred.await()
-        playersByConnection[connected.connectionId] = playerId
-        connectionsByPlayer[playerId] = connected.connectionId
-        session to connected.connectionId
+        val sessionToken = receiveTestConnectionToken(session)
+        val connectionId = awaitTestConnectionId(network, sessionToken)
+        playersByConnection[connectionId] = playerId
+        connectionsByPlayer[playerId] = connectionId
+        session to connectionId
     }
 
     private suspend fun receivePayload(

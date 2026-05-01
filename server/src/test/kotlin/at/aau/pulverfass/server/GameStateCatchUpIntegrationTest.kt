@@ -14,7 +14,6 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
-import at.aau.pulverfass.shared.network.Network
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -24,12 +23,8 @@ import io.ktor.websocket.close
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -221,17 +216,9 @@ class GameStateCatchUpIntegrationTest {
         playerId: PlayerId,
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
     ) = coroutineScope {
-        val connectedDeferred =
-            async {
-                withTimeout(5_000) {
-                    network.events
-                        .filterIsInstance<Network.Event.Connected<ConnectionId>>()
-                        .first()
-                }
-            }
-
         val session = client.webSocketSession("/ws")
-        val connectionId = connectedDeferred.await().connectionId
+        val sessionToken = receiveTestConnectionToken(session)
+        val connectionId = awaitTestConnectionId(network, sessionToken)
         playersByConnection[connectionId] = playerId
         session to connectionId
     }
