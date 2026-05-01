@@ -3,6 +3,8 @@ package at.aau.pulverfass.app.lobby
 import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.network.ClientNetwork
+import at.aau.pulverfass.app.storage.NoOpReconnectSessionStore
+import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
@@ -67,22 +69,31 @@ import kotlinx.coroutines.launch
  * @param scope CoroutineScope für Transport, Decoder und ausgehende Requests
  * @param network technische WebSocket- und Packet-Schicht
  * @param config zentrale Texte und Retry-Grenzen für den Lobby-Flow
+ * @param reconnectSessionStore kleine lokale Persistenz für Session-Token und
+ * Reconnect-Metadaten nach App-Neustart
  */
 class LobbyController(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val network: ClientNetwork = ClientNetwork(scope),
     private val config: LobbyControllerConfig = LobbyControllerConfig(),
+    private val reconnectSessionStore: ReconnectSessionStore = NoOpReconnectSessionStore,
 ) {
     private enum class PendingLobbyAction {
         CREATE,
         JOIN,
     }
 
+    private val wasGameStartedOnLastAppRun =
+        reconnectSessionStore.readWasGameStarted()
+
     private val _state =
         MutableStateFlow(
             LobbyUiState(
-                serverUrl = config.defaultServerUrl,
+                serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
                 statusText = config.statusNotConnected,
+                sessionToken = reconnectSessionStore.readSessionToken(),
+                gameStarted = wasGameStartedOnLastAppRun,
+                gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
             ),
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
@@ -142,17 +153,6 @@ class LobbyController(
 
         scope.launch {
             /*
-             * ClientNetwork speichert nur den ersten technischen Session-Token.
-             * Während eines Reconnects darf ein provisorischer neuer Token die
-             * alte fachliche Session nicht ersetzen.
-             */
-            network.sessionToken.collect { sessionToken ->
-                _state.update { it.copy(sessionToken = sessionToken?.value) }
-            }
-        }
-
-        scope.launch {
-            /*
              * Alle fachlichen Pakete laufen durch denselben Decoder. Danach
              * entscheidet handlePayload, ob das Paket Lobby, Reconnect oder Game
              * betrifft.
@@ -175,9 +175,20 @@ class LobbyController(
                 handlePacketDecodeFailure(error)
             }
         }
+
+        /*
+         * Wenn die App nach einem Prozessende neu startet, gibt es keinen
+         * In-Memory-Zustand mehr. Ein gespeicherter Token ist deshalb das
+         * Signal, direkt eine neue technische Verbindung aufzubauen und danach
+         * den alten Token per ReconnectRequest vorzulegen.
+         */
+        if (state.value.sessionToken != null) {
+            beginReconnect(state.value)
+        }
     }
 
     fun updateServerUrl(serverUrl: String) {
+        reconnectSessionStore.saveServerUrl(serverUrl)
         _state.update { it.copy(serverUrl = serverUrl) }
     }
 
@@ -309,10 +320,12 @@ class LobbyController(
                 players = emptyList(),
                 ownPlayerId = null,
                 gameStarted = false,
+                sessionToken = null,
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
             )
         }
+        reconnectSessionStore.clearSession()
         playersById.clear()
     }
 
@@ -749,16 +762,35 @@ class LobbyController(
     }
 
     private fun handleConnectionResponse(payload: ConnectionResponse) {
-        if (state.value.sessionToken == null) {
-            _state.update { it.copy(sessionToken = payload.sessionToken.value) }
+        /*
+         * Bei einem normalen Connect ist die ConnectionResponse die Quelle für
+         * den ersten stabilen Token. Während eines Reconnects sendet der Server
+         * aber zunächst ebenfalls eine technische ConnectionResponse für die
+         * neue WebSocket-Verbindung. Dieser provisorische Token darf den alten
+         * fachlichen Token nicht überschreiben, sonst würde der eigentliche
+         * ReconnectRequest mit der falschen Session laufen.
+         */
+        if (!awaitingReconnectResponse && state.value.sessionToken == null) {
+            val sessionToken = payload.sessionToken.value
+            reconnectSessionStore.saveSessionToken(sessionToken)
+            _state.update { it.copy(sessionToken = sessionToken) }
         }
     }
 
     private fun handleReconnectResponse(payload: ReconnectResponse) {
+        val confirmedSessionToken = reconnectSessionToken?.value ?: state.value.sessionToken
+        val shouldRequestCatchUp = state.value.gameStarted
         awaitingReconnectResponse = false
         reconnectSessionToken = null
 
         if (!payload.success) {
+            /*
+             * TOKEN_INVALID, TOKEN_EXPIRED und TOKEN_REVOKED bedeuten, dass der
+             * lokal gespeicherte Schlüssel nicht mehr zu einer Server-Session
+             * gehört. Der Client löscht ihn sofort, damit der nächste App-Start
+             * nicht wieder in denselben kaputten Reconnect läuft.
+             */
+            reconnectSessionStore.clearSession()
             _state.update {
                 it.copy(
                     isConnected = false,
@@ -766,10 +798,23 @@ class LobbyController(
                     isReconnecting = false,
                     statusText = config.statusReconnectFailed,
                     errorText = payload.errorCode?.name ?: config.errorReconnectFailed,
+                    sessionToken = null,
+                    activeLobbyCode = null,
+                    ownPlayerId = null,
+                    isHost = false,
+                    players = emptyList(),
+                    playerNames = emptyList(),
+                    gameStarted = false,
+                    gameState = GameUiState(),
                 )
             }
+            playersById.clear()
             clearPendingLobbyAction()
             return
+        }
+
+        if (confirmedSessionToken != null) {
+            reconnectSessionStore.saveSessionToken(confirmedSessionToken)
         }
 
         _state.update {
@@ -779,6 +824,7 @@ class LobbyController(
                 isReconnecting = false,
                 statusText = config.statusConnected,
                 errorText = null,
+                sessionToken = confirmedSessionToken ?: it.sessionToken,
                 activeLobbyCode = payload.lobbyCode?.value ?: it.activeLobbyCode,
                 lobbyCode = payload.lobbyCode?.value ?: it.lobbyCode,
                 playerName = payload.playerDisplayName ?: it.playerName,
@@ -792,7 +838,7 @@ class LobbyController(
             )
         }
 
-        if (state.value.gameStarted) {
+        if (shouldRequestCatchUp) {
             requestGameCatchUp(
                 reason = GameStateCatchUpReason.AFTER_RECONNECT,
                 syncMessage =
@@ -970,6 +1016,7 @@ class LobbyController(
     }
 
     private fun handleGameStarted(payload: GameStartedEvent) {
+        reconnectSessionStore.saveWasGameStarted(true)
         _state.update {
             it.copy(
                 gameStarted = true,
@@ -1148,6 +1195,7 @@ class LobbyController(
 
     private fun resetLobbyMembers() {
         playersById.clear()
+        reconnectSessionStore.saveWasGameStarted(false)
         _state.update {
             it.copy(
                 players = emptyList(),
@@ -1173,6 +1221,7 @@ class LobbyController(
             it.copy(
                 players = players,
                 playerNames = players.map(LobbyPlayerUi::displayName),
+                gameState = ClientGameStateReducer.applyPlayers(it.gameState, players),
             )
         }
     }

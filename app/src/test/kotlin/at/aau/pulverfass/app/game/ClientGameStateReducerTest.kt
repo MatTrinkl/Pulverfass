@@ -211,6 +211,40 @@ class ClientGameStateReducerTest {
         assertEquals(ownRegion, accepted.selectionFromRegionId)
     }
 
+    @Test
+    fun `player list arriving after snapshot should rebuild region owners`() {
+        val stateWithoutPlayers =
+            GameUiState(
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(
+                                territoryId = TerritoryId("brasilien"),
+                                ownerId = aliceId,
+                                troopCount = 5,
+                            ),
+                    ),
+            ).let { state ->
+                state.copy(
+                    regionStates =
+                        buildRegionStates(
+                            territoryStates = state.territoryStates,
+                            players = emptyList(),
+                        ),
+                )
+            }
+
+        val restoredState =
+            ClientGameStateReducer.applyPlayers(
+                current = stateWithoutPlayers,
+                players = players,
+            )
+
+        assertEquals("Neutral", stateWithoutPlayers.regionStates.getValue("brazil").ownerName)
+        assertEquals("Alice", restoredState.regionStates.getValue("brazil").ownerName)
+        assertEquals("1", restoredState.regionStates.getValue("brazil").ownerPlayerId)
+    }
+
     private fun mapDefinition(vararg territoryIds: String): MapDefinitionSnapshot =
         MapDefinitionSnapshot(
             territories =

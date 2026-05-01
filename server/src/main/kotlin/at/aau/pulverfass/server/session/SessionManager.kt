@@ -192,6 +192,6 @@ class SessionManager(
     private fun expiresAtEpochMillis(): Long = nowEpochMillis() + sessionTtlMillis
 
     companion object {
-        const val DEFAULT_SESSION_TTL_MILLIS: Long = 5 * 60 * 1000
+        const val DEFAULT_SESSION_TTL_MILLIS: Long = 60 * 60 * 1000
     }
 }

@@ -1,10 +1,12 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
@@ -473,11 +475,190 @@ class LobbyControllerTest {
         }
     }
 
+    @Test
+    fun `startup reconnect should reuse persisted token`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("PR35")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174210")
+            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174211"),
+                        ),
+                ) { payload, outgoing ->
+                    reconnectPayloads += payload
+                    if (payload is ReconnectRequest) {
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    ReconnectResponse(
+                                        success = true,
+                                        playerId = PlayerId(1),
+                                        lobbyCode = lobbyCode,
+                                        playerDisplayName = "Alice",
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            val store =
+                InMemoryReconnectSessionStore(
+                    token = originalToken.value,
+                    serverUrl = server.url,
+                    wasGameStarted = true,
+                )
+
+            val controller =
+                createController(
+                    sessionStore = store,
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                waitUntil {
+                    reconnectPayloads.any {
+                        it is ReconnectRequest && it.sessionToken == originalToken
+                    }
+                }
+                waitUntil {
+                    controller.state.value.isConnected &&
+                        !controller.state.value.isReconnecting
+                }
+                waitUntil { reconnectPayloads.any { it is GameStateCatchUpRequest } }
+
+                val state = controller.state.value
+                assertEquals(originalToken.value, state.sessionToken)
+                assertEquals(lobbyCode.value, state.activeLobbyCode)
+                assertEquals(originalToken.value, store.readSessionToken())
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `failed startup reconnect should clear persisted session token`() {
+        runBlocking {
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174220")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174221"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is ReconnectRequest) {
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    ReconnectResponse(
+                                        success = false,
+                                        errorCode = ReconnectErrorCode.TOKEN_INVALID,
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            val store =
+                InMemoryReconnectSessionStore(
+                    token = originalToken.value,
+                    serverUrl = server.url,
+                    wasGameStarted = true,
+                )
+
+            val controller =
+                createController(
+                    sessionStore = store,
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                waitUntil {
+                    controller.state.value.errorText == ReconnectErrorCode.TOKEN_INVALID.name &&
+                        controller.state.value.sessionToken == null
+                }
+
+                assertNull(store.readSessionToken())
+                assertFalse(store.readWasGameStarted())
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `leave lobby should clear persisted session token`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("LV42")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
+            val store = InMemoryReconnectSessionStore()
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                    }
+                }
+
+            val controller = createController(sessionStore = store)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+
+                waitUntil { controller.state.value.sessionToken == originalToken.value }
+                waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
+
+                controller.leaveLobby()
+
+                assertNull(store.readSessionToken())
+                assertNull(controller.state.value.sessionToken)
+                assertNull(controller.state.value.activeLobbyCode)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
     private fun createController(
         config: LobbyControllerConfig = LobbyControllerConfig(),
+        sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
     ): LobbyController {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        return LobbyController(scope = scope, config = config)
+        return LobbyController(
+            scope = scope,
+            config = config,
+            reconnectSessionStore = sessionStore,
+        )
     }
 
     private suspend fun waitUntil(condition: () -> Boolean) {
@@ -574,6 +755,39 @@ class LobbyControllerTest {
     ) {
         fun close() {
             engine.stop(100, 1_000)
+        }
+    }
+
+    private class InMemoryReconnectSessionStore(
+        private var token: String? = null,
+        private var serverUrl: String? = null,
+        private var wasGameStarted: Boolean = false,
+    ) : ReconnectSessionStore {
+        override fun readSessionToken(): String? = token
+
+        override fun saveSessionToken(sessionToken: String) {
+            token = sessionToken
+        }
+
+        override fun clearSessionToken() {
+            token = null
+        }
+
+        override fun readServerUrl(): String? = serverUrl
+
+        override fun saveServerUrl(serverUrl: String) {
+            this.serverUrl = serverUrl
+        }
+
+        override fun readWasGameStarted(): Boolean = wasGameStarted
+
+        override fun saveWasGameStarted(wasGameStarted: Boolean) {
+            this.wasGameStarted = wasGameStarted
+        }
+
+        override fun clearSession() {
+            token = null
+            wasGameStarted = false
         }
     }
 }

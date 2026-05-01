@@ -17,6 +17,7 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
@@ -127,6 +128,14 @@ class MainServerLobbyRoutingService(
     private suspend fun routePacket(packet: ReceivedPacket) {
         runCatching {
             val request = decodeRequest(packet)
+            val payload = request.payload
+            if (payload is ReconnectRequest) {
+                dispatchReconnectLobbySnapshot(
+                    connectionId = packet.connectionId,
+                    payload = payload,
+                )
+                return
+            }
             if (request.payload is CreateLobbyRequest) {
                 routeCreateLobbyRequest(packet)
                 return
@@ -484,6 +493,42 @@ class MainServerLobbyRoutingService(
     private suspend fun handleCreateLobbyRequest(connectionId: ConnectionId) {
         val lobbyCode = createLobbyWithUniqueCode()
         network.send(connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
+    }
+
+    private suspend fun dispatchReconnectLobbySnapshot(
+        connectionId: ConnectionId,
+        payload: ReconnectRequest,
+    ) {
+        val reconnectContext =
+            sessionContextRegistry?.contextFor(payload.sessionToken)
+                ?: return
+        val lobbyCode = reconnectContext.lobbyCode ?: return
+        val reconnectingPlayerId = reconnectContext.playerId ?: return
+        val lobbyState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+
+        if (!lobbyState.players.contains(reconnectingPlayerId)) {
+            return
+        }
+
+        /*
+         * Ein echter Reconnect durchläuft keinen JoinRequest mehr. Deshalb muss
+         * der reconnectende Client seine Lobby-Spielerliste erneut erhalten,
+         * sonst kann die Android-App Owner-IDs aus dem GameState nicht auf Namen
+         * und Farben abbilden. Es wird nur an die neue Verbindung gesendet; die
+         * übrigen Clients kennen diese Spieler bereits.
+         */
+        lobbyState.players.forEach { playerId ->
+            val playerDisplayName = lobbyState.playerDisplayNames[playerId] ?: return@forEach
+            network.send(
+                connectionId,
+                PlayerJoinedLobbyEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    playerDisplayName = playerDisplayName,
+                    isHost = lobbyState.lobbyOwner == playerId,
+                ),
+            )
+        }
     }
 
     private suspend fun dispatchCreateErrorResponse(

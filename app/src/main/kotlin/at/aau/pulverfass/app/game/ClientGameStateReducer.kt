@@ -200,6 +200,38 @@ object ClientGameStateReducer {
         )
 
     /**
+     * Baut die sichtbare Kartenprojektion mit einer aktualisierten Spielerliste
+     * neu auf.
+     *
+     * Nach einem Reconnect können öffentlicher GameState und Lobby-Spieler in
+     * unterschiedlicher Reihenfolge eintreffen. Der öffentliche Snapshot kennt
+     * nur Owner-IDs, während Namen und Farben aus den Lobby-Spielern kommen.
+     * Sobald diese Spieler nachgereicht werden, wird deshalb nur die UI-nahe
+     * Regionendarstellung neu berechnet. Der serverautoritative Territory-State
+     * bleibt unverändert.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen
+     * @return GameState mit aktualisierter Regionendarstellung
+     */
+    fun applyPlayers(
+        current: GameUiState,
+        players: List<LobbyPlayerUi>,
+    ): GameUiState {
+        if (current.territoryStates.isEmpty()) {
+            return current
+        }
+
+        return current.copy(
+            regionStates =
+                buildRegionStates(
+                    territoryStates = current.territoryStates,
+                    players = players,
+                ),
+        )
+    }
+
+    /**
      * Verarbeitet die Auswahl einer Kartenregion nach einem Tap.
      *
      * Die UI liefert Android-Region-IDs aus der Farbhitmap. Der Reducer übersetzt
