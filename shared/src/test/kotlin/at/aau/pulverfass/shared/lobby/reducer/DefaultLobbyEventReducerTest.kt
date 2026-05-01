@@ -999,6 +999,121 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
+    fun `territory events require loaded map and known owner`() {
+        val lobbyCode = LobbyCode("TM18")
+        val playerOne = PlayerId(1)
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                GameState.initial(lobbyCode),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 2),
+            )
+        }
+
+        val mappedState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                mappedState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), PlayerId(99)),
+            )
+        }
+    }
+
+    @Test
+    fun `start player configuration rejects invalid lobby lifecycle and requester`() {
+        val lobbyCode = LobbyCode("SP04")
+        val owner = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, playerTwo),
+                turnOrder = listOf(owner, playerTwo),
+                activePlayer = owner,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                baseState.copy(status = GameStatus.CLOSED),
+                StartPlayerConfigured(lobbyCode, playerTwo, owner),
+            )
+        }
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                baseState,
+                StartPlayerConfigured(lobbyCode, playerTwo, requesterPlayerId = playerTwo),
+            )
+        }
+    }
+
+    @Test
+    fun `game start rejects closed state and missing map`() {
+        val lobbyCode = LobbyCode("GS05")
+        val owner = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val playerThree = PlayerId(3)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, playerTwo, playerThree),
+                turnOrder = listOf(owner, playerTwo, playerThree),
+                activePlayer = owner,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(baseState.copy(status = GameStatus.CLOSED), GameStarted(lobbyCode))
+        }
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(baseState, GameStarted(lobbyCode))
+        }
+    }
+
+    @Test
+    fun `turn state update rejects invalid start and pause players`() {
+        val lobbyCode = LobbyCode("TS66")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val baseState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                baseState,
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.ATTACK,
+                    turnCount = 1,
+                    startPlayerId = PlayerId(99),
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `bonus query reagiert korrekt auf event sequenz`() {
         val lobbyCode = LobbyCode("TM16")
         val playerOne = PlayerId(1)
