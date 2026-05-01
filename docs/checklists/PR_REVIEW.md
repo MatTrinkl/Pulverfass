@@ -89,10 +89,10 @@ Use this checklist before merging any Pull Request.
 
 ## References
 
-- **Network Message Conventions:** See `docs/NETWORK_MESSAGES.md`
-- **Serializer Template:** See `docs/SERIALIZER_TEMPLATE.kt`
-- **Message Compliance Report:** See `docs/MESSAGE_COMPLIANCE_REPORT.md`
+- **Network Message Conventions:** See `docs/network-messages/CONVENTIONS.md`
+- **Serializer Template:** See `docs/network-messages/TEMPLATE.kt`
+- **Quick Reference:** See `docs/network-messages/QUICK_REFERENCE.md`
 
 ---
 
-**Questions?** See docs/NETWORK_MESSAGES.md FAQ section.
+**Questions?** See `docs/network-messages/CONVENTIONS.md` FAQ section.

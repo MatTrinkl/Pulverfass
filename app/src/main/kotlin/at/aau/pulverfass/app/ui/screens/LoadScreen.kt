@@ -31,7 +31,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Ladebildschirm beim Start der App.
+/**
+ * Ladebildschirm beim Start der App.
+ *
+ * @param navController Navigation, die nach erfolgreichem Asset-Preload in die
+ * Lobby weiterleitet
+ * @param preloadAssets injizierbare Preload-Funktion für Tests
+ */
 @Composable
 fun LoadScreen(
     navController: NavController,
@@ -43,7 +49,11 @@ fun LoadScreen(
     var totalAssets by remember { mutableIntStateOf(1) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
-    // Wechselt erst weiter, wenn die App-Assets tatsächlich dekodierbar sind.
+    /*
+     * Die Navigation passiert erst nach dem Preload. Dadurch fallen kaputte oder
+     * fehlende Kartenassets sofort im Ladebildschirm auf, statt später im
+     * GameScreen als leere Karte oder unbrauchbare Hitmap.
+     */
     LaunchedEffect(Unit) {
         runCatching {
             preloadAssets(resources) { loaded, total ->
@@ -72,7 +82,6 @@ fun LoadScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // Zeigt den Namen der App und die aktuelle Version an.
             Text(
                 text = appName,
                 style = MaterialTheme.typography.headlineLarge,

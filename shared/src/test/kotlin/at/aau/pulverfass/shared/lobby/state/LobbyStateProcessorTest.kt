@@ -1,11 +1,19 @@
 package at.aau.pulverfass.shared.lobby.state
 
+import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
+import at.aau.pulverfass.shared.lobby.command.MoveTroopsCommand
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.SystemTick
 import at.aau.pulverfass.shared.lobby.reducer.InvalidLobbyEventException
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
+import at.aau.pulverfass.shared.map.config.ContinentDefinition
+import at.aau.pulverfass.shared.map.config.MapDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -28,6 +36,7 @@ class LobbyStateProcessorTest {
         assertEquals(lobbyCode, snapshot.lobbyCode)
         assertEquals(listOf(playerId), snapshot.players)
         assertEquals(playerId, snapshot.activePlayer)
+        assertEquals(1, snapshot.stateVersion)
         assertEquals(1, snapshot.processedEventCount)
     }
 
@@ -87,6 +96,7 @@ class LobbyStateProcessorTest {
                     repeat(eventCount * 3) {
                         val snapshot = processor.currentState()
                         assertEquals(lobbyCode, snapshot.lobbyCode)
+                        assertTrue(snapshot.stateVersion >= 0)
                         assertTrue(snapshot.processedEventCount >= 0)
                         if (snapshot.activePlayer != null) {
                             assertTrue(snapshot.players.contains(snapshot.activePlayer))
@@ -109,6 +119,7 @@ class LobbyStateProcessorTest {
         readerFailure.get()?.let { throw it }
 
         val finalSnapshot = processor.currentState()
+        assertEquals(eventCount.toLong(), finalSnapshot.stateVersion)
         assertEquals(eventCount.toLong(), finalSnapshot.processedEventCount)
         assertNull(finalSnapshot.lastEventContext)
     }
@@ -121,8 +132,62 @@ class LobbyStateProcessorTest {
 
         val updated = processor.apply(PlayerJoined(lobbyCode, PlayerId(4), "Player 4"))
 
+        assertEquals(1, updated.stateVersion)
         assertEquals(1, updated.processedEventCount)
         assertEquals(PlayerId(4), updated.activePlayer)
+    }
+
+    @Test
+    fun `processor applies map commands atomically through rule layer`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val processor: LobbyStateProcessor =
+            DefaultLobbyStateProcessor(
+                initialState =
+                    GameState.initial(
+                        lobbyCode = LobbyCode("MC12"),
+                        mapDefinition = sampleMapDefinition(),
+                        players = listOf(playerOne, playerTwo),
+                    ).copy(
+                        territoryStates =
+                            mapOf(
+                                TerritoryId("alpha") to
+                                    TerritoryState(
+                                        territoryId = TerritoryId("alpha"),
+                                        ownerId = playerOne,
+                                        troopCount = 5,
+                                    ),
+                                TerritoryId("beta") to
+                                    TerritoryState(
+                                        territoryId = TerritoryId("beta"),
+                                        ownerId = playerOne,
+                                        troopCount = 1,
+                                    ),
+                                TerritoryId("gamma") to
+                                    TerritoryState(
+                                        territoryId = TerritoryId("gamma"),
+                                        ownerId = playerTwo,
+                                        troopCount = 0,
+                                    ),
+                            ),
+                    ),
+            )
+
+        val updated =
+            processor.apply(
+                MoveTroopsCommand(
+                    lobbyCode = LobbyCode("MC12"),
+                    playerId = playerOne,
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    troopCount = 3,
+                ),
+            )
+
+        assertEquals(2, updated.troopCountOf(TerritoryId("alpha")))
+        assertEquals(4, updated.troopCountOf(TerritoryId("beta")))
+        assertEquals(2, updated.stateVersion)
+        assertEquals(2, updated.processedEventCount)
     }
 
     @Test
@@ -147,6 +212,55 @@ class LobbyStateProcessorTest {
             processor.apply(SystemTick(lobbyCode, 1))
         }
         assertEquals(GameState.initial(lobbyCode), processor.currentState())
+    }
+
+    @Test
+    fun `processor keeps state unchanged when map command validation fails`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val initialState =
+            GameState.initial(
+                lobbyCode = LobbyCode("MC34"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            ).copy(
+                territoryStates =
+                    mapOf(
+                        TerritoryId("alpha") to
+                            TerritoryState(
+                                territoryId = TerritoryId("alpha"),
+                                ownerId = playerOne,
+                                troopCount = 3,
+                            ),
+                        TerritoryId("beta") to
+                            TerritoryState(
+                                territoryId = TerritoryId("beta"),
+                                ownerId = playerTwo,
+                                troopCount = 1,
+                            ),
+                        TerritoryId("gamma") to
+                            TerritoryState(
+                                territoryId = TerritoryId("gamma"),
+                                ownerId = playerOne,
+                                troopCount = 1,
+                            ),
+                    ),
+            )
+        val processor: LobbyStateProcessor = DefaultLobbyStateProcessor(initialState)
+
+        assertThrows(InvalidMapCommandException::class.java) {
+            processor.apply(
+                MoveTroopsCommand(
+                    lobbyCode = initialState.lobbyCode,
+                    playerId = playerOne,
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("gamma"),
+                    troopCount = 1,
+                ),
+            )
+        }
+
+        assertEquals(initialState, processor.currentState())
     }
 
     @Test
@@ -181,4 +295,40 @@ class LobbyStateProcessorTest {
         assertEquals(PlayerId(5), updated.activePlayer)
         assertNull(updated.lastEventContext)
     }
+
+    private fun sampleMapDefinition(): MapDefinition =
+        MapDefinition(
+            schemaVersion = 1,
+            territories =
+                listOf(
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("alpha"),
+                        edges =
+                            listOf(
+                                TerritoryEdgeDefinition(targetId = TerritoryId("beta")),
+                            ),
+                    ),
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("beta"),
+                        edges = listOf(TerritoryEdgeDefinition(targetId = TerritoryId("alpha"))),
+                    ),
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("gamma"),
+                        edges = emptyList(),
+                    ),
+                ),
+            continents =
+                listOf(
+                    ContinentDefinition(
+                        continentId = ContinentId("north"),
+                        territoryIds =
+                            listOf(
+                                TerritoryId("alpha"),
+                                TerritoryId("beta"),
+                                TerritoryId("gamma"),
+                            ),
+                        bonusValue = 3,
+                    ),
+                ),
+        )
 }

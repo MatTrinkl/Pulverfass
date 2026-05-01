@@ -1,6 +1,5 @@
 package at.aau.pulverfass.app.ui.screens
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -15,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -35,10 +37,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,11 +52,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
-import at.aau.pulverfass.app.ui.map.GameMapRegion
-import at.aau.pulverfass.app.ui.map.GameMapRegionState
+import at.aau.pulverfass.app.game.GamePlayerUi
+import at.aau.pulverfass.app.game.GameUiState
+import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
+import at.aau.pulverfass.app.lobby.LobbyCommandKey
+import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 
 private val HudSurfaceColor = Color.White
 private val HudSurfaceMutedColor = Color(0xFFF1F1F1)
@@ -67,59 +73,113 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 
-private enum class DemoGamePhase(
-    @param:StringRes val labelRes: Int,
-) {
-    VERSTAERKEN(R.string.game_action_reinforce),
-    ANGRIFF(R.string.game_action_attack),
-    VERSCHIEBEN(R.string.game_action_move),
-}
-
-private data class DemoPlayer(
-    val id: String,
-    val name: String,
-    val avatarText: String,
-    val color: Color,
-    val isHost: Boolean,
-)
-
-private data class DemoGameUiState(
-    val round: Int,
-    val currentPhase: DemoGamePhase,
-    val activePlayerId: String,
-    val personalPlayerId: String,
-    val selectedRegionId: String,
-    val cardsVisible: Boolean,
-    val regionStates: Map<String, GameMapRegionState>,
-)
-
+/**
+ * Einstiegspunkt des Spielbildschirms.
+ *
+ * @param controller gemeinsamer LobbyController, der Lobby-, Netzwerk- und
+ * GameState verwaltet
+ */
 @Composable
-fun GameScreen() {
-    val players = remember { createDemoPlayers() }
+fun GameScreen(controller: LobbyController) {
+    val lobbyState by controller.state.collectAsState()
+    val players = remember(lobbyState.players) { lobbyPlayersToGamePlayers(lobbyState.players) }
     val mapPainter = painterResource(id = R.drawable.map_world)
-    var uiState by remember {
-        mutableStateOf(
-            createDemoGameUiState(players = players),
-        )
-    }
 
     GameScreenContent(
-        players = players,
-        uiState = uiState,
-        onUiStateChange = { uiState = it },
-        mapPainter = mapPainter,
+        contentState =
+            GameScreenContentState(
+                players = players,
+                localPlayerId = lobbyState.ownPlayerId,
+                uiState = lobbyState.gameState,
+                isConnected = lobbyState.isConnected,
+                pendingCommandKeys = lobbyState.pendingCommandKeys,
+                mapPainter = mapPainter,
+            ),
+        actions =
+            GameScreenActions(
+                onRegionSelected = controller::selectGameRegion,
+                onToggleCards = controller::toggleCards,
+                onAdvanceTurn = controller::advanceTurn,
+                onRefreshGameState = controller::refreshGameState,
+            ),
     )
 }
 
+internal data class GameScreenContentState(
+    val players: List<GamePlayerUi>,
+    val localPlayerId: PlayerId?,
+    val uiState: GameUiState,
+    val isConnected: Boolean,
+    val pendingCommandKeys: Set<LobbyCommandKey>,
+    val mapPainter: Painter,
+)
+
+internal data class GameScreenActions(
+    val onRegionSelected: (String) -> Unit,
+    val onToggleCards: () -> Unit,
+    val onAdvanceTurn: () -> Unit,
+    val onRefreshGameState: () -> Unit,
+)
+
+/**
+ * Baut das eigentliche Game-Layout aus Karte, HUD, Seitenteilen und Aktionen.
+ *
+ * @param players sichtbare Spieler im Spiel
+ * @param localPlayerId eigener Spieler für Gating und Highlighting
+ * @param uiState serverbasierter GameState für Karte und HUD
+ * @param isConnected aktueller Verbindungszustand
+ * @param pendingCommandKeys ausstehende Requests für Button-Sperren
+ * @param onRegionSelected Callback für erfolgreiche Kartenauswahl
+ * @param onToggleCards Callback zum Ein-/Ausblenden der privaten Hand
+ * @param onAdvanceTurn Callback für den aktuell vorhandenen TurnAdvance-Request
+ * @param onRefreshGameState Callback für manuelles Snapshot-Refresh
+ * @param mapPainter sichtbares Kartenbild
+ */
 @Composable
-private fun GameScreenContent(
-    players: List<DemoPlayer>,
-    uiState: DemoGameUiState,
-    onUiStateChange: (DemoGameUiState) -> Unit,
-    mapPainter: Painter,
+internal fun GameScreenContent(
+    contentState: GameScreenContentState,
+    actions: GameScreenActions,
 ) {
-    val personalPlayer = players.first { it.id == uiState.personalPlayerId }
-    val activePlayer = players.first { it.id == uiState.activePlayerId }
+    val players = contentState.players
+    val localPlayerId = contentState.localPlayerId
+    val uiState = contentState.uiState
+    val isConnected = contentState.isConnected
+    val pendingCommandKeys = contentState.pendingCommandKeys
+    val mapPainter = contentState.mapPainter
+    val onRegionSelected = actions.onRegionSelected
+    val onToggleCards = actions.onToggleCards
+    val onAdvanceTurn = actions.onAdvanceTurn
+    val onRefreshGameState = actions.onRefreshGameState
+    val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
+    val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
+
+    /*
+     * Refresh-Pending bündelt die drei Snapshot-Requests, aus denen der aktuelle
+     * öffentliche und private Spielstand besteht. Der Reload-Button bleibt
+     * gesperrt, bis diese Runde abgeschlossen ist.
+     */
+    val isRefreshPending =
+        pendingCommandKeys.any {
+            it == LobbyCommandKey.MAP_GET ||
+                it == LobbyCommandKey.TURN_STATE_GET ||
+                it == LobbyCommandKey.CATCH_UP
+        }
+
+    /*
+     * Priorität der Statusanzeige: Verbindungsausfall schlägt Catch-up,
+     * Catch-up schlägt Desync, danach kommen konkrete Fehler und zuletzt reine
+     * Auswahlhinweise. So sieht der Nutzer immer den dringendsten Zustand.
+     */
+    val statusMessage =
+        when {
+            !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
+            uiState.isCatchingUp -> stringResource(id = R.string.game_sync_catching_up)
+            uiState.isDesynced ->
+                uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
+            uiState.lastSyncError != null -> uiState.lastSyncError
+            uiState.selectionMessage != null -> uiState.selectionMessage
+            else -> null
+        }
 
     Box(
         modifier =
@@ -133,7 +193,14 @@ private fun GameScreenContent(
             regionStates = uiState.regionStates,
             selectedRegionId = uiState.selectedRegionId,
             onRegionSelected = { region ->
-                onUiStateChange(uiState.copy(selectedRegionId = region.id))
+                /*
+                 * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
+                 * werden aber nur weitergereicht, wenn der lokale Spieler gerade
+                 * handeln darf und der Client synchron verbunden ist.
+                 */
+                if (canUseGameActions) {
+                    onRegionSelected(region.id)
+                }
             },
             options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
             modifier = Modifier.fillMaxSize(),
@@ -141,16 +208,37 @@ private fun GameScreenContent(
 
         GameTopBar(
             personalPlayer = personalPlayer,
-            phase = uiState.currentPhase,
-            round = uiState.round,
+            phase = uiState.turnPhase,
+            round = uiState.turnCount.coerceAtLeast(1),
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth(),
         )
 
+        if (statusMessage != null) {
+            GameStatusBanner(
+                message = statusMessage,
+                canRefresh = isConnected && !isRefreshPending,
+                isRefreshPending = isRefreshPending,
+                onRefreshGameState = onRefreshGameState,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = TopBarHeight)
+                        .fillMaxWidth(),
+            )
+        }
+
+        if (uiState.isCatchingUp) {
+            SyncProgressOverlay(
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+
         CardsSidebar(
-            activePlayer = activePlayer,
+            player = personalPlayer,
+            handCards = uiState.handCards,
             isVisible = uiState.cardsVisible,
             modifier =
                 Modifier
@@ -172,23 +260,14 @@ private fun GameScreenContent(
         )
 
         BottomActionClusters(
-            currentPhase = uiState.currentPhase,
-            onPhaseSelected = { phase ->
-                onUiStateChange(applyPhaseSelection(uiState = uiState, phase = phase))
-            },
+            currentPhase = uiState.turnPhase,
+            canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
+            canAdvanceTurn =
+                uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                    !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE),
             cardsVisible = uiState.cardsVisible,
-            onToggleCards = {
-                onUiStateChange(uiState.copy(cardsVisible = !uiState.cardsVisible))
-            },
-            onEndRound = {
-                onUiStateChange(
-                    advanceRound(
-                        uiState = uiState,
-                        players = players,
-                        regions = PulverfassMapDefaults.regions,
-                    ),
-                )
-            },
+            onToggleCards = onToggleCards,
+            onAdvanceTurn = onAdvanceTurn,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -199,9 +278,81 @@ private fun GameScreenContent(
 }
 
 @Composable
+private fun GameStatusBanner(
+    message: String,
+    canRefresh: Boolean,
+    isRefreshPending: Boolean,
+    onRefreshGameState: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.testTag("game_sync_banner"),
+        shape = RoundedCornerShape(0.dp),
+        color = HudSurfaceMutedColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = HudContentColor,
+            )
+            FilledTonalButton(
+                onClick = onRefreshGameState,
+                enabled = canRefresh,
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.testTag("game_sync_reload_button"),
+            ) {
+                Text(
+                    text =
+                        if (isRefreshPending) {
+                            stringResource(id = R.string.game_sync_reload_pending)
+                        } else {
+                            stringResource(id = R.string.game_sync_reload)
+                        },
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncProgressOverlay(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.testTag("game_sync_overlay"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_sync_catching_up),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = HudContentColor,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
 private fun GameTopBar(
-    personalPlayer: DemoPlayer,
-    phase: DemoGamePhase,
+    personalPlayer: GamePlayerUi,
+    phase: TurnPhase?,
     round: Int,
     modifier: Modifier = Modifier,
 ) {
@@ -258,7 +409,7 @@ private fun GameTopBar(
                     color = HudContentColor,
                 )
                 Text(
-                    text = stringResource(id = phase.labelRes),
+                    text = stringResource(id = phase.labelRes()),
                     modifier = Modifier.testTag("game_phase_value"),
                     style = MaterialTheme.typography.titleSmall,
                     color = HudContentColor,
@@ -293,7 +444,8 @@ private fun GameTopBar(
 
 @Composable
 private fun CardsSidebar(
-    activePlayer: DemoPlayer,
+    player: GamePlayerUi,
+    handCards: List<String>,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -306,8 +458,9 @@ private fun CardsSidebar(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            CardsOverview(
-                activePlayer = activePlayer,
+            PrivateHandPanel(
+                playerName = player.name,
+                handCards = handCards,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -319,12 +472,12 @@ private fun CardsSidebar(
 
 @Composable
 private fun PlayerSidebar(
-    players: List<DemoPlayer>,
-    activePlayerId: String,
+    players: List<GamePlayerUi>,
+    activePlayerId: PlayerId?,
     modifier: Modifier = Modifier,
 ) {
     val playerListScrollState = rememberScrollState()
-    val activePlayerIndex = players.indexOfFirst { it.id == activePlayerId }
+    val activePlayerIndex = players.indexOfFirst { it.playerId == activePlayerId }
 
     LaunchedEffect(activePlayerId, playerListScrollState.maxValue) {
         when (activePlayerIndex) {
@@ -360,7 +513,7 @@ private fun PlayerSidebar(
                 players.forEach { player ->
                     PlayerSidebarRow(
                         player = player,
-                        isActive = player.id == activePlayerId,
+                        isActive = player.playerId == activePlayerId,
                         disableBringIntoView =
                             activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
                     )
@@ -373,7 +526,7 @@ private fun PlayerSidebar(
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun PlayerSidebarRow(
-    player: DemoPlayer,
+    player: GamePlayerUi,
     isActive: Boolean,
     disableBringIntoView: Boolean,
 ) {
@@ -467,7 +620,7 @@ private fun ActiveTurnIndicator(isVisible: Boolean) {
 
 @Composable
 private fun PlayerAvatar(
-    player: DemoPlayer,
+    player: GamePlayerUi,
     size: Dp,
 ) {
     Surface(
@@ -491,57 +644,119 @@ private fun PlayerAvatar(
 }
 
 @Composable
-private fun CardsOverview(
-    activePlayer: DemoPlayer,
+internal fun PrivateHandPanel(
+    playerName: String,
+    handCards: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.testTag("game_cards_panel"),
-        shape = RoundedCornerShape(18.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = stringResource(id = R.string.game_cards_title),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = HudContentColor,
+    val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
+    val handCardItems =
+        remember(handCards, unknownCardLabel) {
+            buildHandCardItems(
+                handCards = handCards,
+                unknownCardLabel = unknownCardLabel,
             )
-            Text(
-                text = activePlayer.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = HudContentColor,
-            )
+        }
 
+    Column(
+        modifier = modifier.testTag("game_cards_panel"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_cards_title),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = HudContentColor,
+        )
+        Text(
+            text = playerName,
+            style = MaterialTheme.typography.labelMedium,
+            color = HudContentColor,
+        )
+
+        if (handCardItems.isEmpty()) {
             Text(
-                text = stringResource(id = R.string.game_cards_demo_infantry),
+                text = stringResource(id = R.string.game_cards_empty),
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text(
-                text = stringResource(id = R.string.game_cards_demo_cavalry),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = stringResource(id = R.string.game_cards_demo_artillery),
-                style = MaterialTheme.typography.bodySmall,
-            )
+        } else {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .testTag("game_cards_list"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(
+                    items = handCardItems,
+                    key = HandCardItemUi::stableKey,
+                ) { item ->
+                    HandCardRow(item = item)
+                }
+            }
         }
     }
 }
 
 @Composable
+private fun HandCardRow(item: HandCardItemUi) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceMutedColor,
+        contentColor = HudContentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = item.label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = HudContentColor,
+        )
+    }
+}
+
+internal data class HandCardItemUi(
+    val stableKey: String,
+    val label: String,
+)
+
+/**
+ * Erzeugt Listeneinträge mit stabilen Keys aus dem privaten Hand-Snapshot.
+ *
+ * Das Backend liefert aktuell nur Kartenlabels ohne Karten-ID. Der Key nutzt
+ * deshalb Label plus laufende Duplikatnummer, damit gleiche Karten mehrfach
+ * ohne LazyList-Key-Kollision angezeigt werden.
+ */
+internal fun buildHandCardItems(
+    handCards: List<String>,
+    unknownCardLabel: String,
+): List<HandCardItemUi> {
+    val occurrencesByLabel = mutableMapOf<String, Int>()
+
+    return handCards.map { card ->
+        val label = card.trim().ifBlank { unknownCardLabel }
+        val occurrenceIndex = occurrencesByLabel.getOrDefault(label, 0)
+        occurrencesByLabel[label] = occurrenceIndex + 1
+
+        HandCardItemUi(
+            stableKey = "$label#$occurrenceIndex",
+            label = label,
+        )
+    }
+}
+
+@Composable
 private fun BottomActionClusters(
-    currentPhase: DemoGamePhase,
-    onPhaseSelected: (DemoGamePhase) -> Unit,
+    currentPhase: TurnPhase?,
+    canUseLocalInput: Boolean,
+    canAdvanceTurn: Boolean,
     cardsVisible: Boolean,
     onToggleCards: () -> Unit,
-    onEndRound: () -> Unit,
+    onAdvanceTurn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -570,6 +785,7 @@ private fun BottomActionClusters(
                     },
                 onClick = onToggleCards,
                 selected = false,
+                enabled = canUseLocalInput,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
             )
 
@@ -579,20 +795,20 @@ private fun BottomActionClusters(
             ) {
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_reinforce),
-                    selected = currentPhase == DemoGamePhase.VERSTAERKEN,
-                    onClick = { onPhaseSelected(DemoGamePhase.VERSTAERKEN) },
+                    selected = currentPhase == TurnPhase.REINFORCEMENTS,
+                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_attack),
-                    selected = currentPhase == DemoGamePhase.ANGRIFF,
-                    onClick = { onPhaseSelected(DemoGamePhase.ANGRIFF) },
+                    selected = currentPhase == TurnPhase.ATTACK,
+                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_move),
-                    selected = currentPhase == DemoGamePhase.VERSCHIEBEN,
-                    onClick = { onPhaseSelected(DemoGamePhase.VERSCHIEBEN) },
+                    selected = currentPhase == TurnPhase.FORTIFY,
+                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -603,8 +819,9 @@ private fun BottomActionClusters(
             ) {
                 BlockActionButton(
                     label = stringResource(id = R.string.game_end_round_button),
-                    onClick = onEndRound,
+                    onClick = onAdvanceTurn,
                     selected = true,
+                    enabled = canAdvanceTurn,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                 )
             }
@@ -616,13 +833,14 @@ private fun BottomActionClusters(
 private fun PhaseButton(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit,
+    enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     BlockActionButton(
         label = label,
-        onClick = onClick,
+        onClick = {},
         selected = selected,
+        enabled = enabled,
         modifier = modifier,
     )
 }
@@ -632,6 +850,7 @@ private fun BlockActionButton(
     label: String,
     onClick: () -> Unit,
     selected: Boolean,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
@@ -640,6 +859,7 @@ private fun BlockActionButton(
         Button(
             onClick = onClick,
             modifier = modifier,
+            enabled = enabled,
             shape = RoundedCornerShape(14.dp),
             contentPadding = contentPadding,
             colors =
@@ -659,6 +879,7 @@ private fun BlockActionButton(
     FilledTonalButton(
         onClick = onClick,
         modifier = modifier,
+        enabled = enabled,
         shape = RoundedCornerShape(14.dp),
         contentPadding = contentPadding,
         colors =
@@ -674,144 +895,21 @@ private fun BlockActionButton(
     }
 }
 
-private fun createDemoPlayers(): List<DemoPlayer> =
-    listOf(
-        DemoPlayer(
-            id = "robin",
-            name = "Robin",
-            avatarText = "RO",
-            color = Color(0xFF6FD4C5),
-            isHost = false,
-        ),
-        DemoPlayer(
-            id = "matthias",
-            name = "Matthias",
-            avatarText = "MT",
-            color = Color(0xFFE0B35C),
-            isHost = true,
-        ),
-        DemoPlayer(
-            id = "marco",
-            name = "Marco",
-            avatarText = "MR",
-            color = Color(0xFFE78D91),
-            isHost = false,
-        ),
-        DemoPlayer(
-            id = "aldin",
-            name = "Aldin",
-            avatarText = "AL",
-            color = Color(0xFF79A8E8),
-            isHost = false,
-        ),
+private fun fallbackPlayer(): GamePlayerUi =
+    GamePlayerUi(
+        playerId = PlayerId(1),
+        name = FALLBACK_PLAYER_NAME,
+        avatarText = "?",
+        color = Color(0xFF8F8F8F),
     )
 
-private fun createDemoGameUiState(players: List<DemoPlayer>): DemoGameUiState {
-    val playersById = players.associateBy { it.id }
-
-    fun regionState(
-        ownerId: String,
-        troops: Int,
-    ): GameMapRegionState {
-        val owner = requireNotNull(playersById[ownerId])
-        return GameMapRegionState(
-            ownerPlayerId = owner.id,
-            ownerName = owner.name,
-            troopCount = troops,
-            accentColor = owner.color,
-        )
+private fun TurnPhase?.labelRes(): Int =
+    when (this) {
+        TurnPhase.REINFORCEMENTS -> R.string.game_action_reinforce
+        TurnPhase.ATTACK -> R.string.game_action_attack
+        TurnPhase.FORTIFY -> R.string.game_action_move
+        TurnPhase.DRAW_CARD -> R.string.game_action_draw_card
+        null -> R.string.game_action_waiting
     }
 
-    return DemoGameUiState(
-        round = 7,
-        currentPhase = DemoGamePhase.VERSTAERKEN,
-        activePlayerId = "marco",
-        personalPlayerId = "robin",
-        selectedRegionId = "central_europe",
-        cardsVisible = false,
-        regionStates =
-            linkedMapOf(
-                "america" to regionState(ownerId = "matthias", troops = 5),
-                "canada" to regionState(ownerId = "matthias", troops = 4),
-                "mexico" to regionState(ownerId = "aldin", troops = 3),
-                "greenland" to regionState(ownerId = "robin", troops = 2),
-                "british_islands" to regionState(ownerId = "robin", troops = 3),
-                "scandinavia" to regionState(ownerId = "robin", troops = 2),
-                "west_europe" to regionState(ownerId = "robin", troops = 4),
-                "central_europe" to regionState(ownerId = "robin", troops = 5),
-                "russia" to regionState(ownerId = "marco", troops = 5),
-                "siberia" to regionState(ownerId = "marco", troops = 4),
-                "east_siberia" to regionState(ownerId = "marco", troops = 3),
-                "china" to regionState(ownerId = "marco", troops = 6),
-                "japan" to regionState(ownerId = "marco", troops = 2),
-                "orient" to regionState(ownerId = "marco", troops = 3),
-                "middle_east" to regionState(ownerId = "marco", troops = 4),
-                "egypt" to regionState(ownerId = "aldin", troops = 3),
-                "west_africa" to regionState(ownerId = "aldin", troops = 4),
-                "central_africa" to regionState(ownerId = "aldin", troops = 5),
-                "south_africa" to regionState(ownerId = "aldin", troops = 3),
-                "brazil" to regionState(ownerId = "aldin", troops = 4),
-                "andean_community" to regionState(ownerId = "aldin", troops = 3),
-                "argentina" to regionState(ownerId = "aldin", troops = 2),
-                "australia" to regionState(ownerId = "matthias", troops = 4),
-                "oceania" to regionState(ownerId = "matthias", troops = 2),
-            ),
-    )
-}
-
-// Hält die Demo interaktiv, bis fachlicher State aus den anderen Modulen kommt.
-private fun applyPhaseSelection(
-    uiState: DemoGameUiState,
-    phase: DemoGamePhase,
-): DemoGameUiState {
-    if (phase != DemoGamePhase.VERSTAERKEN) {
-        return uiState.copy(currentPhase = phase)
-    }
-
-    val regionState =
-        uiState.regionStates[uiState.selectedRegionId]
-            ?: return uiState.copy(currentPhase = phase)
-    if (regionState.ownerPlayerId != uiState.activePlayerId) {
-        return uiState.copy(currentPhase = phase)
-    }
-
-    return uiState.copy(
-        currentPhase = phase,
-        regionStates =
-            uiState.regionStates.toMutableMap().apply {
-                put(
-                    uiState.selectedRegionId,
-                    regionState.copy(troopCount = regionState.troopCount + 1),
-                )
-            },
-    )
-}
-
-// Wechselt zum nächsten Spieler und erhöht nach einer vollen Runde den Zähler.
-private fun advanceRound(
-    uiState: DemoGameUiState,
-    players: List<DemoPlayer>,
-    regions: List<GameMapRegion>,
-): DemoGameUiState {
-    val currentIndex = players.indexOfFirst { it.id == uiState.activePlayerId }.coerceAtLeast(0)
-    val nextIndex = (currentIndex + 1) % players.size
-    val nextPlayer = players[nextIndex]
-    val nextRound =
-        if (nextIndex == 0) {
-            uiState.round + 1
-        } else {
-            uiState.round
-        }
-    val nextSelectedRegionId =
-        regions.firstOrNull { region ->
-            uiState.regionStates[region.id]?.ownerPlayerId == nextPlayer.id
-        }?.id ?: uiState.selectedRegionId
-
-    return uiState.copy(
-        round = nextRound,
-        currentPhase = DemoGamePhase.VERSTAERKEN,
-        activePlayerId = nextPlayer.id,
-        selectedRegionId = nextSelectedRegionId,
-        cardsVisible = false,
-    )
-}
+private const val FALLBACK_PLAYER_NAME = "Spieler"

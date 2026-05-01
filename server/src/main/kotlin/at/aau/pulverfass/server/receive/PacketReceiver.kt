@@ -60,6 +60,15 @@ class PacketReceiver(
     suspend fun decode(
         connectionId: at.aau.pulverfass.shared.ids.ConnectionId,
         bytes: ByteArray,
+    ): ReceivedPacket? {
+        val receivedPacket = decodeWithoutPublishing(connectionId, bytes) ?: return null
+        publish(receivedPacket)
+        return receivedPacket
+    }
+
+    internal suspend fun decodeWithoutPublishing(
+        connectionId: at.aau.pulverfass.shared.ids.ConnectionId,
+        bytes: ByteArray,
     ): ReceivedPacket? =
         try {
             val receivedPacket = adapter.decode(connectionId, bytes)
@@ -68,7 +77,6 @@ class PacketReceiver(
                 receivedPacket.header.type,
                 receivedPacket.connectionId.value,
             )
-            _packets.emit(receivedPacket)
             receivedPacket
         } catch (cause: PacketReceiveException) {
             logger.warn(
@@ -79,6 +87,10 @@ class PacketReceiver(
             _errors.emit(cause)
             null
         }
+
+    internal suspend fun publish(receivedPacket: ReceivedPacket) {
+        _packets.emit(receivedPacket)
+    }
 
     /**
      * Dekodiert ein Binary-Transportevent bis zum Header.

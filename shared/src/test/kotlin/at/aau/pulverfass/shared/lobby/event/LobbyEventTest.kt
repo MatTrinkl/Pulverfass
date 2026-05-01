@@ -2,6 +2,9 @@ package at.aau.pulverfass.shared.lobby.event
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -16,17 +19,27 @@ class LobbyEventTest {
             listOf<LobbyEvent>(
                 PlayerJoined(lobbyCode, playerId, "Alice"),
                 PlayerLeft(lobbyCode, playerId, "quit"),
+                StartPlayerConfigured(lobbyCode, playerId, PlayerId(1)),
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode, "finished"),
                 SystemTick(lobbyCode, tick = 5),
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerId,
+                    turnPhase = TurnPhase.ATTACK,
+                    turnCount = 2,
+                    startPlayerId = playerId,
+                ),
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerId),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 3),
                 TimeoutTriggered(lobbyCode, target = "turn", timeoutMillis = 30_000),
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(8, events.size)
+        assertEquals(12, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
-        assertEquals("finished", (events[4] as LobbyClosed).reason)
+        assertEquals("finished", (events[5] as LobbyClosed).reason)
     }
 
     @Test
@@ -45,6 +58,7 @@ class LobbyEventTest {
                 is PlayerJoined -> "joined:${event.playerId.value}"
                 is PlayerKicked -> "kicked:${event.targetPlayerId.value}"
                 is PlayerLeft -> "left:${event.playerId.value}"
+                is StartPlayerConfigured -> "startPlayer:${event.startPlayerId.value}"
                 is TurnEnded -> "turnEnded:${event.playerId.value}"
             }
 
@@ -54,7 +68,10 @@ class LobbyEventTest {
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
                 is SystemTick -> event.tick.toString()
+                is TerritoryOwnerChangedEvent -> event.territoryId.value
+                is TerritoryTroopsChangedEvent -> event.troopCount.toString()
                 is TimeoutTriggered -> event.target
+                is TurnStateUpdatedEvent -> event.turnPhase.name
             }
 
         assertEquals("internal:CD34", rootResult)
@@ -71,10 +88,20 @@ class LobbyEventTest {
             listOf<LobbyEvent>(
                 PlayerJoined(lobbyCode, playerId, "Bob"),
                 PlayerLeft(lobbyCode, playerId),
+                StartPlayerConfigured(lobbyCode, playerId, PlayerId(1)),
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode),
                 SystemTick(lobbyCode, 0),
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerId,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 1,
+                    startPlayerId = playerId,
+                ),
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerId),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 2),
                 TimeoutTriggered(lobbyCode, "heartbeat", 1_000),
                 InvalidActionDetected(lobbyCode, reason = "invalid"),
             )
@@ -117,6 +144,26 @@ class LobbyEventTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             TimeoutTriggered(LobbyCode("GG77"), "turn", 0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            TurnStateUpdatedEvent(
+                lobbyCode = LobbyCode("HH88"),
+                activePlayerId = PlayerId(1),
+                turnPhase = TurnPhase.FORTIFY,
+                turnCount = 0,
+                startPlayerId = PlayerId(1),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            TurnStateUpdatedEvent(
+                lobbyCode = LobbyCode("II99"),
+                activePlayerId = PlayerId(1),
+                turnPhase = TurnPhase.FORTIFY,
+                turnCount = 1,
+                startPlayerId = PlayerId(1),
+                isPaused = true,
+                pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+            )
         }
     }
 }

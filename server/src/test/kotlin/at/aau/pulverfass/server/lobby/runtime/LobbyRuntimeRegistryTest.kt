@@ -3,6 +3,7 @@ package at.aau.pulverfass.server.lobby.runtime
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.SystemTick
@@ -11,6 +12,8 @@ import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,20 +56,30 @@ class LobbyRuntimeRegistryTest {
             val lobbyCode = LobbyCode("AB12")
             val firstPlayer = PlayerId(1)
             val secondPlayer = PlayerId(2)
+            val thirdPlayer = PlayerId(3)
 
             try {
-                registry.startLobby(lobbyCode)
+                registry.startLobby(
+                    lobbyCode,
+                    initialState = GameState.initial(lobbyCode, defaultMapDefinition()),
+                )
                 registry.submit(PlayerJoined(lobbyCode, firstPlayer, "Alice"))
                 registry.submit(PlayerJoined(lobbyCode, secondPlayer, "Bob"))
+                registry.submit(PlayerJoined(lobbyCode, thirdPlayer, "Carol"))
+                registry.submit(GameStarted(lobbyCode))
                 registry.submit(TurnEnded(lobbyCode, firstPlayer))
 
-                waitUntilProcessed(registry, lobbyCode, expectedCount = 3)
+                waitUntilProcessed(registry, lobbyCode, expectedCount = 5)
                 val snapshot = registry.currentState(lobbyCode)
                 assertNotNull(snapshot)
 
-                assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.players)
-                assertEquals(listOf(firstPlayer, secondPlayer), snapshot?.turnOrder)
-                assertEquals(secondPlayer, snapshot?.activePlayer)
+                assertEquals(listOf(firstPlayer, secondPlayer, thirdPlayer), snapshot?.players)
+                assertTrue(
+                    snapshot
+                        ?.turnOrder
+                        ?.containsAll(listOf(firstPlayer, secondPlayer, thirdPlayer)) == true,
+                )
+                assertEquals(TurnPhase.ATTACK, snapshot?.turnState?.turnPhase)
                 assertEquals(GameStatus.RUNNING, snapshot?.status)
                 assertEquals(1, snapshot?.turnNumber)
             } finally {
@@ -315,6 +328,8 @@ class LobbyRuntimeRegistryTest {
         }
     }
 }
+
+private fun defaultMapDefinition() = MapConfigLoader.loadDefault()
 
 private class BlockingReducer(
     private val blockedLobby: LobbyCode,

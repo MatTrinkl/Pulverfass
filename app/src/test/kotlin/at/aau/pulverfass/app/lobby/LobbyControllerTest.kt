@@ -1,14 +1,25 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
+import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
+import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -27,6 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.net.ServerSocket
+import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -45,6 +57,7 @@ class LobbyControllerTest {
             assertEquals("", state.lobbyCode)
             assertFalse(state.isJoining)
             assertFalse(state.isConnecting)
+            assertFalse(state.isReconnecting)
             assertFalse(state.isConnected)
             assertEquals("Nicht verbunden", state.statusText)
             assertNull(state.errorText)
@@ -202,9 +215,450 @@ class LobbyControllerTest {
         }
     }
 
-    private fun createController(): LobbyController {
+    @Test
+    fun `start game should send backend request and trigger catch up after game started event`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("S123")
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is StartGameRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(StartGameResponse()),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(GameStartedEvent(payload.lobbyCode)),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.startGame()
+                waitUntil { seenPayloads.any { it is StartGameRequest } }
+                waitUntil { controller.state.value.gameStarted }
+                waitUntil { seenPayloads.any { it is GameStateCatchUpRequest } }
+
+                assertTrue(controller.state.value.gameState.isCatchingUp)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `refresh game state should request public turn and private snapshots`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("R123")
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.refreshGameState()
+
+                waitUntil { seenPayloads.any { it is MapGetRequest } }
+                waitUntil { seenPayloads.any { it is TurnStateGetRequest } }
+                waitUntil { seenPayloads.any { it is GameStatePrivateGetRequest } }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `reconnect should reuse old session token and request catch up`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("RC01")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174202")
+            val replacementToken = SessionToken("123e4567-e89b-12d3-a456-426614174203")
+            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val firstServer =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is StartGameRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(StartGameResponse()),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(GameStartedEvent(payload.lobbyCode)),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller =
+                createController(
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                controller.updateServerUrl(firstServer.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.startGame()
+                waitUntil { controller.state.value.gameStarted }
+
+                val reconnectPort = firstServer.port
+                firstServer.close()
+                waitUntil { controller.state.value.isReconnecting }
+
+                val secondServer =
+                    startProtocolServerAt(
+                        port = reconnectPort,
+                        onOpenPayload = ConnectionResponse(replacementToken),
+                    ) { payload, outgoing ->
+                        reconnectPayloads += payload
+                        when (payload) {
+                            is ReconnectRequest ->
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ReconnectResponse(
+                                                success = true,
+                                                playerId = PlayerId(1),
+                                                lobbyCode = lobbyCode,
+                                                playerDisplayName = "Alice",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                        }
+                    }
+
+                try {
+                    waitUntil {
+                        reconnectPayloads.any {
+                            it is ReconnectRequest && it.sessionToken == originalToken
+                        }
+                    }
+                    waitUntil {
+                        controller.state.value.isConnected &&
+                            !controller.state.value.isReconnecting
+                    }
+                    waitUntil { reconnectPayloads.any { it is GameStateCatchUpRequest } }
+
+                    val state = controller.state.value
+                    assertEquals(originalToken.value, state.sessionToken)
+                    assertEquals(lobbyCode.value, state.activeLobbyCode)
+                    assertEquals(PlayerId(1), state.ownPlayerId)
+                } finally {
+                    secondServer.close()
+                }
+            } finally {
+                controller.close()
+                firstServer.close()
+            }
+        }
+    }
+
+    @Test
+    fun `startup reconnect should reuse persisted token`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("PR35")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174210")
+            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174211"),
+                        ),
+                ) { payload, outgoing ->
+                    reconnectPayloads += payload
+                    if (payload is ReconnectRequest) {
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    ReconnectResponse(
+                                        success = true,
+                                        playerId = PlayerId(1),
+                                        lobbyCode = lobbyCode,
+                                        playerDisplayName = "Alice",
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            val store =
+                InMemoryReconnectSessionStore(
+                    token = originalToken.value,
+                    serverUrl = server.url,
+                    wasGameStarted = true,
+                )
+
+            val controller =
+                createController(
+                    sessionStore = store,
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                waitUntil {
+                    reconnectPayloads.any {
+                        it is ReconnectRequest && it.sessionToken == originalToken
+                    }
+                }
+                waitUntil {
+                    controller.state.value.isConnected &&
+                        !controller.state.value.isReconnecting
+                }
+                waitUntil { reconnectPayloads.any { it is GameStateCatchUpRequest } }
+
+                val state = controller.state.value
+                assertEquals(originalToken.value, state.sessionToken)
+                assertEquals(lobbyCode.value, state.activeLobbyCode)
+                assertEquals(originalToken.value, store.readSessionToken())
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `failed startup reconnect should clear persisted session token`() {
+        runBlocking {
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174220")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174221"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is ReconnectRequest) {
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    ReconnectResponse(
+                                        success = false,
+                                        errorCode = ReconnectErrorCode.TOKEN_INVALID,
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            val store =
+                InMemoryReconnectSessionStore(
+                    token = originalToken.value,
+                    serverUrl = server.url,
+                    wasGameStarted = true,
+                )
+
+            val controller =
+                createController(
+                    sessionStore = store,
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                waitUntil {
+                    controller.state.value.errorText == ReconnectErrorCode.TOKEN_INVALID.name &&
+                        controller.state.value.sessionToken == null
+                }
+
+                assertNull(store.readSessionToken())
+                assertFalse(store.readWasGameStarted())
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `leave lobby should clear persisted session token`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("LV42")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
+            val store = InMemoryReconnectSessionStore()
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                    }
+                }
+
+            val controller = createController(sessionStore = store)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+
+                waitUntil { controller.state.value.sessionToken == originalToken.value }
+                waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
+
+                controller.leaveLobby()
+
+                assertNull(store.readSessionToken())
+                assertNull(controller.state.value.sessionToken)
+                assertNull(controller.state.value.activeLobbyCode)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    private fun createController(
+        config: LobbyControllerConfig = LobbyControllerConfig(),
+        sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
+    ): LobbyController {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        return LobbyController(scope = scope)
+        return LobbyController(
+            scope = scope,
+            config = config,
+            reconnectSessionStore = sessionStore,
+        )
     }
 
     private suspend fun waitUntil(condition: () -> Boolean) {
@@ -246,7 +700,7 @@ class LobbyControllerTest {
 
             try {
                 server.start(wait = false)
-                return TestWebSocketServer(server, "ws://127.0.0.1:$port/ws")
+                return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
             } catch (error: Exception) {
                 server.stop(0, 0)
                 if (attempt == 4) {
@@ -257,6 +711,38 @@ class LobbyControllerTest {
         error("Unable to start test websocket server")
     }
 
+    private fun startProtocolServerAt(
+        port: Int,
+        onOpenPayload: NetworkMessagePayload? = null,
+        onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
+    ): TestWebSocketServer {
+        val server =
+            embeddedServer(Netty, port = port) {
+                install(WebSockets)
+                routing {
+                    webSocket("/ws") {
+                        if (onOpenPayload != null) {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(onOpenPayload),
+                                ),
+                            )
+                        }
+                        for (frame in incoming) {
+                            if (frame is Frame.Binary) {
+                                val payload = MessageCodec.decodePayload(frame.readBytes())
+                                onPayload(payload, this)
+                            }
+                        }
+                    }
+                }
+            }
+
+        server.start(wait = false)
+        return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
+    }
+
     private fun findFreePort(): Int =
         ServerSocket(0).use { socket ->
             socket.localPort
@@ -264,10 +750,44 @@ class LobbyControllerTest {
 
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
+        val port: Int,
         val url: String,
     ) {
         fun close() {
             engine.stop(100, 1_000)
+        }
+    }
+
+    private class InMemoryReconnectSessionStore(
+        private var token: String? = null,
+        private var serverUrl: String? = null,
+        private var wasGameStarted: Boolean = false,
+    ) : ReconnectSessionStore {
+        override fun readSessionToken(): String? = token
+
+        override fun saveSessionToken(sessionToken: String) {
+            token = sessionToken
+        }
+
+        override fun clearSessionToken() {
+            token = null
+        }
+
+        override fun readServerUrl(): String? = serverUrl
+
+        override fun saveServerUrl(serverUrl: String) {
+            this.serverUrl = serverUrl
+        }
+
+        override fun readWasGameStarted(): Boolean = wasGameStarted
+
+        override fun saveWasGameStarted(wasGameStarted: Boolean) {
+            this.wasGameStarted = wasGameStarted
+        }
+
+        override fun clearSession() {
+            token = null
+            wasGameStarted = false
         }
     }
 }

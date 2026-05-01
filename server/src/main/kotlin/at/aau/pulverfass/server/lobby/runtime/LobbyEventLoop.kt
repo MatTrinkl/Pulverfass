@@ -58,8 +58,15 @@ internal class LobbyEventLoop(
                 scope.launch {
                     for (queued in events) {
                         try {
-                            stateProcessor.apply(queued.event, queued.context)
-                            queued.processed.complete(Unit)
+                            val beforeState = stateProcessor.currentState()
+                            val afterState = stateProcessor.apply(queued.event, queued.context)
+                            queued.processed.complete(
+                                ProcessedLobbyEvent(
+                                    event = queued.event,
+                                    beforeState = beforeState,
+                                    afterState = afterState,
+                                ),
+                            )
                         } catch (cause: Throwable) {
                             queued.processed.completeExceptionally(cause)
                         }
@@ -80,7 +87,7 @@ internal class LobbyEventLoop(
     suspend fun submit(
         event: LobbyEvent,
         context: EventContext? = null,
-    ) {
+    ): ProcessedLobbyEvent {
         require(event.lobbyCode == lobbyCode) {
             "Event lobbyCode '${event.lobbyCode.value}' passt nicht zu Loop '${lobbyCode.value}'."
         }
@@ -88,9 +95,9 @@ internal class LobbyEventLoop(
         check(activeJob?.isActive == true) {
             "Lobby event loop for '${lobbyCode.value}' is not running."
         }
-        val processed = CompletableDeferred<Unit>()
+        val processed = CompletableDeferred<ProcessedLobbyEvent>()
         events.send(QueuedLobbyEvent(event, context, processed))
-        processed.await()
+        return processed.await()
     }
 
     /**
@@ -118,5 +125,11 @@ internal class LobbyEventLoop(
 private data class QueuedLobbyEvent(
     val event: LobbyEvent,
     val context: EventContext?,
-    val processed: CompletableDeferred<Unit>,
+    val processed: CompletableDeferred<ProcessedLobbyEvent>,
+)
+
+internal data class ProcessedLobbyEvent(
+    val event: LobbyEvent,
+    val beforeState: GameState,
+    val afterState: GameState,
 )

@@ -1,240 +1,234 @@
 # Network API Integration
 
-## 1. Integration auf Server- und Appseite
+## Ziel
 
-### Zielbild
+Dieses Dokument beschreibt, wie der technische Netzwerkpfad und die fachlichen Routing-/Client-Schichten aktuell im Projekt zusammenspielen.
 
-Die fachliche Integration soll nur noch mit `NetworkMessagePayload` arbeiten.  
-Transport, Packet-Framing, Header-Serialisierung und WebSocket-Handling bleiben im Netzwerk-Layer.
+Source of Truth:
+- `:shared` enthält Protokolltypen, `MessageCodec`, `MessageType` und `NetworkPayloadRegistry`
+- `:server` enthält WebSocket-Server, Routing und Delivery
+- `:app` enthält den technischen Android-Client-Stack und den aktuellen Lobby-Controller
 
-Öffentliche Einstiegsschnittstelle ist:
+## Module und Verantwortlichkeiten
 
-- [Network.kt](../shared/src/main/kotlin/at/aau/pulverfass/shared/network/Network.kt)
+### `:shared`
 
-Wichtige Produktivklassen:
+Wichtige Klassen:
+- `shared.network.codec.MessageCodec`
+- `shared.message.codec.NetworkPayloadRegistry`
+- `shared.message.protocol.MessageType`
+- `shared.message.protocol.NetworkMessagePayload`
+- `shared.network.receive.PacketReceiveAdapter`
+- `shared.network.send.PacketSendAdapter`
 
-- [ServerNetwork.kt](../server/src/main/kotlin/at/aau/pulverfass/server/ServerNetwork.kt)
-- [Application.kt](../server/src/main/kotlin/at/aau/pulverfass/server/Application.kt)
-- [MessageCodec.kt](../shared/src/main/kotlin/at/aau/pulverfass/shared/network/codec/MessageCodec.kt)
+Verantwortung:
+- Serialisierung und Deserialisierung aller Payloads
+- Header-/Packet-Framing
+- gemeinsame IDs, Domain-Events und Responses/Requests
 
-### Serverseite
+### `:server`
 
-Auf der Serverseite ist die Integration bereits vorhanden.
+Wichtige Klassen:
+- `server.Application`
+- `server.ServerNetwork`
+- `server.transport.ServerWebSocketTransport`
+- `server.routing.MainServerLobbyRoutingService`
+- `server.routing.MainServerRouter`
+- `server.routing.GameStateDeliveryDispatcher`
 
-Was integriert werden muss:
+Verantwortung:
+- Ktor-WebSocket-Endpunkt `/ws`
+- technische Entkopplung zwischen Transport und Routing
+- Zuordnung von Requests zu Lobby-Domainlogik
+- Versand öffentlicher und privater GameState-Payloads
 
-- `ServerNetwork` erzeugen oder injizieren
-- `Application.module(network)` bzw. `createServer(network = ...)` verwenden
-- Fachlogik auf `network.events` hängen
-- Antworten über `network.send(connectionId, payload)` senden
+### `:app`
 
-Beispiel:
+Wichtige Klassen:
+- `app.network.transport.AndroidWebSocketTransport`
+- `app.network.ClientNetwork`
+- `app.lobby.LobbyController`
 
-```kotlin
-import at.aau.pulverfass.server.ServerNetwork
-import at.aau.pulverfass.server.createServer
-import at.aau.pulverfass.shared.ids.ConnectionId
-import at.aau.pulverfass.shared.ids.LobbyCode
-import at.aau.pulverfass.shared.network.Network
-import at.aau.pulverfass.shared.network.message.JoinLobbyRequest
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+Verantwortung:
+- technischer WebSocket-Client
+- Kodierung ausgehender Payloads
+- Dekodierung eingehender Pakete
+- aktueller fachlicher Lobby-Flow der Android-App
 
-val network = ServerNetwork()
-val server = createServer(host = "0.0.0.0", port = 8080, network = network)
+## Serverseitige Integration
 
-CoroutineScope(Dispatchers.Default).launch {
-    network.events.collect { event ->
-        when (event) {
-            is Network.Event.Connected<ConnectionId> -> {
-                println("Client verbunden: ${event.connectionId.value}")
-            }
-            is Network.Event.MessageReceived<ConnectionId> -> {
-                when (val payload = event.payload) {
-                    is JoinLobbyRequest -> {
-                        println("Join-Lobby von ${payload.playerDisplayName} für ${payload.lobbyCode}")
-                    }
-                }
-            }
-            is Network.Event.Disconnected<ConnectionId> -> {
-                println("Client getrennt: ${event.connectionId.value}")
-            }
-            is Network.Event.Error<ConnectionId> -> {
-                println("Netzwerkfehler: ${event.cause.message}")
-            }
-        }
-    }
-}
+### Entry Points
 
-server.start(wait = true)
+- Low-Level-Server ohne Lobby-Runtime:
+  - `Application.module(network)`
+- Produktionsverdrahtung mit Lobby-/GameState-Routing:
+  - `Application.moduleWithLobbyRuntime(network)`
+  - `createServerWithLobbyRuntime(...)`
+
+`main()` startet aktuell den Server mit aktiver Lobby-Runtime.
+
+### Verbindungsfluss
+
+```text
+WebSocket /ws
+  -> ServerWebSocketTransport
+  -> ServerNetwork
+  -> PacketReceiver
+  -> MainServerLobbyRoutingService
+  -> MainServerRouter / direkte Handler
+  -> LobbyManager / DeliveryDispatcher
 ```
 
-Senden:
+### Laufzeitverhalten
 
-```kotlin
-network.send(
-    connectionId,
-    JoinLobbyRequest(lobbyCode = LobbyCode("AB12"), playerDisplayName = "alice"),
-)
+1. Für jede WebSocket-Verbindung wird eine serverseitige `ConnectionId` vergeben.
+2. `moduleWithLobbyRuntime(...)` ordnet aktuell jeder neuen Verbindung eine neue `PlayerId` zu.
+3. `ServerNetwork` emittiert technische Events (`Connected`, `MessageReceived`, `Disconnected`, `Error`).
+4. `MainServerLobbyRoutingService` dekodiert `ReceivedPacket`s zu `DecodedNetworkRequest`s.
+5. Je nach Payload:
+   - direkte technische Handler auf Routing-Service-Ebene, z. B. für
+     - `CreateLobbyRequest`
+     - `MapGetRequest`
+     - `GameStatePrivateGetRequest`
+     - `GameStateCatchUpRequest`
+     - `StartPlayerSetRequest`
+     - `TurnStateGetRequest`
+     - `TurnAdvanceRequest`
+   - oder Weitergabe an `MainServerRouter` für gemappte Lobby-Events wie Join/Leave/Kick/StartGame
+
+## Aktuell integrierte GameState-Übertragung
+
+### Öffentliche Server-zu-Lobby-Nachrichten
+
+- `GameStateDeltaEvent`
+- `PhaseBoundaryEvent`
+- `GameStateSnapshotBroadcast`
+- öffentliche Einzel-Events wie `TurnStateUpdatedEvent`, `TerritoryOwnerChangedEvent`, `TerritoryTroopsChangedEvent`, `GameStartedEvent`
+
+### Private Server-zu-Client-Nachrichten
+
+- `GameStatePrivateGetResponse`
+
+### Client-zu-Server Requests
+
+- `MapGetRequest`
+- `GameStatePrivateGetRequest`
+- `GameStateCatchUpRequest`
+- `TurnAdvanceRequest`
+- `TurnStateGetRequest`
+
+### Sequenz bei erfolgreichem `TurnAdvanceRequest`
+
+Reihenfolge der öffentlichen S2L-Nachrichten:
+
+1. `GameStateDeltaEvent`
+2. `PhaseBoundaryEvent`
+3. `TurnStateUpdatedEvent`
+4. optional `GameStateSnapshotBroadcast` bei Spielerwechsel
+
+Zusätzlich erhält der anfragende Client synchron die `TurnAdvanceResponse`.
+
+### Public/Private Delivery
+
+- `GameStateDeliveryDispatcher` trennt technisch zwischen öffentlichen und privaten Payloads.
+- `PublicGameStateBuilder` ist die einzige Quelle für öffentliche Snapshots und Deltas.
+- Private Daten werden nicht in `GameStateDeltaEvent` oder öffentliche Snapshot-Broadcasts aufgenommen.
+
+### Observability
+
+Der Server loggt an den relevanten Sendepfaden mindestens:
+- `lobbyCode`
+- `playerId` bzw. aktiven Spieler
+- `fromVersion` / `toVersion` bei Deltas
+- `stateVersion`
+- `turnCount`
+
+Zusätzlich hält der Server pro Lobby einen `RoundHistoryBuffer` für die letzten zwei Runden.
+
+## Appseitige Integration
+
+## Aktueller Stand
+
+Die App besitzt inzwischen eine produktive technische Client-Implementierung. Sie besteht nicht aus einer direkten `Network<Unit>`-Implementierung, sondern aus einer Komposition folgender Klassen:
+
+- `AndroidWebSocketTransport`
+- `PacketReceiver`
+- `PacketSender`
+- `ClientNetwork`
+- `LobbyController`
+
+### Datenfluss
+
+```text
+AndroidWebSocketTransport.events
+  -> ClientNetwork
+    -> PacketReceiver
+      -> LobbyController
+        -> Compose UI
 ```
 
-Was der Server dabei automatisch übernimmt:
+### Aktuell fachlich genutzte Nachrichten
 
-- WebSocket-Verbindung auf `/ws`
-- Binary-Only-Verhalten
-- `NetworkMessagePayload -> ByteArray`
-- `ByteArray -> NetworkMessagePayload`
-- Connect-, Message-, Disconnect- und Error-Events
+Produktiv im Client verarbeitet werden derzeit:
+- `CreateLobbyResponse`
+- `CreateLobbyErrorResponse`
+- `JoinLobbyResponse`
+- `JoinLobbyErrorResponse`
+- `PlayerJoinedLobbyEvent`
+- `PlayerLeftLobbyEvent`
+- `PlayerKickedLobbyEvent`
 
-### Appseite
+Technisch empfangbar, aber aktuell nicht fachlich verdrahtet:
+- `GameStateDeltaEvent`
+- `PhaseBoundaryEvent`
+- `GameStateSnapshotBroadcast`
+- `GameStateCatchUpResponse`
+- `GameStatePrivateGetResponse`
+- `MapGetResponse`
+- `TurnStateGetResponse`
 
-Die App-Integration fehlt aktuell noch als Produktivklasse.  
-Für die App muss eine Client-Implementierung derselben Schnittstelle gebaut werden, zum Beispiel `AppNetwork`.
+Für diese Payloads existiert im Client derzeit noch keine produktive State-Verarbeitung.
 
-Diese Klasse sollte:
+### Initialisierung in der App
 
-- `Network<...>` implementieren
-- eine Ktor-WebSocket-Verbindung zum Server auf `ws://<host>:<port>/ws` aufbauen
-- eingehende Binary Frames mit `MessageCodec.decodePayload(...)` dekodieren
-- ausgehende Payloads mit `MessageCodec.encode(...)` senden
-- `Network.Event.Connected`, `MessageReceived`, `Disconnected` und `Error` emittieren
-
-Minimaler Ablauf für die App:
-
-1. WebSocket zum Server auf `/ws` öffnen
-2. Binary Frames lesen
-3. `MessageCodec.decodePayload(bytes)` aufrufen
-4. Ergebnis als `Network.Event.MessageReceived` weitergeben
-5. Beim Senden nur `NetworkMessagePayload` entgegennehmen
-
-Beispiel für den technischen Kern einer späteren `AppNetwork`-Klasse:
+Der aktuelle Einstiegspunkt erzeugt genau einen `LobbyController`:
 
 ```kotlin
-import at.aau.pulverfass.shared.network.Network
-import at.aau.pulverfass.shared.network.codec.MessageCodec
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.client.plugins.websocket.webSocketSession
-import io.ktor.websocket.Frame
-import io.ktor.websocket.readBytes
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
-
-class AppNetwork(
-    private val client: HttpClient =
-        HttpClient {
-            install(WebSockets)
-        },
-) : Network<Unit> {
-    private val _events = MutableSharedFlow<Network.Event<Unit>>(extraBufferCapacity = 64)
-    private var session: DefaultClientWebSocketSession? = null
-
-    override val events: SharedFlow<Network.Event<Unit>> = _events.asSharedFlow()
-
-    suspend fun connect() {
-        val webSocketSession = client.webSocketSession("ws://127.0.0.1:8080/ws")
-        session = webSocketSession
-        _events.emit(Network.Event.Connected(Unit))
-
-        for (frame in webSocketSession.incoming) {
-            when (frame) {
-                is Frame.Binary -> {
-                    val payload = MessageCodec.decodePayload(frame.readBytes())
-                    _events.emit(Network.Event.MessageReceived(Unit, payload))
-                }
-                else -> Unit
-            }
-        }
-    }
-
-    override suspend fun send(
-        connectionId: Unit,
-        payload: NetworkMessagePayload,
-    ) {
-        val webSocketSession = checkNotNull(session) { "WebSocket ist noch nicht verbunden." }
-        webSocketSession.send(Frame.Binary(fin = true, data = MessageCodec.encode(payload)))
-    }
-}
+val lobbyController = remember { LobbyController() }
 ```
 
-Wichtig:
+Dieser Controller verwaltet:
+- Verbindung
+- Lobby-Create/Join/Leave
+- Spielerliste im Waiting Room
 
-- Die App soll keine Header manuell bauen.
-- Die App soll keine `SerializedPacket` oder `PacketCodec` direkt verwenden.
-- Diese Details bleiben im Netzwerk-Layer.
+## Neue Nachrichten hinzufügen
 
-## 2. Neue Message-Payloads hinzufügen
+Damit eine neue Nachricht end-to-end funktioniert, müssen aktuell folgende Stellen konsistent erweitert werden:
 
-Damit eine neue Nachricht im System funktioniert, müssen Server und App dieselbe Payload-Klasse und denselben
-`MessageType` kennen.
+1. Payload-Klasse im `:shared`
+2. `MessageType`
+3. `NetworkPayloadRegistry`
+4. Serializer-/Codec-Tests
+5. Server-Routing oder Server-Delivery
+6. optional Client-Verarbeitung, falls die App die Nachricht fachlich nutzen soll
 
-### Schritt 1: Neuen MessageType anlegen
+## Build und lokale Verifikation
 
-In [MessageType.kt](../shared/src/main/kotlin/at/aau/pulverfass/shared/network/message/MessageType.kt) einen neuen
-Eintrag ergänzen.
+Typische Befehle:
 
-Beispiel:
-
-```kotlin
-GAME_START_REQUEST(13)
+```bash
+./gradlew :shared:test :server:test
+./gradlew :app:testDebugUnitTest
+./gradlew :server:run
+./gradlew dokkaLocal
 ```
 
-Die ID muss eindeutig sein.
+Hinweis:
+- Im aktuellen Repository wird für umfangreichere Testläufe häufig `-Pkotlin.incremental=false` verwendet.
 
-### Schritt 2: Payload-Klasse anlegen
+## Bekannte Grenzen
 
-In `shared.network.message` eine neue `@Serializable`-Klasse anlegen, die `NetworkMessagePayload` implementiert.
-
-Beispiel:
-
-```kotlin
-@Serializable
-data class GameStartRequest(
-    val lobbyCode: String,
-) : NetworkMessagePayload
-```
-
-### Schritt 3: Registry erweitern
-
-In [NetworkPayloadRegistry.kt](../shared/src/main/kotlin/at/aau/pulverfass/shared/network/message/NetworkPayloadRegistry.kt)
-müssen drei Zuordnungen ergänzt werden:
-
-- `payloadTypeByClass`
-- `payloadSerializerByClass`
-- `payloadDeserializerByType`
-
-Ohne diese Einträge kann die Nachricht nicht automatisch kodiert oder dekodiert werden.
-
-### Schritt 4: Fachlogik anbinden
-
-Danach kann die Nachricht über `Network.Event.MessageReceived` verarbeitet werden.
-
-Beispiel:
-
-```kotlin
-when (val payload = event.payload) {
-    is GameStartRequest -> {
-        // Fachlogik
-    }
-}
-```
-
-### Schritt 5: Tests ergänzen
-
-Mindestens ergänzen:
-
-- Codec-Test für `MessageCodec.encode/decodePayload`
-- Server-Integrationstest für Empfang
-- Server-Integrationstest für Versand, falls der Server diese Payload sendet
-
-## Kurzfassung
-
-- Fachcode arbeitet nur mit `Network` und `NetworkMessagePayload`.
-- Serverseitig ist das bereits verdrahtet.
-- Appseitig fehlt noch eine Client-Implementierung derselben Schnittstelle.
-- Neue Nachrichten brauchen immer:
-  `MessageType` + Payload-Klasse + Registry-Einträge + Tests.
+- Die App besitzt noch keine autoritative Client-State-Schicht für GameState-Deltas und Snapshots.
+- Player-Identität ist aktuell serverseitig an die WebSocket-Verbindung gekoppelt; es gibt noch kein persistentes Session-/Auth-Modell.
+- `:e2e` ist vorbereitet, enthält aber noch keine echten produktiven End-to-End-Szenarien.

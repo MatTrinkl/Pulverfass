@@ -3,12 +3,14 @@ package at.aau.pulverfass.server
 import at.aau.pulverfass.server.ids.IdFactory
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.network.Network
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -139,7 +141,18 @@ internal fun Application.module(transport: ServerWebSocketTransport) {
 
 private fun Application.installLobbyRuntime(network: ServerNetwork) {
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val lobbyManager = LobbyManager(serverScope)
+    val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
+    val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
+    val lobbyManager =
+        LobbyManager(
+            scope = serverScope,
+            initialStateFactory = { lobbyCode ->
+                GameState.initial(
+                    lobbyCode = lobbyCode,
+                    mapDefinition = defaultMapDefinition,
+                )
+            },
+        )
     val sessionContextRegistry = SessionContextRegistry()
     val router =
         MainServerRouter(
@@ -178,10 +191,23 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
-                    if (sessionContextRegistry.playerIdForSession(session.sessionToken) == null) {
-                        val playerId = PlayerId(nextPlayerId.getAndIncrement())
-                        sessionContextRegistry.assignPlayer(session.sessionToken, playerId)
-                    }
+                    val playerId =
+                        sessionContextRegistry.playerIdForSession(session.sessionToken)
+                            ?: PlayerId(nextPlayerId.getAndIncrement()).also { assignedPlayerId ->
+                                sessionContextRegistry.assignPlayer(
+                                    sessionToken = session.sessionToken,
+                                    playerId = assignedPlayerId,
+                                )
+                            }
+                    routingService.onPlayerConnected(playerId)
+                }
+
+                is Network.Event.Disconnected<ConnectionId> -> {
+                    network.sessionManager
+                        .getByConnectionId(event.connectionId)
+                        ?.sessionToken
+                        ?.let(sessionContextRegistry::playerIdForSession)
+                        ?.let { playerId -> routingService.onPlayerDisconnected(playerId) }
                 }
 
                 else -> Unit

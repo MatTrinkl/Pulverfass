@@ -1,7 +1,9 @@
 package at.aau.pulverfass.shared
 
-// app-weite konstanten die in allen modulen verwendet werden
+/**
+ * App-weite Konstanten, die in mehreren UI-Modulen gebraucht werden.
+ */
 object Constants {
-    // aktuelle version
+    /** Aktuelle sichtbare App-Version im Ladebildschirm. */
     const val APP_VERSION = "1.0.0"
 }

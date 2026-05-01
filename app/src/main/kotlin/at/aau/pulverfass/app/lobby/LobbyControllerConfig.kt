@@ -1,16 +1,27 @@
 package at.aau.pulverfass.app.lobby
 
+/**
+ * Konfigurations- und Textsammlung für den aktuellen [LobbyController].
+ *
+ * Die Klasse bündelt bewusst sowohl technische Defaults als auch UI-nahe
+ * Status- und Fehlermeldungen für den derzeit kleinen App-Scope. Für größere
+ * Features wäre eine spätere Trennung in Infrastruktur- und UI-Konfiguration
+ * sinnvoll, aktuell existiert aber nur ein gemeinsamer Konfigurationspunkt.
+ */
 data class LobbyControllerConfig(
     val defaultServerUrl: String = "ws://10.0.2.2:8080/ws",
-    val loginPasswordTemplate: String = "android-template",
     val disconnectReason: String = "Client disconnected",
     val lobbyCodeLength: Int = 4,
+    val reconnectMaxAttempts: Int = 5,
+    val reconnectRetryDelayMillis: Long = 750L,
     val statusNotConnected: String = "Nicht verbunden",
     val statusConnecting: String = "Verbinde...",
+    val statusReconnecting: String = "Verbinde erneut...",
     val statusConnected: String = "Verbunden",
     val statusDisconnected: String = "Getrennt",
     val statusConnectionError: String = "Verbindungsfehler",
     val statusConnectionFailed: String = "Verbindung fehlgeschlagen",
+    val statusReconnectFailed: String = "Reconnect fehlgeschlagen",
     val errorPlayerNameRequired: String = "Bitte zuerst einen Spielernamen eingeben",
     val errorConnectFirst: String = "Bitte zuerst mit dem Server verbinden",
     val errorTransportUnknown: String = "Unbekannter Transportfehler",
@@ -18,5 +29,26 @@ data class LobbyControllerConfig(
     val errorCreateFailed: String = "Create request fehlgeschlagen",
     val errorJoinFailed: String = "Join request fehlgeschlagen",
     val errorLobbyCodeLength: String = "Lobbycode muss 4-stellig sein",
+    val errorLobbyMissing: String = "Keine aktive Lobby gefunden",
+    val errorStartGameFailed: String = "Spielstart fehlgeschlagen",
+    val errorCatchUpFailed: String = "Spielstand konnte nicht synchronisiert werden",
+    val errorMapGetFailed: String = "Kartenzustand konnte nicht geladen werden",
+    val errorTurnStateGetFailed: String = "Zugstatus konnte nicht geladen werden",
+    val errorPlayerIdMissing: String = "Eigene Spieler-ID fehlt noch",
+    val errorTurnAdvanceNotAllowed: String = "Du kannst die aktuelle Phase nicht beenden",
+    val errorTurnAdvanceFailed: String = "Phasenwechsel fehlgeschlagen",
+    val errorDisconnectedDuringGame: String =
+        "Verbindung getrennt. Reconnect wird vorbereitet.",
+    val errorReconnectFailed: String = "Session konnte nicht wiederhergestellt werden",
+    val errorReconnectTokenMissing: String = "Session-Token für Reconnect fehlt",
     val errorUnknown: String = "Unbekannter Fehler",
-)
+) {
+    init {
+        require(reconnectMaxAttempts > 0) {
+            "reconnectMaxAttempts muss positiv sein."
+        }
+        require(reconnectRetryDelayMillis >= 0L) {
+            "reconnectRetryDelayMillis darf nicht negativ sein."
+        }
+    }
+}

@@ -2,21 +2,28 @@ package at.aau.pulverfass.app.ui.screens
 
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import at.aau.pulverfass.app.game.GamePlayerUi
+import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import at.aau.pulverfass.shared.ids.PlayerId
 import kotlinx.coroutines.delay
 import org.junit.Rule
 import org.junit.Test
@@ -114,7 +121,7 @@ class ScreenComposableTest {
 
         composeTestRule.onNodeWithText("Spiel wird vorbereitet").assertIsDisplayed()
         composeTestRule.onNodeWithText(
-            "Karte und Demo-Spielzustand werden geladen.",
+            "Karte und Spielzustand werden geladen.",
         ).assertIsDisplayed()
 
         composeTestRule.mainClock.advanceTimeBy(1_100)
@@ -164,20 +171,84 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_shows_dynamic_map_ui_and_reacts_to_actions() {
+        val controller = LobbyController()
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreen(controller = controller)
+                }
+            }
+
+            composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Warten")
+            composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 1")
+            composeTestRule.onNodeWithTag("game_sync_banner").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Verbindung getrennt. Aktionen sind gesperrt.")
+                .assertIsDisplayed()
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun private_hand_panel_shows_own_cards_with_duplicate_labels() {
         composeTestRule.setContent {
             AndroidAppTheme {
-                GameScreen()
+                PrivateHandPanel(
+                    playerName = "Alice",
+                    handCards = listOf("Infanterie", "Infanterie", "Kavallerie"),
+                )
             }
         }
 
-        composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Verstärken")
-        composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 7")
-        composeTestRule.onNodeWithText("Karten").performClick()
         composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Infanterie").assertCountEquals(2)
+        composeTestRule.onNodeWithText("Kavallerie").assertIsDisplayed()
+    }
+
+    @Test
+    fun game_screen_keeps_private_hand_hidden_when_cards_panel_is_closed() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    handCards = listOf("Geheime Karte"),
+                                    cardsVisible = false,
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("game_cards_panel").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Geheime Karte").assertCountEquals(0)
     }
 }

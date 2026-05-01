@@ -2,6 +2,7 @@ package at.aau.pulverfass.server.lobby.runtime
 
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
@@ -9,6 +10,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Zentrale Verwaltung mehrerer parallel laufender Lobby-Runtimes.
@@ -17,25 +19,16 @@ import java.util.concurrent.ConcurrentHashMap
  * enthält aber keine Spiellogik.
  */
 class LobbyManager(
-    private val runtimeFactory: (LobbyCode, GameState) -> LobbyRuntime,
+    private val scope: CoroutineScope,
+    private val reducerFactory: (LobbyCode) -> LobbyEventReducer = { DefaultLobbyEventReducer() },
+    private val queueCapacity: Int = Channel.BUFFERED,
+    private val hooksFactory: (LobbyCode) -> LobbyRuntimeHooks = { LobbyRuntimeHooks() },
+    private val initialStateFactory: (
+        LobbyCode,
+    ) -> GameState = { lobbyCode -> GameState.initial(lobbyCode) },
 ) {
-    constructor(
-        scope: CoroutineScope,
-        reducerFactory: (LobbyCode) -> LobbyEventReducer = { DefaultLobbyEventReducer() },
-        queueCapacity: Int = Channel.BUFFERED,
-        hooksFactory: (LobbyCode) -> LobbyRuntimeHooks = { LobbyRuntimeHooks() },
-    ) : this(
-        runtimeFactory = { lobbyCode, initialState ->
-            LobbyRuntime(
-                lobbyCode = lobbyCode,
-                initialState = initialState,
-                reducer = reducerFactory(lobbyCode),
-                scope = scope,
-                queueCapacity = queueCapacity,
-                hooks = hooksFactory(lobbyCode),
-            )
-        },
-    )
+    private val acceptedEventListeners =
+        CopyOnWriteArrayList<suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit>()
 
     private val lobbies = ConcurrentHashMap<LobbyCode, LobbyRuntime>()
     private val lifecycleLock = Any()
@@ -47,7 +40,7 @@ class LobbyManager(
      */
     fun createLobby(
         lobbyCode: LobbyCode,
-        initialState: GameState = GameState.initial(lobbyCode),
+        initialState: GameState = initialStateFactory(lobbyCode),
     ): LobbyRuntime =
         synchronized(lifecycleLock) {
             require(initialState.lobbyCode == lobbyCode) {
@@ -58,7 +51,7 @@ class LobbyManager(
                 "Lobby '${lobbyCode.value}' exists already."
             }
 
-            val runtime = runtimeFactory(lobbyCode, initialState)
+            val runtime = createRuntime(lobbyCode, initialState)
             runtime.start()
             lobbies[lobbyCode] = runtime
             runtime
@@ -68,6 +61,15 @@ class LobbyManager(
      * Liefert eine aktive Lobby-Runtime per Lobbycode.
      */
     fun getLobby(lobbyCode: LobbyCode): LobbyRuntime? = lobbies[lobbyCode]
+
+    /**
+     * Findet die aktive Lobby eines Spielers, falls dieser aktuell Mitglied ist.
+     */
+    fun findLobbyCodeByPlayer(playerId: PlayerId): LobbyCode? =
+        lobbies.entries.firstOrNull {
+                (_, runtime) ->
+            runtime.currentState().hasPlayer(playerId)
+        }?.key
 
     /**
      * Leitet ein Event an die zugehörige laufende Lobby weiter.
@@ -102,6 +104,36 @@ class LobbyManager(
                 values
             }
         activeRuntimes.forEach { runtime -> runtime.shutdown() }
+    }
+
+    fun registerAcceptedEventListener(
+        listener: suspend (LobbyCode, LobbyEvent, GameState, GameState) -> Unit,
+    ) {
+        acceptedEventListeners.add(listener)
+    }
+
+    private fun createRuntime(
+        lobbyCode: LobbyCode,
+        initialState: GameState,
+    ): LobbyRuntime {
+        val baseHooks = hooksFactory(lobbyCode)
+
+        return LobbyRuntime(
+            lobbyCode = lobbyCode,
+            initialState = initialState,
+            reducer = reducerFactory(lobbyCode),
+            scope = scope,
+            queueCapacity = queueCapacity,
+            hooks =
+                baseHooks.copy(
+                    onEventAccepted = { acceptedLobbyCode, event, beforeState, afterState ->
+                        baseHooks.onEventAccepted(acceptedLobbyCode, event, beforeState, afterState)
+                        acceptedEventListeners.forEach { listener ->
+                            listener(acceptedLobbyCode, event, beforeState, afterState)
+                        }
+                    },
+                ),
+        )
     }
 
     private fun requireRuntime(lobbyCode: LobbyCode): LobbyRuntime =

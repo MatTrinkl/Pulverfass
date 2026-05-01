@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.protocol.MessageType
+import kotlin.random.Random
 
 /**
  * Standard-Mapping von dekodierten Netzwerkrequests auf Lobby-Domain-Events.
@@ -21,7 +22,9 @@ import at.aau.pulverfass.shared.message.protocol.MessageType
  * - [MessageType.LOBBY_KICK_REQUEST] -> [PlayerKicked]
  * - [MessageType.LOBBY_START_REQUEST] -> [GameStarted]
  */
-class DefaultNetworkToLobbyEventMapper : NetworkToLobbyEventMapper {
+class DefaultNetworkToLobbyEventMapper(
+    private val gameStartSeedProvider: () -> Long = { Random.nextLong() },
+) : NetworkToLobbyEventMapper {
     /**
      * Führt das typspezifische Mapping anhand der Payload-Klasse aus.
      */
@@ -178,7 +181,7 @@ class DefaultNetworkToLobbyEventMapper : NetworkToLobbyEventMapper {
         request.context.playerId
             ?: throw MissingPlayerContextMappingException(request.header.type)
 
-        val event = GameStarted(lobbyCode)
+        val event = GameStarted(lobbyCode, randomSeed = gameStartSeedProvider())
         return MappedLobbyEvents(
             lobbyCode = lobbyCode,
             events = listOf(event),

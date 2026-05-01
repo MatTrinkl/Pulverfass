@@ -48,15 +48,17 @@ object KickPlayerRequestSerializer : KSerializer<KickPlayerRequest> { ... }
 Alle NetworkMessage-Payloads müssen im folgenden Package liegen:
 
 ```
-shared/src/main/kotlin/at/aau/pulverfass/shared/network/message/
+shared/src/main/kotlin/at/aau/pulverfass/shared/message/lobby/
 ├── request/          # C2S Requests
 │   ├── KickPlayerRequest.kt
 │   ├── StartGameRequest.kt
 │   └── ...
-├── response/         # S2C Responses & Error Responses
+├── response/         # S2C Responses
 │   ├── KickPlayerResponse.kt
-│   ├── KickPlayerErrorResponse.kt
 │   ├── StartGameResponse.kt
+│   └── ...
+├── response/error/   # S2C Error Responses
+│   ├── KickPlayerErrorResponse.kt
 │   ├── StartGameErrorResponse.kt
 │   └── ...
 └── event/            # S2L Lobby Events
@@ -72,7 +74,7 @@ shared/src/main/kotlin/at/aau/pulverfass/shared/network/message/
 ## Payload-Klassen-Template
 
 ```kotlin
-import at.aau.pulverfass.shared.network.message.NetworkMessagePayload
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.Serializable
 
 @Serializable(with = ExampleRequestSerializer::class)
@@ -113,7 +115,7 @@ object ExampleRequestSerializer : KSerializer<ExampleRequest> {
     // Definiert die Struktur für Serialisierungs-/Deserialisierungsprozess.
     // FQCN (Fully Qualified Class Name) muss stabil für Protokollkompatibilität sein.
     override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.ExampleRequest") {
+        buildClassSerialDescriptor("at.aau.pulverfass.shared.message.lobby.request.ExampleRequest") {
             // element(name, serializer, ...)
             // Index 0, 1, 2, ... muss KONSISTENT bleiben!
             element("lobbyCode", LobbyCode.serializer().descriptor)
@@ -223,16 +225,16 @@ players = composite.decodeSerializableElement(descriptor, 2, serializer<List<Pla
 Der Descriptor-Name MUSS die **Fully Qualified Class Name (FQCN)** sein:
 
 ```
-at.aau.pulverfass.shared.network.message.<subpackage>.<ClassName>
+at.aau.pulverfass.shared.message.lobby.<subpackage>.<ClassName>
 ```
 
 ### Beispiele
 
 | Klasse | Location | Descriptor Name |
 |--------|----------|-----------------|
-| `KickPlayerRequest` | `shared/.../network/message/request/` | `at.aau.pulverfass.shared.network.message.request.KickPlayerRequest` |
-| `KickPlayerResponse` | `shared/.../network/message/response/` | `at.aau.pulverfass.shared.network.message.response.KickPlayerResponse` |
-| `PlayerKickedLobbyEvent` | `shared/.../network/message/event/` | `at.aau.pulverfass.shared.network.message.event.PlayerKickedLobbyEvent` |
+| `KickPlayerRequest` | `shared/.../message/lobby/request/` | `at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest` |
+| `KickPlayerResponse` | `shared/.../message/lobby/response/` | `at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse` |
+| `PlayerKickedLobbyEvent` | `shared/.../message/lobby/event/` | `at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent` |
 
 ### Warum FQCN?
 
@@ -271,7 +273,7 @@ decode(oldData)
 3. **Dokumentation:** Kommentar mit versionierter Historie
 
 ```kotlin
-buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.request.Example") {
+buildClassSerialDescriptor("at.aau.pulverfass.shared.message.lobby.request.Example") {
     element("lobbyCode", LobbyCode.serializer().descriptor)      // v1.0, stable
     element("targetPlayerId", PlayerId.serializer().descriptor)  // v1.0, stable
     element("reason", String.serializer().descriptor)            // v1.1, added
@@ -297,7 +299,7 @@ return ExampleRequest(
 ```
 
 **Nachricht-Format:**  
-`"Field 'lobbyCode' is missing. Descriptor: 'at.aau.pulverfass.shared.network.message.request.ExampleRequest'"`
+`"Field 'lobbyCode' is missing. Descriptor: 'at.aau.pulverfass.shared.message.lobby.request.ExampleRequest'"`
 
 ### Unbekannte Indizes
 
@@ -313,7 +315,7 @@ when (val index = composite.decodeElementIndex(descriptor)) {
 ```
 
 **Nachricht-Format:**  
-`"Unexpected index 99 in descriptor 'at.aau.pulverfass.shared.network.message.request.ExampleRequest'"`
+`"Unexpected index 99 in descriptor 'at.aau.pulverfass.shared.message.lobby.request.ExampleRequest'"`
 
 **Grund:** Schutz gegen zukünftige Versionen, die neue Felder hinzufügen könnten. Alte Dekodierer müssen sichere Fehler werfen, nicht Daten ignorieren.
 
@@ -321,46 +323,52 @@ when (val index = composite.decodeElementIndex(descriptor)) {
 
 ## Referenzimplementierungen
 
-### 1. GameJoinRequest (Einfach: 1 Feld)
+### 1. JoinLobbyRequest (Einfach: 2 Felder)
 
 **Payload:**
 ```kotlin
-@Serializable(with = GameJoinRequestSerializer::class)
-data class GameJoinRequest(
+@Serializable(with = JoinLobbyRequestSerializer::class)
+data class JoinLobbyRequest(
     val lobbyCode: LobbyCode,
+    val playerDisplayName: String,
 ) : NetworkMessagePayload
 ```
 
 **Serializer:**
 ```kotlin
-object GameJoinRequestSerializer : KSerializer<GameJoinRequest> {
+object JoinLobbyRequestSerializer : KSerializer<JoinLobbyRequest> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.request.GameJoinRequest"
+        "at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest"
     ) {
         element("lobbyCode", LobbyCode.serializer().descriptor)
+        element("playerDisplayName", String.serializer().descriptor)
     }
 
-    override fun serialize(encoder: Encoder, value: GameJoinRequest) {
+    override fun serialize(encoder: Encoder, value: JoinLobbyRequest) {
         val composite = encoder.beginStructure(descriptor)
         composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
+        composite.encodeSerializableElement(descriptor, 1, String.serializer(), value.playerDisplayName)
         composite.endStructure(descriptor)
     }
 
-    override fun deserialize(decoder: Decoder): GameJoinRequest {
+    override fun deserialize(decoder: Decoder): JoinLobbyRequest {
         val composite = decoder.beginStructure(descriptor)
         var lobbyCode: LobbyCode? = null
+        var playerDisplayName: String? = null
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
                 0 -> lobbyCode = composite.decodeSerializableElement(descriptor, 0, LobbyCode.serializer())
+                1 -> playerDisplayName = composite.decodeSerializableElement(descriptor, 1, String.serializer())
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
         }
 
         composite.endStructure(descriptor)
-        return GameJoinRequest(
-            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName)
+        return JoinLobbyRequest(
+            lobbyCode = lobbyCode ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
+            playerDisplayName = playerDisplayName ?: throw MissingFieldException("playerDisplayName", descriptor.serialName),
         )
     }
 }
@@ -382,7 +390,7 @@ data class KickPlayerRequest(
 ```kotlin
 object KickPlayerRequestSerializer : KSerializer<KickPlayerRequest> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.request.KickPlayerRequest"
+        "at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest"
     ) {
         element("lobbyCode", LobbyCode.serializer().descriptor)
         element("targetPlayerId", PlayerId.serializer().descriptor)
@@ -437,7 +445,7 @@ data class StartGameErrorResponse(
 ```kotlin
 object StartGameErrorResponseSerializer : KSerializer<StartGameErrorResponse> {
     override val descriptor = buildClassSerialDescriptor(
-        "at.aau.pulverfass.shared.network.message.response.StartGameErrorResponse"
+        "at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse"
     ) {
         element("reason", String.serializer().descriptor)
     }
@@ -476,7 +484,7 @@ Vor dem Merge jeder PR mit neuen NetworkMessage-Payloads checken:
 
 ### Struktur & Naming
 - [ ] Klasse folgt Naming-Konvention (`*Request`, `*Response`, `*Event`)
-- [ ] Klasse liegt im korrekten Package (`shared/.../network/message/request/`, etc.)
+- [ ] Klasse liegt im korrekten Package (`shared/.../message/lobby/request/`, etc.)
 - [ ] Klasse erbt von `NetworkMessagePayload`
 - [ ] Serializer ist `object` (Singleton), nicht `class`
 - [ ] Serializer-Name ist `<PayloadName>Serializer`
@@ -535,7 +543,7 @@ A: **Nein.** Request hat 1 Serializer. Response hat 1 Serializer. ErrorResponse 
 | Aspekt | Regel |
 |--------|-------|
 | **Naming** | *Request, *Response, *Event, *Serializer |
-| **Package** | `at.aau.pulverfass.shared.network.message.<subpackage>` |
+| **Package** | `at.aau.pulverfass.shared.message.lobby.<subpackage>` |
 | **Serializer** | `object XSerializer : KSerializer<X>` mit manuellem encode/decode |
 | **Descriptor** | FQCN, stabile Feldordnung, keine Änderungen |
 | **Fehler** | `MissingFieldException` für Pflichtfelder, `IllegalArgumentException` für unbekannte Indizes |

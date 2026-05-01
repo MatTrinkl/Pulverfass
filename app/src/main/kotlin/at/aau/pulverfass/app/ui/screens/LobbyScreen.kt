@@ -196,7 +196,11 @@ private fun LobbyCodeInputField(
     OutlinedTextField(
         value = value,
         onValueChange = {
-            // Nur vierstellige, alphanumerische Lobbycodes akzeptieren.
+            /*
+             * Lobbycodes werden schon beim Tippen normalisiert. Der Server
+             * bleibt trotzdem autoritativ, aber die UI verhindert offensichtliche
+             * Fehleingaben und hält den Join-Button stabil deaktivierbar.
+             */
             val uppercase = it.uppercase()
             if (uppercase.length <= 4 && uppercase.all { char -> char.isLetterOrDigit() }) {
                 onValueChange(uppercase)
@@ -293,7 +297,11 @@ private fun LobbyPrimaryActions(
 
         Button(
             onClick = {
-                // Zurück zur Auswahl zwischen Erstellen und Beitreten.
+                /*
+                 * Zurück zur Auswahl zwischen Erstellen und Beitreten. Der
+                 * eingegebene Code wird gelöscht, damit ein späterer Join nicht
+                 * versehentlich mit einem alten Wert startet.
+                 */
                 handlers.onJoinToggled(false)
                 handlers.onLobbyCodeCleared()
             },
