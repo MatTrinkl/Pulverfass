@@ -24,7 +24,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -240,11 +239,7 @@ class RoundHistoryIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    ): Any = receiveRelevantTestPayload(session)
 
     private fun defaultMapDefinition() =
         at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()

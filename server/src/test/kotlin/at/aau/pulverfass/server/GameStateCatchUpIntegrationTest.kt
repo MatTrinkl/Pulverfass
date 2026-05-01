@@ -21,7 +21,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,10 +30,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
 
@@ -241,20 +238,11 @@ class GameStateCatchUpIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    ): Any = receiveRelevantTestPayload(session)
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any? =
-        withTimeoutOrNull(500) {
-            val frame = session.incoming.receive()
-            assertTrue(frame is Frame.Binary)
-            MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-        }
+    ): Any? = receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 500)
 
     private fun defaultMapDefinition() =
         at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()

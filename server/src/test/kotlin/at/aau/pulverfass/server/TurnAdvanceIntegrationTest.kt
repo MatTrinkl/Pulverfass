@@ -29,7 +29,6 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +38,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -1087,40 +1085,21 @@ class TurnAdvanceIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any {
-        repeat(10) {
-            val payload = receiveAnyPayload(session)
-            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
-                return payload
-            }
-        }
-        throw AssertionError("Expected non-delta payload within 10 messages.")
-    }
+    ): Any = receiveRelevantTestPayload(session = session, skipGameSync = true)
 
     private suspend fun receiveAnyPayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    ): Any = receiveRelevantTestPayload(session)
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): Any? {
-        repeat(5) {
-            val frame =
-                withTimeoutOrNull(200) {
-                    session.incoming.receive()
-                } ?: return null
-            assertTrue(frame is Frame.Binary)
-            val payload = MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
-                return payload
-            }
-        }
-        return null
-    }
+    ): Any? =
+        receiveRelevantTestPayloadOrNull(
+            session = session,
+            skipGameSync = true,
+            timeoutMillis = 200,
+            maxMessages = 5,
+        )
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(

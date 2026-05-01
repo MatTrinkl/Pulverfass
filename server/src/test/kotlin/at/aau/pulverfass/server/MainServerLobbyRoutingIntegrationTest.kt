@@ -25,7 +25,6 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
-import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -52,7 +51,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +58,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -1683,6 +1680,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         reconnectResponse,
                     )
                     assertTrue(aliceConnectionId != reboundConnectionId)
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        receivePayload(reconnectingSession),
+                    )
 
                     val bobSession = client.webSocketSession("/ws")
                     val bobToken = discardConnectionHandshake(bobSession)
@@ -1735,33 +1736,17 @@ class MainServerLobbyRoutingIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload {
-        repeat(10) {
-            val payload = receiveAnyPayload(session)
-            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
-                return payload
-            }
-        }
-        throw AssertionError("Expected non-delta payload within 10 messages.")
-    }
+    ): NetworkMessagePayload = receiveRelevantTestPayload(session = session, skipGameSync = true)
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload? {
-        repeat(5) {
-            val frame =
-                withTimeoutOrNull(200) {
-                    session.incoming.receive()
-                } ?: return null
-
-            val binary = assertIs<Frame.Binary>(frame)
-            val payload = MessageCodec.decodePayload(binary.readBytes())
-            if (payload !is GameStateDeltaEvent && payload !is GameStateSnapshotBroadcast) {
-                return payload
-            }
-        }
-        return null
-    }
+    ): NetworkMessagePayload? =
+        receiveRelevantTestPayloadOrNull(
+            session = session,
+            skipGameSync = true,
+            timeoutMillis = 200,
+            maxMessages = 5,
+        )
 
     private suspend inline fun <reified T : NetworkMessagePayload> receivePayloadOfType(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
@@ -1780,15 +1765,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
     private suspend fun receiveAnyPayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload {
-        val frame =
-            withTimeout(5_000) {
-                session.incoming.receive()
-            }
-
-        val binary = assertIs<Frame.Binary>(frame)
-        return MessageCodec.decodePayload(binary.readBytes())
-    }
+    ): NetworkMessagePayload = receiveRelevantTestPayload(session)
 
     private suspend fun waitUntilProcessed(
         manager: LobbyManager,
@@ -1813,7 +1790,7 @@ class MainServerLobbyRoutingIntegrationTest {
     private suspend fun discardConnectionHandshake(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): SessionToken {
-        val payload = receivePayload(session)
+        val payload = receiveRawTestPayload(session)
         val response = assertIs<ConnectionResponse>(payload)
         return response.sessionToken
     }

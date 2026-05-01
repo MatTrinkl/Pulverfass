@@ -1,7 +1,10 @@
 package at.aau.pulverfass.server
 
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -15,8 +18,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -118,20 +119,25 @@ class ApplicationTest {
         }
 
     private suspend fun discardConnectionHandshake(session: DefaultClientWebSocketSession) {
-        val payload = receivePayload(session)
+        val payload = receiveRawTestPayload(session)
         assertTrue(payload is ConnectionResponse)
     }
 
     private suspend fun receivePayload(
         session: DefaultClientWebSocketSession,
     ): NetworkMessagePayload {
-        val frame =
-            withTimeout(5_000) {
-                session.incoming.receive()
+        repeat(20) {
+            val payload = receiveRawTestPayload(session)
+            if (
+                payload !is ConnectionResponse &&
+                payload !is GameStateDeltaEvent &&
+                payload !is GameStateSnapshotBroadcast &&
+                payload !is TurnStateUpdatedEvent
+            ) {
+                return payload
             }
-
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
+        }
+        throw AssertionError("Expected lobby payload within 20 messages.")
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {

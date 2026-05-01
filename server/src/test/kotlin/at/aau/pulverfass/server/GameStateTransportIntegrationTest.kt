@@ -33,7 +33,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,7 +42,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -378,18 +376,11 @@ class GameStateTransportIntegrationTest {
         session to connected.connectionId
     }
 
-    private suspend fun receiveAnyPayload(session: DefaultClientWebSocketSession): Any {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    private suspend fun receiveAnyPayload(session: DefaultClientWebSocketSession): Any =
+        receiveRelevantTestPayload(session)
 
     private suspend fun receivePayloadOrNull(session: DefaultClientWebSocketSession): Any? =
-        withTimeoutOrNull(300) {
-            val frame = session.incoming.receive()
-            assertTrue(frame is Frame.Binary)
-            MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-        }
+        receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 300)
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(
