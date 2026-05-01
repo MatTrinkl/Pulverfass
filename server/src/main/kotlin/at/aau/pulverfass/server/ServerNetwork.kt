@@ -99,7 +99,7 @@ class ServerNetwork(
     ) {
         transport.onBinaryMessage(connectionId, bytes)
 
-        val receivedPacket = packetReceiver.decode(connectionId, bytes)
+        val receivedPacket = packetReceiver.decodeWithoutPublishing(connectionId, bytes)
         if (receivedPacket == null) {
             val cause =
                 IllegalArgumentException(
@@ -118,8 +118,10 @@ class ServerNetwork(
             val payload = MessageCodec.decodePayload(receivedPacket)
             if (payload is ReconnectRequest) {
                 handleReconnect(connectionId, payload)
+                packetReceiver.publish(receivedPacket)
                 return
             }
+            packetReceiver.publish(receivedPacket)
             _events.emit(Network.Event.MessageReceived(connectionId, payload))
         } catch (cause: NetworkException) {
             logger.warn(

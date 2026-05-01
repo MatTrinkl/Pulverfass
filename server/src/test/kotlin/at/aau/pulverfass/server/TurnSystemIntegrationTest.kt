@@ -389,10 +389,38 @@ class TurnSystemIntegrationTest {
                     )
                     assertEquals(initialTurnEvent, receivePayload(playerThreeSession.first))
 
+                    val sessionsByPlayer =
+                        mapOf(
+                            hostId to hostSession.first,
+                            playerTwo to playerTwoSession.first,
+                            playerThree to playerThreeSession.first,
+                        )
+                    val connectionsByKnownPlayer =
+                        mapOf(
+                            hostId to hostSession.second,
+                            playerTwo to playerTwoSession.second,
+                            playerThree to playerThreeSession.second,
+                        )
+                    val runningTurnOrder =
+                        lobbyManager
+                            .getLobby(lobbyCode)
+                            ?.currentState()
+                            ?.turnOrder
+                            ?: error("TurnOrder muss nach Spielstart gesetzt sein.")
+                    val disconnectedNextPlayer = nextPlayerAfter(hostId, runningTurnOrder)
+                    val connectedWatcherSession =
+                        sessionsByPlayer
+                            .filterKeys { playerId ->
+                                playerId != hostId &&
+                                    playerId != disconnectedNextPlayer
+                            }
+                            .values
+                            .single()
+
                     disconnectPlayer(
-                        playerId = playerTwo,
-                        session = playerTwoSession.first,
-                        connectionId = playerTwoSession.second,
+                        playerId = disconnectedNextPlayer,
+                        session = sessionsByPlayer.getValue(disconnectedNextPlayer),
+                        connectionId = connectionsByKnownPlayer.getValue(disconnectedNextPlayer),
                         playersByConnection = playersByConnection,
                         connectionsByPlayer = connectionsByPlayer,
                         routingService = routingService,
@@ -400,21 +428,21 @@ class TurnSystemIntegrationTest {
 
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
-                        watchers = listOf(playerThreeSession.first),
+                        watchers = listOf(connectedWatcherSession),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.REINFORCEMENTS),
                         expectedUpdate =
                             TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.ATTACK, 1, hostId),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
-                        watchers = listOf(playerThreeSession.first),
+                        watchers = listOf(connectedWatcherSession),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.ATTACK),
                         expectedUpdate =
                             TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.FORTIFY, 1, hostId),
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
-                        watchers = listOf(playerThreeSession.first),
+                        watchers = listOf(connectedWatcherSession),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.FORTIFY),
                         expectedUpdate =
                             TurnStateUpdatedEvent(
@@ -427,38 +455,38 @@ class TurnSystemIntegrationTest {
                     )
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
-                        watchers = listOf(playerThreeSession.first),
+                        watchers = listOf(connectedWatcherSession),
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.DRAW_CARD),
                         expectedUpdate =
                             TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
-                                activePlayerId = playerTwo,
+                                activePlayerId = disconnectedNextPlayer,
                                 turnPhase = TurnPhase.REINFORCEMENTS,
                                 turnCount = 1,
                                 startPlayerId = hostId,
                                 isPaused = true,
                                 pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
-                                pausedPlayerId = playerTwo,
+                                pausedPlayerId = disconnectedNextPlayer,
                             ),
                     )
 
-                    val reconnectedPlayerTwo =
+                    val reconnectedNextPlayer =
                         connectSessionWithConnection(
                             client = client,
                             network = network,
-                            playerId = playerTwo,
+                            playerId = disconnectedNextPlayer,
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
 
-                    reconnectedPlayerTwo.first.send(
+                    reconnectedNextPlayer.first.send(
                         Frame.Binary(
                             fin = true,
                             data =
                                 MessageCodec.encode(
                                     TurnAdvanceRequest(
                                         lobbyCode = lobbyCode,
-                                        playerId = playerTwo,
+                                        playerId = disconnectedNextPlayer,
                                         expectedPhase = TurnPhase.REINFORCEMENTS,
                                     ),
                                 ),
@@ -466,16 +494,16 @@ class TurnSystemIntegrationTest {
                     )
                     val pausedError =
                         assertIs<TurnAdvanceErrorResponse>(
-                            receivePayload(reconnectedPlayerTwo.first),
+                            receivePayload(reconnectedNextPlayer.first),
                         )
                     assertEquals(TurnAdvanceErrorCode.GAME_PAUSED, pausedError.code)
 
-                    routingService.onPlayerConnected(playerTwo)
+                    routingService.onPlayerConnected(disconnectedNextPlayer)
 
                     val resumedEvent =
                         TurnStateUpdatedEvent(
                             lobbyCode = lobbyCode,
-                            activePlayerId = playerTwo,
+                            activePlayerId = disconnectedNextPlayer,
                             turnPhase = TurnPhase.REINFORCEMENTS,
                             turnCount = 1,
                             startPlayerId = hostId,
@@ -484,10 +512,10 @@ class TurnSystemIntegrationTest {
                             pausedPlayerId = null,
                         )
                     assertEquals(resumedEvent, receivePayload(hostSession.first))
-                    assertEquals(resumedEvent, receivePayload(playerThreeSession.first))
-                    assertEquals(resumedEvent, receivePayload(reconnectedPlayerTwo.first))
+                    assertEquals(resumedEvent, receivePayload(connectedWatcherSession))
+                    assertEquals(resumedEvent, receivePayload(reconnectedNextPlayer.first))
 
-                    reconnectedPlayerTwo.first.send(
+                    reconnectedNextPlayer.first.send(
                         Frame.Binary(
                             fin = true,
                             data = MessageCodec.encode(TurnStateGetRequest(lobbyCode)),
@@ -496,17 +524,19 @@ class TurnSystemIntegrationTest {
                     assertEquals(
                         TurnStateGetResponse(
                             lobbyCode = lobbyCode,
-                            activePlayerId = playerTwo,
+                            activePlayerId = disconnectedNextPlayer,
                             turnPhase = TurnPhase.REINFORCEMENTS,
                             turnCount = 1,
                             startPlayerId = hostId,
                         ),
-                        receivePayload(reconnectedPlayerTwo.first),
+                        receivePayload(reconnectedNextPlayer.first),
                     )
 
-                    hostSession.first.close()
-                    playerThreeSession.first.close()
-                    reconnectedPlayerTwo.first.close()
+                    sessionsByPlayer
+                        .filterKeys { playerId -> playerId != disconnectedNextPlayer }
+                        .values
+                        .forEach { session -> session.close() }
+                    reconnectedNextPlayer.first.close()
                 }
             } finally {
                 routingService.stop()
