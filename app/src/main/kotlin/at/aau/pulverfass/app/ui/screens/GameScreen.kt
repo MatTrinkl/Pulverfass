@@ -86,18 +86,40 @@ fun GameScreen(controller: LobbyController) {
     val mapPainter = painterResource(id = R.drawable.map_world)
 
     GameScreenContent(
-        players = players,
-        localPlayerId = lobbyState.ownPlayerId,
-        uiState = lobbyState.gameState,
-        isConnected = lobbyState.isConnected,
-        pendingCommandKeys = lobbyState.pendingCommandKeys,
-        onRegionSelected = controller::selectGameRegion,
-        onToggleCards = controller::toggleCards,
-        onAdvanceTurn = controller::advanceTurn,
-        onRefreshGameState = controller::refreshGameState,
-        mapPainter = mapPainter,
+        contentState =
+            GameScreenContentState(
+                players = players,
+                localPlayerId = lobbyState.ownPlayerId,
+                uiState = lobbyState.gameState,
+                isConnected = lobbyState.isConnected,
+                pendingCommandKeys = lobbyState.pendingCommandKeys,
+                mapPainter = mapPainter,
+            ),
+        actions =
+            GameScreenActions(
+                onRegionSelected = controller::selectGameRegion,
+                onToggleCards = controller::toggleCards,
+                onAdvanceTurn = controller::advanceTurn,
+                onRefreshGameState = controller::refreshGameState,
+            ),
     )
 }
+
+internal data class GameScreenContentState(
+    val players: List<GamePlayerUi>,
+    val localPlayerId: PlayerId?,
+    val uiState: GameUiState,
+    val isConnected: Boolean,
+    val pendingCommandKeys: Set<LobbyCommandKey>,
+    val mapPainter: Painter,
+)
+
+internal data class GameScreenActions(
+    val onRegionSelected: (String) -> Unit,
+    val onToggleCards: () -> Unit,
+    val onAdvanceTurn: () -> Unit,
+    val onRefreshGameState: () -> Unit,
+)
 
 /**
  * Baut das eigentliche Game-Layout aus Karte, HUD, Seitenteilen und Aktionen.
@@ -115,17 +137,19 @@ fun GameScreen(controller: LobbyController) {
  */
 @Composable
 internal fun GameScreenContent(
-    players: List<GamePlayerUi>,
-    localPlayerId: PlayerId?,
-    uiState: GameUiState,
-    isConnected: Boolean,
-    pendingCommandKeys: Set<LobbyCommandKey>,
-    onRegionSelected: (String) -> Unit,
-    onToggleCards: () -> Unit,
-    onAdvanceTurn: () -> Unit,
-    onRefreshGameState: () -> Unit,
-    mapPainter: Painter,
+    contentState: GameScreenContentState,
+    actions: GameScreenActions,
 ) {
+    val players = contentState.players
+    val localPlayerId = contentState.localPlayerId
+    val uiState = contentState.uiState
+    val isConnected = contentState.isConnected
+    val pendingCommandKeys = contentState.pendingCommandKeys
+    val mapPainter = contentState.mapPainter
+    val onRegionSelected = actions.onRegionSelected
+    val onToggleCards = actions.onToggleCards
+    val onAdvanceTurn = actions.onAdvanceTurn
+    val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
 

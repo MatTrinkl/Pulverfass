@@ -6,6 +6,7 @@ import at.aau.pulverfass.app.network.ClientNetwork
 import at.aau.pulverfass.app.storage.NoOpReconnectSessionStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
@@ -778,8 +779,8 @@ class LobbyController(
     }
 
     private fun handleReconnectResponse(payload: ReconnectResponse) {
-        val confirmedSessionToken = reconnectSessionToken?.value ?: state.value.sessionToken
         val shouldRequestCatchUp = state.value.gameStarted
+        val pendingSessionToken = reconnectSessionToken?.value ?: state.value.sessionToken
         awaitingReconnectResponse = false
         reconnectSessionToken = null
 
@@ -813,9 +814,11 @@ class LobbyController(
             return
         }
 
-        if (confirmedSessionToken != null) {
-            reconnectSessionStore.saveSessionToken(confirmedSessionToken)
-        }
+        val confirmedSessionToken =
+            requireNotNull(pendingSessionToken) {
+                "Successful reconnect response requires a known session token."
+            }
+        reconnectSessionStore.saveSessionToken(confirmedSessionToken)
 
         _state.update {
             it.copy(
@@ -824,11 +827,11 @@ class LobbyController(
                 isReconnecting = false,
                 statusText = config.statusConnected,
                 errorText = null,
-                sessionToken = confirmedSessionToken ?: it.sessionToken,
-                activeLobbyCode = payload.lobbyCode?.value ?: it.activeLobbyCode,
-                lobbyCode = payload.lobbyCode?.value ?: it.lobbyCode,
-                playerName = payload.playerDisplayName ?: it.playerName,
-                ownPlayerId = payload.playerId ?: it.ownPlayerId,
+                sessionToken = confirmedSessionToken,
+                activeLobbyCode = payload.lobbyCodeValueOrNull(it.activeLobbyCode),
+                lobbyCode = payload.lobbyCodeValueOr(it.lobbyCode),
+                playerName = payload.playerDisplayNameOr(it.playerName),
+                ownPlayerId = payload.playerIdOr(it.ownPlayerId),
                 gameState =
                     it.gameState.copy(
                         isCatchingUp = it.gameStarted,
@@ -845,6 +848,42 @@ class LobbyController(
                     "Session wiederhergestellt. " +
                         "Spielstand wird synchronisiert.",
             )
+        }
+    }
+
+    private fun ReconnectResponse.lobbyCodeValueOrNull(fallback: String?): String? {
+        val restoredLobbyCode = lobbyCode
+        return if (restoredLobbyCode == null) {
+            fallback
+        } else {
+            restoredLobbyCode.value
+        }
+    }
+
+    private fun ReconnectResponse.lobbyCodeValueOr(fallback: String): String {
+        val restoredLobbyCode = lobbyCode
+        return if (restoredLobbyCode == null) {
+            fallback
+        } else {
+            restoredLobbyCode.value
+        }
+    }
+
+    private fun ReconnectResponse.playerDisplayNameOr(fallback: String): String {
+        val restoredPlayerDisplayName = playerDisplayName
+        return if (restoredPlayerDisplayName == null) {
+            fallback
+        } else {
+            restoredPlayerDisplayName
+        }
+    }
+
+    private fun ReconnectResponse.playerIdOr(fallback: PlayerId?): PlayerId? {
+        val restoredPlayerId = playerId
+        return if (restoredPlayerId == null) {
+            fallback
+        } else {
+            restoredPlayerId
         }
     }
 

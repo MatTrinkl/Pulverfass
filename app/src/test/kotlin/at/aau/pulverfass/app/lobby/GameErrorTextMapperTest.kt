@@ -18,11 +18,11 @@ class GameErrorTextMapperTest {
     @Test
     fun `map get errors are translated for UI`() {
         assertEquals(
-            "Das Spiel wurde nicht gefunden.",
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             GameErrorTextMapper.map(MapGetErrorResponse(MapGetErrorCode.GAME_NOT_FOUND, "raw")),
         )
         assertEquals(
-            "Du bist diesem Spiel noch nicht zugeordnet.",
+            GameErrorTextMapper.NOT_IN_GAME_TEXT,
             GameErrorTextMapper.map(MapGetErrorResponse(MapGetErrorCode.NOT_IN_GAME, "raw")),
         )
         assertEquals(
@@ -34,13 +34,13 @@ class GameErrorTextMapperTest {
     @Test
     fun `snapshot errors are translated for UI`() {
         assertEquals(
-            "Das Spiel wurde nicht gefunden.",
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             GameErrorTextMapper.map(
                 GameStateCatchUpErrorResponse(GameStateCatchUpErrorCode.GAME_NOT_FOUND, "raw"),
             ),
         )
         assertEquals(
-            "Du bist diesem Spiel noch nicht zugeordnet.",
+            GameErrorTextMapper.NOT_IN_GAME_TEXT,
             GameErrorTextMapper.map(
                 GameStateCatchUpErrorResponse(GameStateCatchUpErrorCode.NOT_IN_GAME, "raw"),
             ),
@@ -59,7 +59,7 @@ class GameErrorTextMapperTest {
     @Test
     fun `private and turn state errors are translated for UI`() {
         assertEquals(
-            "Das Spiel wurde nicht gefunden.",
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             GameErrorTextMapper.map(
                 GameStatePrivateGetErrorResponse(
                     GameStatePrivateGetErrorCode.GAME_NOT_FOUND,
@@ -68,7 +68,7 @@ class GameErrorTextMapperTest {
             ),
         )
         assertEquals(
-            "Du bist diesem Spiel noch nicht zugeordnet.",
+            GameErrorTextMapper.NOT_IN_GAME_TEXT,
             GameErrorTextMapper.map(
                 GameStatePrivateGetErrorResponse(GameStatePrivateGetErrorCode.NOT_IN_GAME, "raw"),
             ),
@@ -82,7 +82,7 @@ class GameErrorTextMapperTest {
             ).contains("Private Spielerdaten"),
         )
         assertEquals(
-            "Das Spiel wurde nicht gefunden.",
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             GameErrorTextMapper.map(
                 TurnStateGetErrorResponse(TurnStateGetErrorCode.GAME_NOT_FOUND, "raw"),
             ),
@@ -115,7 +115,7 @@ class GameErrorTextMapperTest {
             ).contains("Lade den Spielstand neu."),
         )
         assertEquals(
-            "Das Spiel wurde nicht gefunden.",
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             GameErrorTextMapper.map(
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_NOT_FOUND, "raw"),
             ),

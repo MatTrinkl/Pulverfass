@@ -126,64 +126,50 @@ class MainServerLobbyRoutingService(
     }
 
     private suspend fun routePacket(packet: ReceivedPacket) {
-        runCatching {
-            val request = decodeRequest(packet)
-            val payload = request.payload
-            if (payload is ReconnectRequest) {
+        runCatching { routeDecodedPacket(packet) }
+            .onFailure { cause -> handlePacketRoutingFailure(packet, cause) }
+    }
+
+    private suspend fun routeDecodedPacket(packet: ReceivedPacket) {
+        val request = decodeRequest(packet)
+        when (val payload = request.payload) {
+            is ReconnectRequest ->
                 dispatchReconnectLobbySnapshot(
                     connectionId = packet.connectionId,
                     payload = payload,
                 )
-                return
-            }
-            if (request.payload is CreateLobbyRequest) {
-                routeCreateLobbyRequest(packet)
-                return
-            }
-            if (request.payload is MapGetRequest) {
-                routeMapGetRequest(request)
-                return
-            }
-            if (request.payload is GameStateCatchUpRequest) {
-                routeGameStateCatchUpRequest(request)
-                return
-            }
-            if (request.payload is GameStatePrivateGetRequest) {
-                routeGameStatePrivateGetRequest(request)
-                return
-            }
-            if (request.payload is StartPlayerSetRequest) {
-                routeStartPlayerSetRequest(request)
-                return
-            }
-            if (request.payload is TurnStateGetRequest) {
-                routeTurnStateGetRequest(request)
-                return
-            }
-            if (request.payload is TurnAdvanceRequest) {
-                routeTurnAdvanceRequest(request)
-                return
-            }
-            routeDecodedRequest(request)
-        }.onFailure { cause ->
-            logger.warn(
-                "Failed to route packet for connection {}",
-                packet.connectionId.value,
-                cause,
-            )
-            hooks.onRoutingError(
-                packet.connectionId,
-                LobbyRoutingError.InvalidRoutingData(
-                    reason = cause.message ?: "Technischer Routingfehler.",
-                    context =
-                        LobbyRoutingContext(
-                            connectionId = packet.connectionId,
-                            messageType = packet.header.type,
-                        ),
-                    cause = cause,
-                ),
-            )
+            is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
+            is MapGetRequest -> routeMapGetRequest(request)
+            is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
+            is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
+            is StartPlayerSetRequest -> routeStartPlayerSetRequest(request)
+            is TurnStateGetRequest -> routeTurnStateGetRequest(request)
+            is TurnAdvanceRequest -> routeTurnAdvanceRequest(request)
+            else -> routeDecodedRequest(request)
         }
+    }
+
+    private fun handlePacketRoutingFailure(
+        packet: ReceivedPacket,
+        cause: Throwable,
+    ) {
+        logger.warn(
+            "Failed to route packet for connection {}",
+            packet.connectionId.value,
+            cause,
+        )
+        hooks.onRoutingError(
+            packet.connectionId,
+            LobbyRoutingError.InvalidRoutingData(
+                reason = cause.message ?: "Technischer Routingfehler.",
+                context =
+                    LobbyRoutingContext(
+                        connectionId = packet.connectionId,
+                        messageType = packet.header.type,
+                    ),
+                cause = cause,
+            ),
+        )
     }
 
     private fun decodeRequest(packet: ReceivedPacket): DecodedNetworkRequest {

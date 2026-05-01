@@ -15,33 +15,35 @@ import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorRe
  * Übersetzt serverseitige Fehlercodes in kurze deutsche App-Texte.
  */
 object GameErrorTextMapper {
+    internal const val GAME_NOT_FOUND_TEXT = "Das Spiel wurde nicht gefunden."
+    internal const val NOT_IN_GAME_TEXT = "Du bist diesem Spiel noch nicht zugeordnet."
+
     fun map(error: MapGetErrorResponse): String =
         when (error.code) {
-            MapGetErrorCode.GAME_NOT_FOUND -> "Das Spiel wurde nicht gefunden."
-            MapGetErrorCode.NOT_IN_GAME -> "Du bist diesem Spiel noch nicht zugeordnet."
+            MapGetErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            MapGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             MapGetErrorCode.MAP_NOT_READY -> "Die Karte ist noch nicht bereit."
         }
 
     fun map(error: GameStateCatchUpErrorResponse): String =
         when (error.code) {
-            GameStateCatchUpErrorCode.GAME_NOT_FOUND -> "Das Spiel wurde nicht gefunden."
-            GameStateCatchUpErrorCode.NOT_IN_GAME -> "Du bist diesem Spiel noch nicht zugeordnet."
+            GameStateCatchUpErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            GameStateCatchUpErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
                 "Der Spielstand ist noch nicht bereit."
         }
 
     fun map(error: GameStatePrivateGetErrorResponse): String =
         when (error.code) {
-            GameStatePrivateGetErrorCode.GAME_NOT_FOUND -> "Das Spiel wurde nicht gefunden."
-            GameStatePrivateGetErrorCode.NOT_IN_GAME ->
-                "Du bist diesem Spiel noch nicht zugeordnet."
+            GameStatePrivateGetErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            GameStatePrivateGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStatePrivateGetErrorCode.REQUESTER_MISMATCH ->
                 "Private Spielerdaten können nur für dich selbst geladen werden."
         }
 
     fun map(error: TurnStateGetErrorResponse): String =
         when (error.code) {
-            TurnStateGetErrorCode.GAME_NOT_FOUND -> "Das Spiel wurde nicht gefunden."
+            TurnStateGetErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
             TurnStateGetErrorCode.TURN_STATE_NOT_READY ->
                 "Der aktuelle Zugstatus ist noch nicht bereit."
         }
@@ -52,6 +54,6 @@ object GameErrorTextMapper {
             TurnAdvanceErrorCode.GAME_PAUSED -> "Das Spiel ist aktuell pausiert."
             TurnAdvanceErrorCode.PHASE_MISMATCH ->
                 "Die Phase hat sich geändert. Lade den Spielstand neu."
-            TurnAdvanceErrorCode.GAME_NOT_FOUND -> "Das Spiel wurde nicht gefunden."
+            TurnAdvanceErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
         }
 }

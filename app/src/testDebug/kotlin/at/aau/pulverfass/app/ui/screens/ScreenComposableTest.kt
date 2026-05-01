@@ -216,28 +216,34 @@ class ScreenComposableTest {
         composeTestRule.setContent {
             AndroidAppTheme {
                 GameScreenContent(
-                    players =
-                        listOf(
-                            GamePlayerUi(
-                                playerId = playerId,
-                                name = "Alice",
-                                avatarText = "A",
-                                color = Color(0xFF6FD4C5),
-                            ),
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    handCards = listOf("Geheime Karte"),
+                                    cardsVisible = false,
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
                         ),
-                    localPlayerId = playerId,
-                    uiState =
-                        GameUiState(
-                            handCards = listOf("Geheime Karte"),
-                            cardsVisible = false,
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
                         ),
-                    isConnected = true,
-                    pendingCommandKeys = emptySet(),
-                    onRegionSelected = {},
-                    onToggleCards = {},
-                    onAdvanceTurn = {},
-                    onRefreshGameState = {},
-                    mapPainter = ColorPainter(Color.White),
                 )
             }
         }
