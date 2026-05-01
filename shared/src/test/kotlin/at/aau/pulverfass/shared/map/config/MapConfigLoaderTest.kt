@@ -4,9 +4,11 @@ import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.io.ByteArrayInputStream
 
 class MapConfigLoaderTest {
     @Test
@@ -235,6 +237,68 @@ class MapConfigLoaderTest {
 
         assertNotNull(continent)
         assertEquals(listOf(TerritoryId("alpha"), TerritoryId("beta")), continent?.territoryIds)
+    }
+
+    @Test
+    fun `load liest JSON aus input stream`() {
+        val definition =
+            MapConfigLoader.load(
+                ByteArrayInputStream(validEdgesJson().encodeToByteArray()),
+            )
+
+        assertEquals(MapConfig.CURRENT_SCHEMA_VERSION, definition.schemaVersion)
+        assertEquals(3, definition.territories.size)
+    }
+
+    @Test
+    fun `loadResource normalisiert fuehrenden slash`() {
+        val definition =
+            MapConfigLoader.loadResource(
+                "/${MapConfigLoader.DEFAULT_RESOURCE_PATH}",
+            )
+
+        assertEquals(23, definition.territories.size)
+    }
+
+    @Test
+    fun `fehlende resource wird als load exception gemeldet`() {
+        val exception =
+            assertThrows<MapConfigLoadException> {
+                MapConfigLoader.loadResource("config/maps/does-not-exist.json")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("wurde nicht gefunden"))
+    }
+
+    @Test
+    fun `ungueltiges JSON wird als load exception mit cause gemeldet`() {
+        val exception =
+            assertThrows<MapConfigLoadException> {
+                MapConfigLoader.loadFromJson("{ invalid json")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("konnte nicht geparst werden"))
+        assertNotNull(exception.cause)
+    }
+
+    @Test
+    fun `config model defaults and invariants are explicit`() {
+        val territory = TerritoryConfig(territoryId = TerritoryId("alpha"))
+        val edge = TerritoryEdgeConfig(TerritoryId("beta"))
+        val cause = IllegalStateException("source")
+        val exception = MapConfigLoadException("load failed", cause)
+
+        assertTrue(territory.edges.isEmpty())
+        assertTrue(territory.adjacentTerritoryIds.isEmpty())
+        assertEquals(TerritoryId("beta"), edge.targetId)
+        assertSame(cause, exception.cause)
+        assertThrows<IllegalArgumentException> {
+            ContinentConfig(
+                continentId = ContinentId("north"),
+                territoryIds = listOf(TerritoryId("alpha")),
+                bonusValue = -1,
+            )
+        }
     }
 
     private fun validEdgesJson(): String =
