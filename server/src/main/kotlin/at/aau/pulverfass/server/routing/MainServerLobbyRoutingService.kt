@@ -20,6 +20,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -210,8 +212,30 @@ class MainServerLobbyRoutingService(
         }
     }
 
-    suspend fun onPlayerDisconnected(playerId: PlayerId) {
+    suspend fun onPlayerDisconnected(
+        connectionId: ConnectionId,
+        playerId: PlayerId,
+        reason: String?,
+    ) {
+        val currentConnectionId = connectionIdResolver(playerId)
+        if (currentConnectionId != null && currentConnectionId != connectionId) {
+            logger.info(
+                "Ignoring stale disconnect after reconnect: playerId={} staleConnectionId={} " +
+                    "currentConnectionId={}",
+                playerId.value,
+                connectionId.value,
+                currentConnectionId.value,
+            )
+            return
+        }
+
         val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId) ?: return
+        broadcastPlayerConnectionLost(
+            lobbyCode = lobbyCode,
+            playerId = playerId,
+            reason = connectionLostReason(reason),
+        )
+
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
         val currentTurnState = currentState.turnState ?: return
@@ -1237,6 +1261,48 @@ class MainServerLobbyRoutingService(
             pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
             pausedPlayerId = pausedPlayerId,
         )
+
+    private suspend fun broadcastPlayerConnectionLost(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        reason: PlayerConnectionLostReason,
+    ) {
+        val members = lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
+        val event =
+            PlayerConnectionLostEvent(
+                lobbyCode = lobbyCode,
+                playerId = playerId,
+                reason = reason,
+            )
+
+        logger.info(
+            "Connection lost broadcast: lobbyCode={} playerId={} reason={}",
+            lobbyCode.value,
+            playerId.value,
+            reason.name,
+        )
+
+        members
+            .filter { memberId -> memberId != playerId }
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { activeConnectionId ->
+                network.send(activeConnectionId, event)
+            }
+    }
+
+    private fun connectionLostReason(reason: String?): PlayerConnectionLostReason {
+        val normalizedReason = reason?.lowercase().orEmpty()
+        return if (
+            normalizedReason.contains("ping") ||
+            normalizedReason.contains("pong") ||
+            normalizedReason.contains("timeout")
+        ) {
+            PlayerConnectionLostReason.HEARTBEAT_TIMEOUT
+        } else {
+            PlayerConnectionLostReason.SOCKET_CLOSED
+        }
+    }
 
     private fun TurnState.toUpdatedEvent(
         lobbyCode: LobbyCode,

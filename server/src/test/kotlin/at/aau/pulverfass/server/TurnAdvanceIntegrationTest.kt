@@ -17,6 +17,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -681,7 +683,14 @@ class TurnAdvanceIntegrationTest {
                         routingService = routingService,
                     )
 
-                    assertNull(receivePayloadOrNull(playerOneSession.first))
+                    assertEquals(
+                        PlayerConnectionLostEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                        ),
+                        receivePayload(playerOneSession.first),
+                    )
                     val snapshot =
                         lobbyManager.getLobby(lobbyCode)?.currentState()
                             ?: error("snapshot missing")
@@ -770,6 +779,14 @@ class TurnAdvanceIntegrationTest {
                         playersByConnection = playersByConnection,
                         connectionsByPlayer = connectionsByPlayer,
                         routingService = routingService,
+                    )
+                    assertEquals(
+                        PlayerConnectionLostEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                        ),
+                        receivePayload(playerOneSession.first),
                     )
 
                     playerOneSession.first.send(
@@ -1051,7 +1068,11 @@ class TurnAdvanceIntegrationTest {
     ) {
         playersByConnection.remove(connectionId)
         connectionsByPlayer.remove(playerId)
-        routingService.onPlayerDisconnected(playerId)
+        routingService.onPlayerDisconnected(
+            connectionId = connectionId,
+            playerId = playerId,
+            reason = "socket closed",
+        )
         session.close()
     }
 

@@ -203,11 +203,15 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {
-                    network.sessionManager
-                        .getByConnectionId(event.connectionId)
-                        ?.sessionToken
+                    event.sessionToken
                         ?.let(sessionContextRegistry::playerIdForSession)
-                        ?.let { playerId -> routingService.onPlayerDisconnected(playerId) }
+                        ?.let { playerId ->
+                            routingService.onPlayerDisconnected(
+                                connectionId = event.connectionId,
+                                playerId = playerId,
+                                reason = event.reason,
+                            )
+                        }
                 }
 
                 else -> Unit

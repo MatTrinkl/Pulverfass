@@ -25,6 +25,8 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -1716,6 +1718,109 @@ class MainServerLobbyRoutingIntegrationTest {
                 routingService.stop()
                 lobbyManager.shutdownAll()
                 serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `disconnect broadcasts player connection lost event only to affected lobby`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val aliceSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(aliceSession)
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyA =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(aliceSession),
+                    ).lobbyCode
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(aliceSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val bobSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(bobSession)
+                bobSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Bob")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(bobSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val carolSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(carolSession)
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyB =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(carolSession),
+                    ).lobbyCode
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyB, "Carol")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyB), receivePayload(carolSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
+                )
+                receivePayloadOfType<TurnStateUpdatedEvent>(carolSession)
+
+                bobSession.close()
+
+                assertEquals(
+                    PlayerConnectionLostEvent(
+                        lobbyCode = lobbyA,
+                        playerId = PlayerId(2),
+                        reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                    ),
+                    receivePayloadOfType<PlayerConnectionLostEvent>(aliceSession),
+                )
+                assertNull(receivePayloadOrNull(carolSession))
+
+                aliceSession.close()
+                carolSession.close()
             }
         }
 

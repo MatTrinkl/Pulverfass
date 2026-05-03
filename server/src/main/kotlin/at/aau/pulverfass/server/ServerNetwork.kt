@@ -142,9 +142,15 @@ class ServerNetwork(
         connectionId: ConnectionId,
         reason: String?,
     ) {
-        sessionManager.detachConnection(connectionId)
+        val detachedSession = sessionManager.detachConnection(connectionId)
         transport.onDisconnected(connectionId, reason)
-        _events.emit(Network.Event.Disconnected(connectionId, reason))
+        _events.emit(
+            Network.Event.Disconnected(
+                connectionId = connectionId,
+                reason = reason,
+                sessionToken = detachedSession?.sessionToken,
+            ),
+        )
     }
 
     /**
