@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -69,6 +70,8 @@ internal object NetworkPayloadRegistry {
             JoinLobbyErrorResponse::class.java to MessageType.LOBBY_JOIN_ERROR_RESPONSE,
             JoinLobbyResponse::class.java to MessageType.LOBBY_JOIN_RESPONSE,
             PlayerJoinedLobbyEvent::class.java to MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
+            PlayerConnectionLostEvent::class.java to
+                MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
             LeaveLobbyRequest::class.java to MessageType.LOBBY_LEAVE_REQUEST,
             LeaveLobbyResponse::class.java to MessageType.LOBBY_LEAVE_RESPONSE,
             PlayerLeftLobbyEvent::class.java to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
@@ -135,6 +138,8 @@ internal object NetworkPayloadRegistry {
                 encodeWith(JoinLobbyErrorResponse.serializer()),
             JoinLobbyResponse::class.java to encodeWith(JoinLobbyResponse.serializer()),
             PlayerJoinedLobbyEvent::class.java to encodeWith(PlayerJoinedLobbyEvent.serializer()),
+            PlayerConnectionLostEvent::class.java to
+                encodeWith(PlayerConnectionLostEvent.serializer()),
             LeaveLobbyRequest::class.java to encodeWith(LeaveLobbyRequest.serializer()),
             LeaveLobbyResponse::class.java to encodeWith(LeaveLobbyResponse.serializer()),
             PlayerLeftLobbyEvent::class.java to encodeWith(PlayerLeftLobbyEvent.serializer()),
@@ -201,6 +206,8 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_JOIN_RESPONSE to decodeWith(JoinLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_JOINED_BROADCAST to
                 decodeWith(PlayerJoinedLobbyEvent.serializer()),
+            MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST to
+                decodeWith(PlayerConnectionLostEvent.serializer()),
             MessageType.LOBBY_LEAVE_REQUEST to decodeWith(LeaveLobbyRequest.serializer()),
             MessageType.LOBBY_LEAVE_RESPONSE to decodeWith(LeaveLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_LEFT_BROADCAST to

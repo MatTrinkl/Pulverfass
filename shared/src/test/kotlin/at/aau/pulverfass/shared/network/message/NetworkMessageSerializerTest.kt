@@ -13,6 +13,8 @@ import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -278,6 +280,25 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered player connection lost broadcast by runtime type`() {
+        val payload =
+            PlayerConnectionLostEvent(
+                lobbyCode = LobbyCode("EF57"),
+                playerId = PlayerId(17),
+                reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
                 bytes,
             )
 

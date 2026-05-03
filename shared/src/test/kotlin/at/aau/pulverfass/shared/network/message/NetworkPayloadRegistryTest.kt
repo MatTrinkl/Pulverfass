@@ -16,6 +16,8 @@ import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -201,6 +203,27 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_PLAYER_JOINED_BROADCAST, messageType)
         assertEquals(
             """{"lobbyCode":"EF56","playerId":8,"playerDisplayName":"Bob"}""",
+            serialized,
+        )
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for player connection lost event`() {
+        val payload =
+            PlayerConnectionLostEvent(
+                lobbyCode = LobbyCode("EF57"),
+                playerId = PlayerId(18),
+                reason = PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST, messageType)
+        assertEquals(
+            """{"lobbyCode":"EF57","playerId":18,"reason":"HEARTBEAT_TIMEOUT"}""",
             serialized,
         )
         assertEquals(payload, deserialized)

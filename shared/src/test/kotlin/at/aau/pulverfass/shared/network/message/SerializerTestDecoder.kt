@@ -11,6 +11,7 @@ internal class SerializerTestDecoder(
     private val indices: IntArray,
     private val stringElements: Map<Int, String> = emptyMap(),
     private val scalarString: String? = null,
+    private val scalarLong: Long? = null,
 ) : Decoder, CompositeDecoder {
     private var indexPointer = 0
 
@@ -46,7 +47,7 @@ internal class SerializerTestDecoder(
 
     override fun decodeInt(): Int = error("Not used in serializer coverage tests.")
 
-    override fun decodeLong(): Long = error("Not used in serializer coverage tests.")
+    override fun decodeLong(): Long = scalarLong ?: error("No scalar long configured.")
 
     override fun decodeNotNullMark(): Boolean = true
 
@@ -94,7 +95,7 @@ internal class SerializerTestDecoder(
     override fun decodeLongElement(
         descriptor: SerialDescriptor,
         index: Int,
-    ): Long = error("Not used in serializer coverage tests.")
+    ): Long = scalarLong ?: error("No scalar long configured.")
 
     override fun decodeShortElement(
         descriptor: SerialDescriptor,

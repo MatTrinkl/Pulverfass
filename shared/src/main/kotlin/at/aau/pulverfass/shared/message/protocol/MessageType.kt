@@ -25,6 +25,9 @@ enum class MessageType(val id: Int) {
     /** Antwort des Servers auf einen Reconnect-Versuch. */
     CONNECTION_RECONNECT_RESPONSE(51),
 
+    /** Broadcast, dass ein Lobby-Spieler technisch die Verbindung verloren hat. */
+    LOBBY_PLAYER_CONNECTION_LOST_BROADCAST(52),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

@@ -9,6 +9,8 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -139,6 +141,21 @@ class MessageCodecTest {
                 lobbyCode = LobbyCode("EF56"),
                 playerId = PlayerId(7),
                 playerDisplayName = "Carol",
+            )
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode player connection lost event payload directly`() {
+        val payload =
+            PlayerConnectionLostEvent(
+                lobbyCode = LobbyCode("EF57"),
+                playerId = PlayerId(15),
+                reason = PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
             )
 
         val bytes = MessageCodec.encode(payload)
