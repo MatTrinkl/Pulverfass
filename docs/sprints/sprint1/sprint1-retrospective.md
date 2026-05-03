@@ -25,27 +25,27 @@ Die Ergebnisse werden zusammengefasst und vom Team bestätigt.
 
 # Kurzfassung der Ergebnisse:
 
-**Liked – Was lief gut?**  
+- **Liked – Was lief gut?**  
 Die klare Rollenverteilung hat gut funktioniert.  
 Die gute Struktur hat einen schnellen Projektstart ermöglicht.  
-Es gab keine größeren Konflikte im Team.
+Es gab keine größeren Konflikte im Team.  
 
-**Learned – Was haben wir gelernt?**  
-Agile Rollenverteilung funktioniert, wenn sie aktiv gelebt wird.    
+- **Learned – Was haben wir gelernt?**  
+Agile Rollenverteilung funktioniert, wenn sie aktiv gelebt wird.  
 Klare Kommunikation ist entscheidend für den Fortschritt.  
-Gemeinsames Verständnis im Team ist zentral für effizientes Arbeiten.
+Gemeinsames Verständnis im Team ist zentral für effizientes Arbeiten.  
 
-**Lacked – Was hat gefehlt? Was hat nicht funktioniert?**
-
+- **Lacked – Was hat gefehlt? Was hat nicht funktioniert?**
 Zu Beginn fehlte eine klare Abstimmung, wer woran arbeitet.  
 Es fehlte ein gemeinsames Bild der nächsten Implementierungsschritte.  
 Die Sichtbarkeit individueller Beiträge war teilweise eingeschränkt.
 
-**Longed for – Was hätten wir uns gewünscht?**  
+- **Longed for – Was hätten wir uns gewünscht?**
 Genauere organisatorische Vorgaben seitens der Lehrveranstaltungsleitung.  
 Frühere Abstimmung über Ziele und Vorgehensweise im Team.
 
 
-**Maßnahmen**  
+## Konkrete Maßnahmen
 Work Logs weiterführen.  
+Weiterhin regelmäßige persönliche Meetings (mind. 1x außerhalb des LV-Termins).  
 Regelmäßige Abstimmung des gemeinsamen Projektverständnisses.  
