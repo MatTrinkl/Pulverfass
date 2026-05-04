@@ -57,6 +57,7 @@ object GameMapTerritoryMapper {
             "sahara" to "west_africa",
             "zentral_afrika" to "central_africa",
             "sued_afrika" to "south_africa",
+            "ozeanien" to "oceania",
         )
     private val androidRegionIdToServer =
         serverToAndroidRegionId.entries.associate { (territoryId, regionId) ->
