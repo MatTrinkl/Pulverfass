@@ -145,14 +145,12 @@
       "edges": [
         { "targetId": "naher_osten" },
         { "targetId": "china" },
-        { "targetId": "australien" },
         { "targetId": "ozeanien" }
       ]
     },
     {
       "territoryId": "australien",
       "edges": [
-        { "targetId": "ferner_osten" },
         { "targetId": "ozeanien" }
       ]
     },
