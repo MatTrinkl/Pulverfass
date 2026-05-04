@@ -512,8 +512,8 @@ class TurnAdvanceIntegrationTest {
                     assertEquals(TurnPhase.REINFORCEMENTS, snapshot.turnState.turnPhase)
                     assertEquals(1, snapshot.turnState.turnCount)
                     assertEquals(playerOne, snapshot.turnState.startPlayerId)
-                    assertEquals(23, snapshot.territoryStates.size)
-                    assertEquals(23, snapshot.definition.territories.size)
+                    assertEquals(24, snapshot.territoryStates.size)
+                    assertEquals(24, snapshot.definition.territories.size)
 
                     playerOneSession.first.close()
                     playerTwoSession.first.close()
