@@ -145,13 +145,22 @@
       "edges": [
         { "targetId": "naher_osten" },
         { "targetId": "china" },
-        { "targetId": "australien" }
+        { "targetId": "australien" },
+        { "targetId": "ozeanien" }
       ]
     },
     {
       "territoryId": "australien",
       "edges": [
-        { "targetId": "ferner_osten" }
+        { "targetId": "ferner_osten" },
+        { "targetId": "ozeanien" }
+      ]
+    },
+    {
+      "territoryId": "ozeanien",
+      "edges": [
+        { "targetId": "ferner_osten" },
+        { "targetId": "australien" }
       ]
     },
     {
@@ -243,7 +252,8 @@
     {
       "continentId": "ozeanien",
       "territoryIds": [
-        "australien"
+        "australien",
+        "ozeanien"
       ],
       "bonusValue": 1
     }
