@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pulverfass · Color Tokens
+    ==========================
+    Single source of truth für alle Farben in der App.
+    Generiert aus der Art Bible (Sprint 2).
+
+    Alle Farben sind als Tokens benannt — niemals direkt aus Layouts
+    auf Hex-Werte zugreifen. Stattdessen via:
+        ?attr/colorPrimary  (für Theme-Attributes)
+        @color/gold         (für direkte Token-Referenz)
+-->
+<resources>
+
+    <!-- ============================================ -->
+    <!-- SURFACES (dunkle Untergründe)               -->
+    <!-- ============================================ -->
+    <color name="surface_void">#0F1419</color>
+    <color name="surface_dark">#1A1F2A</color>
+    <color name="surface_wood">#2A1F18</color>
+    <color name="surface_card">#1F1A14</color>
+    <color name="surface_overlay">#CC000000</color>
+    <!-- 80% schwarz für Modal-Backdrops -->
+
+    <!-- ============================================ -->
+    <!-- PARCHMENT (warme Mitten)                    -->
+    <!-- ============================================ -->
+    <color name="parchment_light">#D4B896</color>
+    <color name="parchment">#C8A876</color>
+    <color name="parchment_dark">#A8855A</color>
+    <color name="parchment_edge">#6B4D2A</color>
+
+    <!-- ============================================ -->
+    <!-- GOLD (Akzent — sparsam!)                    -->
+    <!-- ============================================ -->
+    <color name="gold_bright">#E8C268</color>
+    <color name="gold">#D4B45A</color>
+    <color name="gold_muted">#C4A14B</color>
+    <color name="gold_dark">#8B6F2A</color>
+
+    <!-- ============================================ -->
+    <!-- PLAYER COLORS (semantisch — 8 Spieler)      -->
+    <!-- ============================================ -->
+    <color name="player_red">#A6342B</color>
+    <color name="player_blue">#3A5BA0</color>
+    <color name="player_orange">#D17030</color>
+    <color name="player_olive">#8C8A2E</color>
+    <color name="player_purple">#7A4A8C</color>
+    <color name="player_teal">#4A8C8C</color>
+    <color name="player_pink">#B8466C</color>
+    <color name="player_green">#5A8C3A</color>
+
+    <!-- 70%-Varianten für Region-Fills auf der Karte -->
+    <color name="player_red_70">#B3A6342B</color>
+    <color name="player_blue_70">#B33A5BA0</color>
+    <color name="player_orange_70">#B3D17030</color>
+    <color name="player_olive_70">#B38C8A2E</color>
+    <color name="player_purple_70">#B37A4A8C</color>
+    <color name="player_teal_70">#B34A8C8C</color>
+    <color name="player_pink_70">#B3B8466C</color>
+    <color name="player_green_70">#B35A8C3A</color>
+
+    <!-- ============================================ -->
+    <!-- SEMANTIC COLORS                             -->
+    <!-- ============================================ -->
+    <color name="danger">#8B2828</color>
+    <color name="danger_bright">#C44030</color>
+    <color name="success">#4A7A4A</color>
+    <color name="warning">#D17030</color>
+    <color name="info">#3A5BA0</color>
+
+    <!-- ============================================ -->
+    <!-- TEXT                                        -->
+    <!-- ============================================ -->
+    <color name="text_primary">#F0E6D2</color>
+    <color name="text_on_dark">#E8DCC8</color>
+    <color name="text_on_parchment">#2A1F18</color>
+    <color name="text_muted">#8B7F66</color>
+    <color name="text_gold">#D4B45A</color>
+
+    <!-- ============================================ -->
+    <!-- ALPHA UTILITIES                             -->
+    <!-- ============================================ -->
+    <color name="alpha_30_black">#4D000000</color>
+    <color name="alpha_60_black">#99000000</color>
+    <color name="alpha_80_black">#CC000000</color>
+    <color name="alpha_50_gold">#80D4B45A</color>
+
+</resources>

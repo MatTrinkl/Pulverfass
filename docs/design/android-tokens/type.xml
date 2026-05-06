@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pulverfass · Typography Styles
+    ================================
+    Type-Scale gemäß Art Bible §3.
+
+    Setup-Voraussetzung:
+    - Fonts in res/font/ ablegen:
+        cinzel_decorative.ttf
+        cormorant_garamond.ttf
+        philosopher.ttf
+        fleur_de_leah.ttf  (sparsam!)
+    - Font-Family-XMLs anlegen (siehe README)
+
+    Verwendung in Layouts:
+        style="@style/Pulverfass.Display.Large"
+-->
+<resources>
+
+    <!-- ============================================ -->
+    <!-- BASE STYLE                                  -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Text" parent="">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- DISPLAY (Cinzel Decorative)                 -->
+    <!-- Game-Titel, Screen-Headlines                -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Display.XLarge" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cinzel_decorative</item>
+        <item name="android:textSize">56sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/gold</item>
+        <!-- z.B. "GEWONNEN !!!!" -->
+    </style>
+
+    <style name="Pulverfass.Display.Large" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cinzel_decorative</item>
+        <item name="android:textSize">48sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/gold</item>
+        <!-- z.B. "SCHLACHT", "LOBBY" -->
+    </style>
+
+    <style name="Pulverfass.Display.Medium" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cinzel_decorative</item>
+        <item name="android:textSize">36sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/gold</item>
+        <!-- z.B. "Nächster ZUG" -->
+    </style>
+
+    <!-- ============================================ -->
+    <!-- HEADLINE (Cinzel Decorative)                -->
+    <!-- Phasen-Labels, Section-Titles               -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Headline" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cinzel_decorative</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.05</item>
+        <item name="android:textColor">@color/gold</item>
+        <!-- z.B. "PHASE: ANGRIFF", "RUNDE 3" -->
+    </style>
+
+    <style name="Pulverfass.Title" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cinzel_decorative</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.05</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- BODY (Cormorant Garamond)                   -->
+    <!-- Fließtext, Player-Namen                     -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Body.Large" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cormorant_garamond</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="Pulverfass.Body" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cormorant_garamond</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="Pulverfass.Body.Small" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/cormorant_garamond</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_muted</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- UI (Philosopher)                            -->
+    <!-- Buttons, Labels, Captions                   -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Button" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/philosopher</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="Pulverfass.Label" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/philosopher</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="Pulverfass.Caption" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/philosopher</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.05</item>
+        <item name="android:textColor">@color/text_muted</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- DECORATIVE (Fleur De Leah)                  -->
+    <!-- NUR für Zier-Akzente — sparsam!             -->
+    <!-- ============================================ -->
+    <style name="Pulverfass.Decorative" parent="Pulverfass.Text">
+        <item name="android:fontFamily">@font/fleur_de_leah</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:textColor">@color/gold</item>
+    </style>
+
+</resources>
