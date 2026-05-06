@@ -485,4 +485,20 @@ class GameStateTest {
                     ),
                 ),
         )
+
+
+    @Test
+    fun `should throw when lobby owner is not part of players`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        // Prüft, ob der Lobby-Owner Teil der Spielerliste ist.
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("AB12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                lobbyOwner = playerTwo,
+            )
+        }
+    }
 }
