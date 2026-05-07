@@ -90,12 +90,14 @@ Der Workflow deployed per SSH mit:
 - `docker compose up -d`
 - anschließend Health-Smoke-Test gegen `/health`
 
+Die vollständige Setup- und Secret-Dokumentation steht in [docs/deploy.md](/Users/matthiastrinkl/Documents/GitHub/SE2Risiko/docs/deploy.md:1).
+
 ### Local Compose Override
 
 Für einen lokalen Build ohne GHCR-Pull gibt es zusätzlich `compose.local.yaml`:
 
 ```bash
-export POSTGRES_PASSWORD='replace-me'
+export POSTGRES_PASSWORD='<SET_LOCALLY>'
 docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 

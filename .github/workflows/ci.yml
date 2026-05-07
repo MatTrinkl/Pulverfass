@@ -183,6 +183,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
 
     steps:
       - name: Check out repository
@@ -232,8 +235,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_TOKEN }}
 
       - name: Push server image
         run: |
@@ -255,6 +258,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
     outputs:
       app_version: ${{ steps.metadata.outputs.app_version }}
       publish_tag: ${{ steps.metadata.outputs.publish_tag }}
@@ -306,8 +312,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_TOKEN }}
 
       - name: Push main images
         run: |
@@ -338,8 +344,8 @@ jobs:
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
       DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || secrets.DEPLOY_HEALTH_URL }}
-      GHCR_USERNAME: ${{ github.actor }}
-      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
       SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.publish_tag }}
       APP_VERSION: ${{ needs.docker-main-publish.outputs.app_version }}
 
