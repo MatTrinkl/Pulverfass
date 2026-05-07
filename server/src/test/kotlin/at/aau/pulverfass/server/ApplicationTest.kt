@@ -12,9 +12,12 @@ import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -23,6 +26,81 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ApplicationTest {
+    private object ReadyDatabaseProbe : DatabaseReadinessProbe {
+        override fun readiness(): DatabaseReadiness = DatabaseReadiness(DatabaseReadinessState.UP)
+    }
+
+    private object DownDatabaseProbe : DatabaseReadinessProbe {
+        override fun readiness(): DatabaseReadiness =
+            DatabaseReadiness(
+                state = DatabaseReadinessState.DOWN,
+                detail = "Connection refused",
+            )
+    }
+
+    @Test
+    fun `module exposes health endpoint`() =
+        testApplication {
+            application {
+                module()
+            }
+
+            val response = client.get("/health")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("OK", response.bodyAsText())
+        }
+
+    @Test
+    fun `module exposes version endpoint`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig = ServerRuntimeConfig(appVersion = "v1.2.3"),
+                )
+            }
+
+            val response = client.get("/version")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("v1.2.3", response.bodyAsText())
+        }
+
+    @Test
+    fun `module exposes ready endpoint when database is ready`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig = ServerRuntimeConfig(appVersion = "v1.2.3"),
+                    databaseReadinessProbe = ReadyDatabaseProbe,
+                )
+            }
+
+            val response = client.get("/ready")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("READY version=v1.2.3 database=up", response.bodyAsText())
+        }
+
+    @Test
+    fun `module exposes not ready endpoint when database is down`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig = ServerRuntimeConfig(appVersion = "v1.2.3"),
+                    databaseReadinessProbe = DownDatabaseProbe,
+                )
+            }
+
+            val response = client.get("/ready")
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+            assertEquals(
+                "NOT_READY version=v1.2.3 database=down detail=Connection refused",
+                response.bodyAsText(),
+            )
+        }
+
     @Test
     fun `createServerWithLobbyRuntime creates startable engine that can be stopped cleanly`() {
         val server = createServerWithLobbyRuntime(host = "127.0.0.1", port = 0)

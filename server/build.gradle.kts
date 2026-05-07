@@ -25,7 +25,9 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.hikari.cp)
     implementation(libs.logback.classic)
+    implementation(libs.postgresql)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.ktor.client.websockets)

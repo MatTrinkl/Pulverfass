@@ -19,6 +19,8 @@ junitExt = "1.2.1"
 espressoCore = "3.6.1"
 androidxTestCore = "1.6.1"
 robolectric = "4.14.1"
+hikari = "7.0.2"
+postgresql = "42.7.10"
 
 [libraries]
 # AndroidX
@@ -60,6 +62,8 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
+hikari-cp = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
+postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

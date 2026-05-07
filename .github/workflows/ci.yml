@@ -6,6 +6,7 @@ on:
     types: [ opened, synchronize, reopened, labeled, unlabeled ]
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 concurrency:
@@ -51,8 +52,8 @@ jobs:
             **/build/reports/ktlint/**
           if-no-files-found: ignore
 
-  unit-tests:
-    name: Unit Tests
+  build-and-test:
+    name: Build and Unit Tests
     runs-on: self-hosted
 
     steps:
@@ -71,9 +72,12 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Run unit tests
+      - name: Build and run JVM tests
         run: >
           ./gradlew
+          :shared:assemble
+          :server:assemble
+          :e2e:assemble
           :shared:test
           :server:test
           :e2e:test
@@ -89,10 +93,308 @@ jobs:
             **/build/test-results/**
           if-no-files-found: ignore
 
+  docker-pr-check:
+    name: Docker PR Check
+    runs-on: self-hosted
+    if: github.event_name == 'pull_request'
+    needs: build-and-test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/${repo}-server"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            if ! printf '%s' "${GITHUB_REF_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+            app_version="${GITHUB_REF_NAME}"
+          else
+            app_version="sha-${short_sha}"
+          fi
+
+          local_tag="se2risiko-server:${app_version}"
+          {
+            echo "app_version=${app_version}"
+            echo "image=${image}"
+            echo "local_tag=${local_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --tag ${{ steps.metadata.outputs.local_tag }}
+          .
+
+      - name: Smoke test container
+        run: |
+          docker rm -f se2risiko-server-smoke >/dev/null 2>&1 || true
+          docker run -d --name se2risiko-server-smoke -p 18080:8080 "${{ steps.metadata.outputs.local_tag }}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          health_response="$(curl --fail --silent http://127.0.0.1:18080/health)"
+          version_response="$(curl --fail --silent http://127.0.0.1:18080/version)"
+
+          test "${health_response}" = "OK"
+          test "${version_response}" = "${{ steps.metadata.outputs.app_version }}"
+
+      - name: Print image metadata
+        run: |
+          echo "APP_VERSION=${{ steps.metadata.outputs.app_version }}"
+          echo "IMAGE_NAME=${{ steps.metadata.outputs.image }}"
+          echo "PR_CHECK_ONLY=true"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker logs se2risiko-server-smoke
+
+      - name: Cleanup smoke test container
+        if: always()
+        run: docker rm -f se2risiko-server-smoke >/dev/null 2>&1 || true
+
+  docker-publish:
+    name: Release Build and GHCR Push
+    runs-on: self-hosted
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/${repo}-server"
+          if ! printf '%s' "${GITHUB_REF_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+          app_version="${GITHUB_REF_NAME}"
+          created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          local_tag="se2risiko-server:${app_version}"
+          publish_tag="${image}:${app_version}"
+
+          {
+            echo "app_version=${app_version}"
+            echo "local_tag=${local_tag}"
+            echo "publish_tag=${publish_tag}"
+            echo "created=${created}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.local_tag }}
+          .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push server image
+        run: |
+          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.publish_tag }}"
+          docker push "${{ steps.metadata.outputs.publish_tag }}"
+
+      - name: Print release image metadata
+        run: |
+          echo "RELEASE_TAG=${{ steps.metadata.outputs.app_version }}"
+          echo "IMAGE_TAG=${{ steps.metadata.outputs.publish_tag }}"
+          echo "COMMIT=${{ github.sha }}"
+          echo "CREATED=${{ steps.metadata.outputs.created }}"
+
+  docker-main-publish:
+    name: Main Build and GHCR Push
+    runs-on: self-hosted
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      app_version: ${{ steps.metadata.outputs.app_version }}
+      publish_tag: ${{ steps.metadata.outputs.publish_tag }}
+      floating_tag: ${{ steps.metadata.outputs.floating_tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/${repo}-server"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}" | tr '[:upper:]' '[:lower:]')"
+          app_version="sha-${short_sha}"
+          created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          local_tag="se2risiko-server:${app_version}"
+          publish_tag="${image}:${app_version}"
+          floating_tag="${image}:main"
+
+          {
+            echo "app_version=${app_version}"
+            echo "local_tag=${local_tag}"
+            echo "publish_tag=${publish_tag}"
+            echo "floating_tag=${floating_tag}"
+            echo "created=${created}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.local_tag }}
+          .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push main images
+        run: |
+          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.floating_tag }}"
+          docker push "${{ steps.metadata.outputs.publish_tag }}"
+          docker push "${{ steps.metadata.outputs.floating_tag }}"
+
+      - name: Print main image metadata
+        run: |
+          echo "MAIN_TAG=${{ steps.metadata.outputs.app_version }}"
+          echo "IMAGE_TAG=${{ steps.metadata.outputs.publish_tag }}"
+          echo "FLOATING_TAG=${{ steps.metadata.outputs.floating_tag }}"
+          echo "COMMIT=${{ github.sha }}"
+          echo "CREATED=${{ steps.metadata.outputs.created }}"
+
+  deploy-main:
+    name: Deploy on Main
+    runs-on: self-hosted
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: docker-main-publish
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+      DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || secrets.DEPLOY_HEALTH_URL }}
+      GHCR_USERNAME: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.publish_tag }}
+      APP_VERSION: ${{ needs.docker-main-publish.outputs.app_version }}
+
+    steps:
+      - name: Validate deploy configuration
+        run: |
+          set -eu
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_PORT}"
+          test -n "${DEPLOY_PATH}"
+          test -n "${GHCR_TOKEN}"
+
+      - name: Configure SSH
+        run: |
+          set -eu
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+
+      - name: Deploy with docker compose
+        run: |
+          set -eu
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; \
+            cd '${DEPLOY_PATH}'; \
+            echo '${GHCR_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
+            SERVER_IMAGE='${SERVER_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose pull server; \
+            SERVER_IMAGE='${SERVER_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose up -d; \
+            docker image prune -f"
+
+      - name: Smoke test deployed health endpoint
+        run: |
+          set -eu
+          health_url="${DEPLOY_HEALTH_URL}"
+          if [ -z "${health_url}" ]; then
+            health_url="https://${DEPLOY_HOST}/health"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error "${health_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed for ${health_url}" >&2
+          exit 1
+
   analyze:
     name: Build, coverage and SonarCloud
     runs-on: self-hosted
-    needs: [ style, unit-tests ]
+    needs: [ style, build-and-test ]
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
@@ -189,7 +491,7 @@ jobs:
   e2e-tests:
     name: E2E Tests (placeholder)
     runs-on: self-hosted
-    needs: unit-tests
+    needs: build-and-test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
     env:
       E2E_WS_HOST: 127.0.0.1

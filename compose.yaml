@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pulverfass}
+      POSTGRES_USER: ${POSTGRES_USER:-pulverfass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell or .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  server:
+    image: ${SERVER_IMAGE:?Set SERVER_IMAGE to ghcr.io/<owner>/<repo>-server:<tag>}
+    restart: unless-stopped
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: ${PORT:-8080}
+      APP_VERSION: ${APP_VERSION:-dev}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-pulverfass}
+      DB_USER: ${POSTGRES_USER:-pulverfass}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell or .env}
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -12,12 +12,16 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.network.Network
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
@@ -34,15 +38,30 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
 
-private const val DEFAULT_HOST = "0.0.0.0"
-private const val DEFAULT_PORT = 8080
+internal const val DEFAULT_HOST = "0.0.0.0"
+internal const val DEFAULT_PORT = 8080
 private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
+private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Runtime")
 
 /**
  * Startet den eingebetteten Ktor-Server mit der Standardkonfiguration.
  */
 fun main() {
-    createServerWithLobbyRuntime().start(wait = true)
+    val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
+    val databaseReadinessProbe = createDatabaseReadinessProbe(runtimeConfig.database)
+    runtimeLogger.info(
+        "Starting websocket server on {}:{} (version: {}, database env configured: {})",
+        runtimeConfig.host,
+        runtimeConfig.port,
+        runtimeConfig.appVersion,
+        runtimeConfig.database.isConfigured,
+    )
+    createServerWithLobbyRuntime(
+        host = runtimeConfig.host,
+        port = runtimeConfig.port,
+        runtimeConfig = runtimeConfig,
+        databaseReadinessProbe = databaseReadinessProbe,
+    ).start(wait = true)
 }
 
 /**
@@ -59,13 +78,15 @@ fun createServer(
     host: String = DEFAULT_HOST,
     port: Int = DEFAULT_PORT,
     network: ServerNetwork = ServerNetwork(),
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
 ): ApplicationEngine =
     embeddedServer(
         factory = Netty,
         host = host,
         port = port,
     ) {
-        module(network)
+        module(network, runtimeConfig, databaseReadinessProbe)
     }
 
 /**
@@ -76,13 +97,15 @@ fun createServerWithLobbyRuntime(
     host: String = DEFAULT_HOST,
     port: Int = DEFAULT_PORT,
     network: ServerNetwork = ServerNetwork(),
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
 ): ApplicationEngine =
     embeddedServer(
         factory = Netty,
         host = host,
         port = port,
     ) {
-        moduleWithLobbyRuntime(network)
+        moduleWithLobbyRuntime(network, runtimeConfig, databaseReadinessProbe)
     }
 
 /**
@@ -105,7 +128,11 @@ internal fun createServer(
  *
  * @param network serverseitige Netzwerkkomposition für die WebSocket-Route
  */
-fun Application.module(network: ServerNetwork = ServerNetwork()) {
+fun Application.module(
+    network: ServerNetwork = ServerNetwork(),
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+) {
     install(WebSockets) {
         pingPeriodMillis = 15_000
         timeoutMillis = 15_000
@@ -114,9 +141,27 @@ fun Application.module(network: ServerNetwork = ServerNetwork()) {
     }
 
     routing {
+        get("/health") {
+            call.respondText("OK", status = HttpStatusCode.OK)
+        }
+        get("/version") {
+            call.respondText(runtimeConfig.appVersion, status = HttpStatusCode.OK)
+        }
+        get("/ready") {
+            val readiness = databaseReadinessProbe.readiness()
+            val status = if (readiness.isReady) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable
+            call.respondText(
+                formatReadinessResponse(runtimeConfig.appVersion, readiness),
+                status = status,
+            )
+        }
         webSocket("/ws") {
             handleWebSocketConnection(network)
         }
+    }
+
+    environment.monitor.subscribe(ApplicationStopped) {
+        databaseReadinessProbe.close()
     }
 }
 
@@ -127,8 +172,12 @@ fun Application.module(network: ServerNetwork = ServerNetwork()) {
  * gestartet, damit Create/Join/Leave-Requests tatsächlich in den Lobby-Layer
  * gelangen und Antworten an Clients zurückfließen.
  */
-fun Application.moduleWithLobbyRuntime(network: ServerNetwork = ServerNetwork()) {
-    module(network)
+fun Application.moduleWithLobbyRuntime(
+    network: ServerNetwork = ServerNetwork(),
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+) {
+    module(network, runtimeConfig, databaseReadinessProbe)
     installLobbyRuntime(network)
 }
 
@@ -137,6 +186,38 @@ fun Application.moduleWithLobbyRuntime(network: ServerNetwork = ServerNetwork())
  */
 internal fun Application.module(transport: ServerWebSocketTransport) {
     module(ServerNetwork(transport = transport))
+}
+
+private fun createDatabaseReadinessProbe(config: DatabaseRuntimeConfig): DatabaseReadinessProbe =
+    if (config.isConfigured) {
+        PostgresDatabaseReadinessProbe(config)
+    } else {
+        DatabaseReadinessProbe.disabled()
+    }
+
+private fun formatReadinessResponse(
+    appVersion: String,
+    readiness: DatabaseReadiness,
+): String {
+    val databaseStatus =
+        when (readiness.state) {
+            DatabaseReadinessState.UP -> "up"
+            DatabaseReadinessState.DOWN -> "down"
+            DatabaseReadinessState.DISABLED -> "disabled"
+        }
+    val detail = readiness.detail?.replace(Regex("\\s+"), " ")
+
+    return buildString {
+        append(if (readiness.isReady) "READY" else "NOT_READY")
+        append(" version=")
+        append(appVersion)
+        append(" database=")
+        append(databaseStatus)
+        if (!detail.isNullOrBlank()) {
+            append(" detail=")
+            append(detail)
+        }
+    }
 }
 
 private fun Application.installLobbyRuntime(network: ServerNetwork) {
