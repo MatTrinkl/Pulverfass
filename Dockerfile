@@ -21,6 +21,11 @@ WORKDIR /app
 
 COPY --from=builder /workspace/server/build/install/server/ ./
 
+RUN groupadd --system appuser && useradd --system --gid appuser --create-home --home-dir /home/appuser appuser
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8080
 
 ENTRYPOINT ["bin/server"]

@@ -24,6 +24,10 @@ services:
     restart: unless-stopped
     networks:
       - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       db:
         condition: service_healthy
@@ -37,6 +41,18 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell or .env}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
+
+  dokka:
+    image: ${DOKKA_IMAGE:?Set DOKKA_IMAGE to ghcr.io/<owner>/<repo>-dokka:<tag>}
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "${DOKKA_PORT:-8081}:8080"
 
 networks:
   internal:

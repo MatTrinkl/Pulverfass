@@ -45,10 +45,13 @@ curl http://127.0.0.1:8080/ready
 Die Root-`compose.yaml` ist jetzt auf den Deploy-Server ausgerichtet:
 
 - `server` läuft aus einem GHCR-Image
+- `dokka` läuft aus einem separaten GHCR-Image
 - `db` nutzt das offizielle PostgreSQL-Image
 - beide Services teilen ein internes Docker-Netzwerk
 - PostgreSQL hat keine veröffentlichten Host-Ports
 - DB-Daten liegen persistent im Volume `postgres_data`
+- Dokka wird öffentlich über `DOKKA_PORT` ausgeliefert
+- `server` und `dokka` laufen im Deploy-Setup ohne zusätzliche Linux-Capabilities
 
 Die produktive `.env` liegt auf dem Server und gehört nicht ins Repo. Als Vorlage dient [.env.example](/Users/matthiastrinkl/Documents/GitHub/SE2Risiko/.env.example:1).
 
@@ -69,6 +72,7 @@ curl -i http://127.0.0.1:8080/ready
 Wichtig:
 
 - `SERVER_IMAGE` muss auf ein veröffentlichtes GHCR-Image zeigen
+- `DOKKA_IMAGE` muss auf ein veröffentlichtes GHCR-Image zeigen
 - `POSTGRES_PASSWORD` muss serverseitig gesetzt werden
 - die DB ist nur intern über den Service-Namen `db` erreichbar
 
@@ -81,14 +85,16 @@ Der Deploy-Workflow auf `main` erwartet folgende GitHub Secrets/Vars:
 - `DEPLOY_USER`
 - `DEPLOY_PORT`
 - `DEPLOY_PATH`
+- optional `DEPLOY_HOST_KEY`
 - optional `DEPLOY_HEALTH_URL`
+- optional `DEPLOY_DOKKA_URL`
 
 Der Workflow deployed per SSH mit:
 
 - `docker login ghcr.io`
-- `docker compose pull server`
+- `docker compose pull server dokka`
 - `docker compose up -d`
-- anschließend Health-Smoke-Test gegen `/health`
+- anschließend Smoke-Tests gegen `/health` und die Dokka-`index.html`
 
 Die vollständige Setup- und Secret-Dokumentation steht in [docs/deploy.md](/Users/matthiastrinkl/Documents/GitHub/SE2Risiko/docs/deploy.md:1).
 

@@ -1,0 +1,14 @@
+FROM eclipse-temurin:25-jdk AS builder
+
+WORKDIR /workspace
+
+COPY . .
+
+RUN chmod +x ./gradlew
+RUN ./gradlew --no-daemon dokkaGenerate
+
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+
+COPY --from=builder /workspace/build/documentation/html/ /usr/share/nginx/html/
+
+EXPOSE 8080

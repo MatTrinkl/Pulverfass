@@ -29,7 +29,9 @@ Es werden nur Token-Namen dokumentiert. Keine Secret-Werte gehören ins Repo, ni
 ### Optional
 
 - `DEPLOY_PATH`
+- `DEPLOY_HOST_KEY`
 - `DEPLOY_HEALTH_URL`
+- `DEPLOY_DOKKA_URL`
 
 ## Bedeutung der Tokens
 
@@ -66,8 +68,12 @@ Es werden nur Token-Namen dokumentiert. Keine Secret-Werte gehören ins Repo, ni
 
 - `DEPLOY_PATH`
   Absoluter Pfad auf dem Zielserver, in dem `compose.yaml` und `.env` liegen.
+- `DEPLOY_HOST_KEY`
+  Empfohlener gepinnter Eintrag für `known_hosts`. Wenn gesetzt, nutzt der Workflow diesen Wert statt eines frischen `ssh-keyscan`.
 - `DEPLOY_HEALTH_URL`
   Optionaler externer Health-Endpunkt für den Smoke-Test. Wenn nicht gesetzt, wird im Workflow die Default-URL aus dem Host abgeleitet.
+- `DEPLOY_DOKKA_URL`
+  Optionaler externer Dokka-Endpunkt für den Smoke-Test. Wenn nicht gesetzt, wird im Workflow standardmäßig `http://<DEPLOY_HOST>:8081/index.html` verwendet.
 
 ## Server Prerequisites
 
@@ -90,8 +96,13 @@ Der Zielserver muss vor dem ersten automatischen Deployment vorbereitet sein.
 
 - SSH-Port aus `DEPLOY_PORT` muss vom GitHub Actions Runner erreichbar sein.
 - Der externe Server-Port für den Ktor-Service muss erreichbar sein.
+- Der externe Dokka-Port muss nur dann erreichbar sein, wenn die Doku öffentlich ausgeliefert werden soll.
 - PostgreSQL darf **nicht** extern veröffentlicht werden.
 - In Compose bleibt die Datenbank nur im internen Docker-Netz.
+- Minimal erwartete externe Freigaben sind damit:
+  - SSH auf `DEPLOY_PORT`
+  - App-Port `PORT`
+  - optional Doku-Port `DOKKA_PORT`
 
 ### GHCR Login auf dem Server
 
@@ -108,6 +119,21 @@ Dabei gilt:
 - nie echte Token-Werte in Terminal-History belassen
 - kein Token in Skripte oder Repo-Dateien schreiben
 - nach manuellen Tests Shell-History entsprechend behandeln
+
+## SSH Host Key Handling
+
+Bevorzugter Pfad:
+
+- `DEPLOY_HOST_KEY` als gepinnter `known_hosts`-Eintrag in GitHub hinterlegen
+
+Fallback:
+
+- wenn `DEPLOY_HOST_KEY` nicht gesetzt ist, verwendet der Workflow `ssh-keyscan`
+
+Empfehlung:
+
+- für produktive Hosts `DEPLOY_HOST_KEY` setzen
+- Host-Key-Rotation bewusst dokumentieren und den gepinnten Wert anschließend aktualisieren
 
 ## Wie die Compose-Datei auf den Server kommt
 
@@ -155,11 +181,20 @@ Wichtig:
 Die produktive `compose.yaml` im Repo erwartet:
 
 - ein Server-Image aus GHCR über `SERVER_IMAGE`
+- ein Dokka-Image aus GHCR über `DOKKA_IMAGE`
 - App-Version über `APP_VERSION`
+- öffentlichen Dokka-Port über `DOKKA_PORT`
 - PostgreSQL-Konfiguration über:
   - `POSTGRES_USER`
   - `POSTGRES_PASSWORD`
   - `POSTGRES_DB`
+
+Security-Basics im Compose-Setup:
+
+- PostgreSQL ohne öffentliches Port-Mapping
+- nur App-Port und optional Dokka-Port nach außen
+- `server` und `dokka` mit `no-new-privileges`
+- `server` und `dokka` ohne Linux-Capabilities
 
 ### `.env`
 
@@ -168,15 +203,17 @@ Die `.env` liegt nur auf dem Server. Sie enthält keine Beispielwerte aus dem Re
 Erwartete Variablen:
 
 - `SERVER_IMAGE`
+- `DOKKA_IMAGE`
 - `APP_VERSION`
 - `PORT`
+- `DOKKA_PORT`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `POSTGRES_DB`
 
 Hinweis:
 
-- `SERVER_IMAGE` und `APP_VERSION` können beim Deployment per GitHub Actions temporär überschrieben werden.
+- `SERVER_IMAGE`, `DOKKA_IMAGE` und `APP_VERSION` können beim Deployment per GitHub Actions temporär überschrieben werden.
 - `POSTGRES_USER`, `POSTGRES_PASSWORD` und `POSTGRES_DB` bleiben serverseitige Konfiguration.
 
 ## Initiale Server-Vorbereitung
@@ -202,6 +239,8 @@ Ein neuer Server ist dann reproduzierbar vorbereitet, wenn folgende Punkte erfü
 - `.env` liegt unter `DEPLOY_PATH`
 - GHCR Login funktioniert
 - der externe Health-Endpunkt antwortet nach `docker compose up -d`
+- der externe Dokka-Endpunkt liefert `index.html`
+- PostgreSQL ist von außen nicht erreichbar
 
 ## Smoke-Test nach Deployment
 
@@ -216,4 +255,5 @@ Optional zusätzlich:
 ```bash
 curl -i '<DEPLOY_READY_URL_OR_SERVER_READY_ENDPOINT>'
 curl -i '<DEPLOY_VERSION_URL_OR_SERVER_VERSION_ENDPOINT>'
+curl -i '<DEPLOY_DOKKA_URL_OR_DOKKA_INDEX_ENDPOINT>'
 ```

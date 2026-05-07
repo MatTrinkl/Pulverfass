@@ -93,11 +93,42 @@ jobs:
             **/build/test-results/**
           if-no-files-found: ignore
 
+  dokka-build:
+    name: Dokka Build
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Dokka site
+        run: ./gradlew dokkaGenerate --stacktrace
+
+      - name: Upload Dokka site artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dokka-site
+          path: build/documentation/html/**
+          if-no-files-found: error
+
   docker-pr-check:
     name: Docker PR Check
     runs-on: self-hosted
     if: github.event_name == 'pull_request'
-    needs: build-and-test
+    needs: [build-and-test, dokka-build]
     permissions:
       contents: read
 
@@ -175,11 +206,45 @@ jobs:
         if: always()
         run: docker rm -f se2risiko-server-smoke >/dev/null 2>&1 || true
 
+  dokka-pr-check:
+    name: Dokka Docker PR Check
+    runs-on: self-hosted
+    if: github.event_name == 'pull_request'
+    needs: dokka-build
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Dokka image
+        run: docker build -f Dockerfile.dokka --tag se2risiko-dokka-pr .
+
+      - name: Smoke test Dokka container
+        run: |
+          docker rm -f se2risiko-dokka-smoke >/dev/null 2>&1 || true
+          docker run -d --name se2risiko-dokka-smoke -p 18081:8080 se2risiko-dokka-pr
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:18081/index.html >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs se2risiko-dokka-smoke
+          exit 1
+
+      - name: Cleanup Dokka smoke container
+        if: always()
+        run: docker rm -f se2risiko-dokka-smoke >/dev/null 2>&1 || true
+
   docker-publish:
     name: Release Build and GHCR Push
     runs-on: self-hosted
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
+    needs: [build-and-test, dokka-build]
     permissions:
       contents: read
       packages: write
@@ -201,7 +266,8 @@ jobs:
           owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           repo="${GITHUB_REPOSITORY#*/}"
           repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/${repo}-server"
+          server_image="ghcr.io/${owner}/${repo}-server"
+          dokka_image="ghcr.io/${owner}/${repo}-dokka"
           if ! printf '%s' "${GITHUB_REF_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
             exit 1
@@ -210,13 +276,17 @@ jobs:
           app_version="${GITHUB_REF_NAME}"
           created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-          local_tag="se2risiko-server:${app_version}"
-          publish_tag="${image}:${app_version}"
+          server_local_tag="se2risiko-server:${app_version}"
+          server_publish_tag="${server_image}:${app_version}"
+          dokka_local_tag="se2risiko-dokka:${app_version}"
+          dokka_publish_tag="${dokka_image}:${app_version}"
 
           {
             echo "app_version=${app_version}"
-            echo "local_tag=${local_tag}"
-            echo "publish_tag=${publish_tag}"
+            echo "server_local_tag=${server_local_tag}"
+            echo "server_publish_tag=${server_publish_tag}"
+            echo "dokka_local_tag=${dokka_local_tag}"
+            echo "dokka_publish_tag=${dokka_publish_tag}"
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -228,7 +298,18 @@ jobs:
           --label org.opencontainers.image.revision=${{ github.sha }}
           --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
           --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          --tag ${{ steps.metadata.outputs.local_tag }}
+          --tag ${{ steps.metadata.outputs.server_local_tag }}
+          .
+
+      - name: Build Dokka image
+        run: >
+          docker build
+          -f Dockerfile.dokka
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.dokka_local_tag }}
           .
 
       - name: Log in to GHCR
@@ -238,15 +319,18 @@ jobs:
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_TOKEN }}
 
-      - name: Push server image
+      - name: Push release images
         run: |
-          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.publish_tag }}"
-          docker push "${{ steps.metadata.outputs.publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.dokka_publish_tag }}"
 
       - name: Print release image metadata
         run: |
           echo "RELEASE_TAG=${{ steps.metadata.outputs.app_version }}"
-          echo "IMAGE_TAG=${{ steps.metadata.outputs.publish_tag }}"
+          echo "SERVER_IMAGE_TAG=${{ steps.metadata.outputs.server_publish_tag }}"
+          echo "DOKKA_IMAGE_TAG=${{ steps.metadata.outputs.dokka_publish_tag }}"
           echo "COMMIT=${{ github.sha }}"
           echo "CREATED=${{ steps.metadata.outputs.created }}"
 
@@ -254,7 +338,7 @@ jobs:
     name: Main Build and GHCR Push
     runs-on: self-hosted
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build-and-test
+    needs: [build-and-test, dokka-build]
     permissions:
       contents: read
       packages: write
@@ -263,8 +347,10 @@ jobs:
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
     outputs:
       app_version: ${{ steps.metadata.outputs.app_version }}
-      publish_tag: ${{ steps.metadata.outputs.publish_tag }}
-      floating_tag: ${{ steps.metadata.outputs.floating_tag }}
+      server_publish_tag: ${{ steps.metadata.outputs.server_publish_tag }}
+      server_floating_tag: ${{ steps.metadata.outputs.server_floating_tag }}
+      dokka_publish_tag: ${{ steps.metadata.outputs.dokka_publish_tag }}
+      dokka_floating_tag: ${{ steps.metadata.outputs.dokka_floating_tag }}
 
     steps:
       - name: Check out repository
@@ -280,20 +366,27 @@ jobs:
           owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           repo="${GITHUB_REPOSITORY#*/}"
           repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/${repo}-server"
+          server_image="ghcr.io/${owner}/${repo}-server"
+          dokka_image="ghcr.io/${owner}/${repo}-dokka"
           short_sha="$(printf '%.7s' "${GITHUB_SHA}" | tr '[:upper:]' '[:lower:]')"
           app_version="sha-${short_sha}"
           created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-          local_tag="se2risiko-server:${app_version}"
-          publish_tag="${image}:${app_version}"
-          floating_tag="${image}:main"
+          server_local_tag="se2risiko-server:${app_version}"
+          server_publish_tag="${server_image}:${app_version}"
+          server_floating_tag="${server_image}:main"
+          dokka_local_tag="se2risiko-dokka:${app_version}"
+          dokka_publish_tag="${dokka_image}:${app_version}"
+          dokka_floating_tag="${dokka_image}:main"
 
           {
             echo "app_version=${app_version}"
-            echo "local_tag=${local_tag}"
-            echo "publish_tag=${publish_tag}"
-            echo "floating_tag=${floating_tag}"
+            echo "server_local_tag=${server_local_tag}"
+            echo "server_publish_tag=${server_publish_tag}"
+            echo "server_floating_tag=${server_floating_tag}"
+            echo "dokka_local_tag=${dokka_local_tag}"
+            echo "dokka_publish_tag=${dokka_publish_tag}"
+            echo "dokka_floating_tag=${dokka_floating_tag}"
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -305,7 +398,18 @@ jobs:
           --label org.opencontainers.image.revision=${{ github.sha }}
           --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
           --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          --tag ${{ steps.metadata.outputs.local_tag }}
+          --tag ${{ steps.metadata.outputs.server_local_tag }}
+          .
+
+      - name: Build Dokka image
+        run: >
+          docker build
+          -f Dockerfile.dokka
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.dokka_local_tag }}
           .
 
       - name: Log in to GHCR
@@ -317,16 +421,22 @@ jobs:
 
       - name: Push main images
         run: |
-          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.publish_tag }}"
-          docker tag "${{ steps.metadata.outputs.local_tag }}" "${{ steps.metadata.outputs.floating_tag }}"
-          docker push "${{ steps.metadata.outputs.publish_tag }}"
-          docker push "${{ steps.metadata.outputs.floating_tag }}"
+          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_floating_tag }}"
+          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_floating_tag }}"
+          docker push "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.server_floating_tag }}"
+          docker push "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.dokka_floating_tag }}"
 
       - name: Print main image metadata
         run: |
           echo "MAIN_TAG=${{ steps.metadata.outputs.app_version }}"
-          echo "IMAGE_TAG=${{ steps.metadata.outputs.publish_tag }}"
-          echo "FLOATING_TAG=${{ steps.metadata.outputs.floating_tag }}"
+          echo "SERVER_IMAGE_TAG=${{ steps.metadata.outputs.server_publish_tag }}"
+          echo "SERVER_FLOATING_TAG=${{ steps.metadata.outputs.server_floating_tag }}"
+          echo "DOKKA_IMAGE_TAG=${{ steps.metadata.outputs.dokka_publish_tag }}"
+          echo "DOKKA_FLOATING_TAG=${{ steps.metadata.outputs.dokka_floating_tag }}"
           echo "COMMIT=${{ github.sha }}"
           echo "CREATED=${{ steps.metadata.outputs.created }}"
 
@@ -343,10 +453,13 @@ jobs:
       DEPLOY_USER: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY || secrets.DEPLOY_HOST_KEY }}
       DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || secrets.DEPLOY_HEALTH_URL }}
+      DEPLOY_DOKKA_URL: ${{ vars.DEPLOY_DOKKA_URL || secrets.DEPLOY_DOKKA_URL }}
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
-      SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.publish_tag }}
+      SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.server_publish_tag }}
+      DOKKA_IMAGE: ${{ needs.docker-main-publish.outputs.dokka_publish_tag }}
       APP_VERSION: ${{ needs.docker-main-publish.outputs.app_version }}
 
     steps:
@@ -366,7 +479,11 @@ jobs:
           chmod 700 "${HOME}/.ssh"
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > "${HOME}/.ssh/deploy_key"
           chmod 600 "${HOME}/.ssh/deploy_key"
-          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+          if [ -n "${DEPLOY_HOST_KEY}" ]; then
+            printf '%s\n' "${DEPLOY_HOST_KEY}" >> "${HOME}/.ssh/known_hosts"
+          else
+            ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+          fi
 
       - name: Deploy with docker compose
         run: |
@@ -375,8 +492,8 @@ jobs:
             "set -eu; \
             cd '${DEPLOY_PATH}'; \
             echo '${GHCR_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
-            SERVER_IMAGE='${SERVER_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose pull server; \
-            SERVER_IMAGE='${SERVER_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose up -d; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose pull server dokka; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose up -d; \
             docker image prune -f"
 
       - name: Smoke test deployed health endpoint
@@ -395,6 +512,24 @@ jobs:
           done
 
           echo "Health check failed for ${health_url}" >&2
+          exit 1
+
+      - name: Smoke test deployed Dokka endpoint
+        run: |
+          set -eu
+          dokka_url="${DEPLOY_DOKKA_URL}"
+          if [ -z "${dokka_url}" ]; then
+            dokka_url="http://${DEPLOY_HOST}:8081/index.html"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error "${dokka_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Dokka check failed for ${dokka_url}" >&2
           exit 1
 
   analyze:
