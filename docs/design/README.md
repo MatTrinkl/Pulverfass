@@ -6,7 +6,7 @@
 ## 📁 Was ist drin
 
 ```
-art-bible/
+docs/design/
 ├── README.md                       ← du bist hier
 ├── ART_BIBLE.md                    ← Kern-Dokument (Issue #356)
 ├── DEV-HANDOFF.md                  ← Screen-by-Screen Token Mapping (Issue #357)
