@@ -3,11 +3,13 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -67,7 +69,6 @@ import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
@@ -88,7 +89,7 @@ class MainServerLobbyRoutingService(
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
-    private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
+    private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
     private val gameStateDelivery =
@@ -138,7 +139,7 @@ class MainServerLobbyRoutingService(
                     connectionId = packet.connectionId,
                     payload = payload,
                 )
-            is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
+            is CreateLobbyRequest -> routeCreateLobbyRequest(request)
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
@@ -186,23 +187,23 @@ class MainServerLobbyRoutingService(
         )
     }
 
-    private suspend fun routeCreateLobbyRequest(packet: ReceivedPacket) {
+    private suspend fun routeCreateLobbyRequest(request: DecodedNetworkRequest) {
         runCatching {
-            handleCreateLobbyRequest(packet.connectionId)
-            hooks.onRouted(packet.connectionId)
+            handleCreateLobbyRequest(request)
+            hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             dispatchCreateErrorResponse(
-                connectionId = packet.connectionId,
+                connectionId = request.connectionId,
                 reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
             )
             hooks.onRoutingError(
-                packet.connectionId,
+                request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
                     reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
                     context =
                         LobbyRoutingContext(
-                            connectionId = packet.connectionId,
-                            messageType = packet.header.type,
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
                         ),
                     cause = cause,
                 ),
@@ -476,9 +477,10 @@ class MainServerLobbyRoutingService(
         }
     }
 
-    private suspend fun handleCreateLobbyRequest(connectionId: ConnectionId) {
+    private suspend fun handleCreateLobbyRequest(request: DecodedNetworkRequest) {
         val lobbyCode = createLobbyWithUniqueCode()
-        network.send(connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
+        lobbyManager.submit(LobbyCreated(lobbyCode), request.context)
+        network.send(request.connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
     }
 
     private suspend fun dispatchReconnectLobbySnapshot(

@@ -147,7 +147,7 @@ class LobbyRuntimeTest {
                     scope = scope,
                     hooks =
                         LobbyRuntimeHooks(
-                            onEventRejected = { _, _, _ -> rejected++ },
+                            onEventRejected = { _, _, _, _, _ -> rejected++ },
                         ),
                 )
 
@@ -185,7 +185,7 @@ class LobbyRuntimeTest {
                                 accepted++
                                 throw IllegalStateException("hook failed")
                             },
-                            onEventRejected = { _, _, _ -> rejected++ },
+                            onEventRejected = { _, _, _, _, _ -> rejected++ },
                         ),
                 )
 

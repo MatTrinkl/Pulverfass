@@ -232,7 +232,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(createResponse.lobbyCode, response.lobbyCode)
                     assertEquals(1, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
-                    assertEquals(1, response.stateVersion)
+                    assertEquals(2, response.stateVersion)
                     assertEquals(24, response.definition.territories.size)
                     assertEquals(6, response.definition.continents.size)
                     assertEquals(24, response.territoryStates.size)
@@ -1264,6 +1264,13 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(
                         response.lobbyCode,
                         lobbyManager.getLobby(response.lobbyCode)?.lobbyCode,
+                    )
+                    assertEquals(
+                        1L,
+                        lobbyManager
+                            .getLobby(response.lobbyCode)
+                            ?.currentState()
+                            ?.processedEventCount,
                     )
 
                     sessionAndConnection.first.close()
