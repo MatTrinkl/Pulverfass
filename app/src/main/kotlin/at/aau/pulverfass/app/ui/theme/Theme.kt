@@ -8,34 +8,30 @@ import androidx.compose.runtime.Composable
  * Pulverfass Color Scheme (Dark only — die App hat kein Light-Theme).
  * Die Material3 Color-Slots sind auf unsere Pulverfass-Tokens gemappt.
  */
-private val PulverfassColorScheme = darkColorScheme(
-    primary = PulverfassColors.Gold,
-    onPrimary = PulverfassColors.SurfaceVoid,
-    primaryContainer = PulverfassColors.GoldDark,
-    onPrimaryContainer = PulverfassColors.TextPrimary,
-
-    secondary = PulverfassColors.Parchment,
-    onSecondary = PulverfassColors.TextOnParchment,
-    secondaryContainer = PulverfassColors.ParchmentDark,
-    onSecondaryContainer = PulverfassColors.TextOnParchment,
-
-    tertiary = PulverfassColors.GoldBright,
-    onTertiary = PulverfassColors.SurfaceVoid,
-
-    background = PulverfassColors.SurfaceDark,
-    onBackground = PulverfassColors.TextPrimary,
-    surface = PulverfassColors.SurfaceCard,
-    onSurface = PulverfassColors.TextPrimary,
-    surfaceVariant = PulverfassColors.SurfaceWood,
-    onSurfaceVariant = PulverfassColors.TextOnDark,
-
-    error = PulverfassColors.Danger,
-    onError = PulverfassColors.TextPrimary,
-    errorContainer = PulverfassColors.DangerBright,
-
-    outline = PulverfassColors.GoldMuted,
-    outlineVariant = PulverfassColors.ParchmentEdge,
-)
+private val PulverfassColorScheme =
+    darkColorScheme(
+        primary = PulverfassColors.Gold,
+        onPrimary = PulverfassColors.SurfaceVoid,
+        primaryContainer = PulverfassColors.GoldDark,
+        onPrimaryContainer = PulverfassColors.TextPrimary,
+        secondary = PulverfassColors.Parchment,
+        onSecondary = PulverfassColors.TextOnParchment,
+        secondaryContainer = PulverfassColors.ParchmentDark,
+        onSecondaryContainer = PulverfassColors.TextOnParchment,
+        tertiary = PulverfassColors.GoldBright,
+        onTertiary = PulverfassColors.SurfaceVoid,
+        background = PulverfassColors.SurfaceDark,
+        onBackground = PulverfassColors.TextPrimary,
+        surface = PulverfassColors.SurfaceCard,
+        onSurface = PulverfassColors.TextPrimary,
+        surfaceVariant = PulverfassColors.SurfaceWood,
+        onSurfaceVariant = PulverfassColors.TextOnDark,
+        error = PulverfassColors.Danger,
+        onError = PulverfassColors.TextPrimary,
+        errorContainer = PulverfassColors.DangerBright,
+        outline = PulverfassColors.GoldMuted,
+        outlineVariant = PulverfassColors.ParchmentEdge,
+    )
 
 /**
  * Zentrales Material-Theme der Android-App.

@@ -56,10 +56,17 @@ object PulverfassColors {
      * Liste aller Player-Farben in fester Reihenfolge.
      * Use case: Spieler-Index → Color via [playerColors][index].
      */
-    val playerColors: List<Color> = listOf(
-        PlayerRed, PlayerBlue, PlayerOrange, PlayerOlive,
-        PlayerPurple, PlayerTeal, PlayerPink, PlayerGreen,
-    )
+    val playerColors: List<Color> =
+        listOf(
+            PlayerRed,
+            PlayerBlue,
+            PlayerOrange,
+            PlayerOlive,
+            PlayerPurple,
+            PlayerTeal,
+            PlayerPink,
+            PlayerGreen,
+        )
 
     // ============================================
     // SEMANTIC COLORS
