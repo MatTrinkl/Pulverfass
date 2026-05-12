@@ -486,7 +486,6 @@ class GameStateTest {
                 ),
         )
 
-
     @Test
     fun `should throw when lobby owner is not part of players`() {
         val playerOne = PlayerId(1)
@@ -500,5 +499,25 @@ class GameStateTest {
                 lobbyOwner = playerTwo,
             )
         }
+    }
+    @Test
+    fun `should return display name for known player`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("DN12"),
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                playerDisplayNames =
+                    mapOf(
+                        playerOne to "Player 1 name",
+                        playerTwo to "Player 2 name",
+                    ),
+            )
+
+        // Prüft, dass die Anzeigenamen bekannter Spieler aus dem GameState gelesen werden können.
+        assertEquals("Player 1 name", state.displayNameOf(playerOne))
+        assertEquals("Player 2 name", state.displayNameOf(playerTwo))
     }
 }
