@@ -8,6 +8,12 @@ on:
     branches: [ main ]
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Run image publish and deploy
+        required: true
+        type: boolean
+        default: true
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -337,7 +343,9 @@ jobs:
   docker-main-publish:
     name: Main Build and GHCR Push
     runs-on: self-hosted
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
     needs: [build-and-test, dokka-build]
     permissions:
       contents: read
@@ -374,10 +382,15 @@ jobs:
 
           server_local_tag="se2risiko-server:${app_version}"
           server_publish_tag="${server_image}:${app_version}"
-          server_floating_tag="${server_image}:main"
           dokka_local_tag="se2risiko-dokka:${app_version}"
           dokka_publish_tag="${dokka_image}:${app_version}"
-          dokka_floating_tag="${dokka_image}:main"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            server_floating_tag="${server_image}:main"
+            dokka_floating_tag="${dokka_image}:main"
+          else
+            server_floating_tag=""
+            dokka_floating_tag=""
+          fi
 
           {
             echo "app_version=${app_version}"
@@ -422,28 +435,38 @@ jobs:
       - name: Push main images
         run: |
           docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_publish_tag }}"
-          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_floating_tag }}"
           docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_publish_tag }}"
-          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_floating_tag }}"
           docker push "${{ steps.metadata.outputs.server_publish_tag }}"
-          docker push "${{ steps.metadata.outputs.server_floating_tag }}"
           docker push "${{ steps.metadata.outputs.dokka_publish_tag }}"
-          docker push "${{ steps.metadata.outputs.dokka_floating_tag }}"
+          if [ -n "${{ steps.metadata.outputs.server_floating_tag }}" ]; then
+            docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_floating_tag }}"
+            docker push "${{ steps.metadata.outputs.server_floating_tag }}"
+          fi
+          if [ -n "${{ steps.metadata.outputs.dokka_floating_tag }}" ]; then
+            docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_floating_tag }}"
+            docker push "${{ steps.metadata.outputs.dokka_floating_tag }}"
+          fi
 
       - name: Print main image metadata
         run: |
           echo "MAIN_TAG=${{ steps.metadata.outputs.app_version }}"
           echo "SERVER_IMAGE_TAG=${{ steps.metadata.outputs.server_publish_tag }}"
-          echo "SERVER_FLOATING_TAG=${{ steps.metadata.outputs.server_floating_tag }}"
           echo "DOKKA_IMAGE_TAG=${{ steps.metadata.outputs.dokka_publish_tag }}"
-          echo "DOKKA_FLOATING_TAG=${{ steps.metadata.outputs.dokka_floating_tag }}"
+          if [ -n "${{ steps.metadata.outputs.server_floating_tag }}" ]; then
+            echo "SERVER_FLOATING_TAG=${{ steps.metadata.outputs.server_floating_tag }}"
+          fi
+          if [ -n "${{ steps.metadata.outputs.dokka_floating_tag }}" ]; then
+            echo "DOKKA_FLOATING_TAG=${{ steps.metadata.outputs.dokka_floating_tag }}"
+          fi
           echo "COMMIT=${{ github.sha }}"
           echo "CREATED=${{ steps.metadata.outputs.created }}"
 
   deploy-main:
     name: Deploy on Main
     runs-on: self-hosted
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
     needs: docker-main-publish
     permissions:
       contents: read
@@ -461,6 +484,11 @@ jobs:
       SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.server_publish_tag }}
       DOKKA_IMAGE: ${{ needs.docker-main-publish.outputs.dokka_publish_tag }}
       APP_VERSION: ${{ needs.docker-main-publish.outputs.app_version }}
+      PORT: ${{ vars.PORT || secrets.PORT || '8080' }}
+      DOKKA_PORT: ${{ vars.DOKKA_PORT || secrets.DOKKA_PORT || '8081' }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER || secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB || secrets.POSTGRES_DB }}
 
     steps:
       - name: Validate deploy configuration
@@ -471,6 +499,11 @@ jobs:
           test -n "${DEPLOY_PORT}"
           test -n "${DEPLOY_PATH}"
           test -n "${GHCR_TOKEN}"
+          test -n "${PORT}"
+          test -n "${DOKKA_PORT}"
+          test -n "${POSTGRES_USER}"
+          test -n "${POSTGRES_PASSWORD}"
+          test -n "${POSTGRES_DB}"
 
       - name: Configure SSH
         run: |
@@ -485,15 +518,27 @@ jobs:
             ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
           fi
 
-      - name: Deploy with docker compose
+      - name: Sync compose file to deploy server
         run: |
           set -eu
           ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; mkdir -p '${DEPLOY_PATH}'"
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; cat > '${DEPLOY_PATH}/compose.yaml'" < compose.yaml
+
+      - name: Deploy with docker compose
+        run: |
+          set -eu
+          ghcr_token_b64="$(printf '%s' "${GHCR_TOKEN}" | base64 -w 0)"
+          postgres_password_b64="$(printf '%s' "${POSTGRES_PASSWORD}" | base64 -w 0)"
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "set -eu; \
             cd '${DEPLOY_PATH}'; \
-            echo '${GHCR_TOKEN}' | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
-            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose pull server dokka; \
-            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' docker compose up -d; \
+            GHCR_TOKEN=\$(printf '%s' '${ghcr_token_b64}' | base64 -d); \
+            POSTGRES_PASSWORD=\$(printf '%s' '${postgres_password_b64}' | base64 -d); \
+            echo \"\$GHCR_TOKEN\" | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' docker compose pull server dokka; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' docker compose up -d; \
             docker image prune -f"
 
       - name: Smoke test deployed health endpoint
