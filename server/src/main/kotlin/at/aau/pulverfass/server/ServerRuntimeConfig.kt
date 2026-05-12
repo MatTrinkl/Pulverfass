@@ -122,7 +122,8 @@ data class ServerRuntimeConfig(
                     ?.let(BuildVersion::fromManifestVersion)
                 ?: BuildVersion.default()
 
-        private fun readManifestVersion(): String? = ServerRuntimeConfig::class.java.`package`?.implementationVersion
+        private fun readManifestVersion(): String? =
+            ServerRuntimeConfig::class.java.`package`?.implementationVersion
     }
 }
 
@@ -169,11 +170,20 @@ data class DatabaseRuntimeConfig(
             return true
         }
 
-    fun requireJdbcUrl(): String = requireNotNull(jdbcUrl) { "Database JDBC URL is not configured." }
+    fun requireJdbcUrl(): String =
+        requireNotNull(jdbcUrl) {
+            "Database JDBC URL is not configured."
+        }
 
-    fun requireUser(): String = requireNotNull(user) { "Database user is not configured." }
+    fun requireUser(): String =
+        requireNotNull(user) {
+            "Database user is not configured."
+        }
 
-    fun requirePassword(): String = requireNotNull(password) { "Database password is not configured." }
+    fun requirePassword(): String =
+        requireNotNull(password) {
+            "Database password is not configured."
+        }
 }
 
 private const val DEFAULT_DB_PORT = 5432

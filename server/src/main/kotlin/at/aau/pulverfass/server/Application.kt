@@ -149,7 +149,12 @@ fun Application.module(
         }
         get("/ready") {
             val readiness = databaseReadinessProbe.readiness()
-            val status = if (readiness.isReady) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable
+            val status =
+                if (readiness.isReady) {
+                    HttpStatusCode.OK
+                } else {
+                    HttpStatusCode.ServiceUnavailable
+                }
             call.respondText(
                 formatReadinessResponse(runtimeConfig.appVersion, readiness),
                 status = status,
