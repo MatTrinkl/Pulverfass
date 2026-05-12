@@ -500,6 +500,7 @@ class GameStateTest {
             )
         }
     }
+    
     @Test
     fun `should return display name for known player`() {
         val playerOne = PlayerId(1)
@@ -519,5 +520,24 @@ class GameStateTest {
         // Prüft, dass die Anzeigenamen bekannter Spieler aus dem GameState gelesen werden können.
         assertEquals("Player 1 name", state.displayNameOf(playerOne))
         assertEquals("Player 2 name", state.displayNameOf(playerTwo))
+    }
+
+    @Test
+    fun `should return null for unknown player display name`() {
+        val playerOne = PlayerId(1)
+        val unknownPlayer = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("DP34"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                playerDisplayNames =
+                    mapOf(
+                        playerOne to "Player 1 name",
+                    ),
+            )
+
+        // Prüft, dass für unbekannte Spieler kein Anzeigename zurückgegeben wird.
+        assertNull(state.displayNameOf(unknownPlayer))
     }
 }
