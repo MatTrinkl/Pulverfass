@@ -1143,11 +1143,7 @@ class MainServerLobbyRoutingService(
         payload: LobbyPlayerCountRequest,
         cause: Throwable,
     ): LobbyPlayerCountErrorResponse {
-        val code =
-            when (cause.message) {
-                "LOBBY_NOT_FOUND" -> LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
-                else -> LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
-            }
+        val code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
 
         val reason =
             when (code) {
