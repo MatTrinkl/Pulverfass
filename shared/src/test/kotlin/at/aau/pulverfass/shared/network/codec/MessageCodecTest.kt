@@ -16,6 +16,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -23,6 +24,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
@@ -35,6 +37,8 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -156,6 +160,41 @@ class MessageCodecTest {
                 lobbyCode = LobbyCode("EF57"),
                 playerId = PlayerId(15),
                 reason = PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
+            )
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode lobby player count request payload directly`() {
+        val payload = LobbyPlayerCountRequest(LobbyCode("PC12"))
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode lobby player count response payload directly`() {
+        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("PC34"), playerCount = 6)
+
+        val bytes = MessageCodec.encode(payload)
+        val result = MessageCodec.decodePayload(bytes)
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode lobby player count error payload directly`() {
+        val payload =
+            LobbyPlayerCountErrorResponse(
+                lobbyCode = LobbyCode("PC99"),
+                code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
+                reason = "Lobby 'PC99' wurde nicht gefunden.",
             )
 
         val bytes = MessageCodec.encode(payload)

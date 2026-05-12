@@ -28,6 +28,15 @@ enum class MessageType(val id: Int) {
     /** Broadcast, dass ein Lobby-Spieler technisch die Verbindung verloren hat. */
     LOBBY_PLAYER_CONNECTION_LOST_BROADCAST(52),
 
+    /** Anfrage nach der aktuellen Spieleranzahl einer Lobby. */
+    LOBBY_PLAYER_COUNT_REQUEST(53),
+
+    /** Erfolgsantwort mit der aktuellen Spieleranzahl einer Lobby. */
+    LOBBY_PLAYER_COUNT_RESPONSE(54),
+
+    /** Fehlantwort auf eine PlayerCount-Anfrage. */
+    LOBBY_PLAYER_COUNT_ERROR_RESPONSE(55),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 
