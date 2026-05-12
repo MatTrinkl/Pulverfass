@@ -500,7 +500,7 @@ class GameStateTest {
             )
         }
     }
-    
+
     @Test
     fun `should return display name for known player`() {
         val playerOne = PlayerId(1)
@@ -539,5 +539,20 @@ class GameStateTest {
 
         // Prüft, dass für unbekannte Spieler kein Anzeigename zurückgegeben wird.
         assertNull(state.displayNameOf(unknownPlayer))
+    }
+
+    @Test
+    fun `should return false when player is not part of players`() {
+        val playerOne = PlayerId(1)
+        val unknownPlayer = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("HP12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+            )
+
+        // Prüft, dass hasPlayer nur Spieler erkennt, die Teil der Spielerliste sind.
+        assertFalse(state.hasPlayer(unknownPlayer))
     }
 }
