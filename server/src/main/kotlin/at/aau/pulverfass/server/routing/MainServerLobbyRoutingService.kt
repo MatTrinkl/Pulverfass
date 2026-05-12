@@ -67,6 +67,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCod
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
@@ -324,13 +325,27 @@ class MainServerLobbyRoutingService(
 
     private suspend fun routeLobbyPlayerCountRequest(request: DecodedNetworkRequest) {
         val payload = request.payload as LobbyPlayerCountRequest
+        logger.info(
+            "Routing messageType={} connectionId={} lobbyCode={}",
+            request.receivedPacket.header.type.name,
+            request.connectionId.value,
+            payload.lobbyCode.value,
+        )
 
         runCatching {
-            val response = buildLobbyPlayerCountResponse(payload)
+            val response = buildLobbyPlayerCountResponse(request, payload)
             network.send(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = lobbyPlayerCountErrorResponse(payload, cause)
+            logger.warn(
+                "Routing failed messageType={} connectionId={} lobbyCode={} code={} reason={}",
+                MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE.name,
+                request.connectionId.value,
+                payload.lobbyCode.value,
+                error.code.name,
+                error.reason,
+            )
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -981,6 +996,7 @@ class MainServerLobbyRoutingService(
     }
 
     private fun buildLobbyPlayerCountResponse(
+        request: DecodedNetworkRequest,
         payload: LobbyPlayerCountRequest,
     ): LobbyPlayerCountResponse {
         val state =
@@ -992,7 +1008,9 @@ class MainServerLobbyRoutingService(
             playerCount = state.players.size,
         ).also { response ->
             logger.info(
-                "Lobby player count served: lobbyCode={} playerCount={}",
+                "Sent messageType={} connectionId={} lobbyCode={} playerCount={}",
+                MessageType.LOBBY_PLAYER_COUNT_RESPONSE.name,
+                request.connectionId.value,
                 response.lobbyCode.value,
                 response.playerCount,
             )
@@ -1349,7 +1367,8 @@ class MainServerLobbyRoutingService(
             )
 
         logger.info(
-            "Connection lost broadcast: lobbyCode={} playerId={} reason={}",
+            "Broadcasting messageType={} lobbyCode={} playerId={} reason={}",
+            MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST.name,
             lobbyCode.value,
             playerId.value,
             reason.name,
