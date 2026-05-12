@@ -31,6 +31,7 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
@@ -42,6 +43,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
@@ -54,6 +56,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGet
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
@@ -141,6 +145,7 @@ class MainServerLobbyRoutingService(
                     payload = payload,
                 )
             is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
+            is LobbyPlayerCountRequest -> routeLobbyPlayerCountRequest(request)
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
@@ -300,6 +305,32 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = mapGetErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeLobbyPlayerCountRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as LobbyPlayerCountRequest
+
+        runCatching {
+            val response = buildLobbyPlayerCountResponse(payload)
+            network.send(request.connectionId, response)
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = lobbyPlayerCountErrorResponse(payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -949,6 +980,25 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    private fun buildLobbyPlayerCountResponse(
+        payload: LobbyPlayerCountRequest,
+    ): LobbyPlayerCountResponse {
+        val state =
+            lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                ?: throw IllegalStateException("LOBBY_NOT_FOUND")
+
+        return LobbyPlayerCountResponse(
+            lobbyCode = payload.lobbyCode,
+            playerCount = state.players.size,
+        ).also { response ->
+            logger.info(
+                "Lobby player count served: lobbyCode={} playerCount={}",
+                response.lobbyCode.value,
+                response.playerCount,
+            )
+        }
+    }
+
     private fun turnAdvanceErrorResponse(
         request: DecodedNetworkRequest,
         payload: TurnAdvanceRequest,
@@ -1069,6 +1119,29 @@ class MainServerLobbyRoutingService(
             }
 
         return TurnStateGetErrorResponse(code = code, reason = reason)
+    }
+
+    private fun lobbyPlayerCountErrorResponse(
+        payload: LobbyPlayerCountRequest,
+        cause: Throwable,
+    ): LobbyPlayerCountErrorResponse {
+        val code =
+            when (cause.message) {
+                "LOBBY_NOT_FOUND" -> LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
+                else -> LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
+            }
+
+        val reason =
+            when (code) {
+                LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+            }
+
+        return LobbyPlayerCountErrorResponse(
+            lobbyCode = payload.lobbyCode,
+            code = code,
+            reason = reason,
+        )
     }
 
     private suspend fun broadcastAcceptedLobbyEvent(
