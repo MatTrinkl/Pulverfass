@@ -337,7 +337,7 @@ class MainServerLobbyRoutingService(
             network.send(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
-            val error = lobbyPlayerCountErrorResponse(payload, cause)
+            val error = lobbyPlayerCountErrorResponse(payload)
             logger.warn(
                 "Routing failed messageType={} connectionId={} lobbyCode={} code={} reason={}",
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE.name,
@@ -1141,7 +1141,6 @@ class MainServerLobbyRoutingService(
 
     private fun lobbyPlayerCountErrorResponse(
         payload: LobbyPlayerCountRequest,
-        cause: Throwable,
     ): LobbyPlayerCountErrorResponse {
         val code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
 
