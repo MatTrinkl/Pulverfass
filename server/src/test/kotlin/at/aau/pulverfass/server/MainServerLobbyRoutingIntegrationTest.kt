@@ -132,8 +132,8 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(1, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(3, response.stateVersion)
-                    assertEquals(23, response.definition.territories.size)
-                    assertEquals(23, response.territoryStates.size)
+                    assertEquals(24, response.definition.territories.size)
+                    assertEquals(24, response.territoryStates.size)
                     assertEquals(
                         PlayerId(1),
                         response.territoryStates
@@ -235,9 +235,9 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertEquals(1, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(1, response.stateVersion)
-                    assertEquals(23, response.definition.territories.size)
+                    assertEquals(24, response.definition.territories.size)
                     assertEquals(6, response.definition.continents.size)
-                    assertEquals(23, response.territoryStates.size)
+                    assertEquals(24, response.territoryStates.size)
                     assertTrue(
                         response.territoryStates.all { it.ownerId == null && it.troopCount == 0 },
                     )

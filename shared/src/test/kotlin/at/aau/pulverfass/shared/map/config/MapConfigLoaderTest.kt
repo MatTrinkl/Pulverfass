@@ -16,7 +16,7 @@ class MapConfigLoaderTest {
         val definition = MapConfigLoader.loadDefault()
 
         assertEquals(MapConfig.CURRENT_SCHEMA_VERSION, definition.schemaVersion)
-        assertEquals(23, definition.territories.size)
+        assertEquals(24, definition.territories.size)
         assertEquals(6, definition.continents.size)
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
@@ -257,7 +257,7 @@ class MapConfigLoaderTest {
                 "/${MapConfigLoader.DEFAULT_RESOURCE_PATH}",
             )
 
-        assertEquals(23, definition.territories.size)
+        assertEquals(24, definition.territories.size)
     }
 
     @Test
