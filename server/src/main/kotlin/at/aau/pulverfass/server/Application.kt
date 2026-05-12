@@ -4,6 +4,10 @@ import at.aau.pulverfass.server.ids.IdFactory
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
+import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
+import at.aau.pulverfass.server.persistence.JdbcLobbyPersistenceStore
+import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
+import at.aau.pulverfass.server.persistence.LobbyRecoveryLoader
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.server.session.SessionContextRegistry
@@ -48,7 +52,13 @@ private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Ru
  */
 fun main() {
     val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
-    val databaseReadinessProbe = createDatabaseReadinessProbe(runtimeConfig.database)
+    migrateDatabaseSchema(runtimeConfig.database)
+    val persistenceCallbacks = createLobbyPersistenceCallbacks(runtimeConfig.database)
+    val databaseReadinessProbe =
+        CompositeDatabaseReadinessProbe(
+            createDatabaseReadinessProbe(runtimeConfig.database),
+            persistenceCallbacks,
+        )
     runtimeLogger.info(
         "Starting websocket server on {}:{} (version: {}, database env configured: {})",
         runtimeConfig.host,
@@ -61,6 +71,7 @@ fun main() {
         port = runtimeConfig.port,
         runtimeConfig = runtimeConfig,
         databaseReadinessProbe = databaseReadinessProbe,
+        persistenceCallbacks = persistenceCallbacks,
     ).start(wait = true)
 }
 
@@ -99,13 +110,19 @@ fun createServerWithLobbyRuntime(
     network: ServerNetwork = ServerNetwork(),
     runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
     databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+    persistenceCallbacks: LobbyPersistenceCallbacks = LobbyPersistenceCallbacks.disabled(),
 ): ApplicationEngine =
     embeddedServer(
         factory = Netty,
         host = host,
         port = port,
     ) {
-        moduleWithLobbyRuntime(network, runtimeConfig, databaseReadinessProbe)
+        moduleWithLobbyRuntime(
+            network = network,
+            runtimeConfig = runtimeConfig,
+            databaseReadinessProbe = databaseReadinessProbe,
+            persistenceCallbacks = persistenceCallbacks,
+        )
     }
 
 /**
@@ -181,9 +198,10 @@ fun Application.moduleWithLobbyRuntime(
     network: ServerNetwork = ServerNetwork(),
     runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
     databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+    persistenceCallbacks: LobbyPersistenceCallbacks = LobbyPersistenceCallbacks.disabled(),
 ) {
     module(network, runtimeConfig, databaseReadinessProbe)
-    installLobbyRuntime(network)
+    installLobbyRuntime(network, runtimeConfig.database, persistenceCallbacks)
 }
 
 /**
@@ -199,6 +217,25 @@ private fun createDatabaseReadinessProbe(config: DatabaseRuntimeConfig): Databas
     } else {
         DatabaseReadinessProbe.disabled()
     }
+
+private fun createLobbyPersistenceCallbacks(
+    config: DatabaseRuntimeConfig,
+): LobbyPersistenceCallbacks {
+    if (!config.isConfigured) {
+        return LobbyPersistenceCallbacks.disabled()
+    }
+
+    val dataSource =
+        createPostgresDataSource(
+            config = config,
+            poolName = "pulverfass-lobby-persistence-pool",
+            applicationName = "pulverfass-lobby-persistence",
+        )
+    return DatabaseBackedLobbyPersistenceGateway(
+        store = JdbcLobbyPersistenceStore(dataSource),
+        closeAction = dataSource::close,
+    )
+}
 
 private fun formatReadinessResponse(
     appVersion: String,
@@ -225,10 +262,29 @@ private fun formatReadinessResponse(
     }
 }
 
-private fun Application.installLobbyRuntime(network: ServerNetwork) {
+private fun Application.installLobbyRuntime(
+    network: ServerNetwork,
+    databaseConfig: DatabaseRuntimeConfig,
+    persistenceCallbacks: LobbyPersistenceCallbacks,
+) {
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
     val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
+    val recoveryDataSource =
+        databaseConfig.takeIf(DatabaseRuntimeConfig::isConfigured)?.let { config ->
+            createPostgresDataSource(
+                config = config,
+                poolName = "pulverfass-lobby-recovery-pool",
+                applicationName = "pulverfass-lobby-recovery",
+            )
+        }
+    val recoveryLoader =
+        recoveryDataSource?.let { dataSource ->
+            LobbyRecoveryLoader(
+                store = JdbcLobbyPersistenceStore(dataSource),
+                mapDefinitionRepository = mapDefinitionRepository,
+            )
+        }
     val lobbyManager =
         LobbyManager(
             scope = serverScope,
@@ -239,6 +295,7 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                 )
             },
         )
+    recoveryLoader?.restoreAllInto(lobbyManager)
     val sessionContextRegistry = SessionContextRegistry()
     val router =
         MainServerRouter(
@@ -270,6 +327,7 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                     ?.let(network.sessionManager::getByToken)
                     ?.connectionId
             },
+            persistenceCallbacks = persistenceCallbacks,
         )
 
     serverScope.launch {
@@ -308,6 +366,8 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
             routingService.stop()
             lobbyManager.shutdownAll()
         }
+        persistenceCallbacks.close()
+        recoveryDataSource?.close()
         serverScope.cancel()
     }
 }

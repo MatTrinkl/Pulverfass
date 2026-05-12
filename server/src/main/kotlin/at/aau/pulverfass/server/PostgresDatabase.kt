@@ -29,6 +29,29 @@ interface DatabaseReadinessProbe : AutoCloseable {
     }
 }
 
+class CompositeDatabaseReadinessProbe(
+    private vararg val probes: DatabaseReadinessProbe,
+) : DatabaseReadinessProbe {
+    override fun readiness(): DatabaseReadiness {
+        val readings = probes.map(DatabaseReadinessProbe::readiness)
+        val firstDown = readings.firstOrNull { it.state == DatabaseReadinessState.DOWN }
+        if (firstDown != null) {
+            return firstDown
+        }
+        if (readings.any { it.state == DatabaseReadinessState.UP }) {
+            return DatabaseReadiness(DatabaseReadinessState.UP)
+        }
+        return DatabaseReadiness(
+            state = DatabaseReadinessState.DISABLED,
+            detail = readings.firstNotNullOfOrNull(DatabaseReadiness::detail),
+        )
+    }
+
+    override fun close() {
+        probes.forEach(DatabaseReadinessProbe::close)
+    }
+}
+
 private object DisabledDatabaseReadinessProbe : DatabaseReadinessProbe {
     override fun readiness(): DatabaseReadiness =
         DatabaseReadiness(
@@ -40,23 +63,7 @@ private object DisabledDatabaseReadinessProbe : DatabaseReadinessProbe {
 class PostgresDatabaseReadinessProbe(
     private val config: DatabaseRuntimeConfig,
 ) : DatabaseReadinessProbe {
-    private val dataSource =
-        HikariDataSource(
-            HikariConfig().apply {
-                poolName = "pulverfass-server-pool"
-                jdbcUrl = config.requireJdbcUrl()
-                username = config.requireUser()
-                password = config.requirePassword()
-                driverClassName = "org.postgresql.Driver"
-                maximumPoolSize = config.poolMaxSize
-                minimumIdle = 0
-                connectionTimeout = config.connectionTimeoutMillis
-                validationTimeout = config.validationTimeoutMillis
-                initializationFailTimeout = -1
-                addDataSourceProperty("ApplicationName", "pulverfass-server")
-                addDataSourceProperty("tcpKeepAlive", "true")
-            },
-        )
+    private val dataSource = createPostgresDataSource(config, poolName = "pulverfass-server-pool")
 
     override fun readiness(): DatabaseReadiness =
         try {
@@ -81,3 +88,25 @@ class PostgresDatabaseReadinessProbe(
         dataSource.close()
     }
 }
+
+fun createPostgresDataSource(
+    config: DatabaseRuntimeConfig,
+    poolName: String,
+    applicationName: String = "pulverfass-server",
+): HikariDataSource =
+    HikariDataSource(
+        HikariConfig().apply {
+            this.poolName = poolName
+            jdbcUrl = config.requireJdbcUrl()
+            username = config.requireUser()
+            password = config.requirePassword()
+            driverClassName = "org.postgresql.Driver"
+            maximumPoolSize = config.poolMaxSize
+            minimumIdle = 0
+            connectionTimeout = config.connectionTimeoutMillis
+            validationTimeout = config.validationTimeoutMillis
+            initializationFailTimeout = -1
+            addDataSourceProperty("ApplicationName", applicationName)
+            addDataSourceProperty("tcpKeepAlive", "true")
+        },
+    )

@@ -41,6 +41,10 @@ Wichtig:
 - `DOKKA_PORT`
 - `POSTGRES_USER`
 - `POSTGRES_DB`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
 
 ### Optional als Variables
 
@@ -53,6 +57,7 @@ Wichtig:
 
 - `DEPLOY_SSH_KEY`
 - `POSTGRES_PASSWORD`
+- `DB_PASSWORD`
 
 ### Optional als Secrets
 
@@ -85,12 +90,22 @@ Hinweis:
   Externer App-Port fuer den Ktor-Service.
 - `DOKKA_PORT`
   Externer Port fuer die Dokka-Auslieferung.
+- `DB_HOST`
+  Datenbank-Host fuer die Server-Anwendung. Im Compose-Standardfall `db`.
+- `DB_PORT`
+  Datenbank-Port fuer die Server-Anwendung. Im Compose-Standardfall `5432`.
+- `DB_NAME`
+  Datenbankname fuer die Server-Anwendung.
+- `DB_USER`
+  Datenbank-Benutzer fuer die Server-Anwendung.
+- `DB_PASSWORD`
+  Datenbank-Passwort fuer die Server-Anwendung.
 - `POSTGRES_USER`
-  PostgreSQL-Benutzer.
+  PostgreSQL-Benutzer fuer den DB-Container-Init.
 - `POSTGRES_PASSWORD`
-  PostgreSQL-Passwort.
+  PostgreSQL-Passwort fuer den DB-Container-Init.
 - `POSTGRES_DB`
-  Name der initialen Datenbank.
+  Name der initialen Datenbank fuer den DB-Container-Init.
 
 ### Optionale Deploy-Werte
 
@@ -275,6 +290,8 @@ Optional:
   kompletter Inhalt der privaten Datei `github-actions-deploy`
 - `POSTGRES_PASSWORD`
   Output von `openssl rand -base64 32`
+- `DB_PASSWORD`
+  im Compose-Standard gleich wie `POSTGRES_PASSWORD`
 - `GHCR_TOKEN`
   nur wenn noetig
 

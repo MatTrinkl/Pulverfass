@@ -394,6 +394,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             state.copy(
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 gameStarted = true,
+                gameRandomSeed = event.randomSeed,
                 status = GameStatus.RUNNING,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,

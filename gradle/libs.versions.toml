@@ -21,6 +21,8 @@ androidxTestCore = "1.6.1"
 robolectric = "4.14.1"
 hikari = "7.0.2"
 postgresql = "42.7.10"
+flyway = "12.6.0"
+testcontainers = "1.20.4"
 
 [libraries]
 # AndroidX
@@ -64,6 +66,10 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
 hikari-cp = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
 postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
+flyway-core = { group = "org.flywaydb", name = "flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { group = "org.flywaydb", name = "flyway-database-postgresql", version.ref = "flyway" }
+testcontainers-junit-jupiter = { group = "org.testcontainers", name = "junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { group = "org.testcontainers", name = "postgresql", version.ref = "testcontainers" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

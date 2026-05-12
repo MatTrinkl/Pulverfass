@@ -28,11 +28,15 @@ dependencies {
     implementation(libs.hikari.cp)
     implementation(libs.logback.classic)
     implementation(libs.postgresql)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.database.postgresql)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.junit)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
 }
 
 tasks.named<Test>("test") {

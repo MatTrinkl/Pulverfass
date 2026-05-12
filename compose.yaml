@@ -34,11 +34,11 @@ services:
     environment:
       PORT: ${PORT:-8080}
       APP_VERSION: ${APP_VERSION:-dev}
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-pulverfass}
-      DB_USER: ${POSTGRES_USER:-pulverfass}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell or .env}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-pulverfass}
+      DB_USER: ${DB_USER:-pulverfass}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your shell or .env}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
 

@@ -3,6 +3,7 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
@@ -86,6 +87,8 @@ class MainServerLobbyRoutingService(
     private val playerIdResolver: (ConnectionId) -> PlayerId?,
     private val connectionIdResolver: (PlayerId) -> ConnectionId? = { null },
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
+    private val persistenceCallbacks: LobbyPersistenceCallbacks =
+        LobbyPersistenceCallbacks.disabled(),
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
     private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
@@ -1053,6 +1056,11 @@ class MainServerLobbyRoutingService(
         previousState: GameState,
         currentState: GameState,
     ) {
+        persistenceCallbacks.onLobbyEventAccepted(
+            event = event,
+            previousState = previousState,
+            currentState = currentState,
+        )
         val publicDelta =
             publicGameStateBuilder.buildDelta(
                 lobbyCode,
@@ -1157,6 +1165,7 @@ class MainServerLobbyRoutingService(
             payload = payload,
         )
         roundHistoryBuffer(lobbyCode).recordBoundary(payload)
+        persistenceCallbacks.onPhaseBoundaryBroadcast(payload)
     }
 
     private suspend fun broadcastTurnStateIfChanged(
@@ -1223,6 +1232,10 @@ class MainServerLobbyRoutingService(
             roundIndex = payload.turnState.turnCount,
             stateVersion = payload.stateVersion,
             trigger = RoundSnapshotTrigger.TURN_CHANGE_BROADCAST,
+        )
+        persistenceCallbacks.onSnapshotBroadcast(
+            currentState = currentState,
+            payload = payload,
         )
     }
 
