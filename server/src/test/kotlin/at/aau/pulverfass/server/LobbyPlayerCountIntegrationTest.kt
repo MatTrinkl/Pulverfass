@@ -7,8 +7,15 @@ import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
+import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
@@ -26,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 class LobbyPlayerCountIntegrationTest {
     @Test
@@ -34,6 +42,8 @@ class LobbyPlayerCountIntegrationTest {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val lobbyManager = LobbyManager(serverScope)
+            val routedPackets = AtomicInteger(0)
+            val routingErrors = AtomicInteger(0)
             val router =
                 MainServerRouter(
                     lobbyManager = lobbyManager,
@@ -45,7 +55,11 @@ class LobbyPlayerCountIntegrationTest {
                     router = router,
                     lobbyManager = lobbyManager,
                     playerIdResolver = { null },
-                    hooks = MainServerLobbyRoutingServiceHooks(),
+                    hooks =
+                        MainServerLobbyRoutingServiceHooks(
+                            onRouted = { routedPackets.incrementAndGet() },
+                            onRoutingError = { _, _ -> routingErrors.incrementAndGet() },
+                        ),
                 )
 
             application {
@@ -87,6 +101,12 @@ class LobbyPlayerCountIntegrationTest {
                         ),
                         receivePayload(requester.first),
                     )
+                    assertEquals(
+                        0,
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.processedEventCount,
+                    )
+                    assertEquals(1, routedPackets.get())
+                    assertEquals(0, routingErrors.get())
                     assertNull(receivePayloadOrNull(requester.first))
                     assertNull(receivePayloadOrNull(otherClient.first))
 
@@ -165,6 +185,123 @@ class LobbyPlayerCountIntegrationTest {
             }
         }
 
+    @Test
+    fun `player count request is wired through module with lobby runtime`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val hostSession = client.webSocketSession("/ws")
+                receiveTestConnectionToken(hostSession)
+
+                hostSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyCode =
+                    (receivePayload(hostSession) as CreateLobbyResponse).lobbyCode
+
+                hostSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                    ),
+                )
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode),
+                    receivePayloadOfType<JoinLobbyResponse>(hostSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        playerDisplayName = "Alice",
+                        isHost = true,
+                    ),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(hostSession),
+                )
+                assertEquals(
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateUpdatedEvent>(hostSession),
+                )
+
+                val joinerSession = client.webSocketSession("/ws")
+                receiveTestConnectionToken(joinerSession)
+                joinerSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                    ),
+                )
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode),
+                    receivePayloadOfType<JoinLobbyResponse>(joinerSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        playerDisplayName = "Alice",
+                        isHost = true,
+                    ),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(joinerSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(2),
+                        playerDisplayName = "Bob",
+                    ),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(joinerSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(2),
+                        playerDisplayName = "Bob",
+                    ),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(hostSession),
+                )
+
+                hostSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(LobbyPlayerCountRequest(lobbyCode)),
+                    ),
+                )
+
+                assertEquals(
+                    LobbyPlayerCountResponse(
+                        lobbyCode = lobbyCode,
+                        playerCount = 2,
+                    ),
+                    receivePayload(hostSession),
+                )
+                assertNull(receivePayloadOrNull(hostSession))
+                assertNull(receivePayloadOrNull(joinerSession))
+
+                hostSession.close()
+                joinerSession.close()
+            }
+        }
+
     private fun lobbyState(
         lobbyCode: LobbyCode,
         players: List<PlayerId>,
@@ -193,4 +330,20 @@ class LobbyPlayerCountIntegrationTest {
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): Any? = receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 500)
+
+    private suspend inline fun <reified T> receivePayloadOfType(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+        maxMessages: Int = 6,
+    ): T {
+        repeat(maxMessages) {
+            val payload = receivePayload(session)
+            if (payload is T) {
+                return payload
+            }
+        }
+
+        throw AssertionError(
+            "Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.",
+        )
+    }
 }
