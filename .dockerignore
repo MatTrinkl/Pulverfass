@@ -8,3 +8,8 @@
 **/.DS_Store
 
 local.properties
+
+!build/
+!build/documentation/
+!build/documentation/html/
+!build/documentation/html/**
