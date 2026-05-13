@@ -1,3 +1,4 @@
+
 # Pulverfass · Dev Handoff
 
 > Schnell-Referenz für die Devs: welche Tokens für welchen Screen?
@@ -246,3 +247,39 @@ Backgrounds **immer** mit dezenter Vignette + 30% Dunkel-Overlay rendern für UI
 1. Compose vs. XML-Layouts? → Tokens sind kompatibel mit beiden, aber wir empfehlen Compose komplett.
 2. Welche `minSdk` haben wir? → Beeinflusst ob wir `Color(...)` Long-Hex-Format brauchen.
 3. Localization: Strings sind bisher hardcoded im Figma — sollten ALLE in `strings.xml` rein.
+
+## States & Edge Cases
+
+Designs in Figma-Page **"⚠️ States & Edge Cases"**. Verlinkt mit Issue #361.
+
+### Error States
+| Screen | Token-Mapping |
+|---|---|
+| **Verbindung verloren** (Vollbild) | BG `surface_void` + 60% overlay · Title `Display.Medium` color `danger_bright` · Primary CTA `Button.Primary` ("Erneut versuchen") · Secondary `Button.Secondary` ("Hauptmenü") |
+| **Reconnect Flow** | Spinner 48dp `gold_bright` · Title `Display.Medium` · Caption "Versuch X von Y" `Caption` color `text_muted` · 1 Button "Abbrechen" `Button.Secondary` |
+| **Ungültiger Zug** (Inline Toast, ~600×80dp) | Container `parchment` BG mit 2dp `danger` Border · Icon 24dp `danger_bright` (Cross) · Text `Body` color `text_on_parchment` · auto-dismiss nach 3s |
+| **Vom Host entfernt** | BG dark stormy · Title `Display.Medium` `danger_bright` · CTA `Button.Secondary` ("Zum Hauptmenü") |
+
+### Empty States
+| Screen | Token-Mapping |
+|---|---|
+| **Warteraum mit 1 Spieler** | Eigener Avatar gefüllt · 3 leere Pergament-Slots 80×80dp mit pulse-Animation · Caption "Warte auf Mitspieler..." `Body` `text_muted` · Lobby-ID prominent mit Copy-Icon |
+| **Leere Kartenhand** | Center-Icon 120dp `gold_muted` (Truhe/Buch) · Title "Noch keine Kriegskarten" `Headline` · Body `Body` `text_muted` |
+
+### Loading States
+| Screen | Token-Mapping |
+|---|---|
+| **Lobby-Beitritt** | Spinner 48dp `gold` · Title `Display.Medium` · Random Text-Variant aus Liste (siehe unten) |
+
+#### Lustige Loading-Texts (random aus Liste pickern)
+- "Hisse die Segel..."
+- "Lichte den Anker..."
+- "Schartnerbomb building..."
+- "Lädt Pulverfass..."
+- "Rüste die Kanonen..."
+
+### Animation Specs
+- **Reconnect-Spinner:** Rotation 360°, 1.5s, ease-in-out, infinite loop
+- **Empty-Slot Pulse:** Opacity 0.6 → 1.0 → 0.6, 1.5s, ease-in-out, loop
+- **Toast Slide-In:** translateY -100% → 0, 250ms, ease-out, auto-dismiss after 3s
+
