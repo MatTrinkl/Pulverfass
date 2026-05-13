@@ -22,11 +22,6 @@ import at.aau.pulverfass.app.ui.theme.PulverfassSpacing
 /**
  * Pulverfass Primary Button — gefüllter Gold-CTA.
  * Verwendung: WÜRFELN!, NEUES SPIEL, primärer Action pro Screen.
- *
- * @param text Button-Label (wird automatisch UPPERCASED via Typography)
- * @param onClick Click-Handler
- * @param modifier Compose-Modifier für Parent-Layout-Anpassungen
- * @param enabled Wenn false, ist Button gedimmt und nicht klickbar
  */
 @Composable
 fun PulverfassButtonPrimary(
@@ -37,20 +32,23 @@ fun PulverfassButtonPrimary(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier
-            .heightIn(min = PulverfassSizes.buttonHeightPrimary)
-            .widthIn(min = PulverfassSizes.buttonMinWidth),
+        modifier =
+            modifier
+                .heightIn(min = PulverfassSizes.buttonHeightPrimary)
+                .widthIn(min = PulverfassSizes.buttonMinWidth),
         enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = PulverfassColors.Gold,
-            contentColor = PulverfassColors.SurfaceVoid,
-            disabledContainerColor = PulverfassColors.GoldDark,
-            disabledContentColor = PulverfassColors.TextMuted,
-        ),
-        border = BorderStroke(
-            width = PulverfassSizes.borderDefault,
-            color = if (enabled) PulverfassColors.GoldDark else PulverfassColors.SurfaceWood,
-        ),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = PulverfassColors.Gold,
+                contentColor = PulverfassColors.SurfaceVoid,
+                disabledContainerColor = PulverfassColors.GoldDark,
+                disabledContentColor = PulverfassColors.TextMuted,
+            ),
+        border =
+            BorderStroke(
+                width = PulverfassSizes.borderDefault,
+                color = if (enabled) PulverfassColors.GoldDark else PulverfassColors.SurfaceWood,
+            ),
         shape = MaterialTheme.shapes.small,
     ) {
         Text(
@@ -63,8 +61,6 @@ fun PulverfassButtonPrimary(
 /**
  * Pulverfass Secondary Button — outlined mit Gold-Border.
  * Verwendung: VERSTÄRKEN, ANGRIFF, VERSCHIEBEN, HAUPTMENÜ.
- *
- * @param selected Wenn true: aktiver Highlight-State (heller Border + Glow-Effekt)
  */
 @Composable
 fun PulverfassButtonSecondary(
@@ -76,24 +72,28 @@ fun PulverfassButtonSecondary(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier
-            .heightIn(min = PulverfassSizes.buttonHeightSecondary)
-            .widthIn(min = PulverfassSizes.buttonMinWidth),
+        modifier =
+            modifier
+                .heightIn(min = PulverfassSizes.buttonHeightSecondary)
+                .widthIn(min = PulverfassSizes.buttonMinWidth),
         enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = PulverfassColors.SurfaceCard,
-            contentColor = if (selected) PulverfassColors.GoldBright else PulverfassColors.Gold,
-            disabledContainerColor = PulverfassColors.SurfaceCard,
-            disabledContentColor = PulverfassColors.TextMuted,
-        ),
-        border = BorderStroke(
-            width = PulverfassSizes.borderDefault,
-            color = when {
-                !enabled -> PulverfassColors.GoldDark
-                selected -> PulverfassColors.GoldBright
-                else -> PulverfassColors.GoldMuted
-            },
-        ),
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = PulverfassColors.SurfaceCard,
+                contentColor = if (selected) PulverfassColors.GoldBright else PulverfassColors.Gold,
+                disabledContainerColor = PulverfassColors.SurfaceCard,
+                disabledContentColor = PulverfassColors.TextMuted,
+            ),
+        border =
+            BorderStroke(
+                width = PulverfassSizes.borderDefault,
+                color =
+                    when {
+                        !enabled -> PulverfassColors.GoldDark
+                        selected -> PulverfassColors.GoldBright
+                        else -> PulverfassColors.GoldMuted
+                    },
+            ),
         shape = MaterialTheme.shapes.small,
     ) {
         Text(
@@ -116,16 +116,18 @@ fun PulverfassButtonDanger(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier
-            .heightIn(min = PulverfassSizes.buttonHeightPrimary)
-            .widthIn(min = PulverfassSizes.buttonMinWidth),
+        modifier =
+            modifier
+                .heightIn(min = PulverfassSizes.buttonHeightPrimary)
+                .widthIn(min = PulverfassSizes.buttonMinWidth),
         enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = PulverfassColors.Danger,
-            contentColor = PulverfassColors.TextPrimary,
-            disabledContainerColor = PulverfassColors.SurfaceWood,
-            disabledContentColor = PulverfassColors.TextMuted,
-        ),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = PulverfassColors.Danger,
+                contentColor = PulverfassColors.TextPrimary,
+                disabledContainerColor = PulverfassColors.SurfaceWood,
+                disabledContentColor = PulverfassColors.TextMuted,
+            ),
         shape = MaterialTheme.shapes.small,
     ) {
         Text(
@@ -134,12 +136,6 @@ fun PulverfassButtonDanger(
         )
     }
 }
-
-// ============================================
-// PREVIEWS — du siehst sie in Android Studio rechts (Preview-Pane)
-// Damit Preview funktioniert: Code Make Project laufen lassen, dann
-// öffnet sich rechts neben dem Editor automatisch das Preview-Fenster.
-// ============================================
 
 @Preview(showBackground = true, backgroundColor = 0xFF1A1F2A, name = "Buttons – Default States")
 @Composable
