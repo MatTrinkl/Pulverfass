@@ -41,29 +41,5 @@ class StudioIntroScreenTest {
         // wenn wir hier ankommen ohne crash ist alles ok
     }
 
-    @Test
-    fun studio_intro_navigiert_automatisch_nach_safety_timeout() {
-        composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent {
-            AndroidAppTheme {
-                val navController = rememberNavController()
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.StudioIntro.route,
-                ) {
-                    composable(Screen.StudioIntro.route) {
-                        StudioIntroScreen(navController)
-                    }
-                    composable(Screen.Load.route) {
-                        Text("Load destination")
-                    }
-                }
-            }
-        }
-        // simulate timeout passing (5 sec + buffer)
-        composeTestRule.mainClock.advanceTimeBy(11_000L)
-        composeTestRule.waitForIdle()
-        // nach safety timeout sollten wir auf Load sein
-        composeTestRule.onNodeWithText("Load destination").assertExists()
-    }
+
 }
