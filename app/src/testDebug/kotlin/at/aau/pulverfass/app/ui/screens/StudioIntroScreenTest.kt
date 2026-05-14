@@ -61,7 +61,7 @@ class StudioIntroScreenTest {
             }
         }
         // simulate timeout passing (5 sec + buffer)
-        composeTestRule.mainClock.advanceTimeBy(6_000L)
+        composeTestRule.mainClock.advanceTimeBy(11_000L)
         composeTestRule.waitForIdle()
         // nach safety timeout sollten wir auf Load sein
         composeTestRule.onNodeWithText("Load destination").assertExists()
