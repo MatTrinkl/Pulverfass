@@ -35,6 +35,7 @@ import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import at.aau.pulverfass.app.ui.screens.StudioIntroScreen
 
 /**
  * Compose-basierter Einstiegspunkt der Android-App.
@@ -81,8 +82,11 @@ class MainActivity : AppCompatActivity() {
                          */
                         NavHost(
                             navController = navController,
-                            startDestination = Screen.Load.route,
+                            startDestination = Screen.StudioIntro.route,
                         ) {
+                            composable(Screen.StudioIntro.route) {
+                                StudioIntroScreen(navController)
+                            }
                             composable(Screen.Load.route) {
                                 LoadScreen(navController)
                             }

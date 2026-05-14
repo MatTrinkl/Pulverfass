@@ -8,6 +8,10 @@ package at.aau.pulverfass.app.ui.navigation
  * verwendet.
  */
 sealed class Screen(val route: String) {
+
+    /** Studio-Intro-Video vor dem LoadScreen. */
+    object StudioIntro : Screen("studio_intro")
+
     /** Einstiegsscreen der App. */
     object Load : Screen("load")
 
