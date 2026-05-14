@@ -2,34 +2,56 @@ package at.aau.pulverfass.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-/** Farbschema für den dunklen Modus. */
-private val DarkColorScheme = darkColorScheme()
-
-/** Farbschema für den hellen Modus. */
-private val LightColorScheme = lightColorScheme()
+/**
+ * Pulverfass Color Scheme (Dark only — die App hat kein Light-Theme).
+ * Die Material3 Color-Slots sind auf unsere Pulverfass-Tokens gemappt.
+ */
+private val PulverfassColorScheme =
+    darkColorScheme(
+        primary = PulverfassColors.Gold,
+        onPrimary = PulverfassColors.SurfaceVoid,
+        primaryContainer = PulverfassColors.GoldDark,
+        onPrimaryContainer = PulverfassColors.TextPrimary,
+        secondary = PulverfassColors.Parchment,
+        onSecondary = PulverfassColors.TextOnParchment,
+        secondaryContainer = PulverfassColors.ParchmentDark,
+        onSecondaryContainer = PulverfassColors.TextOnParchment,
+        tertiary = PulverfassColors.GoldBright,
+        onTertiary = PulverfassColors.SurfaceVoid,
+        background = PulverfassColors.SurfaceDark,
+        onBackground = PulverfassColors.TextPrimary,
+        surface = PulverfassColors.SurfaceCard,
+        onSurface = PulverfassColors.TextPrimary,
+        surfaceVariant = PulverfassColors.SurfaceWood,
+        onSurfaceVariant = PulverfassColors.TextOnDark,
+        error = PulverfassColors.Danger,
+        onError = PulverfassColors.TextPrimary,
+        errorContainer = PulverfassColors.DangerBright,
+        outline = PulverfassColors.GoldMuted,
+        outlineVariant = PulverfassColors.ParchmentEdge,
+    )
 
 /**
  * Zentrales Material-Theme der Android-App.
  *
- * @param darkTheme steuert, ob das dunkle oder helle Farbschema genutzt wird
- * @param content Inhalt, der innerhalb des Material-Themes gerendert wird
+ * Pulverfass nutzt ausschließlich Dark-Theme (siehe Art Bible §1).
+ * Der `darkTheme`-Parameter ist aus Kompatibilitätsgründen erhalten,
+ * wird aber intern ignoriert.
+ *
+ * @param content Inhalt, der innerhalb des Themes gerendert wird.
  */
 @Composable
 fun AndroidAppTheme(
-    darkTheme: Boolean = false,
+    @Suppress("UNUSED_PARAMETER")
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    /*
-     * Auswahl bleibt hier bewusst simpel, weil die App aktuell keine dynamischen
-     * Systemfarben oder eigene Brand-Tokens kapselt.
-     */
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = PulverfassColorScheme,
+        typography = PulverfassTypography,
+        shapes = PulverfassShapes,
         content = content,
     )
 }
