@@ -4,7 +4,10 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew
+RUN sed -i '/include(":app")/d' settings.gradle.kts && \
+    sed -i '/include(":e2e")/d' settings.gradle.kts && \
+    sed -i 's/\r$//' ./gradlew && \
+    chmod +x ./gradlew
 RUN ./gradlew --no-daemon :server:installDist
 
 FROM eclipse-temurin:25-jre AS runtime

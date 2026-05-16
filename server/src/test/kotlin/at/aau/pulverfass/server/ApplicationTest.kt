@@ -39,6 +39,48 @@ class ApplicationTest {
     }
 
     @Test
+    fun `module exposes disabled ready endpoint when database is not configured`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig = ServerRuntimeConfig(appVersion = "v1.2.3"),
+                )
+            }
+
+            val response = client.get("/ready")
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+            assertEquals(
+                "NOT_READY version=v1.2.3 database=disabled detail=Database is not configured.",
+                response.bodyAsText(),
+            )
+        }
+
+    @Test
+    fun `module closes readiness probe when application stops`() {
+        var closed = false
+        val probe =
+            object : DatabaseReadinessProbe {
+                override fun readiness(): DatabaseReadiness =
+                    DatabaseReadiness(DatabaseReadinessState.UP)
+
+                override fun close() {
+                    closed = true
+                }
+            }
+
+        testApplication {
+            application {
+                module(
+                    databaseReadinessProbe = probe,
+                )
+            }
+        }
+
+        assertTrue(closed)
+    }
+
+    @Test
     fun `module exposes health endpoint`() =
         testApplication {
             application {

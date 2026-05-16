@@ -18,7 +18,7 @@ fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
 
     migrationLogger.info(
         "Running Flyway migrations for database {}",
-        config.jdbcUrl,
+        redactJdbcUrl(config.requireJdbcUrl()),
     )
 
     Flyway
@@ -33,3 +33,8 @@ fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
         .load()
         .migrate()
 }
+
+internal fun redactJdbcUrl(jdbcUrl: String): String =
+    jdbcUrl
+        .replace(Regex("(//)([^/@:]+):([^/@]+)@"), "$1****:****@")
+        .replace(Regex("([?&](?:password|pass|pwd)=)[^&]+", RegexOption.IGNORE_CASE), "$1****")

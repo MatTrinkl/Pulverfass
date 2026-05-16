@@ -20,7 +20,7 @@ services:
       start_period: 5s
 
   server:
-    image: ${SERVER_IMAGE:?Set SERVER_IMAGE to ghcr.io/<owner>/<repo>-server:<tag>}
+    image: ${SERVER_IMAGE:-se2risiko-server-local:dev}
     restart: unless-stopped
     networks:
       - internal
@@ -51,7 +51,7 @@ services:
       - "${PORT:-8080}:${PORT:-8080}"
 
   dokka:
-    image: ${DOKKA_IMAGE:?Set DOKKA_IMAGE to ghcr.io/<owner>/<repo>-dokka:<tag>}
+    image: ${DOKKA_IMAGE:-se2risiko-dokka-local:dev}
     restart: unless-stopped
     networks:
       - internal

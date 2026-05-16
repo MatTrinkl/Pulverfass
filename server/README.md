@@ -53,7 +53,7 @@ Die Root-`compose.yaml` ist jetzt auf den Deploy-Server ausgerichtet:
 - Dokka wird öffentlich über `DOKKA_PORT` ausgeliefert
 - `server` und `dokka` laufen im Deploy-Setup ohne zusätzliche Linux-Capabilities
 
-Die produktive `.env` liegt auf dem Server und gehört nicht ins Repo. Als Vorlage dient [.env.example](/Users/matthiastrinkl/Documents/GitHub/SE2Risiko/.env.example:1).
+Die produktive `.env` liegt auf dem Server und gehört nicht ins Repo. Als Vorlage dient [.env.example](../.env.example).
 
 Beispiel auf dem Server:
 
@@ -96,7 +96,7 @@ Der Workflow deployed per SSH mit:
 - `docker compose up -d`
 - anschließend Smoke-Tests gegen `/health` und die Dokka-`index.html`
 
-Die vollständige Setup- und Secret-Dokumentation steht in [docs/deploy.md](/Users/matthiastrinkl/Documents/GitHub/SE2Risiko/docs/deploy.md:1).
+Die vollständige Setup- und Secret-Dokumentation steht in [docs/deploy.md](../docs/deploy.md).
 
 ### Local Compose Override
 
@@ -104,6 +104,7 @@ Für einen lokalen Build ohne GHCR-Pull gibt es zusätzlich `compose.local.yaml`
 
 ```bash
 export POSTGRES_PASSWORD='<SET_LOCALLY>'
+export DB_PASSWORD='<SET_LOCALLY>'
 docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 
@@ -259,4 +260,4 @@ Direkt oder indirekt verdrahtet sind aktuell unter anderem:
 - Reconnect nutzt stabile Session-Tokens, ist aber noch kein vollständiges Auth-System.
 - Der Server hält eine Default-Map im Speicher; Multi-Map-Management ist noch nicht implementiert.
 - Der `RoundHistoryBuffer` dient Diagnosezwecken und ist noch kein öffentliches Replay-API.
-- Persistente Speicherung von Lobbys oder Event-Logs ist derzeit nicht vorhanden.
+- Lobbys, Events, Snapshots und Reconnect-Kontext werden serverseitig in PostgreSQL persistiert.
