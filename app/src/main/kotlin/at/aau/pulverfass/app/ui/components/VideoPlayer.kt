@@ -5,7 +5,6 @@ import android.widget.VideoView
 import androidx.annotation.RawRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
@@ -26,7 +25,6 @@ fun VideoPlayer(
     loop: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
