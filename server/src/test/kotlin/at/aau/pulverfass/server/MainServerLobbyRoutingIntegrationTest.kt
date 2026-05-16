@@ -26,6 +26,8 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -35,6 +37,7 @@ import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -42,6 +45,7 @@ import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
@@ -1724,6 +1728,292 @@ class MainServerLobbyRoutingIntegrationTest {
                 routingService.stop()
                 lobbyManager.shutdownAll()
                 serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `disconnect broadcasts player connection lost event only to affected lobby`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val aliceSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(aliceSession)
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyA =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(aliceSession),
+                    ).lobbyCode
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(aliceSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val bobSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(bobSession)
+                bobSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Bob")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(bobSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val carolSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(carolSession)
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyB =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(carolSession),
+                    ).lobbyCode
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyB, "Carol")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyB), receivePayload(carolSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
+                )
+                receivePayloadOfType<TurnStateUpdatedEvent>(carolSession)
+
+                bobSession.close()
+
+                assertEquals(
+                    PlayerConnectionLostEvent(
+                        lobbyCode = lobbyA,
+                        playerId = PlayerId(2),
+                        reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                    ),
+                    receivePayloadOfType<PlayerConnectionLostEvent>(aliceSession),
+                )
+                assertNull(receivePayloadOrNull(carolSession))
+
+                aliceSession.close()
+                carolSession.close()
+            }
+        }
+
+    @Test
+    fun `stale disconnect after reconnect does not broadcast connection lost or pause turn`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val aliceSession = client.webSocketSession("/ws")
+                val aliceToken = discardConnectionHandshake(aliceSession)
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyCode =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(aliceSession),
+                    ).lobbyCode
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+                receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession)
+
+                val bobSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(bobSession)
+                bobSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val carolSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(carolSession)
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(StartGameRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(StartGameResponse(), receivePayload(aliceSession))
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(aliceSession))
+                assertEquals(
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession),
+                )
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(bobSession))
+                assertEquals(
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
+                )
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(carolSession))
+                assertEquals(
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
+                )
+
+                val reconnectingSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(reconnectingSession)
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(aliceToken)),
+                    ),
+                )
+                assertEquals(
+                    ReconnectResponse(
+                        success = true,
+                        playerId = PlayerId(1),
+                        lobbyCode = lobbyCode,
+                        playerDisplayName = "Alice",
+                    ),
+                    receivePayload(reconnectingSession),
+                )
+                receivePayloadOfType<PlayerJoinedLobbyEvent>(reconnectingSession)
+                receivePayloadOfType<PlayerJoinedLobbyEvent>(reconnectingSession)
+
+                withTimeout(5_000) {
+                    aliceSession.closeReason.await()
+                }
+
+                assertNull(receivePayloadOrNull(bobSession))
+                assertNull(receivePayloadOrNull(carolSession))
+
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(TurnStateGetRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateGetResponse>(reconnectingSession),
+                )
+
+                reconnectingSession.close()
+                bobSession.close()
+                carolSession.close()
             }
         }
 

@@ -21,6 +21,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -30,6 +32,7 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
@@ -41,6 +44,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
@@ -53,6 +57,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGet
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
@@ -62,6 +68,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCod
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
+import at.aau.pulverfass.shared.message.protocol.MessageType
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
@@ -142,6 +149,7 @@ class MainServerLobbyRoutingService(
                     payload = payload,
                 )
             is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
+            is LobbyPlayerCountRequest -> routeLobbyPlayerCountRequest(request)
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
@@ -213,8 +221,30 @@ class MainServerLobbyRoutingService(
         }
     }
 
-    suspend fun onPlayerDisconnected(playerId: PlayerId) {
+    suspend fun onPlayerDisconnected(
+        connectionId: ConnectionId,
+        playerId: PlayerId,
+        reason: String?,
+    ) {
+        val currentConnectionId = connectionIdResolver(playerId)
+        if (currentConnectionId != null && currentConnectionId != connectionId) {
+            logger.info(
+                "Ignoring stale disconnect after reconnect: playerId={} staleConnectionId={} " +
+                    "currentConnectionId={}",
+                playerId.value,
+                connectionId.value,
+                currentConnectionId.value,
+            )
+            return
+        }
+
         val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId) ?: return
+        broadcastPlayerConnectionLost(
+            lobbyCode = lobbyCode,
+            playerId = playerId,
+            reason = connectionLostReason(reason),
+        )
+
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
         val currentTurnState = currentState.turnState ?: return
@@ -279,6 +309,46 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = mapGetErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeLobbyPlayerCountRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as LobbyPlayerCountRequest
+        logger.info(
+            "Routing messageType={} connectionId={} lobbyCode={}",
+            request.receivedPacket.header.type.name,
+            request.connectionId.value,
+            payload.lobbyCode.value,
+        )
+
+        runCatching {
+            val response = buildLobbyPlayerCountResponse(request, payload)
+            network.send(request.connectionId, response)
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = lobbyPlayerCountErrorResponse(payload)
+            logger.warn(
+                "Routing failed messageType={} connectionId={} lobbyCode={} code={} reason={}",
+                MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE.name,
+                request.connectionId.value,
+                payload.lobbyCode.value,
+                error.code.name,
+                error.reason,
+            )
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -928,6 +998,28 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    private fun buildLobbyPlayerCountResponse(
+        request: DecodedNetworkRequest,
+        payload: LobbyPlayerCountRequest,
+    ): LobbyPlayerCountResponse {
+        val state =
+            lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                ?: throw IllegalStateException("LOBBY_NOT_FOUND")
+
+        return LobbyPlayerCountResponse(
+            lobbyCode = payload.lobbyCode,
+            playerCount = state.players.size,
+        ).also { response ->
+            logger.info(
+                "Sent messageType={} connectionId={} lobbyCode={} playerCount={}",
+                MessageType.LOBBY_PLAYER_COUNT_RESPONSE.name,
+                request.connectionId.value,
+                response.lobbyCode.value,
+                response.playerCount,
+            )
+        }
+    }
+
     private fun turnAdvanceErrorResponse(
         request: DecodedNetworkRequest,
         payload: TurnAdvanceRequest,
@@ -1048,6 +1140,24 @@ class MainServerLobbyRoutingService(
             }
 
         return TurnStateGetErrorResponse(code = code, reason = reason)
+    }
+
+    private fun lobbyPlayerCountErrorResponse(
+        payload: LobbyPlayerCountRequest,
+    ): LobbyPlayerCountErrorResponse {
+        val code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND
+
+        val reason =
+            when (code) {
+                LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+            }
+
+        return LobbyPlayerCountErrorResponse(
+            lobbyCode = payload.lobbyCode,
+            code = code,
+            reason = reason,
+        )
     }
 
     private suspend fun broadcastAcceptedLobbyEvent(
@@ -1250,6 +1360,49 @@ class MainServerLobbyRoutingService(
             pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
             pausedPlayerId = pausedPlayerId,
         )
+
+    private suspend fun broadcastPlayerConnectionLost(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        reason: PlayerConnectionLostReason,
+    ) {
+        val members = lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
+        val event =
+            PlayerConnectionLostEvent(
+                lobbyCode = lobbyCode,
+                playerId = playerId,
+                reason = reason,
+            )
+
+        logger.info(
+            "Broadcasting messageType={} lobbyCode={} playerId={} reason={}",
+            MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST.name,
+            lobbyCode.value,
+            playerId.value,
+            reason.name,
+        )
+
+        members
+            .filter { memberId -> memberId != playerId }
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { activeConnectionId ->
+                network.send(activeConnectionId, event)
+            }
+    }
+
+    private fun connectionLostReason(reason: String?): PlayerConnectionLostReason {
+        val normalizedReason = reason?.lowercase().orEmpty()
+        return if (
+            normalizedReason.contains("ping") ||
+            normalizedReason.contains("pong") ||
+            normalizedReason.contains("timeout")
+        ) {
+            PlayerConnectionLostReason.HEARTBEAT_TIMEOUT
+        } else {
+            PlayerConnectionLostReason.SOCKET_CLOSED
+        }
+    }
 
     private fun TurnState.toUpdatedEvent(
         lobbyCode: LobbyCode,

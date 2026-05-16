@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -953,6 +954,7 @@ class LobbyController(
                 _state.update { it.copy(errorText = payload.reason) }
             }
             is PlayerJoinedLobbyEvent -> handlePlayerJoined(payload)
+            is PlayerConnectionLostEvent -> handlePlayerConnectionLost(payload)
             is PlayerLeftLobbyEvent -> {
                 playersById.remove(payload.playerId.value)
                 publishPlayers()
@@ -1032,11 +1034,13 @@ class LobbyController(
     }
 
     private fun handlePlayerJoined(payload: PlayerJoinedLobbyEvent) {
+        val existingPlayer = playersById[payload.playerId.value]
         playersById[payload.playerId.value] =
             LobbyPlayerUi(
                 playerId = payload.playerId,
                 displayName = payload.playerDisplayName,
                 isHost = payload.isHost,
+                isDisconnected = existingPlayer?.isDisconnected ?: false,
             )
 
         _state.update { current ->
@@ -1045,6 +1049,13 @@ class LobbyController(
                     ?: payload.playerId.takeIf { payload.playerDisplayName == current.playerName }
             current.copy(ownPlayerId = ownPlayerId)
         }
+        publishPlayers()
+    }
+
+    private fun handlePlayerConnectionLost(payload: PlayerConnectionLostEvent) {
+        val existingPlayer = playersById[payload.playerId.value] ?: return
+        playersById[payload.playerId.value] =
+            existingPlayer.copy(isDisconnected = true)
         publishPlayers()
     }
 

@@ -9,6 +9,8 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
@@ -282,6 +284,88 @@ class LobbyControllerTest {
                 waitUntil { seenPayloads.any { it is GameStateCatchUpRequest } }
 
                 assertTrue(controller.state.value.gameState.isCatchingUp)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `player connection lost event should mark lobby member as disconnected`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("DL42")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174240"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                            ),
+                        )
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    PlayerJoinedLobbyEvent(
+                                        lobbyCode = payload.lobbyCode,
+                                        playerId = PlayerId(1),
+                                        playerDisplayName = payload.playerDisplayName,
+                                        isHost = true,
+                                    ),
+                                ),
+                            ),
+                        )
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    PlayerJoinedLobbyEvent(
+                                        lobbyCode = payload.lobbyCode,
+                                        playerId = PlayerId(2),
+                                        playerDisplayName = "Bob",
+                                    ),
+                                ),
+                            ),
+                        )
+                        outgoing.send(
+                            Frame.Binary(
+                                true,
+                                MessageCodec.encode(
+                                    PlayerConnectionLostEvent(
+                                        lobbyCode = payload.lobbyCode,
+                                        playerId = PlayerId(2),
+                                        reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                                    ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+
+                waitUntil {
+                    controller.state.value.players.any { player ->
+                        player.playerId == PlayerId(2) && player.isDisconnected
+                    }
+                }
+
+                val disconnectedPlayer =
+                    controller.state.value.players.first { it.playerId == PlayerId(2) }
+                assertEquals("Bob", disconnectedPlayer.displayName)
+                assertTrue(disconnectedPlayer.isDisconnected)
             } finally {
                 controller.close()
                 server.close()

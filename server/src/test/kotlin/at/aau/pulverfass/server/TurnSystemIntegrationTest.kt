@@ -16,6 +16,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -420,6 +422,22 @@ class TurnSystemIntegrationTest {
                         connectionsByPlayer = connectionsByPlayer,
                         routingService = routingService,
                     )
+                    assertEquals(
+                        PlayerConnectionLostEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = disconnectedNextPlayer,
+                            reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                        ),
+                        receivePayload(hostSession.first),
+                    )
+                    assertEquals(
+                        PlayerConnectionLostEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = disconnectedNextPlayer,
+                            reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                        ),
+                        receivePayload(connectedWatcherSession),
+                    )
 
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
@@ -685,7 +703,11 @@ class TurnSystemIntegrationTest {
     ) {
         playersByConnection.remove(connectionId)
         connectionsByPlayer.remove(playerId)
-        routingService.onPlayerDisconnected(playerId)
+        routingService.onPlayerDisconnected(
+            connectionId = connectionId,
+            playerId = playerId,
+            reason = "socket closed",
+        )
         session.close()
     }
 

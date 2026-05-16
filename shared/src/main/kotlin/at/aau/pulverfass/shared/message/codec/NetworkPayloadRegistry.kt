@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -19,6 +20,7 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
@@ -30,6 +32,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
@@ -40,6 +43,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErr
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
@@ -69,6 +73,12 @@ internal object NetworkPayloadRegistry {
             JoinLobbyErrorResponse::class.java to MessageType.LOBBY_JOIN_ERROR_RESPONSE,
             JoinLobbyResponse::class.java to MessageType.LOBBY_JOIN_RESPONSE,
             PlayerJoinedLobbyEvent::class.java to MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
+            PlayerConnectionLostEvent::class.java to
+                MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
+            LobbyPlayerCountRequest::class.java to MessageType.LOBBY_PLAYER_COUNT_REQUEST,
+            LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
+            LobbyPlayerCountErrorResponse::class.java to
+                MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
             LeaveLobbyRequest::class.java to MessageType.LOBBY_LEAVE_REQUEST,
             LeaveLobbyResponse::class.java to MessageType.LOBBY_LEAVE_RESPONSE,
             PlayerLeftLobbyEvent::class.java to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
@@ -135,6 +145,14 @@ internal object NetworkPayloadRegistry {
                 encodeWith(JoinLobbyErrorResponse.serializer()),
             JoinLobbyResponse::class.java to encodeWith(JoinLobbyResponse.serializer()),
             PlayerJoinedLobbyEvent::class.java to encodeWith(PlayerJoinedLobbyEvent.serializer()),
+            PlayerConnectionLostEvent::class.java to
+                encodeWith(PlayerConnectionLostEvent.serializer()),
+            LobbyPlayerCountRequest::class.java to
+                encodeWith(LobbyPlayerCountRequest.serializer()),
+            LobbyPlayerCountResponse::class.java to
+                encodeWith(LobbyPlayerCountResponse.serializer()),
+            LobbyPlayerCountErrorResponse::class.java to
+                encodeWith(LobbyPlayerCountErrorResponse.serializer()),
             LeaveLobbyRequest::class.java to encodeWith(LeaveLobbyRequest.serializer()),
             LeaveLobbyResponse::class.java to encodeWith(LeaveLobbyResponse.serializer()),
             PlayerLeftLobbyEvent::class.java to encodeWith(PlayerLeftLobbyEvent.serializer()),
@@ -201,6 +219,14 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_JOIN_RESPONSE to decodeWith(JoinLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_JOINED_BROADCAST to
                 decodeWith(PlayerJoinedLobbyEvent.serializer()),
+            MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST to
+                decodeWith(PlayerConnectionLostEvent.serializer()),
+            MessageType.LOBBY_PLAYER_COUNT_REQUEST to
+                decodeWith(LobbyPlayerCountRequest.serializer()),
+            MessageType.LOBBY_PLAYER_COUNT_RESPONSE to
+                decodeWith(LobbyPlayerCountResponse.serializer()),
+            MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE to
+                decodeWith(LobbyPlayerCountErrorResponse.serializer()),
             MessageType.LOBBY_LEAVE_REQUEST to decodeWith(LeaveLobbyRequest.serializer()),
             MessageType.LOBBY_LEAVE_RESPONSE to decodeWith(LeaveLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_LEFT_BROADCAST to

@@ -16,6 +16,7 @@
     <string name="waiting_for_host">Warte auf Host zum Starten...</string>
     <string name="players">Spieler</string>
     <string name="host_tag">(Host)</string>
+    <string name="disconnected_tag">(Getrennt)</string>
     <string name="start_game">Spiel starten</string>
     <string name="need_players">Mindestens 3 Spieler benötigt</string>
     <string name="leave_lobby">Lobby verlassen</string>

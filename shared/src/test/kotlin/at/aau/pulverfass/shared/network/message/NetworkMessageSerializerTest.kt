@@ -13,11 +13,14 @@ import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -25,6 +28,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
@@ -35,6 +39,8 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
@@ -278,6 +284,76 @@ class NetworkMessageSerializerTest {
         val result =
             NetworkMessageSerializer.deserializePayload(
                 MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered player connection lost broadcast by runtime type`() {
+        val payload =
+            PlayerConnectionLostEvent(
+                lobbyCode = LobbyCode("EF57"),
+                playerId = PlayerId(17),
+                reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should deserialize lobby player count request payload for player count request type`() {
+        val payload = LobbyPlayerCountRequest(lobbyCode = LobbyCode("PC12"))
+        val bytes =
+            NetworkMessageSerializer.serializePayload(
+                LobbyPlayerCountRequest.serializer(),
+                payload,
+            )
+
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_PLAYER_COUNT_REQUEST,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered lobby player count response by runtime type`() {
+        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("PC34"), playerCount = 3)
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
+                bytes,
+            )
+
+        assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should serialize registered lobby player count error by runtime type`() {
+        val payload =
+            LobbyPlayerCountErrorResponse(
+                lobbyCode = LobbyCode("PC99"),
+                code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
+                reason = "Lobby 'PC99' wurde nicht gefunden.",
+            )
+
+        val bytes = NetworkMessageSerializer.serializePayload(payload)
+        val result =
+            NetworkMessageSerializer.deserializePayload(
+                MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
                 bytes,
             )
 

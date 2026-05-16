@@ -134,6 +134,41 @@ class ServerNetworkIntegrationTest {
         }
 
     @Test
+    fun `server network emits disconnected event with detached session token`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                module(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val disconnectedDeferred =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        withTimeout(5_000) {
+                            network.events
+                                .filterIsInstance<Network.Event.Disconnected<ConnectionId>>()
+                                .first()
+                        }
+                    }
+
+                val session = client.webSocketSession("/ws")
+                val response = receiveConnectionResponse(session)
+
+                session.close()
+
+                val event = disconnectedDeferred.await()
+
+                assertEquals(response.sessionToken, event.sessionToken)
+            }
+        }
+
+    @Test
     fun `server network send wraps payload into binary frame for connected client`() =
         testApplication {
             val network = ServerNetwork()
