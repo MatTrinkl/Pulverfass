@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulverfass · Art Bible</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,700;1,400&family=Philosopher:wght@400;700&family=Fleur+De+Leah&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-void: #0F1419;
+    --surface-dark: #1A1F2A;
+    --surface-wood: #2A1F18;
+    --surface-card: #1F1A14;
+
+    --parchment-light: #D4B896;
+    --parchment: #C8A876;
+    --parchment-dark: #A8855A;
+    --parchment-edge: #6B4D2A;
+
+    --gold-bright: #E8C268;
+    --gold: #D4B45A;
+    --gold-muted: #C4A14B;
+    --gold-dark: #8B6F2A;
+
+    --player-red: #A6342B;
+    --player-blue: #3A5BA0;
+    --player-orange: #D17030;
+    --player-olive: #8C8A2E;
+    --player-purple: #7A4A8C;
+    --player-teal: #4A8C8C;
+    --player-pink: #B8466C;
+    --player-green: #5A8C3A;
+
+    --danger: #8B2828;
+    --danger-bright: #C44030;
+    --success: #4A7A4A;
+
+    --text-primary: #F0E6D2;
+    --text-on-dark: #E8DCC8;
+    --text-on-parchment: #2A1F18;
+    --text-muted: #8B7F66;
+    --text-gold: #D4B45A;
+
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-base: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-2xl: 48px;
+    --space-3xl: 64px;
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--surface-dark);
+    color: var(--text-primary);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(212, 180, 90, 0.04) 0%, transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(166, 52, 43, 0.03) 0%, transparent 40%),
+      radial-gradient(ellipse at center, transparent 0%, var(--surface-void) 90%);
+  }
+
+  /* Subtle grain overlay for atmosphere */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.4'/></svg>");
+    z-index: 1;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-2xl) var(--space-lg);
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ============================================ */
+  /* HERO                                         */
+  /* ============================================ */
+  .hero {
+    text-align: center;
+    padding: var(--space-3xl) 0 var(--space-2xl);
+    border-bottom: 1px solid var(--gold-dark);
+    margin-bottom: var(--space-2xl);
+    position: relative;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 1px;
+    background: var(--gold);
+    box-shadow: 0 0 12px var(--gold);
+  }
+
+  .hero-eyebrow {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4em;
+    color: var(--text-muted);
+    margin-bottom: var(--space-base);
+  }
+
+  .hero-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(48px, 8vw, 96px);
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 40px rgba(212, 180, 90, 0.4);
+    letter-spacing: 0.02em;
+    line-height: 1;
+    margin-bottom: var(--space-base);
+  }
+
+  .hero-subtitle {
+    font-family: 'Fleur De Leah', cursive;
+    font-size: 28px;
+    color: var(--gold-muted);
+    margin-bottom: var(--space-lg);
+  }
+
+  .hero-meta {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+
+  .hero-meta span { color: var(--gold-muted); }
+
+  /* ============================================ */
+  /* SECTION                                      */
+  /* ============================================ */
+  section {
+    margin-bottom: var(--space-3xl);
+    padding: var(--space-2xl) 0;
+  }
+
+  .section-header {
+    margin-bottom: var(--space-2xl);
+    padding-bottom: var(--space-base);
+    border-bottom: 1px solid var(--surface-wood);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-base);
+  }
+
+  .section-number {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 32px;
+    color: var(--gold-dark);
+    line-height: 1;
+  }
+
+  .section-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.02em;
+  }
+
+  .section-description {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--text-muted);
+    margin-bottom: var(--space-xl);
+    max-width: 700px;
+  }
+
+  /* ============================================ */
+  /* COLOR SWATCHES                               */
+  /* ============================================ */
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-base);
+    margin-bottom: var(--space-xl);
+  }
+
+  .color-group-title {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--gold-muted);
+    margin-bottom: var(--space-base);
+    margin-top: var(--space-xl);
+  }
+
+  .swatch {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--surface-wood);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .swatch:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+
+  .swatch-color {
+    height: 90px;
+    position: relative;
+  }
+
+  .swatch-color::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(0,0,0,0.15) 100%);
+  }
+
+  .swatch-meta {
+    padding: var(--space-md);
+    background: var(--surface-card);
+    border-top: 1px solid var(--surface-wood);
+  }
+
+  .swatch-name {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+
+  .swatch-hex {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ============================================ */
+  /* TYPOGRAPHY                                   */
+  /* ============================================ */
+  .type-spec {
+    padding: var(--space-lg) 0;
+    border-bottom: 1px solid var(--surface-wood);
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: var(--space-xl);
+    align-items: baseline;
+  }
+
+  .type-spec:last-child { border-bottom: 0; }
+
+  .type-label {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+  }
+
+  .type-label strong {
+    display: block;
+    color: var(--gold-muted);
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .type-display-xl {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 56px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    color: var(--gold);
+    line-height: 1.1;
+  }
+
+  .type-display-lg {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--gold);
+    line-height: 1.1;
+  }
+
+  .type-headline {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+  }
+
+  .type-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .type-body {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .type-button {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .type-decorative {
+    font-family: 'Fleur De Leah', cursive;
+    font-size: 32px;
+    color: var(--gold);
+  }
+
+  /* ============================================ */
+  /* COMPONENTS                                   */
+  /* ============================================ */
+  .component-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-base);
+    align-items: center;
+    padding: var(--space-lg);
+    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--surface-wood);
+    margin-bottom: var(--space-base);
+  }
+
+  .component-row-label {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    width: 100%;
+    margin-bottom: var(--space-sm);
+  }
+
+  /* Buttons */
+  .btn {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: var(--space-base) var(--space-lg);
+    border-radius: var(--radius-md);
+    border: 2px solid transparent;
+    cursor: pointer;
+    min-width: 120px;
+    min-height: 56px;
+    transition: all 0.15s ease-out;
+  }
+
+  .btn-primary {
+    background: linear-gradient(180deg, var(--gold) 0%, var(--gold-muted) 100%);
+    color: var(--surface-void);
+    border-color: var(--gold-dark);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .btn-primary:hover {
+    background: var(--gold-bright);
+    box-shadow: 0 0 20px rgba(232, 194, 104, 0.4);
+  }
+
+  .btn-secondary {
+    background: var(--surface-card);
+    color: var(--gold);
+    border-color: var(--gold-muted);
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--gold-bright);
+    box-shadow: 0 0 16px rgba(212, 180, 90, 0.3);
+  }
+
+  .btn-secondary.active {
+    border-color: var(--gold-bright);
+    box-shadow: 0 0 16px rgba(212, 180, 90, 0.4);
+    color: var(--gold-bright);
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: var(--text-primary);
+  }
+
+  .btn-danger:hover {
+    background: var(--danger-bright);
+  }
+
+  /* Avatars */
+  .avatar {
+    border-radius: 50%;
+    border: 2px solid var(--gold-muted);
+    background: var(--surface-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .avatar-sm { width: 40px; height: 40px; font-size: 14px; }
+  .avatar-md { width: 56px; height: 56px; font-size: 18px; }
+  .avatar-lg { width: 80px; height: 80px; font-size: 24px; border-width: 4px; border-color: var(--gold); }
+  .avatar-active {
+    border-color: var(--gold-bright);
+    box-shadow: 0 0 16px rgba(232, 194, 104, 0.5);
+  }
+
+  /* Player Avatars (mit Spieler-Color) */
+  .avatar-red { background: var(--player-red); }
+  .avatar-blue { background: var(--player-blue); }
+
+  /* Truppen-Indikator */
+  .troop {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 2px solid var(--surface-void);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Philosopher', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-on-parchment);
+  }
+
+  /* Würfel */
+  .dice {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--text-primary);
+  }
+
+  .dice-attacker {
+    background: var(--player-red);
+    border: 2px solid var(--danger-bright);
+  }
+
+  .dice-defender {
+    background: var(--player-blue);
+    border: 2px solid #5A7AC0;
+  }
+
+  /* Input */
+  .input-mock {
+    background: var(--parchment);
+    border: 2px solid var(--parchment-edge);
+    border-radius: var(--radius-md);
+    padding: var(--space-base);
+    color: var(--text-on-parchment);
+    font-family: 'Philosopher', sans-serif;
+    font-size: 16px;
+    width: 280px;
+    height: 56px;
+  }
+
+  /* Territory Card Demo */
+  .territory-demo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-base);
+  }
+
+  .territory {
+    aspect-ratio: 16 / 10;
+    border-radius: var(--radius-md);
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .territory-own {
+    background: rgba(166, 52, 43, 0.7);
+    border-color: var(--player-red);
+  }
+
+  .territory-enemy {
+    background: rgba(58, 91, 160, 0.7);
+    border-color: var(--player-blue);
+  }
+
+  .territory-selected {
+    background: rgba(166, 52, 43, 0.7);
+    border: 4px solid var(--gold-bright);
+    box-shadow: 0 0 24px rgba(232, 194, 104, 0.5);
+  }
+
+  .territory-target {
+    background: rgba(58, 91, 160, 0.7);
+    border: 4px solid var(--danger-bright);
+    animation: pulse-target 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-target {
+    0%, 100% { box-shadow: 0 0 16px rgba(196, 64, 48, 0.4); }
+    50% { box-shadow: 0 0 28px rgba(196, 64, 48, 0.8); }
+  }
+
+  .territory-label {
+    position: absolute;
+    bottom: 8px;
+    font-family: 'Philosopher', sans-serif;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* Spacing visualization */
+  .spacing-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: var(--space-base);
+  }
+
+  .spacing-item {
+    text-align: center;
+  }
+
+  .spacing-block {
+    background: var(--gold);
+    margin: 0 auto var(--space-sm);
+    border-radius: var(--radius-sm);
+  }
+
+  .spacing-label {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .spacing-label strong {
+    display: block;
+    color: var(--gold-muted);
+    margin-bottom: 2px;
+    font-size: 13px;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: var(--space-2xl) 0;
+    margin-top: var(--space-3xl);
+    border-top: 1px solid var(--surface-wood);
+    font-family: 'Philosopher', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+
+  footer span { color: var(--gold-muted); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .type-spec {
+      grid-template-columns: 1fr;
+      gap: var(--space-sm);
+    }
+    .spacing-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-eyebrow">Gabumon Game Studio · Sprint 2</div>
+    <h1 class="hero-title">PULVERFASS</h1>
+    <div class="hero-subtitle">Art Bible &amp; Design System</div>
+    <div class="hero-meta">
+      Version <span>1.0</span> · Stand <span>Mai 2026</span> · Kotlin / Jetpack Compose
+    </div>
+  </header>
+
+  <!-- COLORS -->
+  <section>
+    <div class="section-header">
+      <span class="section-number">01</span>
+      <h2 class="section-title">Color System</h2>
+    </div>
+    <p class="section-description">
+      Dunkle Hafenwelt mit warmen Pergament-Akzenten. Gold ist heilig — sparsam einsetzen.
+      Acht Spieler-Farben sind so abgestimmt, dass sie auf der dunklen Seekarte klar trennbar sind.
+    </p>
+
+    <div class="color-group-title">Surfaces</div>
+    <div class="color-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#0F1419"></div><div class="swatch-meta"><div class="swatch-name">surface_void</div><div class="swatch-hex">#0F1419</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#1A1F2A"></div><div class="swatch-meta"><div class="swatch-name">surface_dark</div><div class="swatch-hex">#1A1F2A</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#2A1F18"></div><div class="swatch-meta"><div class="swatch-name">surface_wood</div><div class="swatch-hex">#2A1F18</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#1F1A14"></div><div class="swatch-meta"><div class="swatch-name">surface_card</div><div class="swatch-hex">#1F1A14</div></div></div>
+    </div>
+
+    <div class="color-group-title">Parchment</div>
+    <div class="color-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#D4B896"></div><div class="swatch-meta"><div class="swatch-name">parchment_light</div><div class="swatch-hex">#D4B896</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#C8A876"></div><div class="swatch-meta"><div class="swatch-name">parchment</div><div class="swatch-hex">#C8A876</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#A8855A"></div><div class="swatch-meta"><div class="swatch-name">parchment_dark</div><div class="swatch-hex">#A8855A</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#6B4D2A"></div><div class="swatch-meta"><div class="swatch-name">parchment_edge</div><div class="swatch-hex">#6B4D2A</div></div></div>
+    </div>
+
+    <div class="color-group-title">Gold (Akzent)</div>
+    <div class="color-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#E8C268"></div><div class="swatch-meta"><div class="swatch-name">gold_bright</div><div class="swatch-hex">#E8C268</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#D4B45A"></div><div class="swatch-meta"><div class="swatch-name">gold</div><div class="swatch-hex">#D4B45A</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#C4A14B"></div><div class="swatch-meta"><div class="swatch-name">gold_muted</div><div class="swatch-hex">#C4A14B</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#8B6F2A"></div><div class="swatch-meta"><div class="swatch-name">gold_dark</div><div class="swatch-hex">#8B6F2A</div></div></div>
+    </div>
+
+    <div class="color-group-title">Player Colors</div>
+    <div class="color-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#A6342B"></div><div class="swatch-meta"><div class="swatch-name">player_red</div><div class="swatch-hex">#A6342B</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#3A5BA0"></div><div class="swatch-meta"><div class="swatch-name">player_blue</div><div class="swatch-hex">#3A5BA0</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#D17030"></div><div class="swatch-meta"><div class="swatch-name">player_orange</div><div class="swatch-hex">#D17030</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#8C8A2E"></div><div class="swatch-meta"><div class="swatch-name">player_olive</div><div class="swatch-hex">#8C8A2E</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#7A4A8C"></div><div class="swatch-meta"><div class="swatch-name">player_purple</div><div class="swatch-hex">#7A4A8C</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#4A8C8C"></div><div class="swatch-meta"><div class="swatch-name">player_teal</div><div class="swatch-hex">#4A8C8C</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#B8466C"></div><div class="swatch-meta"><div class="swatch-name">player_pink</div><div class="swatch-hex">#B8466C</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#5A8C3A"></div><div class="swatch-meta"><div class="swatch-name">player_green</div><div class="swatch-hex">#5A8C3A</div></div></div>
+    </div>
+
+    <div class="color-group-title">Semantic</div>
+    <div class="color-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#8B2828"></div><div class="swatch-meta"><div class="swatch-name">danger</div><div class="swatch-hex">#8B2828</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#C44030"></div><div class="swatch-meta"><div class="swatch-name">danger_bright</div><div class="swatch-hex">#C44030</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#4A7A4A"></div><div class="swatch-meta"><div class="swatch-name">success</div><div class="swatch-hex">#4A7A4A</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#D17030"></div><div class="swatch-meta"><div class="swatch-name">warning</div><div class="swatch-hex">#D17030</div></div></div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section>
+    <div class="section-header">
+      <span class="section-number">02</span>
+      <h2 class="section-title">Typography</h2>
+    </div>
+    <p class="section-description">
+      Cinzel Decorative für alles Heroische. Cormorant Garamond für lesbaren Fließtext.
+      Philosopher für UI-Labels. Fleur De Leah nur für Zier — sparsam!
+    </p>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Display XL</strong>Cinzel Decorative · 56sp · 900</div>
+      <div class="type-display-xl">GEWONNEN !!!!</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Display Large</strong>Cinzel Decorative · 48sp · 700</div>
+      <div class="type-display-lg">SCHLACHT</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Headline</strong>Cinzel Decorative · 28sp · 700</div>
+      <div class="type-headline">PHASE: ANGRIFF</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Title</strong>Cinzel Decorative · 20sp · 700</div>
+      <div class="type-title">Lobby auswählen</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Body</strong>Cormorant Garamond · 16sp · 400</div>
+      <div class="type-body">Schartner01 hat die Lobby betreten. Die Schiffe liegen vor Anker und warten auf den Kapitän.</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Button</strong>Philosopher · 14sp · 700 · UPPERCASE</div>
+      <div class="type-button">Würfeln!</div>
+    </div>
+
+    <div class="type-spec">
+      <div class="type-label"><strong>Decorative</strong>Fleur De Leah · 32sp · sparsam!</div>
+      <div class="type-decorative">Pulverfass</div>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section>
+    <div class="section-header">
+      <span class="section-number">03</span>
+      <h2 class="section-title">Spacing Scale</h2>
+    </div>
+    <p class="section-description">
+      8pt-Grid. Niemals hardcoded dp-Werte — immer Tokens nutzen.
+    </p>
+
+    <div class="spacing-grid">
+      <div class="spacing-item"><div class="spacing-block" style="width:4px;height:4px"></div><div class="spacing-label"><strong>xs</strong>4dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:8px;height:8px"></div><div class="spacing-label"><strong>sm</strong>8dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:12px;height:12px"></div><div class="spacing-label"><strong>md</strong>12dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:16px;height:16px"></div><div class="spacing-label"><strong>base</strong>16dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:24px;height:24px"></div><div class="spacing-label"><strong>lg</strong>24dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:32px;height:32px"></div><div class="spacing-label"><strong>xl</strong>32dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:48px;height:48px"></div><div class="spacing-label"><strong>2xl</strong>48dp</div></div>
+      <div class="spacing-item"><div class="spacing-block" style="width:64px;height:64px"></div><div class="spacing-label"><strong>3xl</strong>64dp</div></div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section>
+    <div class="section-header">
+      <span class="section-number">04</span>
+      <h2 class="section-title">Components</h2>
+    </div>
+    <p class="section-description">
+      Wiederverwendbare Bausteine. Jeder Component hat klar definierte States.
+    </p>
+
+    <div class="component-row">
+      <div class="component-row-label">Buttons · Primary / Secondary / Danger</div>
+      <button class="btn btn-primary">Würfeln!</button>
+      <button class="btn btn-secondary">Verstärken</button>
+      <button class="btn btn-secondary active">Angriff</button>
+      <button class="btn btn-secondary">Verschieben</button>
+      <button class="btn btn-danger">Rückzug</button>
+    </div>
+
+    <div class="component-row">
+      <div class="component-row-label">Avatare · Standard / Aktiv / Lobby</div>
+      <div class="avatar avatar-sm avatar-red">S</div>
+      <div class="avatar avatar-md avatar-blue">2</div>
+      <div class="avatar avatar-md avatar-active avatar-red">1</div>
+      <div class="avatar avatar-lg avatar-red">S</div>
+    </div>
+
+    <div class="component-row">
+      <div class="component-row-label">Truppen-Indikatoren · 28×28 weiß auf farbiger Region</div>
+      <div class="troop">3</div>
+      <div class="troop">8</div>
+      <div class="troop">12</div>
+      <div class="troop">1</div>
+    </div>
+
+    <div class="component-row">
+      <div class="component-row-label">Würfel · Angreifer (rot) / Verteidiger (blau)</div>
+      <div class="dice dice-attacker">6</div>
+      <div class="dice dice-attacker">5</div>
+      <div class="dice dice-attacker">4</div>
+      <div style="width:24px"></div>
+      <div class="dice dice-defender">4</div>
+      <div class="dice dice-defender">3</div>
+    </div>
+
+    <div class="component-row">
+      <div class="component-row-label">Input Field · Pergament-Style</div>
+      <input class="input-mock" type="text" placeholder="Spielername eingeben" value="Schartner01">
+    </div>
+
+    <div class="component-row" style="display:block">
+      <div class="component-row-label">Territory Card States</div>
+      <div class="territory-demo">
+        <div class="territory territory-own"><span class="territory-label">Eigene Region</span></div>
+        <div class="territory territory-enemy"><span class="territory-label">Feindlich</span></div>
+        <div class="territory territory-selected"><span class="territory-label">Selektiert</span></div>
+        <div class="territory territory-target"><span class="territory-label">Angriffsziel</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DO'S & DON'TS -->
+  <section>
+    <div class="section-header">
+      <span class="section-number">05</span>
+      <h2 class="section-title">Prinzipien</h2>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-xl);margin-top:var(--space-lg)" class="principles-grid">
+      <div style="padding:var(--space-lg);background:rgba(74,122,74,0.1);border:1px solid var(--success);border-radius:var(--radius-md)">
+        <div style="font-family:'Philosopher',sans-serif;font-size:14px;text-transform:uppercase;letter-spacing:0.15em;color:var(--success);margin-bottom:var(--space-base)">✓ Do</div>
+        <ul style="list-style:none;font-family:'Cormorant Garamond',serif;font-size:16px;line-height:1.8;color:var(--text-on-dark)">
+          <li>· Gold sparsam einsetzen</li>
+          <li>· Tokens, keine Magic-Numbers</li>
+          <li>· Texturen für Tiefe</li>
+          <li>· Cinzel für Titles, Philosopher für UI</li>
+          <li>· 4.5:1 Kontrast minimum</li>
+          <li>· Player-Farben über Tokens</li>
+        </ul>
+      </div>
+      <div style="padding:var(--space-lg);background:rgba(139,40,40,0.1);border:1px solid var(--danger);border-radius:var(--radius-md)">
+        <div style="font-family:'Philosopher',sans-serif;font-size:14px;text-transform:uppercase;letter-spacing:0.15em;color:var(--danger-bright);margin-bottom:var(--space-base)">✗ Don't</div>
+        <ul style="list-style:none;font-family:'Cormorant Garamond',serif;font-size:16px;line-height:1.8;color:var(--text-on-dark)">
+          <li>· Keine reinen Volltöne</li>
+          <li>· Kein Inter / Roboto / SF Pro</li>
+          <li>· Keine bunte LED-Optik</li>
+          <li>· Keine Cartoon-Charaktere</li>
+          <li>· Buttons nie ohne Border</li>
+          <li>· Material Shadow Stack vermeiden</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Pulverfass · Art Bible v1.0 · Maintained by <span>Martin</span> · Studio <span>Gabumon</span>
+  </footer>
+
+</div>
+</body>
+</html>
