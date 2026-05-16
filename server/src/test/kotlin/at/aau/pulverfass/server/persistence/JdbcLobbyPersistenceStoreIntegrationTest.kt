@@ -42,7 +42,10 @@ class JdbcLobbyPersistenceStoreIntegrationTest {
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeUpdate(
-                    "TRUNCATE TABLE lobby_events, lobby_snapshots RESTART IDENTITY",
+                    """
+                    TRUNCATE TABLE lobby_events, lobby_snapshots, lobby_reconnect_sessions
+                    RESTART IDENTITY
+                    """.trimIndent(),
                 )
             }
         }
@@ -119,6 +122,39 @@ class JdbcLobbyPersistenceStoreIntegrationTest {
         val otherLobbySnapshots = store.listSnapshots(untouchedLobby)
         assertEquals(1, otherLobbySnapshots.size)
         assertEquals(50L, otherLobbySnapshots.single().stateVersion)
+    }
+
+    @Test
+    fun `deleteLobbyState removes all persisted events and snapshots for lobby`() {
+        val targetLobby = LobbyCode("DEL1")
+        val untouchedLobby = LobbyCode("DEL2")
+
+        store.appendEvent(
+            lobbyCode = targetLobby,
+            stateVersion = 1L,
+            turnCount = 0,
+            eventType = "test.event",
+            eventJson = jsonPayload("target-event"),
+        )
+        store.appendSnapshot(
+            lobbyCode = targetLobby,
+            stateVersion = 1L,
+            turnCount = 0,
+            snapshotJson = jsonPayload("target-snapshot"),
+        )
+        store.appendEvent(
+            lobbyCode = untouchedLobby,
+            stateVersion = 2L,
+            turnCount = 0,
+            eventType = "test.event",
+            eventJson = jsonPayload("other-event"),
+        )
+
+        store.deleteLobbyState(targetLobby)
+
+        assertEquals(emptyList<Long>(), store.listEvents(targetLobby).map { it.stateVersion })
+        assertEquals(emptyList<Long>(), store.listSnapshots(targetLobby).map { it.stateVersion })
+        assertEquals(listOf(2L), store.listEvents(untouchedLobby).map { it.stateVersion })
     }
 
     private fun jsonPayload(value: String) =

@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN chmod +x ./gradlew
+RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew
 RUN ./gradlew --no-daemon :server:installDist
 
 FROM eclipse-temurin:25-jre AS runtime
@@ -12,12 +12,13 @@ FROM eclipse-temurin:25-jre AS runtime
 ARG APP_VERSION=dev
 
 ENV PORT=8080 \
-    APP_VERSION=${APP_VERSION} \
-    DB_URL="" \
-    DB_USER="" \
-    DB_PASSWORD=""
+    APP_VERSION=${APP_VERSION}
 
 WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/server/build/install/server/ ./
 

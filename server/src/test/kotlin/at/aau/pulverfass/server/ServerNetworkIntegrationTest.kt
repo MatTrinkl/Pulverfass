@@ -1,8 +1,11 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.session.PersistedReconnectSession
 import at.aau.pulverfass.server.session.SessionManager
+import at.aau.pulverfass.server.session.SessionReconnectContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
@@ -222,6 +225,121 @@ class ServerNetworkIntegrationTest {
                 )
 
                 session.close()
+            }
+        }
+
+    @Test
+    fun `server restores reconnectable session from persisted context after restart`() =
+        testApplication {
+            val restoredToken = SessionToken("123e4567-e89b-12d3-a456-426614174399")
+            val network = ServerNetwork()
+            network.installReconnectHooks(
+                reconnectSessionProvider = { sessionToken ->
+                    if (sessionToken == restoredToken) {
+                        PersistedReconnectSession(
+                            context =
+                                SessionReconnectContext(
+                                    playerId = PlayerId(7),
+                                    lobbyCode = LobbyCode("ZX12"),
+                                    playerDisplayName = "Restarted Alice",
+                                ),
+                            expiresAtEpochMillis = System.currentTimeMillis() + 60_000,
+                        )
+                    } else {
+                        null
+                    }
+                },
+            )
+
+            application {
+                module(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val reconnectingSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(reconnectingSession)
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(restoredToken)),
+                    ),
+                )
+
+                val response = assertIs<ReconnectResponse>(receivePayload(reconnectingSession))
+
+                assertEquals(
+                    ReconnectResponse(
+                        success = true,
+                        playerId = PlayerId(7),
+                        lobbyCode = LobbyCode("ZX12"),
+                        playerDisplayName = "Restarted Alice",
+                    ),
+                    response,
+                )
+                assertNotNull(network.sessionManager.getByToken(restoredToken))
+
+                reconnectingSession.close()
+            }
+        }
+
+    @Test
+    fun `server rejects persisted restart reconnect when stored token is already expired`() =
+        testApplication {
+            val restoredToken = SessionToken("123e4567-e89b-12d3-a456-426614174398")
+            val network =
+                ServerNetwork(
+                    sessionManager =
+                        SessionManager(
+                            nowEpochMillis = { 50_000L },
+                        ),
+                )
+            network.installReconnectHooks(
+                reconnectSessionProvider = { sessionToken ->
+                    if (sessionToken == restoredToken) {
+                        PersistedReconnectSession(
+                            context =
+                                SessionReconnectContext(
+                                    playerId = PlayerId(8),
+                                    lobbyCode = LobbyCode("ZX13"),
+                                    playerDisplayName = "Expired Alice",
+                                ),
+                            expiresAtEpochMillis = 49_999L,
+                        )
+                    } else {
+                        null
+                    }
+                },
+            )
+
+            application {
+                module(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val reconnectingSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(reconnectingSession)
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(restoredToken)),
+                    ),
+                )
+
+                val response = assertIs<ReconnectResponse>(receivePayload(reconnectingSession))
+
+                assertEquals(false, response.success)
+                assertEquals(ReconnectErrorCode.TOKEN_EXPIRED, response.errorCode)
+                reconnectingSession.close()
             }
         }
 

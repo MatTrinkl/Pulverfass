@@ -58,7 +58,10 @@ class LobbyRecoveryLoaderIntegrationTest {
         createDataSource().connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeUpdate(
-                    "TRUNCATE TABLE lobby_events, lobby_snapshots RESTART IDENTITY",
+                    """
+                    TRUNCATE TABLE lobby_events, lobby_snapshots, lobby_reconnect_sessions
+                    RESTART IDENTITY
+                    """.trimIndent(),
                 )
             }
         }

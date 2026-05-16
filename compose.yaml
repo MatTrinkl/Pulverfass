@@ -39,6 +39,14 @@ services:
       DB_NAME: ${DB_NAME:-pulverfass}
       DB_USER: ${DB_USER:-pulverfass}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your shell or .env}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent "http://127.0.0.1:$${PORT}/ready" >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
 
@@ -51,6 +59,14 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/index.html
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     ports:
       - "${DOKKA_PORT:-8081}:8080"
 

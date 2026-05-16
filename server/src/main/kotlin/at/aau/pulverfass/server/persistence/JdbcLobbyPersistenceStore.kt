@@ -293,6 +293,33 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
+    fun deleteLobbyState(lobbyCode: LobbyCode) {
+        dataSource.connection.use { connection ->
+            connection.inTransaction {
+                connection.prepareStatement(
+                    """
+                    DELETE FROM lobby_events
+                    WHERE lobby_code = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, lobbyCode.value)
+                    statement.executeUpdate()
+                }
+
+                connection.prepareStatement(
+                    """
+                    DELETE FROM lobby_snapshots
+                    WHERE lobby_code = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, lobbyCode.value)
+                    statement.executeUpdate()
+                }
+                1
+            }
+        }
+    }
+
     private fun cleanupEventRounds(
         connection: Connection,
         lobbyCode: LobbyCode,

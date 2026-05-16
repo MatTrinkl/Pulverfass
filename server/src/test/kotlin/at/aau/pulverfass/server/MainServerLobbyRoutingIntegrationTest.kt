@@ -5,6 +5,7 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.PersistedReconnectSession
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -1597,7 +1598,14 @@ class MainServerLobbyRoutingIntegrationTest {
                 )
             val sessionContextRegistry = SessionContextRegistry()
             network.installReconnectHooks(
-                reconnectContextProvider = sessionContextRegistry::contextFor,
+                reconnectSessionProvider = { sessionToken ->
+                    sessionContextRegistry.contextFor(sessionToken)?.let { context ->
+                        PersistedReconnectSession(
+                            context = context,
+                            expiresAtEpochMillis = Long.MAX_VALUE,
+                        )
+                    }
+                },
                 onSessionRemoved = sessionContextRegistry::removeSession,
             )
             val routingService =

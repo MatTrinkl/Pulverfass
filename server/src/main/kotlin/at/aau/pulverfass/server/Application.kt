@@ -6,15 +6,19 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
 import at.aau.pulverfass.server.persistence.JdbcLobbyPersistenceStore
+import at.aau.pulverfass.server.persistence.JdbcLobbyReconnectSessionStore
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.persistence.LobbyRecoveryLoader
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.server.session.SessionContextPersistenceHooks
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.network.Network
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -46,6 +50,8 @@ internal const val DEFAULT_HOST = "0.0.0.0"
 internal const val DEFAULT_PORT = 8080
 private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
 private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Runtime")
+private const val SERVER_MODE_ENV = "SERVER_MODE"
+private const val SERVER_MODE_MIGRATE = "migrate"
 
 /**
  * Startet den eingebetteten Ktor-Server mit der Standardkonfiguration.
@@ -53,6 +59,14 @@ private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Ru
 fun main() {
     val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
     migrateDatabaseSchema(runtimeConfig.database)
+    val serverMode = System.getenv(SERVER_MODE_ENV)?.trim()?.lowercase().orEmpty()
+    if (serverMode == SERVER_MODE_MIGRATE) {
+        runtimeLogger.info(
+            "Completed migration-only startup for version {}.",
+            runtimeConfig.appVersion,
+        )
+        return
+    }
     val persistenceCallbacks = createLobbyPersistenceCallbacks(runtimeConfig.database)
     val databaseReadinessProbe =
         CompositeDatabaseReadinessProbe(
@@ -262,6 +276,72 @@ private fun formatReadinessResponse(
     }
 }
 
+private fun GameState.isRecoverableOnStartup(): Boolean =
+    status == GameStatus.WAITING_FOR_PLAYERS || status == GameStatus.RUNNING
+
+private fun GameState.isTerminal(): Boolean =
+    status == GameStatus.CLOSED || status == GameStatus.FINISHED
+
+private fun List<GameState>.maxPlayerId(): Long =
+    asSequence()
+        .flatMap { state -> state.players.asSequence() }
+        .map(PlayerId::value)
+        .maxOrNull()
+        ?: 0L
+
+private fun persistReconnectSessionIfPossible(
+    network: ServerNetwork,
+    sessionStore: JdbcLobbyReconnectSessionStore?,
+    sessionContextRegistry: SessionContextRegistry,
+    sessionToken: SessionToken,
+) {
+    val session = network.sessionManager.getByToken(sessionToken) ?: return
+    val context = sessionContextRegistry.contextFor(sessionToken) ?: return
+    if (context.playerId == null) {
+        return
+    }
+    sessionStore?.upsertSession(session, context)
+}
+
+private suspend fun cleanupTerminalLobbyState(
+    lobbyCode: at.aau.pulverfass.shared.ids.LobbyCode,
+    lobbyManager: LobbyManager,
+    sessionContextRegistry: SessionContextRegistry,
+    recoveryStore: JdbcLobbyPersistenceStore?,
+) {
+    var cleanupFailure: Throwable? = null
+
+    try {
+        sessionContextRegistry.clearLobbyContextForLobby(lobbyCode)
+    } catch (cause: Throwable) {
+        cleanupFailure = cause
+        runtimeLogger.error(
+            "Failed to clear reconnect context for terminal lobby {}",
+            lobbyCode.value,
+            cause,
+        )
+    }
+
+    try {
+        recoveryStore?.deleteLobbyState(lobbyCode)
+    } catch (cause: Throwable) {
+        if (cleanupFailure == null) {
+            cleanupFailure = cause
+        }
+        runtimeLogger.error(
+            "Failed to delete persisted state for terminal lobby {}",
+            lobbyCode.value,
+            cause,
+        )
+    } finally {
+        lobbyManager.removeLobby(lobbyCode)
+    }
+
+    if (cleanupFailure == null) {
+        runtimeLogger.info("Removed terminal lobby {}", lobbyCode.value)
+    }
+}
+
 private fun Application.installLobbyRuntime(
     network: ServerNetwork,
     databaseConfig: DatabaseRuntimeConfig,
@@ -278,13 +358,40 @@ private fun Application.installLobbyRuntime(
                 applicationName = "pulverfass-lobby-recovery",
             )
         }
+    val recoveryStore = recoveryDataSource?.let(::JdbcLobbyPersistenceStore)
+    val sessionStore = recoveryDataSource?.let(::JdbcLobbyReconnectSessionStore)
+    lateinit var sessionContextRegistry: SessionContextRegistry
+    sessionContextRegistry =
+        SessionContextRegistry(
+            persistenceHooks =
+                SessionContextPersistenceHooks(
+                    loadContext = { sessionToken -> sessionStore?.loadContext(sessionToken) },
+                    persistContext = { sessionToken, _ ->
+                        persistReconnectSessionIfPossible(
+                            network = network,
+                            sessionStore = sessionStore,
+                            sessionContextRegistry = sessionContextRegistry,
+                            sessionToken = sessionToken,
+                        )
+                    },
+                    removeSession = { sessionToken ->
+                        sessionStore?.deleteSession(sessionToken)
+                    },
+                    clearLobbyContextForLobby = { lobbyCode ->
+                        sessionStore?.clearLobbyContextForLobby(lobbyCode)
+                    },
+                ),
+        )
     val recoveryLoader =
-        recoveryDataSource?.let { dataSource ->
+        recoveryStore?.let { store ->
             LobbyRecoveryLoader(
-                store = JdbcLobbyPersistenceStore(dataSource),
+                store = store,
                 mapDefinitionRepository = mapDefinitionRepository,
             )
         }
+    val restoredStates = recoveryLoader?.restoreAll().orEmpty()
+    val recoverableStates = restoredStates.filter(GameState::isRecoverableOnStartup)
+    val discardedStates = restoredStates.filterNot(GameState::isRecoverableOnStartup)
     val lobbyManager =
         LobbyManager(
             scope = serverScope,
@@ -295,17 +402,76 @@ private fun Application.installLobbyRuntime(
                 )
             },
         )
-    recoveryLoader?.restoreAllInto(lobbyManager)
-    val sessionContextRegistry = SessionContextRegistry()
+    recoverableStates.forEach { state ->
+        lobbyManager.createLobby(lobbyCode = state.lobbyCode, initialState = state)
+    }
+    discardedStates.forEach { state ->
+        try {
+            recoveryStore?.deleteLobbyState(state.lobbyCode)
+        } catch (cause: Throwable) {
+            runtimeLogger.error(
+                "Failed to delete persisted state for discarded startup lobby {}",
+                state.lobbyCode.value,
+                cause,
+            )
+        }
+        try {
+            sessionContextRegistry.clearLobbyContextForLobby(state.lobbyCode)
+        } catch (cause: Throwable) {
+            runtimeLogger.error(
+                "Failed to clear reconnect context for discarded startup lobby {}",
+                state.lobbyCode.value,
+                cause,
+            )
+        }
+    }
     val router =
         MainServerRouter(
             lobbyManager = lobbyManager,
             mapper = DefaultNetworkToLobbyEventMapper(),
         )
 
-    val nextPlayerId = AtomicLong(1)
+    val nextPlayerId =
+        AtomicLong(
+            maxOf(
+                recoverableStates.maxPlayerId(),
+                sessionStore?.maxPersistedPlayerId() ?: 0L,
+            ) + 1,
+        )
+    network.sessionManager.installLifecycleHooks(
+        onSessionUpsert = { session ->
+            persistReconnectSessionIfPossible(
+                network = network,
+                sessionStore = sessionStore,
+                sessionContextRegistry = sessionContextRegistry,
+                sessionToken = session.sessionToken,
+            )
+        },
+        onSessionRemoved = { sessionToken ->
+            sessionStore?.deleteSession(sessionToken)
+        },
+    )
     network.installReconnectHooks(
-        reconnectContextProvider = sessionContextRegistry::contextFor,
+        reconnectSessionProvider = { sessionToken ->
+            sessionStore?.loadSession(sessionToken)
+                ?: sessionContextRegistry.contextFor(sessionToken)?.let { context ->
+                    network.sessionManager.getByToken(sessionToken)?.let { session ->
+                        at.aau.pulverfass.server.session.PersistedReconnectSession(
+                            context = context,
+                            expiresAtEpochMillis = session.expiresAtEpochMillis,
+                            revokedAtEpochMillis = session.revokedAtEpochMillis,
+                        )
+                    }
+                }
+        },
+        onReconnectSucceeded = { sessionToken ->
+            persistReconnectSessionIfPossible(
+                network = network,
+                sessionStore = sessionStore,
+                sessionContextRegistry = sessionContextRegistry,
+                sessionToken = sessionToken,
+            )
+        },
         onSessionRemoved = sessionContextRegistry::removeSession,
     )
 
@@ -329,6 +495,17 @@ private fun Application.installLobbyRuntime(
             },
             persistenceCallbacks = persistenceCallbacks,
         )
+    lobbyManager.registerAcceptedEventListener { lobbyCode, _, _, currentState ->
+        if (!currentState.isTerminal()) {
+            return@registerAcceptedEventListener
+        }
+        cleanupTerminalLobbyState(
+            lobbyCode = lobbyCode,
+            lobbyManager = lobbyManager,
+            sessionContextRegistry = sessionContextRegistry,
+            recoveryStore = recoveryStore,
+        )
+    }
 
     serverScope.launch {
         network.events.collect { event ->

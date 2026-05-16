@@ -97,13 +97,15 @@ class LobbyRecoveryLoader(
     }
 
     fun restoreAllInto(lobbyManager: LobbyManager) {
+        restoreAll().forEach { state ->
+            lobbyManager.createLobby(lobbyCode = state.lobbyCode, initialState = state)
+        }
+    }
+
+    fun restoreAll(): List<GameState> =
         store.findLobbyCodesWithPersistedState()
             .sortedBy(LobbyCode::value)
-            .forEach { lobbyCode ->
-                val state = restoreLobby(lobbyCode) ?: return@forEach
-                lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = state)
-            }
-    }
+            .mapNotNull(::restoreLobby)
 
     private fun validateSequence(
         lobbyCode: LobbyCode,

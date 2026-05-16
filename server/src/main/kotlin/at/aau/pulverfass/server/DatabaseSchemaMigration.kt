@@ -8,7 +8,7 @@ private val migrationLogger =
         "at.aau.pulverfass.server.DatabaseSchemaMigration",
     )
 
-internal fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
+fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
     if (!config.isConfigured) {
         migrationLogger.info(
             "Skipping Flyway migration because database configuration is disabled.",

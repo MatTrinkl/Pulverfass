@@ -86,7 +86,6 @@ jobs:
           :e2e:assemble
           :shared:test
           :server:test
-          :e2e:test
           --stacktrace
 
       - name: Upload unit test reports
@@ -666,8 +665,20 @@ jobs:
             DB_PASSWORD=\$(printf '%s' '${db_password_b64}' | base64 -d); \
             echo \"\$GHCR_TOKEN\" | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
             SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose pull server dokka; \
-            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose up -d; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose up -d --wait db; \
+            SERVER_MODE='migrate' SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose run --rm --no-deps server; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose up -d --wait --remove-orphans server dokka; \
             docker image prune -f"
+
+      - name: Show remote compose state on failure
+        if: failure()
+        run: |
+          set -eu
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; \
+            cd '${DEPLOY_PATH}'; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' docker compose ps; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' docker compose logs --no-color --tail=200 server db dokka"
 
       - name: Smoke test deployed health endpoint
         run: |
@@ -803,15 +814,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   e2e-tests:
-    name: E2E Tests (placeholder)
+    name: E2E Tests
     runs-on: self-hosted
     needs: build-and-test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
-    env:
-      E2E_WS_HOST: 127.0.0.1
-      E2E_WS_PORT: 8080
-      E2E_TEST_MODE: placeholder
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -828,17 +834,17 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Validate E2E placeholder module
+      - name: Run E2E test suite
         run: |
-          ./gradlew :e2e:assemble :e2e:test :e2e:placeholderE2eInfo --stacktrace | tee e2e-placeholder.log
+          ./gradlew :e2e:assemble :e2e:test --stacktrace | tee e2e.log
 
-      - name: Upload E2E placeholder logs and reports
+      - name: Upload E2E logs and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-placeholder-artifacts
+          name: e2e-artifacts
           path: |
-            e2e-placeholder.log
+            e2e.log
             e2e/build/reports/**
             e2e/build/test-results/**
           if-no-files-found: ignore

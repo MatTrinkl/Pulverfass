@@ -82,4 +82,37 @@ class SessionContextRegistryTest {
         assertEquals(newSessionToken, registry.sessionTokenForPlayer(PlayerId(5)))
         assertEquals(PlayerId(5), registry.playerIdForSession(newSessionToken))
     }
+
+    @Test
+    fun `contextFor should lazy load persisted reconnect context`() {
+        val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174306")
+        val registry =
+            SessionContextRegistry(
+                persistenceHooks =
+                    SessionContextPersistenceHooks(
+                        loadContext = { token ->
+                            if (token == sessionToken) {
+                                SessionReconnectContext(
+                                    playerId = PlayerId(6),
+                                    lobbyCode = LobbyCode("IJ90"),
+                                    playerDisplayName = "Eve",
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                    ),
+            )
+
+        assertEquals(
+            SessionReconnectContext(
+                playerId = PlayerId(6),
+                lobbyCode = LobbyCode("IJ90"),
+                playerDisplayName = "Eve",
+            ),
+            registry.contextFor(sessionToken),
+        )
+        assertEquals(PlayerId(6), registry.playerIdForSession(sessionToken))
+        assertEquals(sessionToken, registry.sessionTokenForPlayer(PlayerId(6)))
+    }
 }
