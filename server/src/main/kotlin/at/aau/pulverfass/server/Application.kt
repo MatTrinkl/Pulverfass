@@ -58,21 +58,46 @@ private const val SERVER_MODE_MIGRATE = "migrate"
  */
 fun main() {
     val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
-    migrateDatabaseSchema(runtimeConfig.database)
-    val serverMode = System.getenv(SERVER_MODE_ENV)?.trim()?.lowercase().orEmpty()
+    prepareServerEngine(runtimeConfig)?.start(wait = true)
+}
+
+internal fun prepareServerEngine(
+    runtimeConfig: ServerRuntimeConfig,
+    serverMode: String = System.getenv(SERVER_MODE_ENV)?.trim()?.lowercase().orEmpty(),
+    migrationRunner: (DatabaseRuntimeConfig) -> Unit = ::migrateDatabaseSchema,
+    persistenceCallbacksFactory: (
+        DatabaseRuntimeConfig,
+    ) -> LobbyPersistenceCallbacks = ::createLobbyPersistenceCallbacks,
+    databaseReadinessProbeFactory: (
+        DatabaseRuntimeConfig,
+        LobbyPersistenceCallbacks,
+    ) -> DatabaseReadinessProbe =
+        { databaseConfig, persistenceCallbacks ->
+            CompositeDatabaseReadinessProbe(
+                createDatabaseReadinessProbe(databaseConfig),
+                persistenceCallbacks,
+            )
+        },
+    serverFactory: (
+        String,
+        Int,
+        ServerNetwork,
+        ServerRuntimeConfig,
+        DatabaseReadinessProbe,
+        LobbyPersistenceCallbacks,
+    ) -> ApplicationEngine = ::createServerWithLobbyRuntime,
+): ApplicationEngine? {
+    migrationRunner(runtimeConfig.database)
     if (serverMode == SERVER_MODE_MIGRATE) {
         runtimeLogger.info(
             "Completed migration-only startup for version {}.",
             runtimeConfig.appVersion,
         )
-        return
+        return null
     }
-    val persistenceCallbacks = createLobbyPersistenceCallbacks(runtimeConfig.database)
+    val persistenceCallbacks = persistenceCallbacksFactory(runtimeConfig.database)
     val databaseReadinessProbe =
-        CompositeDatabaseReadinessProbe(
-            createDatabaseReadinessProbe(runtimeConfig.database),
-            persistenceCallbacks,
-        )
+        databaseReadinessProbeFactory(runtimeConfig.database, persistenceCallbacks)
     runtimeLogger.info(
         "Starting websocket server on {}:{} (version: {}, database env configured: {})",
         runtimeConfig.host,
@@ -80,13 +105,14 @@ fun main() {
         runtimeConfig.appVersion,
         runtimeConfig.database.isConfigured,
     )
-    createServerWithLobbyRuntime(
-        host = runtimeConfig.host,
-        port = runtimeConfig.port,
-        runtimeConfig = runtimeConfig,
-        databaseReadinessProbe = databaseReadinessProbe,
-        persistenceCallbacks = persistenceCallbacks,
-    ).start(wait = true)
+    return serverFactory(
+        runtimeConfig.host,
+        runtimeConfig.port,
+        ServerNetwork(),
+        runtimeConfig,
+        databaseReadinessProbe,
+        persistenceCallbacks,
+    )
 }
 
 /**
@@ -225,14 +251,14 @@ internal fun Application.module(transport: ServerWebSocketTransport) {
     module(ServerNetwork(transport = transport))
 }
 
-private fun createDatabaseReadinessProbe(config: DatabaseRuntimeConfig): DatabaseReadinessProbe =
+internal fun createDatabaseReadinessProbe(config: DatabaseRuntimeConfig): DatabaseReadinessProbe =
     if (config.isConfigured) {
         PostgresDatabaseReadinessProbe(config)
     } else {
         DatabaseReadinessProbe.disabled()
     }
 
-private fun createLobbyPersistenceCallbacks(
+internal fun createLobbyPersistenceCallbacks(
     config: DatabaseRuntimeConfig,
 ): LobbyPersistenceCallbacks {
     if (!config.isConfigured) {
@@ -251,7 +277,7 @@ private fun createLobbyPersistenceCallbacks(
     )
 }
 
-private fun formatReadinessResponse(
+internal fun formatReadinessResponse(
     appVersion: String,
     readiness: DatabaseReadiness,
 ): String {
@@ -289,7 +315,7 @@ private fun List<GameState>.maxPlayerId(): Long =
         .maxOrNull()
         ?: 0L
 
-private fun persistReconnectSessionIfPossible(
+internal fun persistReconnectSessionIfPossible(
     network: ServerNetwork,
     sessionStore: JdbcLobbyReconnectSessionStore?,
     sessionContextRegistry: SessionContextRegistry,
@@ -303,7 +329,7 @@ private fun persistReconnectSessionIfPossible(
     sessionStore?.upsertSession(session, context)
 }
 
-private suspend fun cleanupTerminalLobbyState(
+internal suspend fun cleanupTerminalLobbyState(
     lobbyCode: at.aau.pulverfass.shared.ids.LobbyCode,
     lobbyManager: LobbyManager,
     sessionContextRegistry: SessionContextRegistry,

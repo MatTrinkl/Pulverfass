@@ -1,5 +1,3 @@
-DELETE FROM lobby_reconnect_sessions;
-
 DROP TABLE lobby_reconnect_sessions;
 
 CREATE TABLE lobby_reconnect_sessions (

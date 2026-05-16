@@ -97,6 +97,43 @@ class ServerNetworkIntegrationTest {
         }
 
     @Test
+    fun `server network emits error when inbound frame cannot be decoded`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                module(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val errorDeferred =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        withTimeout(5_000) {
+                            network.events
+                                .filterIsInstance<Network.Event.Error<ConnectionId>>()
+                                .first()
+                        }
+                    }
+
+                val session = client.webSocketSession("/ws")
+                discardConnectionHandshake(session)
+                session.send(Frame.Binary(fin = true, data = byteArrayOf(0x01, 0x02, 0x03)))
+
+                val event = errorDeferred.await()
+                assertEquals(
+                    IllegalArgumentException::class.java,
+                    event.cause::class.java,
+                )
+                session.close()
+            }
+        }
+
+    @Test
     fun `server network send wraps payload into binary frame for connected client`() =
         testApplication {
             val network = ServerNetwork()
@@ -182,6 +219,42 @@ class ServerNetworkIntegrationTest {
                 assertNotEquals(initialConnectionId, reboundConnectionId)
 
                 reconnectingSession.close()
+            }
+        }
+
+    @Test
+    fun `server treats reconnect with the same live token as success`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                module(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val session = client.webSocketSession("/ws")
+                val initialResponse = receiveConnectionResponse(session)
+                val initialConnectionId = awaitConnectionId(network, initialResponse.sessionToken)
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(initialResponse.sessionToken)),
+                    ),
+                )
+
+                val reconnectResponse = assertIs<ReconnectResponse>(receivePayload(session))
+                val reboundConnectionId = awaitConnectionId(network, initialResponse.sessionToken)
+
+                assertEquals(true, reconnectResponse.success)
+                assertNull(reconnectResponse.errorCode)
+                assertEquals(initialConnectionId, reboundConnectionId)
+                session.close()
             }
         }
 

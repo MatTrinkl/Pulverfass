@@ -8,6 +8,7 @@ import at.aau.pulverfass.server.persistence.LobbyRecoveryLoader
 import at.aau.pulverfass.server.routing.PublicGameStateBuilder
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
@@ -18,10 +19,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -143,6 +147,83 @@ class LobbyRecoveryLoaderIntegrationTest {
             normalizeRecoveredState(currentState),
             normalizeRecoveredState(restoredState!!),
         )
+    }
+
+    @Test
+    fun `restore rebuilds lobby from persisted events without snapshot`() {
+        val lobbyCode = LobbyCode("RC12")
+        val hostId = PlayerId(1)
+        val guestId = PlayerId(2)
+
+        val currentState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = mapDefinitionRepository.defaultMapDefinition(),
+            )
+        val expectedState =
+            reducer
+                .apply(
+                    currentState,
+                    PlayerJoined(lobbyCode, hostId, "Host"),
+                    context = null,
+                ).let { stateAfterHost ->
+                    reducer.apply(
+                        stateAfterHost,
+                        PlayerJoined(lobbyCode, guestId, "Guest"),
+                        context = null,
+                    )
+                }
+        store.appendEvent(
+            lobbyCode = lobbyCode,
+            stateVersion = 1,
+            turnCount = 0,
+            eventType = "player_joined",
+            eventJson =
+                buildJsonObject {
+                    put("lobbyCode", lobbyCode.value)
+                    put("playerId", hostId.value)
+                    put("playerDisplayName", "Host")
+                },
+        )
+        store.appendEvent(
+            lobbyCode = lobbyCode,
+            stateVersion = 2,
+            turnCount = 0,
+            eventType = "player_joined",
+            eventJson =
+                buildJsonObject {
+                    put("lobbyCode", lobbyCode.value)
+                    put("playerId", guestId.value)
+                    put("playerDisplayName", "Guest")
+                },
+        )
+
+        val restoredState = createRecoveryLoader().restoreLobby(lobbyCode)
+
+        assertNotNull(restoredState)
+        assertEquals(
+            normalizeRecoveredState(expectedState),
+            normalizeRecoveredState(restoredState!!),
+        )
+    }
+
+    @Test
+    fun `restore rejects persisted event sequences with gaps`() {
+        val lobbyCode = LobbyCode("RC13")
+        store.appendEvent(
+            lobbyCode = lobbyCode,
+            stateVersion = 2,
+            turnCount = 0,
+            eventType = "lobby_created",
+            eventJson =
+                buildJsonObject {
+                    put("lobbyCode", lobbyCode.value)
+                },
+        )
+
+        assertThrows(IllegalStateException::class.java) {
+            createRecoveryLoader().restoreLobby(lobbyCode)
+        }
     }
 
     private fun advanceState(state: GameState): Pair<TurnStateUpdatedEvent, GameState> {
