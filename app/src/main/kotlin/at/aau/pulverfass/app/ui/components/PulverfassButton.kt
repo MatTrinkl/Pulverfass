@@ -139,7 +139,7 @@ fun PulverfassButtonDanger(
 
 @Preview(showBackground = true, backgroundColor = 0xFF1A1F2A, name = "Buttons – Default States")
 @Composable
-private fun PulverfassButtonsPreview() {
+internal fun PulverfassButtonsPreview() {
     AndroidAppTheme {
         Column(
             modifier = Modifier.padding(PulverfassSpacing.lg),
@@ -153,9 +153,10 @@ private fun PulverfassButtonsPreview() {
     }
 }
 
+// internal fun PulverfassButtonsPreview -> sichtbar innerhalb des Moduls, also auch für Tests, aber nicht für andere Module.
 @Preview(showBackground = true, backgroundColor = 0xFF1A1F2A, name = "Buttons – Disabled States")
 @Composable
-private fun PulverfassButtonsDisabledPreview() {
+internal fun PulverfassButtonsDisabledPreview() {
     AndroidAppTheme {
         Column(
             modifier = Modifier.padding(PulverfassSpacing.lg),

@@ -74,7 +74,7 @@ fun PulverfassParchmentCard(
 
 @Preview(showBackground = true, backgroundColor = 0xFF1A1F2A, name = "Cards – All Variants")
 @Composable
-private fun PulverfassCardsPreview() {
+internal fun PulverfassCardsPreview() {
     AndroidAppTheme {
         Column(
             modifier = Modifier.padding(PulverfassSpacing.lg),
