@@ -3,7 +3,6 @@ package at.aau.pulverfass.app.ui.screens
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -40,6 +39,4 @@ class StudioIntroScreenTest {
         }
         // wenn wir hier ankommen ohne crash ist alles ok
     }
-
-
 }
