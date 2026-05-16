@@ -116,6 +116,16 @@ fun WaitingRoomScreen(
     }
 }
 
+/**
+ * Kompakte View-Projektion für die reine Darstellung im Warteraum.
+ *
+ * Der Typ trennt die visuelle Liste bewusst von [LobbyController], damit die
+ * Screen-Logik Fallbackwerte aus Navigation und Live-State vereinheitlichen kann.
+ *
+ * @property displayName anzuzeigender Spielername
+ * @property isHost markiert den Host-Eintrag in der Liste
+ * @property isDisconnected blendet einen Verbindungsverlust im Warteraum ein
+ */
 private data class WaitingRoomPlayerUi(
     val displayName: String,
     val isHost: Boolean,

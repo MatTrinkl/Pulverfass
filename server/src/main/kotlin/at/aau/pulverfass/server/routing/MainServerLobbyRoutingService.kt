@@ -221,6 +221,17 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    /**
+     * Reagiert auf den Verlust einer aktiven Spielerverbindung.
+     *
+     * Ein verspätetes Disconnect eines bereits ersetzten Sockets wird ignoriert,
+     * damit Reconnects keine falschen `connection lost`-Broadcasts oder
+     * Turn-Pausen auslösen.
+     *
+     * @param connectionId technisch getrennte Verbindung
+     * @param playerId fachlich betroffener Spieler
+     * @param reason optionaler technischer Close-Reason
+     */
     suspend fun onPlayerDisconnected(
         connectionId: ConnectionId,
         playerId: PlayerId,
@@ -270,6 +281,14 @@ class MainServerLobbyRoutingService(
         broadcastTurnStateIfChanged(lobbyCode, previousTurnState)
     }
 
+    /**
+     * Reagiert auf eine neue oder wiederhergestellte Verbindung eines Spielers.
+     *
+     * Falls der laufende Zug wegen `WAITING_FOR_PLAYER` pausiert war und genau
+     * dieser Spieler zurückkehrt, hebt der Server die Pause wieder auf.
+     *
+     * @param playerId fachlich identifizierter Spieler nach Connect/Reconnect
+     */
     suspend fun onPlayerConnected(playerId: PlayerId) {
         val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId) ?: return
         val previousTurnState = currentTurnState(lobbyCode)

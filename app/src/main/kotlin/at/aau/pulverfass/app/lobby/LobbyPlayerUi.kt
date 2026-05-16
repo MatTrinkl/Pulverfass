@@ -7,6 +7,11 @@ import at.aau.pulverfass.shared.ids.PlayerId
  *
  * Die fachlich gültige Identität bleibt die gemeinsame [PlayerId]; Anzeigename
  * und Host-Markierung werden nur für Lobby- und Spieloberfläche genutzt.
+ *
+ * @property playerId stabile fachliche Spieleridentität
+ * @property displayName aktuell anzuzeigender Spielername
+ * @property isHost markiert den Lobby-Owner in der Oberfläche
+ * @property isDisconnected markiert bekannte Verbindungsverluste im Warteraum
  */
 data class LobbyPlayerUi(
     val playerId: PlayerId,
