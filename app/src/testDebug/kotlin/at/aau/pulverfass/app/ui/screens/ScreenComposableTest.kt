@@ -53,6 +53,7 @@ class ScreenComposableTest {
                                 delay(1_000)
                                 onProgressChanged(1, 1)
                             },
+                            minDisplayTimeMs = 0L,
                         )
                     }
                     composable(Screen.Lobby.route) {
