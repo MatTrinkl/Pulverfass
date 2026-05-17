@@ -3,6 +3,8 @@ package at.aau.pulverfass.server
 import at.aau.pulverfass.server.ids.IdFactory
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.LobbyDomainEventLogger
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerRouter
@@ -31,17 +33,22 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
 
 private const val DEFAULT_HOST = "0.0.0.0"
 private const val DEFAULT_PORT = 8080
-private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
+private val applicationLogger = ServerLoggers.technical("Application")
+private val webSocketLogger = ServerLoggers.technical("WebSocketEndpoint")
 
 /**
  * Startet den eingebetteten Ktor-Server mit der Standardkonfiguration.
  */
 fun main() {
+    applicationLogger.info(
+        "Starting Pulverfass server host={} port={}",
+        DEFAULT_HOST,
+        DEFAULT_PORT,
+    )
     createServerWithLobbyRuntime().start(wait = true)
 }
 
@@ -106,6 +113,7 @@ internal fun createServer(
  * @param network serverseitige Netzwerkkomposition für die WebSocket-Route
  */
 fun Application.module(network: ServerNetwork = ServerNetwork()) {
+    applicationLogger.info("Installing websocket module path=/ws")
     install(WebSockets) {
         pingPeriodMillis = 15_000
         timeoutMillis = 15_000
@@ -140,6 +148,8 @@ internal fun Application.module(transport: ServerWebSocketTransport) {
 }
 
 private fun Application.installLobbyRuntime(network: ServerNetwork) {
+    applicationLogger.info("Installing lobby runtime")
+    LobbyDomainEventLogger.logServerSessionStarted()
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
     val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
@@ -152,6 +162,7 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
                     mapDefinition = defaultMapDefinition,
                 )
             },
+            hooksFactory = { LobbyDomainEventLogger.hooks() },
         )
     val sessionContextRegistry = SessionContextRegistry()
     val router =
@@ -218,11 +229,13 @@ private fun Application.installLobbyRuntime(network: ServerNetwork) {
     routingService.start(serverScope)
 
     environment.monitor.subscribe(ApplicationStopped) {
+        applicationLogger.info("Stopping lobby runtime")
         runBlocking {
             routingService.stop()
             lobbyManager.shutdownAll()
         }
         serverScope.cancel()
+        applicationLogger.info("Lobby runtime stopped")
     }
 }
 
@@ -239,12 +252,16 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
     val connectionId = IdFactory.nextConnectionId()
 
     try {
+        webSocketLogger.info(
+            "WebSocket connection opened connectionId={}",
+            connectionId.value,
+        )
         network.onConnected(connectionId, this)
         for (frame in incoming) {
             when (frame) {
                 is Frame.Binary -> network.onBinaryMessage(connectionId, frame.data.copyOf())
                 is Frame.Text -> {
-                    logger.warn(
+                    webSocketLogger.warn(
                         "Rejecting text websocket frame on connection {} " +
                             "because only binary frames are supported",
                         connectionId.value,
@@ -262,10 +279,20 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
             }
         }
     } catch (cause: Throwable) {
+        webSocketLogger.warn(
+            "WebSocket connection failed connectionId={}",
+            connectionId.value,
+            cause,
+        )
         network.onError(connectionId, cause)
         throw cause
     } finally {
         val reason = runCatching { closeReason.await()?.message }.getOrNull()
         network.onDisconnected(connectionId, reason)
+        webSocketLogger.info(
+            "WebSocket connection closed connectionId={} reason={}",
+            connectionId.value,
+            reason,
+        )
     }
 }

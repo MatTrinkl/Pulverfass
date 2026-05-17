@@ -2,6 +2,7 @@ package at.aau.pulverfass.server.transport
 
 import at.aau.pulverfass.server.connection.ConnectionManager
 import at.aau.pulverfass.server.connection.WebSocketConnection
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.network.transport.BinaryMessageReceived
 import at.aau.pulverfass.shared.network.transport.Connected
@@ -12,7 +13,6 @@ import io.ktor.server.websocket.DefaultWebSocketServerSession
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.slf4j.LoggerFactory
 
 /**
  * Technische Transport-Schicht für serverseitige WebSocket-Verbindungen.
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
 class ServerWebSocketTransport(
     val connectionManager: ConnectionManager = ConnectionManager(),
 ) {
-    private val logger = LoggerFactory.getLogger(ServerWebSocketTransport::class.java)
+    private val logger = ServerLoggers.technical("ServerWebSocketTransport")
     private val _events = MutableSharedFlow<TransportEvent>(extraBufferCapacity = 64)
 
     /**
