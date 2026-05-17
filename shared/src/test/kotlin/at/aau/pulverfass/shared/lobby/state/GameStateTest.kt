@@ -394,6 +394,20 @@ class GameStateTest {
     }
 
     @Test
+    fun `should return true when player is part of players`() {
+        val playerOne = PlayerId(1)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("HP34"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+            )
+
+        // Prüft, dass hasPlayer Spieler erkennt, die Teil der Spielerliste sind.
+        assertTrue(state.hasPlayer(playerOne))
+    }
+
+    @Test
     fun `should return false when player is not part of players`() {
         val playerOne = PlayerId(1)
         val unknownPlayer = PlayerId(2)
