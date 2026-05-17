@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pulverfass · App Theme
+    ========================
+    Material 3 Theme das die Pulverfass-Tokens auf Material-Attribute mapped.
+    Nutzt forciert Dark-Theme — Pulverfass hat kein Light-Theme.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base Theme: dark forced -->
+    <style name="Theme.Pulverfass" parent="Theme.Material3.Dark.NoActionBar">
+
+        <!-- Brand Colors -->
+        <item name="colorPrimary">@color/gold</item>
+        <item name="colorOnPrimary">@color/surface_void</item>
+        <item name="colorPrimaryContainer">@color/gold_dark</item>
+        <item name="colorOnPrimaryContainer">@color/text_primary</item>
+
+        <!-- Secondary -->
+        <item name="colorSecondary">@color/parchment</item>
+        <item name="colorOnSecondary">@color/text_on_parchment</item>
+        <item name="colorSecondaryContainer">@color/parchment_dark</item>
+        <item name="colorOnSecondaryContainer">@color/text_on_parchment</item>
+
+        <!-- Tertiary -->
+        <item name="colorTertiary">@color/gold_bright</item>
+        <item name="colorOnTertiary">@color/surface_void</item>
+
+        <!-- Background & Surface -->
+        <item name="android:colorBackground">@color/surface_dark</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <item name="colorSurface">@color/surface_card</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/surface_wood</item>
+        <item name="colorOnSurfaceVariant">@color/text_on_dark</item>
+
+        <!-- Error / Danger -->
+        <item name="colorError">@color/danger</item>
+        <item name="colorOnError">@color/text_primary</item>
+        <item name="colorErrorContainer">@color/danger_bright</item>
+
+        <!-- Outline -->
+        <item name="colorOutline">@color/gold_muted</item>
+        <item name="colorOutlineVariant">@color/parchment_edge</item>
+
+        <!-- System Bars (immersive seafarer feel) -->
+        <item name="android:statusBarColor">@color/surface_void</item>
+        <item name="android:navigationBarColor">@color/surface_void</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Typography Defaults -->
+        <item name="android:textViewStyle">@style/Pulverfass.Body</item>
+
+        <!-- Force dark — no light theme -->
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+
+    </style>
+
+    <!-- ============================================ -->
+    <!-- BUTTON STYLES                               -->
+    <!-- ============================================ -->
+
+    <!-- Primary Button (Gold) -->
+    <style name="Pulverfass.Button.Primary" parent="Widget.Material3.Button">
+        <item name="android:minHeight">@dimen/button_height_primary</item>
+        <item name="android:minWidth">@dimen/button_min_width</item>
+        <item name="android:paddingHorizontal">@dimen/button_padding_horizontal</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="backgroundTint">@color/gold</item>
+        <item name="strokeColor">@color/gold_dark</item>
+        <item name="strokeWidth">@dimen/border_default</item>
+        <item name="android:textColor">@color/surface_void</item>
+        <item name="android:textAppearance">@style/Pulverfass.Button</item>
+        <item name="elevation">@dimen/elevation_card</item>
+    </style>
+
+    <!-- Secondary Button (Outlined) -->
+    <style name="Pulverfass.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">@dimen/button_height_secondary</item>
+        <item name="android:minWidth">@dimen/button_min_width</item>
+        <item name="android:paddingHorizontal">@dimen/button_padding_horizontal</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="backgroundTint">@color/surface_card</item>
+        <item name="strokeColor">@color/gold_muted</item>
+        <item name="strokeWidth">@dimen/border_default</item>
+        <item name="android:textColor">@color/gold</item>
+        <item name="android:textAppearance">@style/Pulverfass.Button</item>
+    </style>
+
+    <!-- Danger Button -->
+    <style name="Pulverfass.Button.Danger" parent="Widget.Material3.Button">
+        <item name="android:minHeight">@dimen/button_height_primary</item>
+        <item name="android:minWidth">@dimen/button_min_width</item>
+        <item name="android:paddingHorizontal">@dimen/button_padding_horizontal</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="backgroundTint">@color/danger</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textAppearance">@style/Pulverfass.Button</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- INPUT STYLE                                 -->
+    <!-- ============================================ -->
+
+    <style name="Pulverfass.Input" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxBackgroundColor">@color/parchment</item>
+        <item name="boxStrokeColor">@color/parchment_edge</item>
+        <item name="boxStrokeWidth">@dimen/border_default</item>
+        <item name="boxStrokeWidthFocused">@dimen/border_default</item>
+        <item name="boxCornerRadiusTopStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_md</item>
+        <item name="hintTextColor">@color/text_muted</item>
+        <item name="android:textColor">@color/text_on_parchment</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- CARD STYLE                                  -->
+    <!-- ============================================ -->
+
+    <style name="Pulverfass.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/surface_card</item>
+        <item name="cardCornerRadius">@dimen/radius_md</item>
+        <item name="cardElevation">@dimen/elevation_card</item>
+        <item name="strokeColor">@color/parchment_edge</item>
+        <item name="strokeWidth">@dimen/border_thin</item>
+        <item name="contentPadding">@dimen/card_padding</item>
+    </style>
+
+    <!-- ============================================ -->
+    <!-- MODAL STYLE                                 -->
+    <!-- ============================================ -->
+
+    <style name="Pulverfass.Modal" parent="ThemeOverlay.Material3.Dialog">
+        <item name="android:windowBackground">@color/parchment</item>
+        <item name="android:colorBackground">@color/parchment</item>
+        <item name="android:textColorPrimary">@color/text_on_parchment</item>
+    </style>
+
+</resources>
