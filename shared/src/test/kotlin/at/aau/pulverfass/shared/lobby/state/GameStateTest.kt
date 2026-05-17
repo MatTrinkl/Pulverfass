@@ -312,6 +312,95 @@ class GameStateTest {
     }
 
     @Test
+    fun `should throw when lobby owner is not part of players`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        // Prüft, dass der Lobby-Owner Teil der Spielerliste ist.
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("AB12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                lobbyOwner = playerTwo,
+            )
+        }
+    }
+
+    @Test
+    fun `should throw when player display names do not match players`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+
+        // Prüft, dass für jeden Spieler genau ein Anzeigename im GameState vorhanden sein muss.
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("PD12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                playerDisplayNames =
+                    mapOf(
+                        playerTwo to "Player 2 name",
+                    ),
+            )
+        }
+    }
+
+    @Test
+    fun `should return display name for known player`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("DN12"),
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                playerDisplayNames =
+                    mapOf(
+                        playerOne to "Player 1 name",
+                        playerTwo to "Player 2 name",
+                    ),
+            )
+
+        // Prüft, dass die Anzeigenamen bekannter Spieler aus dem GameState gelesen werden können.
+        assertEquals("Player 1 name", state.displayNameOf(playerOne))
+        assertEquals("Player 2 name", state.displayNameOf(playerTwo))
+    }
+
+    @Test
+    fun `should return null for unknown player display name`() {
+        val playerOne = PlayerId(1)
+        val unknownPlayer = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("DP34"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                playerDisplayNames =
+                    mapOf(
+                        playerOne to "Player 1 name",
+                    ),
+            )
+
+        // Prüft, dass für unbekannte Spieler kein Anzeigename zurückgegeben wird.
+        assertNull(state.displayNameOf(unknownPlayer))
+    }
+
+    @Test
+    fun `should return false when player is not part of players`() {
+        val playerOne = PlayerId(1)
+        val unknownPlayer = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = LobbyCode("HP12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+            )
+
+        // Prüft, dass hasPlayer nur Spieler erkennt, die Teil der Spielerliste sind.
+        assertFalse(state.hasPlayer(unknownPlayer))
+    }
+
+    @Test
     fun `should reject invalid constructor arguments`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
@@ -485,74 +574,4 @@ class GameStateTest {
                     ),
                 ),
         )
-
-    @Test
-    fun `should throw when lobby owner is not part of players`() {
-        val playerOne = PlayerId(1)
-        val playerTwo = PlayerId(2)
-        // Prüft, ob der Lobby-Owner Teil der Spielerliste ist.
-        assertThrows(IllegalArgumentException::class.java) {
-            GameState(
-                lobbyCode = LobbyCode("AB12"),
-                players = listOf(playerOne),
-                turnOrder = listOf(playerOne),
-                lobbyOwner = playerTwo,
-            )
-        }
-    }
-
-    @Test
-    fun `should return display name for known player`() {
-        val playerOne = PlayerId(1)
-        val playerTwo = PlayerId(2)
-        val state =
-            GameState(
-                lobbyCode = LobbyCode("DN12"),
-                players = listOf(playerOne, playerTwo),
-                turnOrder = listOf(playerOne, playerTwo),
-                playerDisplayNames =
-                    mapOf(
-                        playerOne to "Player 1 name",
-                        playerTwo to "Player 2 name",
-                    ),
-            )
-
-        // Prüft, dass die Anzeigenamen bekannter Spieler aus dem GameState gelesen werden können.
-        assertEquals("Player 1 name", state.displayNameOf(playerOne))
-        assertEquals("Player 2 name", state.displayNameOf(playerTwo))
-    }
-
-    @Test
-    fun `should return null for unknown player display name`() {
-        val playerOne = PlayerId(1)
-        val unknownPlayer = PlayerId(2)
-        val state =
-            GameState(
-                lobbyCode = LobbyCode("DP34"),
-                players = listOf(playerOne),
-                turnOrder = listOf(playerOne),
-                playerDisplayNames =
-                    mapOf(
-                        playerOne to "Player 1 name",
-                    ),
-            )
-
-        // Prüft, dass für unbekannte Spieler kein Anzeigename zurückgegeben wird.
-        assertNull(state.displayNameOf(unknownPlayer))
-    }
-
-    @Test
-    fun `should return false when player is not part of players`() {
-        val playerOne = PlayerId(1)
-        val unknownPlayer = PlayerId(2)
-        val state =
-            GameState(
-                lobbyCode = LobbyCode("HP12"),
-                players = listOf(playerOne),
-                turnOrder = listOf(playerOne),
-            )
-
-        // Prüft, dass hasPlayer nur Spieler erkennt, die Teil der Spielerliste sind.
-        assertFalse(state.hasPlayer(unknownPlayer))
-    }
 }
