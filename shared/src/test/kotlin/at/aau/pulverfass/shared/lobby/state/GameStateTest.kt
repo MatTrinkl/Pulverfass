@@ -104,6 +104,14 @@ class GameStateTest {
     }
 
     @Test
+    fun `should report no map when map definition is missing`() {
+        val state = GameState.initial(LobbyCode("NM12"))
+
+        // Prüft, dass ein GameState ohne MapDefinition auch keine Spielkarte meldet.
+        assertFalse(state.hasMap())
+    }
+
+    @Test
     fun `should initialize all territories as entities when map is provided`() {
         val firstPlayer = PlayerId(1)
         val state =
