@@ -354,6 +354,21 @@ class GameStateTest {
     }
 
     @Test
+    fun `should throw when player display name is missing`() {
+        val playerOne = PlayerId(1)
+
+        // Prüft, dass jeder Spieler in players einen Anzeigenamen im GameState haben muss.
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("PD34"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                playerDisplayNames = emptyMap(),
+            )
+        }
+    }
+
+    @Test
     fun `should return display name for known player`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
