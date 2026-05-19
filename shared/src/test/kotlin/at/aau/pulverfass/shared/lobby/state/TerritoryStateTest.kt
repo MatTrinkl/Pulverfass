@@ -35,6 +35,21 @@ class TerritoryStateTest {
     }
 
     @Test
+    fun `should allow zero troop count with owner`() {
+        val playerOne = PlayerId(1)
+        val territoryState =
+            TerritoryState(
+                territoryId = TerritoryId("delta"),
+                ownerId = playerOne,
+                troopCount = 0,
+            )
+
+        // Prüft, dass ein Besitzer auch mit 0 Truppen gespeichert werden kann.
+        assertEquals(playerOne, requireNotNull(territoryState.ownerId))
+        assertEquals(0, territoryState.troopCount)
+    }
+
+    @Test
     fun `should throw when troop count is negative`() {
         // Prüft, dass ein Territorium keine negative Truppenanzahl haben darf.
         assertThrows(IllegalArgumentException::class.java) {
