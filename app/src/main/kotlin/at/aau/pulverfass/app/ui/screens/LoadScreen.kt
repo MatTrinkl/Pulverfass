@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -34,7 +33,6 @@ import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
-import at.aau.pulverfass.shared.Constants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -83,6 +81,7 @@ fun LoadScreen(
         VideoPlayer(
             videoResId = R.raw.pulverfass_loading,
             loop = true,
+            cover = true,
             modifier = Modifier.fillMaxSize(),
         )
     },
@@ -144,7 +143,7 @@ fun LoadScreen(
     LaunchedEffect(assetsReady, minTimeElapsed, loadError) {
         if (assetsReady && minTimeElapsed && loadError == null) {
             withContext(Dispatchers.Main.immediate) {
-                navController.navigate(Screen.Lobby.route) {
+                navController.navigate(Screen.MainMenu.route) {
                     popUpTo(Screen.Load.route) { inclusive = true }
                 }
             }
@@ -180,17 +179,6 @@ fun LoadScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                text = stringResource(id = R.string.app_name),
-                style = MaterialTheme.typography.headlineLarge,
-                color = PulverfassColors.Gold,
-            )
-            Text(
-                text = "v${Constants.APP_VERSION}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = PulverfassColors.TextMuted,
-            )
-            Spacer(modifier = Modifier.height(32.dp))
             LinearProgressIndicator(
                 progress = { loadedAssets.toFloat() / totalAssets.toFloat() },
                 color = PulverfassColors.Gold,

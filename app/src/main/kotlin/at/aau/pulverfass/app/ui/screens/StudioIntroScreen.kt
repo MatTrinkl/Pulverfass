@@ -97,6 +97,7 @@ fun StudioIntroScreen(navController: NavController) {
             videoResId = R.raw.gabumon_intro,
             onCompleted = { navigateNext() },
             loop = false,
+            cover = true,
             modifier = Modifier.fillMaxSize(),
         )
     }
