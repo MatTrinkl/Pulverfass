@@ -15,7 +15,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +28,8 @@ import androidx.navigation.navArgument
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
+import at.aau.pulverfass.app.ui.components.ServerStatusIndicator
+import at.aau.pulverfass.app.ui.components.rememberServerHealthStatus
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.navigation.canAutoNavigateToRestoredGame
 import at.aau.pulverfass.app.ui.navigation.restoredGameNavigationTarget
@@ -60,6 +64,7 @@ class MainActivity : AppCompatActivity() {
                         LobbyController(reconnectSessionStore = reconnectSessionStore)
                     }
                 val lobbyState by lobbyController.state.collectAsState()
+                val serverHealthStatus by rememberServerHealthStatus()
 
                 DisposableEffect(Unit) {
                     onDispose {
@@ -73,7 +78,12 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(modifier = Modifier.padding(innerPadding)) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding),
+                    ) {
                         /*
                          * Definiert alle aktuell verfügbaren Routen und Ziele.
                          * Der LobbyController bleibt absichtlich oberhalb des
@@ -131,6 +141,14 @@ class MainActivity : AppCompatActivity() {
                                 GameScreen(controller = lobbyController)
                             }
                         }
+
+                        ServerStatusIndicator(
+                            status = serverHealthStatus,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 12.dp, end = 12.dp),
+                        )
                     }
                 }
             }
