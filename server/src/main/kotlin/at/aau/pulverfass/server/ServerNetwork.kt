@@ -3,13 +3,14 @@ package at.aau.pulverfass.server
 import at.aau.pulverfass.server.connection.ConnectionManager
 import at.aau.pulverfass.server.receive.PacketReceiver
 import at.aau.pulverfass.server.send.PacketSender
+import at.aau.pulverfass.server.session.PersistedReconnectSession
 import at.aau.pulverfass.server.session.SessionManager
-import at.aau.pulverfass.server.session.SessionReconnectContext
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.Network
@@ -44,7 +45,8 @@ class ServerNetwork(
     private val logger = LoggerFactory.getLogger(ServerNetwork::class.java)
     private val sender: PacketSender = PacketSender(connectionManager)
     private val _events = MutableSharedFlow<Network.Event<ConnectionId>>(extraBufferCapacity = 64)
-    private var reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null }
+    private var reconnectSessionProvider: (SessionToken) -> PersistedReconnectSession? = { null }
+    private var onReconnectSucceeded: (SessionToken) -> Unit = {}
     private var onSessionRemoved: (SessionToken) -> Unit = {}
 
     /**
@@ -59,10 +61,12 @@ class ServerNetwork(
      * Installiert optionale Hooks für Reconnect-Kontext und Session-Cleanup.
      */
     fun installReconnectHooks(
-        reconnectContextProvider: (SessionToken) -> SessionReconnectContext? = { null },
+        reconnectSessionProvider: (SessionToken) -> PersistedReconnectSession? = { null },
+        onReconnectSucceeded: (SessionToken) -> Unit = {},
         onSessionRemoved: (SessionToken) -> Unit = {},
     ) {
-        this.reconnectContextProvider = reconnectContextProvider
+        this.reconnectSessionProvider = reconnectSessionProvider
+        this.onReconnectSucceeded = onReconnectSucceeded
         this.onSessionRemoved = onSessionRemoved
     }
 
@@ -142,9 +146,15 @@ class ServerNetwork(
         connectionId: ConnectionId,
         reason: String?,
     ) {
-        sessionManager.detachConnection(connectionId)
+        val detachedSession = sessionManager.detachConnection(connectionId)
         transport.onDisconnected(connectionId, reason)
-        _events.emit(Network.Event.Disconnected(connectionId, reason))
+        _events.emit(
+            Network.Event.Disconnected(
+                connectionId = connectionId,
+                reason = reason,
+                sessionToken = detachedSession?.sessionToken,
+            ),
+        )
     }
 
     /**
@@ -176,7 +186,18 @@ class ServerNetwork(
         connectionId: ConnectionId,
         payload: ReconnectRequest,
     ) {
-        val reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
+        var reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
+        if (reconnectError == ReconnectErrorCode.TOKEN_INVALID) {
+            val persistedSession = reconnectSessionProvider(payload.sessionToken)
+            if (persistedSession != null) {
+                sessionManager.restoreDetachedSession(
+                    sessionToken = payload.sessionToken,
+                    expiresAtEpochMillis = persistedSession.expiresAtEpochMillis,
+                    revokedAtEpochMillis = persistedSession.revokedAtEpochMillis,
+                )
+                reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
+            }
+        }
         if (reconnectError != null) {
             sendReconnectResponse(
                 connectionId = connectionId,
@@ -193,6 +214,7 @@ class ServerNetwork(
         val previousConnectionId = sessionManager.getByToken(payload.sessionToken)?.connectionId
 
         if (currentSession.sessionToken == payload.sessionToken) {
+            onReconnectSucceeded(payload.sessionToken)
             sendReconnectResponse(
                 connectionId = connectionId,
                 payload = createReconnectSuccessResponse(payload.sessionToken),
@@ -203,6 +225,7 @@ class ServerNetwork(
         val removedSession = sessionManager.removeByConnectionId(connectionId)
         removedSession?.let { removed -> onSessionRemoved(removed.sessionToken) }
         sessionManager.bindExisting(payload.sessionToken, connectionId)
+        onReconnectSucceeded(payload.sessionToken)
 
         if (previousConnectionId != null && previousConnectionId != connectionId) {
             closeConnectionForReconnect(previousConnectionId)
@@ -240,7 +263,7 @@ class ServerNetwork(
     }
 
     private fun createReconnectSuccessResponse(sessionToken: SessionToken): ReconnectResponse {
-        val context = reconnectContextProvider(sessionToken)
+        val context = reconnectSessionProvider(sessionToken)?.context
         return ReconnectResponse(
             success = true,
             playerId = context?.playerId,

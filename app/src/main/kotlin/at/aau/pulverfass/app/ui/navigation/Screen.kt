@@ -2,10 +2,6 @@ package at.aau.pulverfass.app.ui.navigation
 
 /**
  * Zentrale Definition der derzeit vorhandenen Compose-Navigationsziele.
- *
- * Die Routen werden in [at.aau.pulverfass.app.MainActivity] verdrahtet und
- * aktuell nur für den Lobby-Flow sowie einen einfachen Game-Platzhalter
- * verwendet.
  */
 sealed class Screen(val route: String) {
     /** Studio-Intro-Video vor dem LoadScreen. */
@@ -13,6 +9,9 @@ sealed class Screen(val route: String) {
 
     /** Einstiegsscreen der App. */
     object Load : Screen("load")
+
+    /** Hauptmenü mit Video-BG, animiertem Logo und Start/Options/Exit. */
+    object MainMenu : Screen("main_menu")
 
     /** Lobby-Einstieg für Connect/Create/Join. */
     object Lobby : Screen("lobby")

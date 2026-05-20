@@ -210,7 +210,10 @@ class PublicGameStateBuilder {
                 )
 
         return PublicMapProjection(
-            determinism = PublicDeterminismMetadataSnapshot.from(definition),
+            determinism =
+                PublicDeterminismMetadataSnapshot.from(definition).copy(
+                    seed = gameState.gameRandomSeed,
+                ),
             definition = MapDefinitionSnapshot.from(definition),
             territoryStates = gameState.allTerritoryStates().map(MapTerritoryStateSnapshot::from),
         )

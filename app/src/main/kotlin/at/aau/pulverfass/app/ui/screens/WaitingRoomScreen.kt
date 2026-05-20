@@ -50,10 +50,19 @@ fun WaitingRoomScreen(
     val effectiveIsHost = state.isHost || isHost
     val players =
         if (state.players.isEmpty()) {
-            listOf(WaitingRoomPlayerUi(displayName = effectivePlayerName, isHost = effectiveIsHost))
+            listOf(
+                WaitingRoomPlayerUi(
+                    displayName = effectivePlayerName,
+                    isHost = effectiveIsHost,
+                ),
+            )
         } else {
             state.players.map {
-                WaitingRoomPlayerUi(displayName = it.displayName, isHost = it.isHost)
+                WaitingRoomPlayerUi(
+                    displayName = it.displayName,
+                    isHost = it.isHost,
+                    isDisconnected = it.isDisconnected,
+                )
             }
         }
 
@@ -107,9 +116,20 @@ fun WaitingRoomScreen(
     }
 }
 
+/**
+ * Kompakte View-Projektion für die reine Darstellung im Warteraum.
+ *
+ * Der Typ trennt die visuelle Liste bewusst von [LobbyController], damit die
+ * Screen-Logik Fallbackwerte aus Navigation und Live-State vereinheitlichen kann.
+ *
+ * @property displayName anzuzeigender Spielername
+ * @property isHost markiert den Host-Eintrag in der Liste
+ * @property isDisconnected blendet einen Verbindungsverlust im Warteraum ein
+ */
 private data class WaitingRoomPlayerUi(
     val displayName: String,
     val isHost: Boolean,
+    val isDisconnected: Boolean = false,
 )
 
 @Composable
@@ -157,6 +177,7 @@ private fun PlayerListCard(
                     PlayerRow(
                         player = player.displayName,
                         isHostPlayer = player.isHost,
+                        isDisconnected = player.isDisconnected,
                     )
                 }
             }
@@ -168,6 +189,7 @@ private fun PlayerListCard(
 private fun PlayerRow(
     player: String,
     isHostPlayer: Boolean,
+    isDisconnected: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -180,6 +202,14 @@ private fun PlayerRow(
                 text = stringResource(id = R.string.host_tag),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+        if (isDisconnected) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(id = R.string.disconnected_tag),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
             )
         }
     }

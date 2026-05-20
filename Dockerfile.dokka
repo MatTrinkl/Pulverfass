@@ -1,0 +1,5 @@
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+
+COPY build/documentation/html/ /usr/share/nginx/html/
+
+EXPOSE 8080

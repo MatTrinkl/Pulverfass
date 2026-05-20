@@ -124,9 +124,11 @@ dokka {
 }
 
 dependencies {
-    dokka(project(":app"))
-    dokka(project(":server"))
-    dokka(project(":shared"))
+    listOf(":app", ":server", ":shared")
+        .filter { projectPath -> findProject(projectPath) != null }
+        .forEach { projectPath ->
+            dokka(project(projectPath))
+        }
 }
 
 subprojects {

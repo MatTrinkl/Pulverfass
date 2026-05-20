@@ -17,6 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -37,6 +42,7 @@ import at.aau.pulverfass.app.ui.screens.GameScreen
 import at.aau.pulverfass.app.ui.screens.LoadGameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
+import at.aau.pulverfass.app.ui.screens.MainMenuScreen
 import at.aau.pulverfass.app.ui.screens.StudioIntroScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
@@ -51,6 +57,11 @@ import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fullscreen Immersive: System-Bars verstecken (nutzt hideSystemBars())
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        hideSystemBars()
+
         enableEdgeToEdge()
         setContent {
             AndroidAppTheme {
@@ -66,6 +77,18 @@ class MainActivity : AppCompatActivity() {
                 val lobbyState by lobbyController.state.collectAsState()
                 val serverHealthStatus by rememberServerHealthStatus()
 
+                // === IMMERSIVE ENFORCEMENT ON EVERY NAV CHANGE ===
+                val view = LocalView.current
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
+                LaunchedEffect(currentBackStackEntry) {
+                    val window = (view.context as Activity).window
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    val controller = WindowInsetsControllerCompat(window, window.decorView)
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+
                 DisposableEffect(Unit) {
                     onDispose {
                         lobbyController.close()
@@ -78,12 +101,7 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding),
-                    ) {
+                    Box(modifier = Modifier.padding(innerPadding)) {
                         /*
                          * Definiert alle aktuell verfügbaren Routen und Ziele.
                          * Der LobbyController bleibt absichtlich oberhalb des
@@ -100,6 +118,21 @@ class MainActivity : AppCompatActivity() {
                             composable(Screen.Load.route) {
                                 LoadScreen(navController)
                             }
+                            composable(Screen.MainMenu.route) {
+                                val activity = LocalContext.current as? Activity
+                                MainMenuScreen(
+                                    onStartClick = {
+                                        navController.navigate(Screen.Lobby.route)
+                                    },
+                                    onOptionsClick = {
+                                        // in planung
+                                    },
+                                    onExitClick = {
+                                        activity?.finish()
+                                    },
+                                )
+                            }
+
                             composable(Screen.Lobby.route) {
                                 LobbyScreen(
                                     navController = navController,
@@ -153,6 +186,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // Fix für das Problem das Screen Videos nicht vollscreen sind und der Content sich nicht über den ganzen screen anpasst
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }
 
