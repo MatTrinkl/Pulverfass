@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.network.ServerHealthStatus
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import kotlin.test.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,6 +16,11 @@ import org.junit.runner.RunWith
 class ServerStatusIndicatorTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun default_poll_interval_is_ten_seconds() {
+        assertEquals(10_000L, HEALTH_POLL_INTERVAL_MS)
+    }
 
     @Test
     fun shows_ok_status_description() {
