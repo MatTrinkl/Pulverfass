@@ -541,7 +541,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val events = buildPlaceReinforcementsEvents(request, payload)
-            events.forEach { event -> lobbyManager.submit(event, request.context) }
+            lobbyManager.submitAll(payload.lobbyCode, events, request.context)
             network.send(
                 request.connectionId,
                 PlaceReinforcementsResponse(lobbyCode = payload.lobbyCode),
@@ -571,7 +571,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val events = buildTradeInCardsEvents(request, payload)
-            events.forEach { event -> lobbyManager.submit(event, request.context) }
+            lobbyManager.submitAll(payload.lobbyCode, events, request.context)
             network.send(
                 request.connectionId,
                 TradeInCardsResponse(lobbyCode = payload.lobbyCode),
@@ -1181,6 +1181,9 @@ class MainServerLobbyRoutingService(
         val projectedTroopCounts = linkedMapOf<TerritoryId, Int>()
         val territoryEvents =
             payload.placements.map { placement ->
+                require(state.territoryStateOf(placement.territoryId) != null) {
+                    "INVALID_PLACEMENT"
+                }
                 val ownerId = state.ownerOf(placement.territoryId)
                 require(ownerId == payload.playerId) { "TERRITORY_NOT_OWNED" }
 

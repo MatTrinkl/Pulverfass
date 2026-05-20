@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "territories": [
     {
       "territoryId": "argentinien",
@@ -202,7 +202,7 @@
         "brasilien",
         "andengemeinschaft"
       ],
-      "bonus": 1
+      "bonus": 2
     },
     {
       "continentId": "nordamerika",
@@ -213,7 +213,7 @@
         "kanada",
         "groenland"
       ],
-      "bonus": 2
+      "bonus": 3
     },
     {
       "continentId": "europa",
@@ -245,7 +245,7 @@
         "japan",
         "ferner_osten"
       ],
-      "bonus": 3
+      "bonus": 4
     },
     {
       "continentId": "ozeanien",

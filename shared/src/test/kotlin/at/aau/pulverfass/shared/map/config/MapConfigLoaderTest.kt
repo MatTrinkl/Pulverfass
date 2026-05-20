@@ -18,10 +18,10 @@ class MapConfigLoaderTest {
         assertEquals(MapConfig.CURRENT_SCHEMA_VERSION, definition.schemaVersion)
         assertEquals(24, definition.territories.size)
         assertEquals(6, definition.continents.size)
-        assertEquals(2, definition.continentsById.getValue(ContinentId("nordamerika")).bonusValue)
+        assertEquals(3, definition.continentsById.getValue(ContinentId("nordamerika")).bonusValue)
         assertEquals(2, definition.continentsById.getValue(ContinentId("europa")).bonusValue)
-        assertEquals(3, definition.continentsById.getValue(ContinentId("asien")).bonusValue)
-        assertEquals(1, definition.continentsById.getValue(ContinentId("suedamerika")).bonusValue)
+        assertEquals(4, definition.continentsById.getValue(ContinentId("asien")).bonusValue)
+        assertEquals(2, definition.continentsById.getValue(ContinentId("suedamerika")).bonusValue)
         assertEquals(2, definition.continentsById.getValue(ContinentId("afrika")).bonusValue)
         assertEquals(1, definition.continentsById.getValue(ContinentId("ozeanien")).bonusValue)
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
@@ -65,7 +65,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
@@ -89,7 +89,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "adjacentTerritoryIds": ["beta", "missing"] },
                         { "territoryId": "beta", "adjacentTerritoryIds": ["alpha"] }
@@ -112,7 +112,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "adjacentTerritoryIds": ["beta"] },
                         { "territoryId": "beta", "adjacentTerritoryIds": [] }
@@ -135,7 +135,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
@@ -160,7 +160,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "gamma" }] },
@@ -186,7 +186,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         {
                           "territoryId": "alpha",
@@ -218,7 +218,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
@@ -294,7 +294,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
@@ -333,7 +333,7 @@ class MapConfigLoaderTest {
     private fun validEdgesJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",
@@ -365,7 +365,7 @@ class MapConfigLoaderTest {
     private fun validLegacyJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",

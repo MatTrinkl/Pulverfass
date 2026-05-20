@@ -39,7 +39,7 @@ internal class LobbyEventLoop(
         }
     }
 
-    private val events = Channel<QueuedLobbyEvent>(capacity = queueCapacity)
+    private val events = Channel<QueuedItem>(capacity = queueCapacity)
     private val lifecycleLock = Any()
     private var loopJob: Job? = null
 
@@ -56,19 +56,49 @@ internal class LobbyEventLoop(
             }
             loopJob =
                 scope.launch {
-                    for (queued in events) {
-                        try {
-                            val beforeState = stateProcessor.currentState()
-                            val afterState = stateProcessor.apply(queued.event, queued.context)
-                            queued.processed.complete(
-                                ProcessedLobbyEvent(
-                                    event = queued.event,
-                                    beforeState = beforeState,
-                                    afterState = afterState,
-                                ),
-                            )
-                        } catch (cause: Throwable) {
-                            queued.processed.completeExceptionally(cause)
+                    for (item in events) {
+                        when (item) {
+                            is QueuedItem.Single -> {
+                                try {
+                                    val beforeState = stateProcessor.currentState()
+                                    val afterState =
+                                        stateProcessor.apply(item.event, item.context)
+                                    item.processed.complete(
+                                        ProcessedLobbyEvent(
+                                            event = item.event,
+                                            beforeState = beforeState,
+                                            afterState = afterState,
+                                        ),
+                                    )
+                                } catch (cause: Throwable) {
+                                    item.processed.completeExceptionally(cause)
+                                }
+                            }
+                            is QueuedItem.Batch -> {
+                                val results = mutableListOf<ProcessedLobbyEvent>()
+                                var batchFailed = false
+                                for (event in item.events) {
+                                    if (batchFailed) break
+                                    try {
+                                        val beforeState = stateProcessor.currentState()
+                                        val afterState =
+                                            stateProcessor.apply(event, item.context)
+                                        results.add(
+                                            ProcessedLobbyEvent(
+                                                event = event,
+                                                beforeState = beforeState,
+                                                afterState = afterState,
+                                            ),
+                                        )
+                                    } catch (cause: Throwable) {
+                                        batchFailed = true
+                                        item.processed.completeExceptionally(cause)
+                                    }
+                                }
+                                if (!batchFailed) {
+                                    item.processed.complete(results)
+                                }
+                            }
                         }
                     }
                 }
@@ -96,7 +126,29 @@ internal class LobbyEventLoop(
             "Lobby event loop for '${lobbyCode.value}' is not running."
         }
         val processed = CompletableDeferred<ProcessedLobbyEvent>()
-        events.send(QueuedLobbyEvent(event, context, processed))
+        events.send(QueuedItem.Single(event, context, processed))
+        return processed.await()
+    }
+
+    /**
+     * Reiht mehrere Events als atomare Einheit ein.
+     *
+     * Alle Events werden als einzelne Queue-Nachricht verarbeitet, sodass kein
+     * fremdes Event zwischen den Batch-Events interleaven kann.
+     */
+    suspend fun submitBatch(
+        batch: List<LobbyEvent>,
+        context: EventContext? = null,
+    ): List<ProcessedLobbyEvent> {
+        require(batch.all { it.lobbyCode == lobbyCode }) {
+            "Alle Batch-Events müssen zur Lobby '$lobbyCode' gehören."
+        }
+        val activeJob = synchronized(lifecycleLock) { loopJob }
+        check(activeJob?.isActive == true) {
+            "Lobby event loop for '${lobbyCode.value}' is not running."
+        }
+        val processed = CompletableDeferred<List<ProcessedLobbyEvent>>()
+        events.send(QueuedItem.Batch(batch, context, processed))
         return processed.await()
     }
 
@@ -119,14 +171,19 @@ internal class LobbyEventLoop(
     }
 }
 
-/**
- * Interne Queue-Nachricht inklusive technischer Completion-Signalisierung.
- */
-private data class QueuedLobbyEvent(
-    val event: LobbyEvent,
-    val context: EventContext?,
-    val processed: CompletableDeferred<ProcessedLobbyEvent>,
-)
+private sealed class QueuedItem {
+    data class Single(
+        val event: LobbyEvent,
+        val context: EventContext?,
+        val processed: CompletableDeferred<ProcessedLobbyEvent>,
+    ) : QueuedItem()
+
+    data class Batch(
+        val events: List<LobbyEvent>,
+        val context: EventContext?,
+        val processed: CompletableDeferred<List<ProcessedLobbyEvent>>,
+    ) : QueuedItem()
+}
 
 internal data class ProcessedLobbyEvent(
     val event: LobbyEvent,

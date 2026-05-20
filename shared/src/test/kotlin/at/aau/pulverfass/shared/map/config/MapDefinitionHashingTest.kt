@@ -23,7 +23,7 @@ class MapDefinitionHashingTest {
             MapConfigLoader.loadFromJson(
                 """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "territories": [
                     { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                     { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
@@ -57,7 +57,7 @@ class MapDefinitionHashingTest {
                       "edges": [{ "targetId": "alpha" }]
                     }
                   ],
-                  "schemaVersion": 1
+                  "schemaVersion": 2
                 }
                 """.trimIndent(),
             )
@@ -73,7 +73,7 @@ class MapDefinitionHashingTest {
             MapConfigLoader.loadFromJson(
                 """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "territories": [
                     {
                       "territoryId": "alpha",
@@ -199,7 +199,7 @@ class MapDefinitionHashingTest {
         val definition = MapConfigLoader.loadDefault()
 
         assertEquals(
-            "c36f7b9b02a068333f24e52af875ed50836a3f9d1c328186a9a804b1bf7f2a43",
+            "fbb6d67f4b4f0994ab6bcfe7a875b5411b1eeac9b3b5493fdbdc27c1e48128e4",
             definition.mapHash,
         )
     }
@@ -207,7 +207,7 @@ class MapDefinitionHashingTest {
     private fun validEdgesJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",
