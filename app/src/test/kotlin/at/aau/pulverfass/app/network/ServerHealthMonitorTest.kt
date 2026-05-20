@@ -5,6 +5,14 @@ import kotlin.test.assertEquals
 
 class ServerHealthMonitorTest {
     @Test
+    fun health_url_points_to_requested_endpoint() {
+        assertEquals(
+            "http://5.189.160.80:8080/health",
+            SERVER_HEALTH_URL,
+        )
+    }
+
+    @Test
     fun success_status_with_ok_body_maps_to_ok() {
         assertEquals(
             ServerHealthStatus.OK,

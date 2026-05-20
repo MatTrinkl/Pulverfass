@@ -1,13 +1,9 @@
 package at.aau.pulverfass.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,7 +11,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -27,8 +22,15 @@ import at.aau.pulverfass.app.network.ServerHealthStatus
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import kotlinx.coroutines.delay
 
-private const val HEALTH_POLL_INTERVAL_MS = 5_000L
+/** Standardintervall für den globalen Health-Check. */
+internal const val HEALTH_POLL_INTERVAL_MS = 10_000L
 
+/**
+ * Erzeugt den Health-Monitor für die aktuelle Composition.
+ *
+ * Beim Verlassen der Composition wird der zugrunde liegende HTTP-Client wieder
+ * geschlossen, damit keine Netzwerkressourcen offen bleiben.
+ */
 @Composable
 fun rememberServerHealthMonitor(): ServerHealthMonitor {
     val monitor = remember { ServerHealthMonitor() }
@@ -42,6 +44,17 @@ fun rememberServerHealthMonitor(): ServerHealthMonitor {
     return monitor
 }
 
+/**
+ * Startet das regelmäßige Polling des Serverstatus.
+ *
+ * Der erste Check läuft sofort, danach wird mit dem angegebenen Intervall
+ * weiter abgefragt. Sehr kleine Intervalle werden auf mindestens eine Sekunde
+ * begrenzt.
+ *
+ * @param monitor Health-Monitor, der den HTTP-Endpunkt abfragt
+ * @param pollIntervalMillis Abstand zwischen zwei Health-Checks
+ * @param initialStatus Status bis zur ersten Serverantwort
+ */
 @Composable
 fun rememberServerHealthStatus(
     monitor: ServerHealthMonitor = rememberServerHealthMonitor(),
@@ -60,6 +73,12 @@ fun rememberServerHealthStatus(
     return status
 }
 
+/**
+ * Zeigt den aktuellen Serverstatus als einfachen farbigen Kreis.
+ *
+ * Grün steht für einen gesunden Server, Orange für eine erreichbare
+ * Fehlerantwort und Rot für einen nicht erreichbaren Server.
+ */
 @Composable
 fun ServerStatusIndicator(
     status: ServerHealthStatus,
@@ -79,27 +98,14 @@ fun ServerStatusIndicator(
                 stringResource(id = R.string.server_status_unreachable)
         }
 
-    Surface(
+    Box(
         modifier =
             modifier
-                .size(24.dp)
+                .size(16.dp)
+                .background(statusColor, CircleShape)
                 .semantics {
                     contentDescription = statusText
                 }
                 .testTag("server_status_indicator"),
-        shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.62f),
-        contentColor = statusColor,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.65f)),
-        tonalElevation = 0.dp,
-        shadowElevation = 4.dp,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(5.dp)
-                    .background(statusColor, CircleShape),
-        )
-    }
+    )
 }
