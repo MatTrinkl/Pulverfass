@@ -1,5 +1,6 @@
 package at.aau.pulverfass.shared.network
 
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.coroutines.flow.SharedFlow
 
@@ -58,10 +59,12 @@ interface Network<ConnectionT> {
          *
          * @property connectionId beendete Verbindung
          * @property reason optionaler technischer Close-Reason des Transports
+         * @property sessionToken zuletzt an die Verbindung gebundene Session, falls bekannt
          */
         data class Disconnected<ConnectionT>(
             val connectionId: ConnectionT,
             val reason: String?,
+            val sessionToken: SessionToken? = null,
         ) : Event<ConnectionT>
 
         /**

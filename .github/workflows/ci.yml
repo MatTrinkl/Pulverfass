@@ -6,7 +6,14 @@ on:
     types: [ opened, synchronize, reopened, labeled, unlabeled ]
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Run image publish and deploy
+        required: true
+        type: boolean
+        default: true
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -51,9 +58,12 @@ jobs:
             **/build/reports/ktlint/**
           if-no-files-found: ignore
 
-  unit-tests:
-    name: Unit Tests
+  build-and-test:
+    name: Build and Unit Tests
     runs-on: self-hosted
+    env:
+      TEST_DB_CONTAINER: pulverfass-ci-postgres-build
+      TEST_DB_PORT: '55432'
 
     steps:
       - name: Check out repository
@@ -71,12 +81,40 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Run unit tests
+      - name: Start test PostgreSQL
+        run: |
+          set -eu
+          docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
+          docker run -d \
+            --name "${TEST_DB_CONTAINER}" \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=pulverfass_test \
+            -p "${TEST_DB_PORT}:5432" \
+            postgres:17-alpine
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            if docker exec "${TEST_DB_CONTAINER}" pg_isready -U postgres -d pulverfass_test >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs "${TEST_DB_CONTAINER}"
+          exit 1
+
+      - name: Build and run JVM tests
+        env:
+          PULVERFASS_TEST_DB_URL: jdbc:postgresql://127.0.0.1:${{ env.TEST_DB_PORT }}/pulverfass_test
+          PULVERFASS_TEST_DB_USER: postgres
+          PULVERFASS_TEST_DB_PASSWORD: postgres
         run: >
           ./gradlew
+          :shared:assemble
+          :server:assemble
+          :e2e:assemble
           :shared:test
           :server:test
-          :e2e:test
           --stacktrace
 
       - name: Upload unit test reports
@@ -89,14 +127,645 @@ jobs:
             **/build/test-results/**
           if-no-files-found: ignore
 
+      - name: Cleanup test PostgreSQL
+        if: always()
+        run: docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
+
+  dokka-build:
+    name: Dokka Build
+    runs-on: self-hosted
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Dokka site
+        run: ./gradlew dokkaGenerate --stacktrace
+
+      - name: Upload Dokka site artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dokka-site
+          path: build/documentation/html/**
+          if-no-files-found: error
+
+  docker-pr-check:
+    name: Docker PR Check
+    runs-on: self-hosted
+    if: github.event_name == 'pull_request'
+    needs: [build-and-test, dokka-build]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/${repo}-server"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            if ! printf '%s' "${GITHUB_REF_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+            app_version="${GITHUB_REF_NAME}"
+          else
+            app_version="sha-${short_sha}"
+          fi
+
+          local_tag="se2risiko-server:${app_version}"
+          {
+            echo "app_version=${app_version}"
+            echo "image=${image}"
+            echo "local_tag=${local_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --tag ${{ steps.metadata.outputs.local_tag }}
+          .
+
+      - name: Smoke test container
+        run: |
+          docker rm -f se2risiko-server-smoke >/dev/null 2>&1 || true
+          docker run -d --name se2risiko-server-smoke -p 18080:8080 "${{ steps.metadata.outputs.local_tag }}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          health_response="$(curl --fail --silent http://127.0.0.1:18080/health)"
+          version_response="$(curl --fail --silent http://127.0.0.1:18080/version)"
+
+          test "${health_response}" = "OK"
+          test "${version_response}" = "${{ steps.metadata.outputs.app_version }}"
+
+      - name: Print image metadata
+        run: |
+          echo "APP_VERSION=${{ steps.metadata.outputs.app_version }}"
+          echo "IMAGE_NAME=${{ steps.metadata.outputs.image }}"
+          echo "PR_CHECK_ONLY=true"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker logs se2risiko-server-smoke
+
+      - name: Cleanup smoke test container
+        if: always()
+        run: docker rm -f se2risiko-server-smoke >/dev/null 2>&1 || true
+
+  dokka-pr-check:
+    name: Dokka Docker PR Check
+    runs-on: self-hosted
+    if: github.event_name == 'pull_request'
+    needs: dokka-build
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Dokka site
+        run: ./gradlew dokkaGenerate --stacktrace
+
+      - name: Build Dokka image
+        run: docker build -f Dockerfile.dokka --tag se2risiko-dokka-pr .
+
+      - name: Smoke test Dokka container
+        run: |
+          docker rm -f se2risiko-dokka-smoke >/dev/null 2>&1 || true
+          docker run -d --name se2risiko-dokka-smoke -p 18081:8080 se2risiko-dokka-pr
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:18081/index.html >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs se2risiko-dokka-smoke
+          exit 1
+
+      - name: Cleanup Dokka smoke container
+        if: always()
+        run: docker rm -f se2risiko-dokka-smoke >/dev/null 2>&1 || true
+
+  docker-publish:
+    name: Release Build and GHCR Push
+    runs-on: self-hosted
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build-and-test, dokka-build]
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          server_image="ghcr.io/${owner}/${repo}-server"
+          dokka_image="ghcr.io/${owner}/${repo}-dokka"
+          if ! printf '%s' "${GITHUB_REF_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+          app_version="${GITHUB_REF_NAME}"
+          created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          server_local_tag="se2risiko-server:${app_version}"
+          server_publish_tag="${server_image}:${app_version}"
+          dokka_local_tag="se2risiko-dokka:${app_version}"
+          dokka_publish_tag="${dokka_image}:${app_version}"
+
+          {
+            echo "app_version=${app_version}"
+            echo "server_local_tag=${server_local_tag}"
+            echo "server_publish_tag=${server_publish_tag}"
+            echo "dokka_local_tag=${dokka_local_tag}"
+            echo "dokka_publish_tag=${dokka_publish_tag}"
+            echo "created=${created}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.server_local_tag }}
+          .
+
+      - name: Build Dokka image
+        run: |
+          chmod +x ./gradlew
+          ./gradlew dokkaGenerate --stacktrace
+          docker build \
+            -f Dockerfile.dokka \
+            --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }} \
+            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
+            --tag ${{ steps.metadata.outputs.dokka_local_tag }} \
+            .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_TOKEN }}
+
+      - name: Push release images
+        run: |
+          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.dokka_publish_tag }}"
+
+      - name: Print release image metadata
+        run: |
+          echo "RELEASE_TAG=${{ steps.metadata.outputs.app_version }}"
+          echo "SERVER_IMAGE_TAG=${{ steps.metadata.outputs.server_publish_tag }}"
+          echo "DOKKA_IMAGE_TAG=${{ steps.metadata.outputs.dokka_publish_tag }}"
+          echo "COMMIT=${{ github.sha }}"
+          echo "CREATED=${{ steps.metadata.outputs.created }}"
+
+  docker-main-publish:
+    name: Main Build and GHCR Push
+    runs-on: self-hosted
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    needs: [build-and-test, dokka-build]
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+    outputs:
+      app_version: ${{ steps.metadata.outputs.app_version }}
+      server_publish_tag: ${{ steps.metadata.outputs.server_publish_tag }}
+      server_floating_tag: ${{ steps.metadata.outputs.server_floating_tag }}
+      dokka_publish_tag: ${{ steps.metadata.outputs.dokka_publish_tag }}
+      dokka_floating_tag: ${{ steps.metadata.outputs.dokka_floating_tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Derive image and version metadata
+        id: metadata
+        run: |
+          set -eu
+
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')"
+          server_image="ghcr.io/${owner}/${repo}-server"
+          dokka_image="ghcr.io/${owner}/${repo}-dokka"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}" | tr '[:upper:]' '[:lower:]')"
+          app_version="sha-${short_sha}"
+          created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          server_local_tag="se2risiko-server:${app_version}"
+          server_publish_tag="${server_image}:${app_version}"
+          dokka_local_tag="se2risiko-dokka:${app_version}"
+          dokka_publish_tag="${dokka_image}:${app_version}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            server_floating_tag="${server_image}:main"
+            dokka_floating_tag="${dokka_image}:main"
+          else
+            server_floating_tag=""
+            dokka_floating_tag=""
+          fi
+
+          {
+            echo "app_version=${app_version}"
+            echo "server_local_tag=${server_local_tag}"
+            echo "server_publish_tag=${server_publish_tag}"
+            echo "server_floating_tag=${server_floating_tag}"
+            echo "dokka_local_tag=${dokka_local_tag}"
+            echo "dokka_publish_tag=${dokka_publish_tag}"
+            echo "dokka_floating_tag=${dokka_floating_tag}"
+            echo "created=${created}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: ${{ runner.os }}-android-sdk-35
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Build server image
+        run: >
+          docker build
+          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          --tag ${{ steps.metadata.outputs.server_local_tag }}
+          .
+
+      - name: Build Dokka image
+        run: |
+          chmod +x ./gradlew
+          ./gradlew dokkaGenerate --stacktrace
+          docker build \
+            -f Dockerfile.dokka \
+            --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }} \
+            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
+            --tag ${{ steps.metadata.outputs.dokka_local_tag }} \
+            .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_TOKEN }}
+
+      - name: Push main images
+        run: |
+          docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.server_publish_tag }}"
+          docker push "${{ steps.metadata.outputs.dokka_publish_tag }}"
+          if [ -n "${{ steps.metadata.outputs.server_floating_tag }}" ]; then
+            docker tag "${{ steps.metadata.outputs.server_local_tag }}" "${{ steps.metadata.outputs.server_floating_tag }}"
+            docker push "${{ steps.metadata.outputs.server_floating_tag }}"
+          fi
+          if [ -n "${{ steps.metadata.outputs.dokka_floating_tag }}" ]; then
+            docker tag "${{ steps.metadata.outputs.dokka_local_tag }}" "${{ steps.metadata.outputs.dokka_floating_tag }}"
+            docker push "${{ steps.metadata.outputs.dokka_floating_tag }}"
+          fi
+
+      - name: Print main image metadata
+        run: |
+          echo "MAIN_TAG=${{ steps.metadata.outputs.app_version }}"
+          echo "SERVER_IMAGE_TAG=${{ steps.metadata.outputs.server_publish_tag }}"
+          echo "DOKKA_IMAGE_TAG=${{ steps.metadata.outputs.dokka_publish_tag }}"
+          if [ -n "${{ steps.metadata.outputs.server_floating_tag }}" ]; then
+            echo "SERVER_FLOATING_TAG=${{ steps.metadata.outputs.server_floating_tag }}"
+          fi
+          if [ -n "${{ steps.metadata.outputs.dokka_floating_tag }}" ]; then
+            echo "DOKKA_FLOATING_TAG=${{ steps.metadata.outputs.dokka_floating_tag }}"
+          fi
+          echo "COMMIT=${{ github.sha }}"
+          echo "CREATED=${{ steps.metadata.outputs.created }}"
+
+  deploy-main:
+    name: Deploy on Main
+    runs-on: self-hosted
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    needs: docker-main-publish
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY || secrets.DEPLOY_HOST_KEY }}
+      DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || secrets.DEPLOY_HEALTH_URL }}
+      DEPLOY_DOKKA_URL: ${{ vars.DEPLOY_DOKKA_URL || secrets.DEPLOY_DOKKA_URL }}
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+      SERVER_IMAGE: ${{ needs.docker-main-publish.outputs.server_publish_tag }}
+      DOKKA_IMAGE: ${{ needs.docker-main-publish.outputs.dokka_publish_tag }}
+      APP_VERSION: ${{ needs.docker-main-publish.outputs.app_version }}
+      PORT: ${{ vars.PORT || secrets.PORT || '8080' }}
+      DOKKA_PORT: ${{ vars.DOKKA_PORT || secrets.DOKKA_PORT || '8081' }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER || secrets.POSTGRES_USER || vars.DB_USER || secrets.DB_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD || secrets.DB_PASSWORD || vars.DB_PASSWORD }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB || secrets.POSTGRES_DB || vars.DB_NAME || secrets.DB_NAME }}
+      DB_HOST: ${{ vars.DB_HOST || secrets.DB_HOST || 'db' }}
+      DB_PORT: ${{ vars.DB_PORT || secrets.DB_PORT || '5432' }}
+      DB_NAME: ${{ vars.DB_NAME || secrets.DB_NAME || vars.POSTGRES_DB || secrets.POSTGRES_DB }}
+      DB_USER: ${{ vars.DB_USER || secrets.DB_USER || vars.POSTGRES_USER || secrets.POSTGRES_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          set -eu
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_PORT}"
+          test -n "${DEPLOY_PATH}"
+          test -n "${GHCR_TOKEN}"
+          test -n "${PORT}"
+          test -n "${DOKKA_PORT}"
+          test -n "${POSTGRES_USER}"
+          test -n "${POSTGRES_PASSWORD}"
+          test -n "${POSTGRES_DB}"
+          test -n "${DB_HOST}"
+          test -n "${DB_PORT}"
+          test -n "${DB_NAME}"
+          test -n "${DB_USER}"
+          test -n "${DB_PASSWORD}"
+
+      - name: Configure SSH
+        run: |
+          set -eu
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+          if [ -n "${DEPLOY_HOST_KEY}" ]; then
+            printf '%s\n' "${DEPLOY_HOST_KEY}" >> "${HOME}/.ssh/known_hosts"
+          else
+            ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+          fi
+
+      - name: Sync compose file to deploy server
+        run: |
+          set -eu
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; mkdir -p '${DEPLOY_PATH}'"
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; cat > '${DEPLOY_PATH}/compose.yaml'" < compose.yaml
+
+      - name: Deploy with docker compose
+        run: |
+          set -eu
+          ghcr_token_b64="$(printf '%s' "${GHCR_TOKEN}" | base64 -w 0)"
+          postgres_password_b64="$(printf '%s' "${POSTGRES_PASSWORD}" | base64 -w 0)"
+          db_password_b64="$(printf '%s' "${DB_PASSWORD}" | base64 -w 0)"
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; \
+            cd '${DEPLOY_PATH}'; \
+            GHCR_TOKEN=\$(printf '%s' '${ghcr_token_b64}' | base64 -d); \
+            POSTGRES_PASSWORD=\$(printf '%s' '${postgres_password_b64}' | base64 -d); \
+            DB_PASSWORD=\$(printf '%s' '${db_password_b64}' | base64 -d); \
+            echo \"\$GHCR_TOKEN\" | docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose pull server dokka; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose up -d --wait db; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose run --rm --no-deps -e SERVER_MODE=migrate server; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose up -d --wait --remove-orphans server dokka; \
+            docker image prune -f"
+
+      - name: Show remote compose state on failure
+        if: failure()
+        run: |
+          set -eu
+          postgres_password_b64="$(printf '%s' "${POSTGRES_PASSWORD}" | base64 -w 0)"
+          db_password_b64="$(printf '%s' "${DB_PASSWORD}" | base64 -w 0)"
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -eu; \
+            cd '${DEPLOY_PATH}'; \
+            POSTGRES_PASSWORD=\$(printf '%s' '${postgres_password_b64}' | base64 -d); \
+            DB_PASSWORD=\$(printf '%s' '${db_password_b64}' | base64 -d); \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose ps; \
+            SERVER_IMAGE='${SERVER_IMAGE}' DOKKA_IMAGE='${DOKKA_IMAGE}' APP_VERSION='${APP_VERSION}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD=\"\$POSTGRES_PASSWORD\" POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD=\"\$DB_PASSWORD\" docker compose logs --no-color --tail=200 server db dokka"
+
+      - name: Smoke test deployed health endpoint
+        run: |
+          set -eu
+          health_url="${DEPLOY_HEALTH_URL}"
+          if [ -z "${health_url}" ]; then
+            health_url="http://${DEPLOY_HOST}:${PORT}/health"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error "${health_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed for ${health_url}" >&2
+          exit 1
+
+      - name: Smoke test deployed Dokka endpoint
+        run: |
+          set -eu
+          dokka_url="${DEPLOY_DOKKA_URL}"
+          if [ -z "${dokka_url}" ]; then
+            dokka_url="http://${DEPLOY_HOST}:${DOKKA_PORT}/index.html"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error "${dokka_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Dokka check failed for ${dokka_url}" >&2
+          exit 1
+
   analyze:
     name: Build, coverage and SonarCloud
     runs-on: self-hosted
-    needs: [ style, unit-tests ]
+    needs: [ style, build-and-test ]
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      TEST_DB_CONTAINER: pulverfass-ci-postgres-analyze
+      TEST_DB_PORT: '55432'
 
     steps:
       - name: Check out repository
@@ -131,7 +800,33 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      - name: Start test PostgreSQL
+        run: |
+          set -eu
+          docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
+          docker run -d \
+            --name "${TEST_DB_CONTAINER}" \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=pulverfass_test \
+            -p "${TEST_DB_PORT}:5432" \
+            postgres:17-alpine
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            if docker exec "${TEST_DB_CONTAINER}" pg_isready -U postgres -d pulverfass_test >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs "${TEST_DB_CONTAINER}"
+          exit 1
+
       - name: Build & test shared + server (JDK 25)
+        env:
+          PULVERFASS_TEST_DB_URL: jdbc:postgresql://127.0.0.1:${{ env.TEST_DB_PORT }}/pulverfass_test
+          PULVERFASS_TEST_DB_USER: postgres
+          PULVERFASS_TEST_DB_PASSWORD: postgres
         run: >
           ./gradlew
           :shared:assemble
@@ -186,16 +881,15 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  e2e-tests:
-    name: E2E Tests (placeholder)
-    runs-on: self-hosted
-    needs: unit-tests
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
-    env:
-      E2E_WS_HOST: 127.0.0.1
-      E2E_WS_PORT: 8080
-      E2E_TEST_MODE: placeholder
+      - name: Cleanup test PostgreSQL
+        if: always()
+        run: docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
 
+  e2e-tests:
+    name: E2E Tests
+    runs-on: self-hosted
+    needs: build-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -212,17 +906,17 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Validate E2E placeholder module
+      - name: Run E2E test suite
         run: |
-          ./gradlew :e2e:assemble :e2e:test :e2e:placeholderE2eInfo --stacktrace | tee e2e-placeholder.log
+          ./gradlew :e2e:assemble :e2e:test --stacktrace | tee e2e.log
 
-      - name: Upload E2E placeholder logs and reports
+      - name: Upload E2E logs and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-placeholder-artifacts
+          name: e2e-artifacts
           path: |
-            e2e-placeholder.log
+            e2e.log
             e2e/build/reports/**
             e2e/build/test-results/**
           if-no-files-found: ignore

@@ -8,6 +8,106 @@ Das Modul `:server` stellt den Ktor-WebSocket-Server, die Lobby-Runtime und die 
 ./gradlew :server:run
 ```
 
+### Docker
+
+Default-Port im Container: `8080`
+
+```bash
+docker build -t se2risiko-server .
+docker run --rm -p 8080:8080 se2risiko-server
+```
+
+Relevante Runtime-ENV-Variablen:
+
+- `PORT` optional, Default `8080`
+- `HOST` optional, Default `0.0.0.0`
+- `APP_VERSION` optional, Default `dev` oder Manifest-Version falls vorhanden
+- `DB_URL` optional, überschreibt Host/Port/Name falls gesetzt
+- `DB_HOST` optional, nötig wenn kein `DB_URL` gesetzt ist
+- `DB_PORT` optional, Default `5432`
+- `DB_NAME` optional, nötig wenn kein `DB_URL` gesetzt ist
+- `DB_USER` nötig sobald DB konfiguriert wird
+- `DB_PASSWORD` nötig sobald DB konfiguriert wird
+- `DB_POOL_MAX_SIZE` optional, Default `10`
+- `DB_CONNECTION_TIMEOUT_MS` optional, Default `5000`
+- `DB_VALIDATION_TIMEOUT_MS` optional, Default `2000`
+
+Smoke-Test auf demselben Port:
+
+```bash
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/version
+curl http://127.0.0.1:8080/ready
+```
+
+### Production Compose
+
+Die Root-`compose.yaml` ist jetzt auf den Deploy-Server ausgerichtet:
+
+- `server` läuft aus einem GHCR-Image
+- `dokka` läuft aus einem separaten GHCR-Image
+- `db` nutzt das offizielle PostgreSQL-Image
+- beide Services teilen ein internes Docker-Netzwerk
+- PostgreSQL hat keine veröffentlichten Host-Ports
+- DB-Daten liegen persistent im Volume `postgres_data`
+- Dokka wird öffentlich über `DOKKA_PORT` ausgeliefert
+- `server` und `dokka` laufen im Deploy-Setup ohne zusätzliche Linux-Capabilities
+
+Die produktive `.env` liegt auf dem Server und gehört nicht ins Repo. Als Vorlage dient [.env.example](../.env.example).
+
+Beispiel auf dem Server:
+
+```bash
+cp .env.example .env
+# Werte in .env anpassen
+docker compose up -d
+```
+
+Readiness mit DB-Prüfung:
+
+```bash
+curl -i http://127.0.0.1:8080/ready
+```
+
+Wichtig:
+
+- `SERVER_IMAGE` muss auf ein veröffentlichtes GHCR-Image zeigen
+- `DOKKA_IMAGE` muss auf ein veröffentlichtes GHCR-Image zeigen
+- `POSTGRES_PASSWORD` muss serverseitig gesetzt werden
+- die DB ist nur intern über den Service-Namen `db` erreichbar
+
+### Main Deploy via GitHub Actions
+
+Der Deploy-Workflow auf `main` erwartet folgende GitHub Secrets/Vars:
+
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PORT`
+- `DEPLOY_PATH`
+- optional `DEPLOY_HOST_KEY`
+- optional `DEPLOY_HEALTH_URL`
+- optional `DEPLOY_DOKKA_URL`
+
+Der Workflow deployed per SSH mit:
+
+- `docker login ghcr.io`
+- `docker compose pull server dokka`
+- `docker compose up -d`
+- anschließend Smoke-Tests gegen `/health` und die Dokka-`index.html`
+
+Die vollständige Setup- und Secret-Dokumentation steht in [docs/deploy.md](../docs/deploy.md).
+
+### Local Compose Override
+
+Für einen lokalen Build ohne GHCR-Pull gibt es zusätzlich `compose.local.yaml`:
+
+```bash
+export POSTGRES_PASSWORD='<SET_LOCALLY>'
+export DB_PASSWORD='<SET_LOCALLY>'
+docker compose -f compose.yaml -f compose.local.yaml up --build
+```
+
 - Das Ktor-Plugin `WebSockets` wird in `Application.module()` installiert.
 - Der WebSocket-Endpunkt ist unter `/ws` verfügbar.
 - `ConnectionManager` verwaltet aktive technische Verbindungen zentral und stellt `send`, `sendMany` und `broadcast`
@@ -160,4 +260,4 @@ Direkt oder indirekt verdrahtet sind aktuell unter anderem:
 - Reconnect nutzt stabile Session-Tokens, ist aber noch kein vollständiges Auth-System.
 - Der Server hält eine Default-Map im Speicher; Multi-Map-Management ist noch nicht implementiert.
 - Der `RoundHistoryBuffer` dient Diagnosezwecken und ist noch kein öffentliches Replay-API.
-- Persistente Speicherung von Lobbys oder Event-Logs ist derzeit nicht vorhanden.
+- Lobbys, Events, Snapshots und Reconnect-Kontext werden serverseitig in PostgreSQL persistiert.

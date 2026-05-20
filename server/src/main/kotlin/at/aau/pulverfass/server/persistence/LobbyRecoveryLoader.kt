@@ -1,0 +1,418 @@
+package at.aau.pulverfass.server.persistence
+
+import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.map.MapDefinitionRepository
+import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.GameStarted
+import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
+import at.aau.pulverfass.shared.lobby.event.LobbyClosed
+import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerJoined
+import at.aau.pulverfass.shared.lobby.event.PlayerKicked
+import at.aau.pulverfass.shared.lobby.event.PlayerLeft
+import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
+import at.aau.pulverfass.shared.lobby.event.SystemTick
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
+import at.aau.pulverfass.shared.lobby.event.TurnEnded
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
+import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
+import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TerritoryState
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.map.config.ContinentDefinition
+import at.aau.pulverfass.shared.map.config.MapDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryDefinition
+import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
+import at.aau.pulverfass.shared.message.lobby.response.MapContinentDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+
+@OptIn(ExperimentalSerializationApi::class)
+class LobbyRecoveryLoader(
+    private val store: JdbcLobbyPersistenceStore,
+    private val mapDefinitionRepository: MapDefinitionRepository,
+    private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
+    private val json: Json =
+        Json {
+            ignoreUnknownKeys = false
+            explicitNulls = false
+        },
+) {
+    fun restoreLobby(lobbyCode: LobbyCode): GameState? {
+        val snapshotRecord = store.loadLatestSnapshot(lobbyCode)
+        val baseState =
+            snapshotRecord?.let { snapshot ->
+                val restored =
+                    json.decodeFromString(
+                        PersistedLobbyRecoverySnapshot.serializer(),
+                        snapshot.snapshotJson,
+                    )
+                restored.toGameState()
+            } ?: run {
+                val events = store.loadEventsAfter(lobbyCode, stateVersionExclusive = -1)
+                if (events.isEmpty()) {
+                    return null
+                }
+                GameState.initial(
+                    lobbyCode = lobbyCode,
+                    mapDefinition = mapDefinitionRepository.defaultMapDefinition(),
+                )
+            }
+
+        val expectedStartVersion = baseState.stateVersion
+        val events = store.loadEventsAfter(lobbyCode, expectedStartVersion)
+        validateSequence(lobbyCode, expectedStartVersion, events)
+
+        return events.fold(baseState) { state, persistedEvent ->
+            val event = persistedEvent.toLobbyEvent()
+            val updatedState = reducer.apply(state, event, context = null)
+            check(updatedState.stateVersion == persistedEvent.stateVersion) {
+                "Recovered stateVersion ${updatedState.stateVersion} stimmt nicht " +
+                    "mit persistiertem Event ${persistedEvent.stateVersion} " +
+                    "für Lobby '${lobbyCode.value}' überein."
+            }
+            updatedState
+        }
+    }
+
+    fun restoreAllInto(lobbyManager: LobbyManager) {
+        restoreAll().forEach { state ->
+            lobbyManager.createLobby(lobbyCode = state.lobbyCode, initialState = state)
+        }
+    }
+
+    fun restoreAll(): List<GameState> =
+        store.findLobbyCodesWithPersistedState()
+            .sortedBy(LobbyCode::value)
+            .mapNotNull(::restoreLobby)
+
+    private fun validateSequence(
+        lobbyCode: LobbyCode,
+        snapshotStateVersion: Long,
+        events: List<PersistedLobbyEventRecord>,
+    ) {
+        var expectedStateVersion = snapshotStateVersion + 1
+        events.forEach { event ->
+            check(event.stateVersion == expectedStateVersion) {
+                "Persistierte Events für Lobby '${lobbyCode.value}' sind " +
+                    "inkonsistent. Erwartete stateVersion $expectedStateVersion, " +
+                    "gefunden ${event.stateVersion}."
+            }
+            expectedStateVersion += 1
+        }
+    }
+}
+
+@Serializable
+data class PersistedLobbyRecoverySnapshot(
+    val lobbyCode: LobbyCode,
+    val stateVersion: Long,
+    val processedEventCount: Long,
+    val gameRandomSeed: Long? = null,
+    val lobbyOwner: PlayerId? = null,
+    val players: List<PlayerId>,
+    val playerDisplayNames: List<PersistedPlayerDisplayName>,
+    val activePlayer: PlayerId? = null,
+    val configuredStartPlayerId: PlayerId? = null,
+    val turnOrder: List<PlayerId>,
+    val turnNumber: Int,
+    val turnState: PersistedTurnStateSnapshot? = null,
+    val gameStarted: Boolean,
+    val status: String,
+    val closedReason: String? = null,
+    val lastInvalidActionReason: String? = null,
+    val determinism: PublicDeterminismMetadataSnapshot,
+    val definition: MapDefinitionSnapshot,
+    val territoryStates: List<MapTerritoryStateSnapshot>,
+    val setupTroopsToPlaceByPlayer: List<PersistedSetupTroopsSnapshot>,
+) {
+    companion object {
+        fun fromGameState(gameState: GameState): PersistedLobbyRecoverySnapshot =
+            PersistedLobbyRecoverySnapshot(
+                lobbyCode = gameState.lobbyCode,
+                stateVersion = gameState.stateVersion,
+                processedEventCount = gameState.processedEventCount,
+                gameRandomSeed = gameState.gameRandomSeed,
+                lobbyOwner = gameState.lobbyOwner,
+                players = gameState.players,
+                playerDisplayNames =
+                    gameState.playerDisplayNames.entries.map { (playerId, displayName) ->
+                        PersistedPlayerDisplayName(playerId = playerId, displayName = displayName)
+                    },
+                activePlayer = gameState.activePlayer,
+                configuredStartPlayerId = gameState.configuredStartPlayerId,
+                turnOrder = gameState.turnOrder,
+                turnNumber = gameState.turnNumber,
+                turnState = gameState.turnState?.let(PersistedTurnStateSnapshot::fromTurnState),
+                gameStarted = gameState.gameStarted,
+                status = gameState.status.name,
+                closedReason = gameState.closedReason,
+                lastInvalidActionReason = gameState.lastInvalidActionReason,
+                determinism =
+                    PublicDeterminismMetadataSnapshot.from(
+                        gameState.mapDefinition
+                            ?: error("GameState ohne MapDefinition kann nicht persistiert werden."),
+                    ).copy(seed = gameState.gameRandomSeed),
+                definition =
+                    MapDefinitionSnapshot.from(
+                        gameState.mapDefinition
+                            ?: error("GameState ohne MapDefinition kann nicht persistiert werden."),
+                    ),
+                territoryStates =
+                    gameState.allTerritoryStates().map(
+                        MapTerritoryStateSnapshot::from,
+                    ),
+                setupTroopsToPlaceByPlayer =
+                    gameState.setupTroopsToPlaceByPlayer.entries.map { (playerId, troopCount) ->
+                        PersistedSetupTroopsSnapshot(
+                            playerId = playerId,
+                            troopCount = troopCount,
+                        )
+                    },
+            )
+    }
+
+    fun toGameState(): GameState {
+        val restoredDefinition =
+            definition.toMapDefinition(
+                schemaVersion = determinism.schemaVersion,
+            )
+        check(restoredDefinition.mapHash == determinism.mapHash) {
+            "Snapshot mapHash ${determinism.mapHash} passt nicht zur " +
+                "rekonstruierten MapDefinition ${restoredDefinition.mapHash}."
+        }
+
+        return GameState(
+            lobbyCode = lobbyCode,
+            lobbyOwner = lobbyOwner,
+            players = players,
+            playerDisplayNames = playerDisplayNames.associate { it.playerId to it.displayName },
+            activePlayer = activePlayer,
+            configuredStartPlayerId = configuredStartPlayerId,
+            turnOrder = turnOrder,
+            turnNumber = turnNumber,
+            turnState = turnState?.toTurnState(),
+            gameStarted = gameStarted,
+            status = GameStatus.valueOf(status),
+            stateVersion = stateVersion,
+            processedEventCount = processedEventCount,
+            gameRandomSeed = gameRandomSeed ?: determinism.seed,
+            lastEventContext = null,
+            closedReason = closedReason,
+            lastInvalidActionReason = lastInvalidActionReason,
+            mapDefinition = restoredDefinition,
+            territoryStates =
+                territoryStates.associate { snapshot ->
+                    snapshot.territoryId to
+                        TerritoryState(
+                            territoryId = snapshot.territoryId,
+                            ownerId = snapshot.ownerId,
+                            troopCount = snapshot.troopCount,
+                        )
+                },
+            setupTroopsToPlaceByPlayer =
+                setupTroopsToPlaceByPlayer.associate { it.playerId to it.troopCount },
+        )
+    }
+}
+
+@Serializable
+data class PersistedPlayerDisplayName(
+    val playerId: PlayerId,
+    val displayName: String,
+)
+
+@Serializable
+data class PersistedSetupTroopsSnapshot(
+    val playerId: PlayerId,
+    val troopCount: Int,
+)
+
+@Serializable
+data class PersistedTurnStateSnapshot(
+    val activePlayerId: PlayerId,
+    val turnPhase: TurnPhase,
+    val turnCount: Int,
+    val startPlayerId: PlayerId,
+    val isPaused: Boolean,
+    val pauseReason: String? = null,
+    val pausedPlayerId: PlayerId? = null,
+) {
+    companion object {
+        fun fromTurnState(turnState: TurnState): PersistedTurnStateSnapshot =
+            PersistedTurnStateSnapshot(
+                activePlayerId = turnState.activePlayerId,
+                turnPhase = turnState.turnPhase,
+                turnCount = turnState.turnCount,
+                startPlayerId = turnState.startPlayerId,
+                isPaused = turnState.isPaused,
+                pauseReason = turnState.pauseReason,
+                pausedPlayerId = turnState.pausedPlayerId,
+            )
+    }
+
+    fun toTurnState(): TurnState =
+        TurnState(
+            activePlayerId = activePlayerId,
+            turnPhase = turnPhase,
+            turnCount = turnCount,
+            startPlayerId = startPlayerId,
+            isPaused = isPaused,
+            pauseReason = pauseReason,
+            pausedPlayerId = pausedPlayerId,
+        )
+}
+
+private fun MapDefinitionSnapshot.toMapDefinition(schemaVersion: Int): MapDefinition =
+    MapDefinition(
+        schemaVersion = schemaVersion,
+        territories = territories.map(MapTerritoryDefinitionSnapshot::toTerritoryDefinition),
+        continents = continents.map(MapContinentDefinitionSnapshot::toContinentDefinition),
+    )
+
+private fun MapTerritoryDefinitionSnapshot.toTerritoryDefinition(): TerritoryDefinition =
+    TerritoryDefinition(
+        territoryId = territoryId,
+        edges = edges.map(MapTerritoryEdgeSnapshot::toTerritoryEdgeDefinition),
+    )
+
+private fun MapTerritoryEdgeSnapshot.toTerritoryEdgeDefinition(): TerritoryEdgeDefinition =
+    TerritoryEdgeDefinition(targetId = targetId)
+
+private fun MapContinentDefinitionSnapshot.toContinentDefinition(): ContinentDefinition =
+    ContinentDefinition(
+        continentId = continentId,
+        territoryIds = territoryIds,
+        bonusValue = bonusValue,
+    )
+
+internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
+    val jsonObject = Json.parseToJsonElement(eventJson).jsonObject
+    val jsonLobbyCode = LobbyCode(jsonObject.string("lobbyCode"))
+    check(jsonLobbyCode == lobbyCode) {
+        "Persistiertes Event referenziert Lobby '${jsonLobbyCode.value}', " +
+            "erwartet war '${lobbyCode.value}'."
+    }
+
+    return when (eventType) {
+        "lobby_created" -> LobbyCreated(lobbyCode)
+        "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
+        "player_joined" ->
+            PlayerJoined(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                playerDisplayName = jsonObject.string("playerDisplayName"),
+            )
+        "player_left" ->
+            PlayerLeft(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                reason = jsonObject.nullableString("reason"),
+            )
+        "player_kicked" ->
+            PlayerKicked(
+                lobbyCode = lobbyCode,
+                targetPlayerId = PlayerId(jsonObject.long("targetPlayerId")),
+                requesterPlayerId = PlayerId(jsonObject.long("requesterPlayerId")),
+            )
+        "start_player_configured" ->
+            StartPlayerConfigured(
+                lobbyCode = lobbyCode,
+                startPlayerId = PlayerId(jsonObject.long("startPlayerId")),
+                requesterPlayerId = PlayerId(jsonObject.long("requesterPlayerId")),
+            )
+        "game_started" ->
+            GameStarted(
+                lobbyCode = lobbyCode,
+                randomSeed = jsonObject.long("randomSeed"),
+            )
+        "invalid_action_detected" ->
+            InvalidActionDetected(
+                lobbyCode = lobbyCode,
+                playerId = jsonObject.nullableLong("playerId")?.let(::PlayerId),
+                reason = jsonObject.string("reason"),
+            )
+        "system_tick" ->
+            SystemTick(
+                lobbyCode = lobbyCode,
+                tick = jsonObject.long("tick"),
+            )
+        "territory_owner_changed" ->
+            TerritoryOwnerChangedEvent(
+                lobbyCode = lobbyCode,
+                territoryId = TerritoryId(jsonObject.string("territoryId")),
+                ownerId = jsonObject.nullableLong("ownerId")?.let(::PlayerId),
+                stateVersion = jsonObject.nullableLong("stateVersion"),
+            )
+        "territory_troops_changed" ->
+            TerritoryTroopsChangedEvent(
+                lobbyCode = lobbyCode,
+                territoryId = TerritoryId(jsonObject.string("territoryId")),
+                troopCount = jsonObject.int("troopCount"),
+                stateVersion = jsonObject.nullableLong("stateVersion"),
+            )
+        "timeout_triggered" ->
+            TimeoutTriggered(
+                lobbyCode = lobbyCode,
+                target = jsonObject.string("target"),
+                timeoutMillis = jsonObject.long("timeoutMillis"),
+            )
+        "turn_ended" ->
+            TurnEnded(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+            )
+        "turn_state_updated" ->
+            TurnStateUpdatedEvent(
+                lobbyCode = lobbyCode,
+                activePlayerId = PlayerId(jsonObject.long("activePlayerId")),
+                turnPhase = TurnPhase.valueOf(jsonObject.string("turnPhase")),
+                turnCount = jsonObject.int("turnCount"),
+                startPlayerId = PlayerId(jsonObject.long("startPlayerId")),
+                isPaused = jsonObject.boolean("isPaused"),
+                pauseReason = jsonObject.nullableString("pauseReason"),
+                pausedPlayerId = jsonObject.nullableLong("pausedPlayerId")?.let(::PlayerId),
+            )
+        else -> error("Unbekannter persistierter eventType '$eventType'.")
+    }
+}
+
+private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive.content
+
+private fun JsonObject.nullableString(key: String): String? =
+    this[key]?.jsonPrimitive?.contentOrNull
+
+private fun JsonObject.long(key: String): Long =
+    getValue(key).jsonPrimitive.longOrNull
+        ?: error("Feld '$key' muss ein Long sein.")
+
+private fun JsonObject.nullableLong(key: String): Long? = this[key]?.jsonPrimitive?.longOrNull
+
+private fun JsonObject.int(key: String): Int =
+    getValue(key).jsonPrimitive.intOrNull
+        ?: error("Feld '$key' muss ein Int sein.")
+
+private fun JsonObject.boolean(key: String): Boolean =
+    getValue(key).jsonPrimitive.booleanOrNull
+        ?: error("Feld '$key' muss ein Boolean sein.")

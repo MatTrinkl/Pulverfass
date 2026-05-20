@@ -8,7 +8,10 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Hält reconnect-relevanten Fachkontext stabil pro Session.
  */
-class SessionContextRegistry {
+class SessionContextRegistry(
+    private val persistenceHooks: SessionContextPersistenceHooks =
+        SessionContextPersistenceHooks(),
+) {
     private val contextsBySession = ConcurrentHashMap<SessionToken, SessionReconnectContext>()
     private val sessionsByPlayer = ConcurrentHashMap<PlayerId, SessionToken>()
     private val lifecycleLock = Any()
@@ -24,17 +27,20 @@ class SessionContextRegistry {
             val previousSessionToken = sessionsByPlayer[playerId]
             if (previousSessionToken != null && previousSessionToken != sessionToken) {
                 contextsBySession.remove(previousSessionToken)
+                persistenceHooks.removeSession(previousSessionToken)
             }
 
-            val current = contextsBySession[sessionToken] ?: SessionReconnectContext()
+            val current = currentOrLoaded(sessionToken) ?: SessionReconnectContext()
             current.playerId?.let { previousPlayerId ->
                 if (previousPlayerId != playerId) {
                     sessionsByPlayer.remove(previousPlayerId)
                 }
             }
 
-            contextsBySession[sessionToken] = current.copy(playerId = playerId)
+            val updated = current.copy(playerId = playerId)
+            contextsBySession[sessionToken] = updated
             sessionsByPlayer[playerId] = sessionToken
+            persistenceHooks.persistContext(sessionToken, updated)
         }
     }
 
@@ -47,12 +53,16 @@ class SessionContextRegistry {
         playerDisplayName: String,
     ) {
         synchronized(lifecycleLock) {
-            val current = contextsBySession[sessionToken] ?: SessionReconnectContext()
-            contextsBySession[sessionToken] =
+            val current = currentOrLoaded(sessionToken) ?: SessionReconnectContext()
+            val updated =
                 current.copy(
                     lobbyCode = lobbyCode,
                     playerDisplayName = playerDisplayName,
                 )
+            contextsBySession[sessionToken] = updated
+            if (updated.playerId != null) {
+                persistenceHooks.persistContext(sessionToken, updated)
+            }
         }
     }
 
@@ -61,13 +71,33 @@ class SessionContextRegistry {
      */
     fun clearLobbyContext(sessionToken: SessionToken) {
         synchronized(lifecycleLock) {
-            val current = contextsBySession[sessionToken] ?: return
-            contextsBySession[sessionToken] =
+            val current = currentOrLoaded(sessionToken) ?: return
+            val updated =
                 current.copy(
                     lobbyCode = null,
                     playerDisplayName = null,
                 )
+            contextsBySession[sessionToken] = updated
+            if (updated.playerId != null) {
+                persistenceHooks.persistContext(sessionToken, updated)
+            }
         }
+    }
+
+    fun clearLobbyContextForLobby(lobbyCode: LobbyCode) {
+        synchronized(lifecycleLock) {
+            contextsBySession.replaceAll { _, context ->
+                if (context.lobbyCode == lobbyCode) {
+                    context.copy(
+                        lobbyCode = null,
+                        playerDisplayName = null,
+                    )
+                } else {
+                    context
+                }
+            }
+        }
+        persistenceHooks.clearLobbyContextForLobby(lobbyCode)
     }
 
     /**
@@ -75,12 +105,14 @@ class SessionContextRegistry {
      */
     fun removeSession(sessionToken: SessionToken) {
         synchronized(lifecycleLock) {
-            val removed = contextsBySession.remove(sessionToken) ?: return
-            removed.playerId?.let { playerId ->
+            val removed = currentOrLoaded(sessionToken)
+            contextsBySession.remove(sessionToken)
+            removed?.playerId?.let { playerId ->
                 if (sessionsByPlayer[playerId] == sessionToken) {
                     sessionsByPlayer.remove(playerId)
                 }
             }
+            persistenceHooks.removeSession(sessionToken)
         }
     }
 
@@ -88,16 +120,34 @@ class SessionContextRegistry {
      * Liefert den reconnect-relevanten Kontext einer Session oder `null`.
      */
     fun contextFor(sessionToken: SessionToken): SessionReconnectContext? =
-        contextsBySession[sessionToken]
+        synchronized(lifecycleLock) { currentOrLoaded(sessionToken) }
 
     /**
      * Liefert den Player einer Session oder `null`.
      */
     fun playerIdForSession(sessionToken: SessionToken): PlayerId? =
-        contextsBySession[sessionToken]?.playerId
+        synchronized(lifecycleLock) { currentOrLoaded(sessionToken)?.playerId }
 
     /**
      * Liefert die Session eines Players oder `null`.
      */
     fun sessionTokenForPlayer(playerId: PlayerId): SessionToken? = sessionsByPlayer[playerId]
+
+    private fun currentOrLoaded(sessionToken: SessionToken): SessionReconnectContext? {
+        contextsBySession[sessionToken]?.let { return it }
+
+        val loaded = persistenceHooks.loadContext(sessionToken) ?: return null
+        val existing = contextsBySession.putIfAbsent(sessionToken, loaded) ?: loaded
+        existing.playerId?.let { playerId ->
+            sessionsByPlayer[playerId] = sessionToken
+        }
+        return existing
+    }
 }
+
+data class SessionContextPersistenceHooks(
+    val loadContext: (SessionToken) -> SessionReconnectContext? = { null },
+    val persistContext: (SessionToken, SessionReconnectContext) -> Unit = { _, _ -> },
+    val removeSession: (SessionToken) -> Unit = {},
+    val clearLobbyContextForLobby: (LobbyCode) -> Unit = {},
+)

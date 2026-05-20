@@ -29,6 +29,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property status grober Lebenszyklus der Lobby
  * @property stateVersion server-authoritative, monotone Zustandsversion für Clients
  * @property processedEventCount Anzahl bereits auf den State angewendeter Events
+ * @property gameRandomSeed optionaler, serverseitig gewählter Seed des aktuellen Spiels
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
@@ -50,6 +51,7 @@ data class GameState(
     val status: GameStatus = GameStatus.WAITING_FOR_PLAYERS,
     val stateVersion: Long = 0,
     val processedEventCount: Long = 0,
+    val gameRandomSeed: Long? = null,
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,

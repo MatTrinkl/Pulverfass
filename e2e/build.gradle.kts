@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 group = "com.example.e2e"
@@ -9,18 +10,14 @@ kotlin {
     jvmToolchain(25)
 }
 
-tasks.register("placeholderE2eInfo") {
-    group = "verification"
-    description = "Prints information about the current placeholder state of the E2E module."
-    doLast {
-        println(
-            "E2E placeholder module: Real end-to-end tests will be added " +
-                "once dependencies are ready.",
-        )
-    }
-}
-
 dependencies {
+    testImplementation(project(":server"))
+    testImplementation(project(":shared"))
+    testImplementation(libs.hikari.cp)
+    testImplementation(libs.ktor.client.cio)
+    testImplementation(libs.ktor.client.websockets)
+    testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.kotlinx.coroutines.core)
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
