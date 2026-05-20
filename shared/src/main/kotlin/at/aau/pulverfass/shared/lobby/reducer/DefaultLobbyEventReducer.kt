@@ -7,6 +7,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -56,6 +58,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     state.copy(
                         status = GameStatus.CLOSED,
                         activePlayer = null,
+                        pendingReinforcements = null,
                         turnState = null,
                         closedReason = event.reason,
                     )
@@ -64,8 +67,12 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     state.copy(
                         status = GameStatus.WAITING_FOR_PLAYERS,
                         closedReason = null,
+                        pendingReinforcements = null,
                     )
 
+                is PendingReinforcementsChangedEvent ->
+                    onPendingReinforcementsChanged(state, event)
+                is PendingReinforcementsSetEvent -> onPendingReinforcementsSet(state, event)
                 is PlayerJoined -> onPlayerJoined(state, event.playerId, event.playerDisplayName)
                 is PlayerLeft -> onPlayerLeft(state, event.playerId)
                 is PlayerKicked ->
@@ -114,6 +121,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 players = updatedPlayers,
                 playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
                 lobbyOwner = updatedLobbyOwner,
+                pendingReinforcements = state.pendingReinforcements,
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
@@ -162,6 +170,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 playerDisplayNames = state.playerDisplayNames - playerId,
                 lobbyOwner = updatedLobbyOwner,
                 activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                pendingReinforcements = state.pendingReinforcements?.takeIf { it.playerId != playerId },
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
@@ -216,6 +225,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 players = updatedPlayers,
                 playerDisplayNames = state.playerDisplayNames - targetPlayerId,
                 activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                pendingReinforcements =
+                    state.pendingReinforcements?.takeIf { it.playerId != targetPlayerId },
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
@@ -402,6 +413,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 gameStarted = true,
                 gameRandomSeed = event.randomSeed,
+                pendingReinforcements = null,
                 status = GameStatus.RUNNING,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,
@@ -418,6 +430,30 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         state: GameState,
         event: TurnStateUpdatedEvent,
     ): GameState = applyTurnStateUpdate(state, event)
+
+    private fun onPendingReinforcementsSet(
+        state: GameState,
+        event: PendingReinforcementsSetEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+        return state.withPendingReinforcements(event.playerId, event.amount)
+    }
+
+    private fun onPendingReinforcementsChanged(
+        state: GameState,
+        event: PendingReinforcementsChangedEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+        val currentAmount = pendingReinforcementsAmountFor(state, event.playerId)
+        val updatedAmount = currentAmount + event.delta
+        if (updatedAmount < 0) {
+            throw InvalidLobbyEventException(
+                "PendingReinforcements für Spieler '${event.playerId.value}' dürfen nicht " +
+                    "negativ werden: aktuell=$currentAmount, delta=${event.delta}.",
+            )
+        }
+        return state.withPendingReinforcements(event.playerId, updatedAmount)
+    }
 
     private fun applyTurnStateUpdate(
         state: GameState,
@@ -569,6 +605,17 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
     }
 
+    private fun requireKnownPlayer(
+        state: GameState,
+        playerId: PlayerId,
+    ) {
+        if (!state.hasPlayer(playerId)) {
+            throw InvalidLobbyEventException(
+                "Spieler '${playerId.value}' ist nicht Teil der Lobby '${state.lobbyCode.value}'.",
+            )
+        }
+    }
+
     private fun requireKnownTerritory(
         state: GameState,
         territoryId: at.aau.pulverfass.shared.ids.TerritoryId,
@@ -576,8 +623,22 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         if (state.territoryStateOf(territoryId) == null) {
             throw InvalidLobbyEventException(
                 "Territory '${territoryId.value}' ist nicht Teil der Map " +
-                    "von Lobby '${state.lobbyCode}'.",
+                "von Lobby '${state.lobbyCode}'.",
             )
         }
+    }
+
+    private fun pendingReinforcementsAmountFor(
+        state: GameState,
+        playerId: PlayerId,
+    ): Int {
+        val current = state.pendingReinforcements ?: return 0
+        if (current.playerId != playerId) {
+            throw InvalidLobbyEventException(
+                "PendingReinforcements gehören Spieler '${current.playerId.value}' und " +
+                    "können nicht für '${playerId.value}' verändert werden.",
+            )
+        }
+        return current.amount
     }
 }

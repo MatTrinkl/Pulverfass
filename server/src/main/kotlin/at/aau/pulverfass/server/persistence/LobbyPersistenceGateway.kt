@@ -10,6 +10,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -173,6 +175,20 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
             persistedPayload(
                 type = "lobby_created",
                 "lobbyCode" to lobbyCode.value,
+            )
+        is PendingReinforcementsSetEvent ->
+            persistedPayload(
+                type = "pending_reinforcements_set",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "amount" to amount,
+            )
+        is PendingReinforcementsChangedEvent ->
+            persistedPayload(
+                type = "pending_reinforcements_changed",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "delta" to delta,
             )
         is LobbyClosed ->
             persistedPayload(

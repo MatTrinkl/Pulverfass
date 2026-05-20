@@ -36,6 +36,7 @@ class GameStateTest {
         assertEquals(0, state.processedEventCount)
         assertEquals(0, state.stateVersion)
         assertEquals(0, state.playerCount)
+        assertFalse(state.hasPendingReinforcements())
     }
 
     @Test
@@ -220,9 +221,13 @@ class GameStateTest {
         assertEquals(playerOne, state.continentOwner(ContinentId("north")))
         assertNull(state.continentOwner(ContinentId("south")))
         assertTrue(state.playerOwnsContinent(playerOne, ContinentId("north")))
+        assertTrue(state.ownsContinent(playerOne, ContinentId("north")))
         assertFalse(state.playerOwnsContinent(playerTwo, ContinentId("north")))
         assertEquals(listOf(ContinentId("north")), state.continentsOwnedBy(playerOne))
         assertTrue(state.continentsOwnedBy(playerTwo).isEmpty())
+        assertEquals(2, state.ownedTerritoryCount(playerOne))
+        assertEquals(3, state.continentBonus(ContinentId("north")))
+        assertEquals(1, state.continentBonus(ContinentId("south")))
         assertEquals(3, state.bonusFor(playerOne))
         assertEquals(0, state.bonusFor(playerTwo))
     }
@@ -501,6 +506,14 @@ class GameStateTest {
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 setupTroopsToPlaceByPlayer = mapOf(playerOne to -1),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("XZ12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                pendingReinforcements = PendingReinforcements(playerOne, -1),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {

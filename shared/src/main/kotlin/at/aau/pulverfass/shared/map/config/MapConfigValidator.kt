@@ -69,6 +69,12 @@ object MapConfigValidator {
                             "mindestens ein Territory enthalten.",
                     )
                 }
+                if (continent.bonus < 0) {
+                    throw MapConfigValidationException(
+                        "Continent '${continent.continentId.value}' darf keinen negativen " +
+                            "Bonus haben, war aber ${continent.bonus}.",
+                    )
+                }
 
                 val localTerritories = LinkedHashSet<TerritoryId>()
                 continent.territoryIds.forEach { territoryId ->
@@ -102,7 +108,7 @@ object MapConfigValidator {
                 ContinentDefinition(
                     continentId = continent.continentId,
                     territoryIds = continent.territoryIds,
-                    bonusValue = continent.bonusValue,
+                    bonusValue = continent.bonus,
                 )
             }
 

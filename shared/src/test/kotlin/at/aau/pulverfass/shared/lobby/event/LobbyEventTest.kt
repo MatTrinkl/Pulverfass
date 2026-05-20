@@ -23,6 +23,8 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode, "finished"),
+                PendingReinforcementsSetEvent(lobbyCode, playerId, 5),
+                PendingReinforcementsChangedEvent(lobbyCode, playerId, 2),
                 SystemTick(lobbyCode, tick = 5),
                 TurnStateUpdatedEvent(
                     lobbyCode = lobbyCode,
@@ -37,7 +39,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(12, events.size)
+        assertEquals(14, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[5] as LobbyClosed).reason)
     }
@@ -67,6 +69,8 @@ class LobbyEventTest {
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
+                is PendingReinforcementsChangedEvent -> event.delta.toString()
+                is PendingReinforcementsSetEvent -> event.amount.toString()
                 is SystemTick -> event.tick.toString()
                 is TerritoryOwnerChangedEvent -> event.territoryId.value
                 is TerritoryTroopsChangedEvent -> event.troopCount.toString()
@@ -92,6 +96,8 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode),
+                PendingReinforcementsSetEvent(lobbyCode, playerId, 4),
+                PendingReinforcementsChangedEvent(lobbyCode, playerId, -1),
                 SystemTick(lobbyCode, 0),
                 TurnStateUpdatedEvent(
                     lobbyCode = lobbyCode,

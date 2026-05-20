@@ -11,6 +11,8 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -1002,6 +1004,69 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(7, updated.troopCountOf(TerritoryId("alpha")))
+    }
+
+    @Test
+    fun `pending reinforcements set und change aktualisieren state deterministisch`() {
+        val lobbyCode = LobbyCode("TM13")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val withSet =
+            reducer.apply(
+                initialState,
+                PendingReinforcementsSetEvent(lobbyCode, playerOne, 5),
+            )
+        val withAdd =
+            reducer.apply(
+                withSet,
+                PendingReinforcementsChangedEvent(lobbyCode, playerOne, 3),
+            )
+        val withSubtract =
+            reducer.apply(
+                withAdd,
+                PendingReinforcementsChangedEvent(lobbyCode, playerOne, -2),
+            )
+
+        assertEquals(5, withSet.pendingReinforcementsFor(playerOne))
+        assertEquals(8, withAdd.pendingReinforcementsFor(playerOne))
+        assertEquals(6, withSubtract.pendingReinforcementsFor(playerOne))
+    }
+
+    @Test
+    fun `pending reinforcements cannot go negative`() {
+        val lobbyCode = LobbyCode("TM15")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val withSet =
+            reducer.apply(
+                initialState,
+                PendingReinforcementsSetEvent(lobbyCode, playerOne, 2),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    withSet,
+                    PendingReinforcementsChangedEvent(lobbyCode, playerOne, -3),
+                )
+            }
+
+        assertEquals(
+            "PendingReinforcements für Spieler '1' dürfen nicht negativ werden: aktuell=2, delta=-3.",
+            exception.message,
+        )
     }
 
     @Test

@@ -2,10 +2,15 @@ package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -81,6 +86,48 @@ class PublicGameStateBuilderTest {
             "GameStateDeltaEvent darf nur PublicGameEvent enthalten. " +
                 "Nicht-oeffentliche Payloads: FakePrivateEvent.",
             exception.message,
+        )
+    }
+
+    @Test
+    fun `pending reinforcement set projects to public reinforcement grant event`() {
+        val previousState =
+            sampleGameState().copy(
+                activePlayer = PlayerId(2),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+        val currentState =
+            previousState.copy(
+                pendingReinforcements = PendingReinforcements(PlayerId(2), 3),
+                stateVersion = 5,
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event = PendingReinforcementsSetEvent(previousState.lobbyCode, PlayerId(2), 3),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                ReinforcementsGrantedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    amount = 3,
+                    territoryBonus = 3,
+                    continentBonus = 0,
+                    cardBonus = 0,
+                ),
+            ),
+            delta?.events,
         )
     }
 

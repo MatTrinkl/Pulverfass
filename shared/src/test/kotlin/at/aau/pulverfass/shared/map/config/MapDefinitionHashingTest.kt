@@ -29,7 +29,7 @@ class MapDefinitionHashingTest {
                     { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
                   ],
                   "continents": [
-                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                   ]
                 }
                 """.trimIndent(),
@@ -40,7 +40,7 @@ class MapDefinitionHashingTest {
                 {
                   "continents": [
                     {
-                      "bonusValue": 2,
+                      "bonus": 2,
                       "territoryIds": ["alpha", "beta"],
                       "continentId": "north"
                     }
@@ -98,8 +98,8 @@ class MapDefinitionHashingTest {
                     }
                   ],
                   "continents": [
-                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-                    { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+                    { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
                   ]
                 }
                 """.trimIndent(),
@@ -199,7 +199,7 @@ class MapDefinitionHashingTest {
         val definition = MapConfigLoader.loadDefault()
 
         assertEquals(
-            "73224ce6c8944f5413b4afff99f77ad3964f90b91b5de6807bf8891b33e6ec56",
+            "c36f7b9b02a068333f24e52af875ed50836a3f9d1c328186a9a804b1bf7f2a43",
             definition.mapHash,
         )
     }
@@ -230,8 +230,8 @@ class MapDefinitionHashingTest {
             }
           ],
           "continents": [
-            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-            { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+            { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
           ]
         }
         """.trimIndent()

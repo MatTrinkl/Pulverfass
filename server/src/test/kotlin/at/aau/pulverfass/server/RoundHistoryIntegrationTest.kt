@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
@@ -132,6 +133,27 @@ class RoundHistoryIntegrationTest {
                         )
 
                         assertTrue(receivePayload(actor) is GameStateDeltaEvent)
+                        if (turnChange) {
+                            val grantedDelta = receivePayload(actor) as GameStateDeltaEvent
+                            assertEquals(
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = lobbyManager
+                                            .getLobby(lobbyCode)
+                                            ?.currentState()
+                                            ?.turnState
+                                            ?.activePlayerId
+                                            ?: error("active player missing"),
+                                        amount = 3,
+                                        territoryBonus = 3,
+                                        continentBonus = 0,
+                                        cardBonus = 0,
+                                    ),
+                                ),
+                                grantedDelta.events,
+                            )
+                        }
                         assertEquals(TurnAdvanceResponse(lobbyCode), receivePayload(actor))
                         assertTrue(receivePayload(actor) is PhaseBoundaryEvent)
                         assertTrue(
@@ -144,6 +166,27 @@ class RoundHistoryIntegrationTest {
                         }
 
                         assertTrue(receivePayload(watcher) is GameStateDeltaEvent)
+                        if (turnChange) {
+                            val grantedDelta = receivePayload(watcher) as GameStateDeltaEvent
+                            assertEquals(
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = lobbyManager
+                                            .getLobby(lobbyCode)
+                                            ?.currentState()
+                                            ?.turnState
+                                            ?.activePlayerId
+                                            ?: error("active player missing"),
+                                        amount = 3,
+                                        territoryBonus = 3,
+                                        continentBonus = 0,
+                                        cardBonus = 0,
+                                    ),
+                                ),
+                                grantedDelta.events,
+                            )
+                        }
                         assertTrue(receivePayload(watcher) is PhaseBoundaryEvent)
                         assertTrue(
                             receivePayload(

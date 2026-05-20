@@ -10,6 +10,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -24,6 +26,7 @@ import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -146,6 +149,7 @@ data class PersistedLobbyRecoverySnapshot(
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
     val setupTroopsToPlaceByPlayer: List<PersistedSetupTroopsSnapshot>,
+    val pendingReinforcements: PendingReinforcements? = null,
 ) {
     companion object {
         fun fromGameState(gameState: GameState): PersistedLobbyRecoverySnapshot =
@@ -190,6 +194,7 @@ data class PersistedLobbyRecoverySnapshot(
                             troopCount = troopCount,
                         )
                     },
+                pendingReinforcements = gameState.pendingReinforcements,
             )
     }
 
@@ -233,6 +238,7 @@ data class PersistedLobbyRecoverySnapshot(
                 },
             setupTroopsToPlaceByPlayer =
                 setupTroopsToPlaceByPlayer.associate { it.playerId to it.troopCount },
+            pendingReinforcements = pendingReinforcements,
         )
     }
 }
@@ -317,6 +323,18 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
 
     return when (eventType) {
         "lobby_created" -> LobbyCreated(lobbyCode)
+        "pending_reinforcements_set" ->
+            PendingReinforcementsSetEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                amount = jsonObject.int("amount"),
+            )
+        "pending_reinforcements_changed" ->
+            PendingReinforcementsChangedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                delta = jsonObject.int("delta"),
+            )
         "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
         "player_joined" ->
             PlayerJoined(

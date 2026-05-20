@@ -36,6 +36,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
+ * @property pendingReinforcements verbleibender Verstärkungspool eines Spielers für Phase 1
  */
 data class GameState(
     val lobbyCode: LobbyCode,
@@ -58,6 +59,7 @@ data class GameState(
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
+    val pendingReinforcements: PendingReinforcements? = null,
 ) {
     init {
         require(turnNumber >= 0) {
@@ -80,6 +82,9 @@ data class GameState(
         }
         require(setupTroopsToPlaceByPlayer.values.all { it >= 0 }) {
             "GameState.setupTroopsToPlaceByPlayer darf keine negativen Werte enthalten."
+        }
+        require(pendingReinforcements == null || players.contains(pendingReinforcements.playerId)) {
+            "GameState.pendingReinforcements.playerId muss Teil der Spielerliste sein."
         }
         require(turnOrder == turnOrder.distinct()) {
             "GameState.turnOrder darf keine Duplikate enthalten."
@@ -194,6 +199,20 @@ data class GameState(
     fun hasPendingSetupTroops(): Boolean = setupTroopsToPlaceByPlayer.values.any { it > 0 }
 
     /**
+     * Liefert den verbleibenden Verstärkungspool eines Spielers.
+     */
+    fun pendingReinforcementsFor(playerId: PlayerId): Int =
+        pendingReinforcements
+            ?.takeIf { it.playerId == playerId }
+            ?.amount
+            ?: 0
+
+    /**
+     * Prüft, ob aktuell noch ausstehende Verstärkungen vorhanden sind.
+     */
+    fun hasPendingReinforcements(): Boolean = (pendingReinforcements?.amount ?: 0) > 0
+
+    /**
      * Liefert alle Laufzeit-Territorien in stabiler Map-Reihenfolge.
      */
     fun allTerritoryStates(): List<TerritoryState> =
@@ -275,6 +294,11 @@ data class GameState(
         allTerritoryStates().filter { it.ownerId == playerId }
 
     /**
+     * Liefert die Anzahl aller aktuell vom Spieler kontrollierten Territorien.
+     */
+    fun ownedTerritoryCount(playerId: PlayerId): Int = territoriesOwnedBy(playerId).size
+
+    /**
      * Liefert den Spieler, der einen Kontinent vollständig kontrolliert, sonst null.
      */
     fun continentOwner(continentId: ContinentId): PlayerId? {
@@ -300,6 +324,25 @@ data class GameState(
         playerId: PlayerId,
         continentId: ContinentId,
     ): Boolean = continentOwner(continentId) == playerId
+
+    /**
+     * Alias für die Abfrage, ob ein Spieler einen Kontinent vollständig kontrolliert.
+     */
+    fun ownsContinent(
+        playerId: PlayerId,
+        continentId: ContinentId,
+    ): Boolean = playerOwnsContinent(playerId, continentId)
+
+    /**
+     * Liefert den konfigurierten Bonuswert eines Kontinents.
+     */
+    fun continentBonus(continentId: ContinentId): Int =
+        requireMapDefinition()
+            .continentsById[continentId]
+            ?.bonusValue
+            ?: throw IllegalArgumentException(
+                "Continent '$continentId' ist in der MapDefinition nicht vorhanden.",
+            )
 
     /**
      * Liefert alle vollständig kontrollierten Kontinente eines Spielers.
@@ -361,8 +404,8 @@ data class GameState(
     fun bonusFor(playerId: PlayerId): Int =
         mapDefinition
             ?.continents
-            ?.filter { continent -> continentOwner(continent.continentId) == playerId }
-            ?.sumOf { continent -> continent.bonusValue }
+            ?.filter { continent -> ownsContinent(playerId, continent.continentId) }
+            ?.sumOf { continent -> continentBonus(continent.continentId) }
             ?: 0
 
     /**
@@ -421,6 +464,19 @@ data class GameState(
             territoryStates = territoryStates + (territoryState.territoryId to territoryState),
         )
     }
+
+    /**
+     * Setzt den ausstehenden Verstärkungspool auf einen absoluten Wert.
+     */
+    internal fun withPendingReinforcements(
+        playerId: PlayerId,
+        amount: Int,
+    ): GameState = copy(pendingReinforcements = PendingReinforcements(playerId = playerId, amount = amount))
+
+    /**
+     * Entfernt den ausstehenden Verstärkungspool vollständig.
+     */
+    internal fun withoutPendingReinforcements(): GameState = copy(pendingReinforcements = null)
 
     /**
      * Liefert einen initialen State für eine einzelne Lobby.
