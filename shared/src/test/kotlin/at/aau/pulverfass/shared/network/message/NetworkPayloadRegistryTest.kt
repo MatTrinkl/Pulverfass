@@ -33,25 +33,25 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
-import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
@@ -310,7 +310,7 @@ class NetworkPayloadRegistryTest {
     }
 
     @Test
-    fun `should resolve message type and serialization for confirm reinforcements done error response`() {
+    fun `should resolve message type for confirm reinforcements done error response`() {
         val payload =
             ConfirmReinforcementsDoneErrorResponse(
                 code = ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED,

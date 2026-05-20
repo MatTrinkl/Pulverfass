@@ -170,7 +170,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 playerDisplayNames = state.playerDisplayNames - playerId,
                 lobbyOwner = updatedLobbyOwner,
                 activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
-                pendingReinforcements = state.pendingReinforcements?.takeIf { it.playerId != playerId },
+                pendingReinforcements =
+                    state.pendingReinforcements?.takeIf { it.playerId != playerId },
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
@@ -445,7 +446,16 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ): GameState {
         requireKnownPlayer(state, event.playerId)
         val currentAmount = pendingReinforcementsAmountFor(state, event.playerId)
-        val updatedAmount = currentAmount + event.delta
+        val updatedAmount =
+            try {
+                Math.addExact(currentAmount, event.delta)
+            } catch (_: ArithmeticException) {
+                throw InvalidLobbyEventException(
+                    "PendingReinforcements für Spieler '${event.playerId.value}' dürfen den " +
+                        "Int-Bereich nicht verlassen: aktuell=$currentAmount, " +
+                        "delta=${event.delta}.",
+                )
+            }
         if (updatedAmount < 0) {
             throw InvalidLobbyEventException(
                 "PendingReinforcements für Spieler '${event.playerId.value}' dürfen nicht " +
@@ -623,7 +633,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         if (state.territoryStateOf(territoryId) == null) {
             throw InvalidLobbyEventException(
                 "Territory '${territoryId.value}' ist nicht Teil der Map " +
-                "von Lobby '${state.lobbyCode}'.",
+                    "von Lobby '${state.lobbyCode}'.",
             )
         }
     }

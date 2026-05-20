@@ -139,12 +139,13 @@ class RoundHistoryIntegrationTest {
                                 listOf(
                                     ReinforcementsGrantedEvent(
                                         lobbyCode = lobbyCode,
-                                        playerId = lobbyManager
-                                            .getLobby(lobbyCode)
-                                            ?.currentState()
-                                            ?.turnState
-                                            ?.activePlayerId
-                                            ?: error("active player missing"),
+                                        playerId =
+                                            lobbyManager
+                                                .getLobby(lobbyCode)
+                                                ?.currentState()
+                                                ?.turnState
+                                                ?.activePlayerId
+                                                ?: error("active player missing"),
                                         amount = 3,
                                         territoryBonus = 3,
                                         continentBonus = 0,
@@ -172,12 +173,13 @@ class RoundHistoryIntegrationTest {
                                 listOf(
                                     ReinforcementsGrantedEvent(
                                         lobbyCode = lobbyCode,
-                                        playerId = lobbyManager
-                                            .getLobby(lobbyCode)
-                                            ?.currentState()
-                                            ?.turnState
-                                            ?.activePlayerId
-                                            ?: error("active player missing"),
+                                        playerId =
+                                            lobbyManager
+                                                .getLobby(lobbyCode)
+                                                ?.currentState()
+                                                ?.turnState
+                                                ?.activePlayerId
+                                                ?: error("active player missing"),
                                         amount = 3,
                                         territoryBonus = 3,
                                         continentBonus = 0,

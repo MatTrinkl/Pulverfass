@@ -30,7 +30,8 @@ data class PendingReinforcementsChangedEvent(
     }
 }
 
-object PendingReinforcementsChangedEventSerializer : KSerializer<PendingReinforcementsChangedEvent> {
+object PendingReinforcementsChangedEventSerializer :
+    KSerializer<PendingReinforcementsChangedEvent> {
     override val descriptor =
         buildClassSerialDescriptor(
             "at.aau.pulverfass.shared.network.message.PendingReinforcementsChangedEvent",

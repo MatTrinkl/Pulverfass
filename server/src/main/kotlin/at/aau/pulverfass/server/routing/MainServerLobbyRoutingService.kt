@@ -24,7 +24,6 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
-import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -32,6 +31,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
@@ -43,11 +43,10 @@ import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
-import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
-import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -60,13 +59,13 @@ import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
@@ -1109,7 +1108,14 @@ class MainServerLobbyRoutingService(
             require(placement.amount > 0) { "INVALID_PLACEMENT" }
         }
 
-        val totalPlacement = payload.placements.sumOf(TerritoryPlacement::amount)
+        val totalPlacement =
+            try {
+                payload.placements.fold(0) { sum, placement ->
+                    Math.addExact(sum, placement.amount)
+                }
+            } catch (_: ArithmeticException) {
+                throw IllegalArgumentException("INVALID_PLACEMENT")
+            }
         require(totalPlacement <= state.pendingReinforcementsFor(payload.playerId)) { "OVERSPEND" }
 
         val projectedTroopCounts = linkedMapOf<TerritoryId, Int>()
@@ -1121,7 +1127,12 @@ class MainServerLobbyRoutingService(
                 val currentTroopCount =
                     projectedTroopCounts[placement.territoryId]
                         ?: state.troopCountOf(placement.territoryId)
-                val updatedTroopCount = currentTroopCount + placement.amount
+                val updatedTroopCount =
+                    try {
+                        Math.addExact(currentTroopCount, placement.amount)
+                    } catch (_: ArithmeticException) {
+                        throw IllegalArgumentException("INVALID_PLACEMENT")
+                    }
                 projectedTroopCounts[placement.territoryId] = updatedTroopCount
 
                 TerritoryTroopsChangedEvent(
@@ -1161,7 +1172,6 @@ class MainServerLobbyRoutingService(
         require(state.pendingReinforcementsFor(payload.playerId) == 0) {
             "PENDING_REINFORCEMENTS_REMAINING"
         }
-        requireForcedTradeRuleSatisfied(state, payload.playerId)
 
         return buildTurnAdvanceEvent(
             request = request,
@@ -1362,10 +1372,16 @@ class MainServerLobbyRoutingService(
                 }
                 PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED ->
                     "Alle Zielterritorien müssen Spieler '${payload.playerId.value}' gehören."
-                PlaceReinforcementsErrorCode.OVERSPEND ->
+                PlaceReinforcementsErrorCode.OVERSPEND -> {
+                    val remainingPending =
+                        lobbyManager
+                            .getLobby(payload.lobbyCode)
+                            ?.currentState()
+                            ?.pendingReinforcementsFor(payload.playerId)
+                            ?: 0
                     "Angeforderte Verstärkungen (${payload.placements.sumOf { it.amount }}) " +
-                        "überschreiten den verbleibenden Pool von " +
-                        "${lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.pendingReinforcementsFor(payload.playerId) ?: 0}."
+                        "überschreiten den verbleibenden Pool von $remainingPending."
+                }
                 PlaceReinforcementsErrorCode.INVALID_PLACEMENT ->
                     "Die Verstärkungsplatzierung muss mindestens ein Ziel enthalten und alle " +
                         "Mengen müssen positiv sein."
@@ -1387,8 +1403,6 @@ class MainServerLobbyRoutingService(
                 "PHASE_MISMATCH" -> ConfirmReinforcementsDoneErrorCode.PHASE_MISMATCH
                 "PENDING_REINFORCEMENTS_REMAINING" ->
                     ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING
-                "FORCED_TRADE_REQUIRED" ->
-                    ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED
                 else -> ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER
             }
 
@@ -1399,9 +1413,11 @@ class MainServerLobbyRoutingService(
                 ConfirmReinforcementsDoneErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler für Lobby '${payload.lobbyCode.value}' zugeordnet."
+                        "Connection ist keinem Spieler für Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
                     } else {
-                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                        "Requester '${payload.playerId.value}' passt nicht " +
+                            "zur aktuellen Connection '${contextPlayerId.value}'."
                     }
                 }
                 ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER -> {
@@ -1409,42 +1425,36 @@ class MainServerLobbyRoutingService(
                     val activePlayer = currentState?.activePlayer
                     when {
                         activePlayer == null ->
-                            "Für Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver Spieler gesetzt."
+                            "Für Lobby '${payload.lobbyCode.value}' ist aktuell " +
+                                "kein aktiver Spieler gesetzt."
                         else ->
-                            "Nur der aktive Spieler '${activePlayer.value}' darf die Reinforcements-Phase beenden."
+                            "Nur der aktive Spieler '${activePlayer.value}' darf " +
+                                "die Reinforcements-Phase beenden."
                     }
                 }
                 ConfirmReinforcementsDoneErrorCode.GAME_PAUSED ->
-                    "Lobby '${payload.lobbyCode.value}' ist pausiert; Phasenwechsel ist aktuell nicht erlaubt."
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
+                        "Phasenwechsel ist aktuell nicht erlaubt."
                 ConfirmReinforcementsDoneErrorCode.PHASE_MISMATCH -> {
                     val currentPhase =
                         lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.activeTurnPhase
                     if (currentPhase == null) {
-                        "Die Reinforcements-Phase ist für Lobby '${payload.lobbyCode.value}' aktuell nicht aktiv."
+                        "Die Reinforcements-Phase ist für Lobby " +
+                            "'${payload.lobbyCode.value}' aktuell nicht aktiv."
                     } else {
-                        "Bestätigung ist nur in Phase 'REINFORCEMENTS' erlaubt, aktueller Serverzustand ist '${currentPhase.name}'."
+                        "Bestätigung ist nur in Phase 'REINFORCEMENTS' erlaubt, " +
+                            "aktueller Serverzustand ist '${currentPhase.name}'."
                     }
                 }
                 ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn keine ausstehenden Verstärkungen mehr vorhanden sind."
+                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                        "keine ausstehenden Verstärkungen mehr vorhanden sind."
                 ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn die Pflichtabgabe von Karten erfüllt ist."
+                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                        "die Pflichtabgabe von Karten erfüllt ist."
             }
 
         return ConfirmReinforcementsDoneErrorResponse(code = code, reason = reason)
-    }
-
-    /**
-     * Hook für die Pflichtabgabe aus Issue 11.
-     *
-     * Solange Karten noch nicht im autoritativen State modelliert sind, gibt es
-     * hier bewusst keinen zusätzlichen Reject-Pfad.
-     */
-    private fun requireForcedTradeRuleSatisfied(
-        state: GameState,
-        playerId: PlayerId,
-    ) {
-        state.hasPlayer(playerId)
     }
 
     private fun startPlayerSetErrorResponse(

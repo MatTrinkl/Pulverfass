@@ -298,7 +298,8 @@ class GameStateTransportIntegrationTest {
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion = if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                stateVersion =
+                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,
@@ -340,7 +341,8 @@ class GameStateTransportIntegrationTest {
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion = if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                stateVersion =
+                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,

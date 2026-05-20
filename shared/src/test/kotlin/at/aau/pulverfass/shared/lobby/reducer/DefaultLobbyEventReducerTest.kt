@@ -1064,7 +1064,40 @@ class DefaultLobbyEventReducerTest {
             }
 
         assertEquals(
-            "PendingReinforcements für Spieler '1' dürfen nicht negativ werden: aktuell=2, delta=-3.",
+            "PendingReinforcements für Spieler '1' dürfen nicht negativ werden: " +
+                "aktuell=2, delta=-3.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `pending reinforcements change cannot overflow int`() {
+        val lobbyCode = LobbyCode("TM16")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val withSet =
+            reducer.apply(
+                initialState,
+                PendingReinforcementsSetEvent(lobbyCode, playerOne, Int.MAX_VALUE),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    withSet,
+                    PendingReinforcementsChangedEvent(lobbyCode, playerOne, 1),
+                )
+            }
+
+        assertEquals(
+            "PendingReinforcements für Spieler '1' dürfen den Int-Bereich nicht " +
+                "verlassen: aktuell=2147483647, delta=1.",
             exception.message,
         )
     }

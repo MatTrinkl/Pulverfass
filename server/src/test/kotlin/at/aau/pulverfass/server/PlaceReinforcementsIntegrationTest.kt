@@ -272,7 +272,10 @@ class PlaceReinforcementsIntegrationTest {
 
             assertEquals(PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED, error.code)
             assertEquals(baseState.stateVersion, snapshot.stateVersion)
-            assertEquals(baseState.pendingReinforcementsFor(playerOne), snapshot.pendingReinforcementsFor(playerOne))
+            assertEquals(
+                baseState.pendingReinforcementsFor(playerOne),
+                snapshot.pendingReinforcementsFor(playerOne),
+            )
         }
 
     @Test
@@ -382,6 +385,86 @@ class PlaceReinforcementsIntegrationTest {
             assertEquals(PlaceReinforcementsErrorCode.OVERSPEND, error.code)
             assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
             assertEquals(1, snapshot.troopCountOf(territoryA))
+        }
+
+    @Test
+    fun `invalid request is rejected when placement sum overflows int`() =
+        testApplication {
+            val lobbyCode = LobbyCode("PRI6")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val territoryA = defaultMapDefinition().territories[0].territoryId
+            val territoryB = defaultMapDefinition().territories[1].territoryId
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = Int.MAX_VALUE,
+                    owners = mapOf(territoryA to playerOne, territoryB to playerOne),
+                    troopCounts = mapOf(territoryA to 0, territoryB to 0),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingPlacement(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        PlaceReinforcementsRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                            placements =
+                                listOf(
+                                    TerritoryPlacement(territoryA, Int.MAX_VALUE),
+                                    TerritoryPlacement(territoryB, 1),
+                                ),
+                        ),
+                )
+
+            assertEquals(PlaceReinforcementsErrorCode.INVALID_PLACEMENT, error.code)
+            assertEquals(Int.MAX_VALUE, snapshot.pendingReinforcementsFor(playerOne))
+            assertEquals(0, snapshot.troopCountOf(territoryA))
+            assertEquals(0, snapshot.troopCountOf(territoryB))
+        }
+
+    @Test
+    fun `invalid request is rejected when troop count would overflow int`() =
+        testApplication {
+            val lobbyCode = LobbyCode("PRI7")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val territoryA = defaultMapDefinition().territories[0].territoryId
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 1,
+                    owners = mapOf(territoryA to playerOne),
+                    troopCounts = mapOf(territoryA to Int.MAX_VALUE),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingPlacement(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        PlaceReinforcementsRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                            placements = listOf(TerritoryPlacement(territoryA, 1)),
+                        ),
+                )
+
+            assertEquals(PlaceReinforcementsErrorCode.INVALID_PLACEMENT, error.code)
+            assertEquals(1, snapshot.pendingReinforcementsFor(playerOne))
+            assertEquals(Int.MAX_VALUE, snapshot.troopCountOf(territoryA))
         }
 
     private suspend fun ApplicationTestBuilder.exerciseFailingPlacement(

@@ -9,8 +9,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
-import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals

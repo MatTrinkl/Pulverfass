@@ -471,7 +471,10 @@ data class GameState(
     internal fun withPendingReinforcements(
         playerId: PlayerId,
         amount: Int,
-    ): GameState = copy(pendingReinforcements = PendingReinforcements(playerId = playerId, amount = amount))
+    ): GameState =
+        copy(
+            pendingReinforcements = PendingReinforcements(playerId = playerId, amount = amount),
+        )
 
     /**
      * Entfernt den ausstehenden Verstärkungspool vollständig.
