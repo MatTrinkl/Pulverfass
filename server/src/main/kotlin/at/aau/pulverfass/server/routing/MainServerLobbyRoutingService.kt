@@ -1458,8 +1458,7 @@ class MainServerLobbyRoutingService(
                 PlaceReinforcementsErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler für Lobby " +
-                            "'${payload.lobbyCode.value}' zugeordnet."
+                        connectionNotAssignedToLobby(payload.lobbyCode)
                     } else {
                         "Requester '${payload.playerId.value}' passt nicht " +
                             "zur aktuellen Connection '${contextPlayerId.value}'."
@@ -1609,8 +1608,7 @@ class MainServerLobbyRoutingService(
                 ConfirmReinforcementsDoneErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler für Lobby " +
-                            "'${payload.lobbyCode.value}' zugeordnet."
+                        connectionNotAssignedToLobby(payload.lobbyCode)
                     } else {
                         "Requester '${payload.playerId.value}' passt nicht " +
                             "zur aktuellen Connection '${contextPlayerId.value}'."
@@ -1684,8 +1682,7 @@ class MainServerLobbyRoutingService(
                 StartPlayerSetErrorCode.REQUESTER_MISMATCH -> {
                     val contextPlayerId = request.context.playerId
                     if (contextPlayerId == null) {
-                        "Connection ist keinem Spieler für Lobby " +
-                            "'${payload.lobbyCode.value}' zugeordnet."
+                        connectionNotAssignedToLobby(payload.lobbyCode)
                     } else {
                         "Requester '${payload.requesterPlayerId.value}' passt " +
                             "nicht zur aktuellen Connection '${contextPlayerId.value}'."
@@ -2041,6 +2038,9 @@ class MainServerLobbyRoutingService(
         activeJob.cancel()
         activeJob.join()
     }
+
+    private fun connectionNotAssignedToLobby(lobbyCode: LobbyCode): String =
+        "Connection ist keinem Spieler für Lobby '${lobbyCode.value}' zugeordnet."
 }
 
 /**

@@ -58,47 +58,8 @@ internal class LobbyEventLoop(
                 scope.launch {
                     for (item in events) {
                         when (item) {
-                            is QueuedItem.Single -> {
-                                try {
-                                    val beforeState = stateProcessor.currentState()
-                                    val afterState =
-                                        stateProcessor.apply(item.event, item.context)
-                                    item.processed.complete(
-                                        ProcessedLobbyEvent(
-                                            event = item.event,
-                                            beforeState = beforeState,
-                                            afterState = afterState,
-                                        ),
-                                    )
-                                } catch (cause: Throwable) {
-                                    item.processed.completeExceptionally(cause)
-                                }
-                            }
-                            is QueuedItem.Batch -> {
-                                val results = mutableListOf<ProcessedLobbyEvent>()
-                                var batchFailed = false
-                                for (event in item.events) {
-                                    if (batchFailed) break
-                                    try {
-                                        val beforeState = stateProcessor.currentState()
-                                        val afterState =
-                                            stateProcessor.apply(event, item.context)
-                                        results.add(
-                                            ProcessedLobbyEvent(
-                                                event = event,
-                                                beforeState = beforeState,
-                                                afterState = afterState,
-                                            ),
-                                        )
-                                    } catch (cause: Throwable) {
-                                        batchFailed = true
-                                        item.processed.completeExceptionally(cause)
-                                    }
-                                }
-                                if (!batchFailed) {
-                                    item.processed.complete(results)
-                                }
-                            }
+                            is QueuedItem.Single -> processSingle(item)
+                            is QueuedItem.Batch -> processBatch(item)
                         }
                     }
                 }
@@ -150,6 +111,43 @@ internal class LobbyEventLoop(
         val processed = CompletableDeferred<List<ProcessedLobbyEvent>>()
         events.send(QueuedItem.Batch(batch, context, processed))
         return processed.await()
+    }
+
+    private fun processSingle(item: QueuedItem.Single) {
+        try {
+            val beforeState = stateProcessor.currentState()
+            val afterState = stateProcessor.apply(item.event, item.context)
+            item.processed.complete(
+                ProcessedLobbyEvent(
+                    event = item.event,
+                    beforeState = beforeState,
+                    afterState = afterState,
+                ),
+            )
+        } catch (cause: Throwable) {
+            item.processed.completeExceptionally(cause)
+        }
+    }
+
+    private fun processBatch(item: QueuedItem.Batch) {
+        val results = mutableListOf<ProcessedLobbyEvent>()
+        for (event in item.events) {
+            try {
+                val beforeState = stateProcessor.currentState()
+                val afterState = stateProcessor.apply(event, item.context)
+                results.add(
+                    ProcessedLobbyEvent(
+                        event = event,
+                        beforeState = beforeState,
+                        afterState = afterState,
+                    ),
+                )
+            } catch (cause: Throwable) {
+                item.processed.completeExceptionally(cause)
+                return
+            }
+        }
+        item.processed.complete(results)
     }
 
     /**
