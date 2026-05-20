@@ -94,9 +94,19 @@ class MainActivity : AppCompatActivity() {
 
                 // Audio: SFX bei Studio-Intro, Music erst wenn MainMenu erreicht
                 LaunchedEffect(currentBackStackEntry) {
-                    when (currentBackStackEntry?.destination?.route) {
-                        Screen.StudioIntro.route -> musicManager.playSfx(R.raw.gamestudio)
-                        Screen.MainMenu.route -> musicManager.play(R.raw.menu_theme2)
+                    val route = currentBackStackEntry?.destination?.route
+                    when {
+                        route == Screen.StudioIntro.route ->
+                            musicManager.playSfx(R.raw.gabumon_intro)
+
+                        route == Screen.MainMenu.route ||
+                            route == Screen.Lobby.route ||
+                            route == Screen.LoadGame.route ||
+                            route?.startsWith(Screen.WaitingRoom.route) == true ->
+                            musicManager.play(R.raw.menu_theme2)
+
+                        route == Screen.Game.route ->
+                            musicManager.stop()
                     }
                 }
 

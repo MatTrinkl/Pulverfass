@@ -4,16 +4,17 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import androidx.annotation.RawRes
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
- * Verwaltet Hintergrundmusik-Wiedergabe via MediaPlayer.
+ * Verwaltet Hintergrundmusik + One-Shot SFX-Wiedergabe.
  *
  * Lifecycle wird vom Caller (MainActivity) gemanagt:
- *  - [play] startet einen Track (loopable)
- *  - [pause] / [resume] für Activity-Lifecycle
- *  - [release] beim onDispose/onDestroy
+ *  - [play] / [stop] / [pause] / [resume] für die Loop-Music
+ *  - [playSfx] für einmalige Sound-Effects (auto-released onCompletion)
+ *  - [release] beim onDestroy gibt alles frei (inkl. aktiver SFX)
  *
- * Mute-State persistiert via SharedPreferences damit's App-Restart-stabil ist.
+ * Mute-State persistiert via SharedPreferences (app-restart-stabil).
  */
 class BackgroundMusicManager(context: Context) {
     private val appContext = context.applicationContext
@@ -23,20 +24,21 @@ class BackgroundMusicManager(context: Context) {
     private var player: MediaPlayer? = null
     private var currentTrack: Int? = null
 
+    /**
+     * Thread-safe Tracking der aktiven One-Shot SFX-Player damit wir sie bei
+     * [release] freigeben falls Completion vorzeitig abgebrochen wurde.
+     */
+    private val activeSfxPlayers = CopyOnWriteArraySet<MediaPlayer>()
+
     val isMuted: Boolean
         get() = prefs.getBoolean(KEY_MUTED, false)
 
-    /**
-     * Spielt einen Raw-Resource-Track ab. Wenn derselbe Track schon läuft,
-     * passiert nix. Bei muted: Track wird "vorgemerkt" aber nicht gestartet —
-     * sobald unmuted, springt [resume] rein.
-     */
     fun play(
         @RawRes resId: Int,
         loop: Boolean = true,
     ) {
         if (currentTrack == resId && player?.isPlaying == true) return
-        stopInternal()
+        stop()
         currentTrack = resId
         if (isMuted) return
         player =
@@ -44,6 +46,17 @@ class BackgroundMusicManager(context: Context) {
                 isLooping = loop
                 start()
             }
+    }
+
+    fun stop() {
+        player?.let {
+            runCatching {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        }
+        player = null
+        currentTrack = null
     }
 
     fun pause() {
@@ -60,7 +73,6 @@ class BackgroundMusicManager(context: Context) {
         if (muted) {
             pause()
         } else {
-            // Falls noch nie initialisiert aber Track vorgemerkt, starten
             if (player == null && currentTrack != null) {
                 play(currentTrack!!)
             } else {
@@ -70,32 +82,39 @@ class BackgroundMusicManager(context: Context) {
     }
 
     /**
-     * Spielt einen Sound-Effect einmalig ab (kein Loop).
-     * MediaPlayer wird nach Ende automatisch freigegeben.
-     * Wird stumm geschaltet wenn isMuted = true.
+     * Spielt einen Sound-Effect einmalig ab.
+     *
+     * Player wird in [activeSfxPlayers] getrackt und gibt sich selbst frei
+     * via [MediaPlayer.OnCompletionListener] / [MediaPlayer.OnErrorListener].
+     * Falls die App zerstört wird bevor das passiert, räumt [release] auf.
      */
     fun playSfx(
         @RawRes resId: Int,
     ) {
         if (isMuted) return
-        MediaPlayer.create(appContext, resId)?.apply {
-            setOnCompletionListener { it.release() }
-            start()
+        val sfxPlayer = MediaPlayer.create(appContext, resId) ?: return
+        activeSfxPlayers.add(sfxPlayer)
+        sfxPlayer.setOnCompletionListener { mp ->
+            activeSfxPlayers.remove(mp)
+            runCatching { mp.release() }
         }
+        sfxPlayer.setOnErrorListener { mp, _, _ ->
+            activeSfxPlayers.remove(mp)
+            runCatching { mp.release() }
+            true
+        }
+        sfxPlayer.start()
     }
 
     fun release() {
-        stopInternal()
-    }
-
-    private fun stopInternal() {
-        player?.let {
+        stop()
+        activeSfxPlayers.forEach { sfx ->
             runCatching {
-                if (it.isPlaying) it.stop()
-                it.release()
+                if (sfx.isPlaying) sfx.stop()
+                sfx.release()
             }
         }
-        player = null
+        activeSfxPlayers.clear()
     }
 
     companion object {
