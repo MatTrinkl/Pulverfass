@@ -7,10 +7,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.network.ServerHealthStatus
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
-import kotlin.test.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.test.assertEquals
 
 @RunWith(AndroidJUnit4::class)
 class ServerStatusIndicatorTest {
