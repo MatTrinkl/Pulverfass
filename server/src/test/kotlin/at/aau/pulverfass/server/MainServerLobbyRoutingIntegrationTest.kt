@@ -24,6 +24,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
@@ -2015,6 +2016,48 @@ class MainServerLobbyRoutingIntegrationTest {
                 reconnectingSession.close()
                 bobSession.close()
                 carolSession.close()
+            }
+        }
+
+    @Test
+    fun `failed reconnect does not dispatch lobby snapshot`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val session = client.webSocketSession("/ws")
+                discardConnectionHandshake(session)
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data =
+                            MessageCodec.encode(
+                                ReconnectRequest(
+                                    SessionToken("123e4567-e89b-12d3-a456-426614174999"),
+                                ),
+                            ),
+                    ),
+                )
+
+                assertEquals(
+                    ReconnectResponse(
+                        success = false,
+                        errorCode = ReconnectErrorCode.TOKEN_INVALID,
+                    ),
+                    receivePayload(session),
+                )
+                assertNull(receivePayloadOrNull(session))
+
+                session.close()
             }
         }
 

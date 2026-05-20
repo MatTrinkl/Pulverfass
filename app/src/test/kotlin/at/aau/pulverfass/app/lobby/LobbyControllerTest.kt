@@ -560,6 +560,106 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `manual connect with active lobby session should reconnect`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("MR01")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
+            val payloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    payloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(1),
+                                            playerDisplayName = payload.playerDisplayName,
+                                            isHost = true,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is ReconnectRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        ReconnectResponse(
+                                            success = true,
+                                            playerId = PlayerId(1),
+                                            lobbyCode = lobbyCode,
+                                            playerDisplayName = "Alice",
+                                        ),
+                                    ),
+                                ),
+                            )
+                    }
+                }
+            val controller =
+                createController(
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+                waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
+
+                controller.disconnect()
+                waitUntil { !controller.state.value.isConnected }
+                payloads.clear()
+
+                controller.connect()
+
+                waitUntil {
+                    payloads.any {
+                        it is ReconnectRequest && it.sessionToken == originalToken
+                    }
+                }
+                waitUntil {
+                    controller.state.value.isConnected &&
+                        !controller.state.value.isReconnecting
+                }
+
+                val reconnectRequests = payloads.filterIsInstance<ReconnectRequest>()
+                assertEquals(listOf(originalToken), reconnectRequests.map { it.sessionToken })
+                assertFalse(payloads.any { it is CreateLobbyRequest })
+                assertFalse(payloads.any { it is JoinLobbyRequest })
+                assertEquals(originalToken.value, controller.state.value.sessionToken)
+                assertEquals(lobbyCode.value, controller.state.value.activeLobbyCode)
+                assertEquals(PlayerId(1), controller.state.value.ownPlayerId)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `startup reconnect should reuse persisted token`() {
         runBlocking {
             val lobbyCode = LobbyCode("PR35")
