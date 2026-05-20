@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app
 
+import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -16,6 +17,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -33,6 +39,7 @@ import at.aau.pulverfass.app.ui.screens.GameScreen
 import at.aau.pulverfass.app.ui.screens.LoadGameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
+import at.aau.pulverfass.app.ui.screens.MainMenuScreen
 import at.aau.pulverfass.app.ui.screens.StudioIntroScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
@@ -47,6 +54,11 @@ import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fullscreen Immersive: System-Bars verstecken (nutzt hideSystemBars())
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        hideSystemBars()
+
         enableEdgeToEdge()
         setContent {
             AndroidAppTheme {
@@ -60,6 +72,18 @@ class MainActivity : AppCompatActivity() {
                         LobbyController(reconnectSessionStore = reconnectSessionStore)
                     }
                 val lobbyState by lobbyController.state.collectAsState()
+
+                // === IMMERSIVE ENFORCEMENT ON EVERY NAV CHANGE ===
+                val view = LocalView.current
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
+                LaunchedEffect(currentBackStackEntry) {
+                    val window = (view.context as Activity).window
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    val controller = WindowInsetsControllerCompat(window, window.decorView)
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
 
                 DisposableEffect(Unit) {
                     onDispose {
@@ -90,6 +114,21 @@ class MainActivity : AppCompatActivity() {
                             composable(Screen.Load.route) {
                                 LoadScreen(navController)
                             }
+                            composable(Screen.MainMenu.route) {
+                                val activity = LocalContext.current as? Activity
+                                MainMenuScreen(
+                                    onStartClick = {
+                                        navController.navigate(Screen.Lobby.route)
+                                    },
+                                    onOptionsClick = {
+                                        // in planung
+                                    },
+                                    onExitClick = {
+                                        activity?.finish()
+                                    },
+                                )
+                            }
+
                             composable(Screen.Lobby.route) {
                                 LobbyScreen(
                                     navController = navController,
@@ -135,6 +174,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // Fix für das Problem das Screen Videos nicht vollscreen sind und der Content sich nicht über den ganzen screen anpasst
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }
 

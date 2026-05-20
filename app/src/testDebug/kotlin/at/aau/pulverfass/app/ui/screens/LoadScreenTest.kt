@@ -19,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val LOBBY_MARKER = "LobbyMarker"
+private const val MAIN_MENU_MARKER = "MainMenuMarker"
 
 @RunWith(AndroidJUnit4::class)
 class LoadScreenTest {
@@ -49,7 +49,7 @@ class LoadScreenTest {
                         background = {},
                     )
                 }
-                composable(Screen.Lobby.route) { Text(LOBBY_MARKER) }
+                composable(Screen.MainMenu.route) { Text(MAIN_MENU_MARKER) }
             }
         }
     }
@@ -110,7 +110,7 @@ class LoadScreenTest {
 
         composeTestRule.mainClock.advanceTimeBy(1_500L)
         composeTestRule.waitForIdle()
-        assertEquals(Screen.Lobby.route, capturedNav?.currentDestination?.route)
+        assertEquals(Screen.MainMenu.route, capturedNav?.currentDestination?.route)
     }
 
     @Test

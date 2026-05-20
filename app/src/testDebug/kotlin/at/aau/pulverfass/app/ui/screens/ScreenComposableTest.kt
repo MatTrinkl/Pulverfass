@@ -35,7 +35,7 @@ class ScreenComposableTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun load_screen_shows_version_and_navigates_to_lobby() {
+    fun load_screen_navigates_to_main_menu() {
         composeTestRule.mainClock.autoAdvance = false
 
         composeTestRule.setContent {
@@ -56,20 +56,21 @@ class ScreenComposableTest {
                             minDisplayTimeMs = 0L,
                         )
                     }
-                    composable(Screen.Lobby.route) {
-                        Text("Lobby destination")
+                    composable(Screen.MainMenu.route) {
+                        Text("MainMenu destination")
                     }
                 }
             }
         }
 
-        composeTestRule.onNodeWithText("Pulverfass").assertIsDisplayed()
-        composeTestRule.onNodeWithText("v1.0.0").assertIsDisplayed()
+        // The "v1.0.0" and "Pulverfass" text checks were removed here
+        // because the new UI no longer hardcodes them.
 
+        // Fast-forward past the 1,000ms delay in preloadAssets
         composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Lobby destination").assertIsDisplayed()
+        composeTestRule.onNodeWithText("MainMenu destination").assertIsDisplayed()
     }
 
     @Test
