@@ -22,8 +22,15 @@ import at.aau.pulverfass.app.network.ServerHealthStatus
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import kotlinx.coroutines.delay
 
+/** Standardintervall für den globalen Health-Check. */
 internal const val HEALTH_POLL_INTERVAL_MS = 10_000L
 
+/**
+ * Erzeugt den Health-Monitor für die aktuelle Composition.
+ *
+ * Beim Verlassen der Composition wird der zugrunde liegende HTTP-Client wieder
+ * geschlossen, damit keine Netzwerkressourcen offen bleiben.
+ */
 @Composable
 fun rememberServerHealthMonitor(): ServerHealthMonitor {
     val monitor = remember { ServerHealthMonitor() }
@@ -37,6 +44,17 @@ fun rememberServerHealthMonitor(): ServerHealthMonitor {
     return monitor
 }
 
+/**
+ * Startet das regelmäßige Polling des Serverstatus.
+ *
+ * Der erste Check läuft sofort, danach wird mit dem angegebenen Intervall
+ * weiter abgefragt. Sehr kleine Intervalle werden auf mindestens eine Sekunde
+ * begrenzt.
+ *
+ * @param monitor Health-Monitor, der den HTTP-Endpunkt abfragt
+ * @param pollIntervalMillis Abstand zwischen zwei Health-Checks
+ * @param initialStatus Status bis zur ersten Serverantwort
+ */
 @Composable
 fun rememberServerHealthStatus(
     monitor: ServerHealthMonitor = rememberServerHealthMonitor(),
@@ -55,6 +73,12 @@ fun rememberServerHealthStatus(
     return status
 }
 
+/**
+ * Zeigt den aktuellen Serverstatus als einfachen farbigen Kreis.
+ *
+ * Grün steht für einen gesunden Server, Orange für eine erreichbare
+ * Fehlerantwort und Rot für einen nicht erreichbaren Server.
+ */
 @Composable
 fun ServerStatusIndicator(
     status: ServerHealthStatus,
