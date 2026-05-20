@@ -216,6 +216,10 @@ class LobbyController(
         if (snapshot.isConnected || snapshot.isConnecting || snapshot.isReconnecting) {
             return
         }
+        if (canReconnect(snapshot)) {
+            beginReconnect(snapshot)
+            return
+        }
 
         scope.launch {
             _state.update {
