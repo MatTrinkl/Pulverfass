@@ -10,7 +10,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
  * Android dieselbe WebSocket-Verbindung für Lobby und Spiel wiederverwendet.
  */
 data class LobbyUiState(
-    val serverUrl: String = "ws://10.0.2.2:8080/ws",
+    val serverUrl: String = "ws://5.189.160.80:8080/ws",
     val playerName: String = "",
     val lobbyCode: String = "",
     val activeLobbyCode: String? = null,

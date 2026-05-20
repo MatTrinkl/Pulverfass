@@ -121,7 +121,7 @@ class MainActivity : AppCompatActivity() {
                                         navController.navigate(Screen.Lobby.route)
                                     },
                                     onOptionsClick = {
-                                        // TODO PR 3b: navigate to SettingsScreen
+                                        // in planung
                                     },
                                     onExitClick = {
                                         activity?.finish()
