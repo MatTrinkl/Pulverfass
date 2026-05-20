@@ -36,6 +36,19 @@ class ServerStatusIndicatorTest {
     }
 
     @Test
+    fun shows_error_status_description() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                ServerStatusIndicator(status = ServerHealthStatus.ERROR)
+            }
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Serverstatus: Fehler")
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun shows_unreachable_status_description() {
         composeTestRule.setContent {
             AndroidAppTheme {

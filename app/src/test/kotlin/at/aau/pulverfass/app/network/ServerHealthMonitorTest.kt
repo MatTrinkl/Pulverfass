@@ -21,6 +21,14 @@ class ServerHealthMonitorTest {
     }
 
     @Test
+    fun success_status_with_trimmed_case_insensitive_ok_body_maps_to_ok() {
+        assertEquals(
+            ServerHealthStatus.OK,
+            serverHealthStatusFromResponse(isSuccessStatus = true, body = " OK "),
+        )
+    }
+
+    @Test
     fun success_status_with_non_ok_body_maps_to_error() {
         assertEquals(
             ServerHealthStatus.ERROR,
