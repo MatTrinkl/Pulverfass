@@ -183,6 +183,69 @@ class ConfirmReinforcementsDoneIntegrationTest {
         }
 
     @Test
+    fun `confirm rejected when requester is not active player`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRNP")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val initialState =
+                reinforcementState(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerTwo,
+                    pendingAmount = 0,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    lobbyCode = lobbyCode,
+                    state = initialState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmReinforcementsDoneRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER, error.code)
+            assertEquals(initialState.stateVersion, snapshot.stateVersion)
+            assertEquals(TurnPhase.REINFORCEMENTS, snapshot.activeTurnPhase)
+        }
+
+    @Test
+    fun `confirm rejected when phase is not REINFORCEMENTS`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRPM")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val initialState =
+                reinforcementState(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    pendingAmount = 0,
+                    turnPhase = TurnPhase.ATTACK,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    lobbyCode = lobbyCode,
+                    state = initialState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmReinforcementsDoneRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmReinforcementsDoneErrorCode.PHASE_MISMATCH, error.code)
+            assertEquals(initialState.stateVersion, snapshot.stateVersion)
+            assertEquals(TurnPhase.ATTACK, snapshot.activeTurnPhase)
+        }
+
+    @Test
     fun `pending greater than zero fails`() =
         testApplication {
             val lobbyCode = LobbyCode("CRI2")
@@ -295,6 +358,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
         players: List<PlayerId>,
         activePlayerId: PlayerId,
         pendingAmount: Int,
+        turnPhase: TurnPhase = TurnPhase.REINFORCEMENTS,
     ): GameState =
         GameState
             .initial(
@@ -310,7 +374,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
                 turnState =
                     TurnState(
                         activePlayerId = activePlayerId,
-                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnPhase = turnPhase,
                         turnCount = 1,
                         startPlayerId = players.first(),
                     ),

@@ -608,13 +608,15 @@ class MainServerLobbyRoutingService(
         previousTurnState: TurnState?,
         context: EventContext,
     ) {
-        if (previousTurnState?.turnPhase != TurnPhase.DRAW_CARD) {
-            return
-        }
-
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
         val currentTurnState = currentState.resolvedTurnState ?: return
         if (currentTurnState.turnPhase != TurnPhase.REINFORCEMENTS) {
+            return
+        }
+        // Skip if already in REINFORCEMENTS for the same player (no phase entry occurred)
+        if (previousTurnState?.turnPhase == TurnPhase.REINFORCEMENTS &&
+            previousTurnState.activePlayerId == currentTurnState.activePlayerId
+        ) {
             return
         }
 
@@ -702,6 +704,13 @@ class MainServerLobbyRoutingService(
             is LobbyRoutingResult.Success -> {
                 dispatchNetworkMessages(request)
                 if (lobbyCode != null) {
+                    if (request.payload is StartGameRequest) {
+                        grantBaseReinforcementsOnPhaseStart(
+                            lobbyCode = lobbyCode,
+                            previousTurnState = previousTurnState,
+                            context = request.context,
+                        )
+                    }
                     broadcastTurnStateIfChanged(
                         lobbyCode = lobbyCode,
                         previousTurnState = previousTurnState,
@@ -1149,6 +1158,10 @@ class MainServerLobbyRoutingService(
         require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
         check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
         require(currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) { "PHASE_MISMATCH" }
+        val hand = state.handOf(payload.playerId)
+        require(
+            !(hand.size >= 5 && CardSetValidator.canMakeAnySet(hand)),
+        ) { "FORCED_TRADE_REQUIRED" }
         require(payload.placements.isNotEmpty()) { "INVALID_PLACEMENT" }
 
         payload.placements.forEach { placement ->
@@ -1271,6 +1284,10 @@ class MainServerLobbyRoutingService(
         require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
         check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
         require(currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) { "PHASE_MISMATCH" }
+        val hand = state.handOf(payload.playerId)
+        require(
+            !(hand.size >= 5 && CardSetValidator.canMakeAnySet(hand)),
+        ) { "FORCED_TRADE_REQUIRED" }
         require(state.pendingReinforcementsFor(payload.playerId) == 0) {
             "PENDING_REINFORCEMENTS_REMAINING"
         }
@@ -1427,6 +1444,7 @@ class MainServerLobbyRoutingService(
                 "TERRITORY_NOT_OWNED" -> PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED
                 "OVERSPEND" -> PlaceReinforcementsErrorCode.OVERSPEND
                 "INVALID_PLACEMENT" -> PlaceReinforcementsErrorCode.INVALID_PLACEMENT
+                "FORCED_TRADE_REQUIRED" -> PlaceReinforcementsErrorCode.FORCED_TRADE_REQUIRED
                 else -> PlaceReinforcementsErrorCode.NOT_ACTIVE_PLAYER
             }
 
@@ -1487,6 +1505,9 @@ class MainServerLobbyRoutingService(
                 PlaceReinforcementsErrorCode.INVALID_PLACEMENT ->
                     "Die Verstärkungsplatzierung muss mindestens ein Ziel enthalten und alle " +
                         "Mengen müssen positiv sein."
+                PlaceReinforcementsErrorCode.FORCED_TRADE_REQUIRED ->
+                    "Truppenplatzierung ist gesperrt: Spieler '${payload.playerId.value}' hat " +
+                        "mindestens 5 Karten und kann ein Set abgeben."
             }
 
         return PlaceReinforcementsErrorResponse(code = code, reason = reason)
@@ -1574,6 +1595,7 @@ class MainServerLobbyRoutingService(
                 "PHASE_MISMATCH" -> ConfirmReinforcementsDoneErrorCode.PHASE_MISMATCH
                 "PENDING_REINFORCEMENTS_REMAINING" ->
                     ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING
+                "FORCED_TRADE_REQUIRED" -> ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED
                 else -> ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER
             }
 

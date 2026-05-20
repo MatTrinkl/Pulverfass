@@ -1383,6 +1383,111 @@ class DefaultLobbyEventReducerTest {
         assertEquals(GameStatus.FINISHED, finishedState.status)
     }
 
+    @Test
+    fun `card set traded in rejects wrong trade index and wrong value`() {
+        val lobbyCode = LobbyCode("TM19")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val wrongIndexException =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    initialState,
+                    CardSetTradedInEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = playerOne,
+                        cardIds = listOf(CardId("c1"), CardId("c2"), CardId("c3")),
+                        value = 4,
+                        tradeIndex = 2,
+                    ),
+                )
+            }
+        assertEquals(
+            "CardSetTradedInEvent.tradeIndex muss den naechsten globalen " +
+                "Trade-In abbilden: erwartet=1, war=2.",
+            wrongIndexException.message,
+        )
+
+        val wrongValueException =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    initialState,
+                    CardSetTradedInEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = playerOne,
+                        cardIds = listOf(CardId("c1"), CardId("c2"), CardId("c3")),
+                        value = 99,
+                        tradeIndex = 1,
+                    ),
+                )
+            }
+        assertEquals(
+            "CardSetTradedInEvent.value passt nicht zur Progression: erwartet=2, war=99.",
+            wrongValueException.message,
+        )
+    }
+
+    @Test
+    fun `card set traded in rejects unknown player`() {
+        val lobbyCode = LobbyCode("TM20")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                initialState,
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = PlayerId(99),
+                    cardIds = listOf(CardId("c1"), CardId("c2"), CardId("c3")),
+                    value = 2,
+                    tradeIndex = 1,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `pending reinforcements changed rejects cross player modification`() {
+        val lobbyCode = LobbyCode("TM21")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+        val withSet =
+            reducer.apply(
+                initialState,
+                PendingReinforcementsSetEvent(lobbyCode, playerOne, 5),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    withSet,
+                    PendingReinforcementsChangedEvent(lobbyCode, playerTwo, 3),
+                )
+            }
+        assertEquals(
+            "PendingReinforcements gehören Spieler '1' und " +
+                "können nicht für '2' verändert werden.",
+            exception.message,
+        )
+    }
+
     private fun sampleMapDefinition(): MapDefinition =
         MapDefinition(
             schemaVersion = 1,

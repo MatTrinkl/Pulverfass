@@ -20,6 +20,7 @@ enum class PlaceReinforcementsErrorCode {
     TERRITORY_NOT_OWNED,
     OVERSPEND,
     INVALID_PLACEMENT,
+    FORCED_TRADE_REQUIRED,
 }
 
 @Serializable(with = PlaceReinforcementsErrorResponseSerializer::class)

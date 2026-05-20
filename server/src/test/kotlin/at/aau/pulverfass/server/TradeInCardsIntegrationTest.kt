@@ -254,6 +254,91 @@ class TradeInCardsIntegrationTest {
         }
 
     @Test
+    fun `invalid trade rejected when requester is not active player`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val cardA = CardState(CardId("card-a"), CardType.A)
+            val cardB = CardState(CardId("card-b"), CardType.B)
+            val cardJ = CardState(CardId("card-j"), CardType.JOKER)
+            val state =
+                reinforcementTradeGame(
+                    lobbyCode = LobbyCode("TRNP"),
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerTwo,
+                    pendingPlayerId = playerTwo,
+                    pendingAmount = 3,
+                    handState =
+                        HandState(
+                            cardsByPlayer =
+                                mapOf(
+                                    playerOne to listOf(cardA, cardB, cardJ),
+                                ),
+                        ),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingTrade(
+                    lobbyCode = LobbyCode("TRNP"),
+                    state = state,
+                    requesterPlayerId = playerOne,
+                    request =
+                        TradeInCardsRequest(
+                            lobbyCode = LobbyCode("TRNP"),
+                            playerId = playerOne,
+                            cardIds = listOf(cardA.cardId, cardB.cardId, cardJ.cardId),
+                        ),
+                )
+
+            assertEquals(TradeInCardsErrorCode.NOT_ACTIVE_PLAYER, error.code)
+            assertEquals(state.stateVersion, snapshot.stateVersion)
+            assertEquals(0, snapshot.tradedInSetCount)
+        }
+
+    @Test
+    fun `invalid trade rejected when phase is not REINFORCEMENTS`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val cardA = CardState(CardId("card-a"), CardType.A)
+            val cardB = CardState(CardId("card-b"), CardType.B)
+            val cardJ = CardState(CardId("card-j"), CardType.JOKER)
+            val state =
+                reinforcementTradeGame(
+                    lobbyCode = LobbyCode("TRPM"),
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 0,
+                    handState =
+                        HandState(
+                            cardsByPlayer =
+                                mapOf(
+                                    playerOne to listOf(cardA, cardB, cardJ),
+                                ),
+                        ),
+                    turnPhase = TurnPhase.ATTACK,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingTrade(
+                    lobbyCode = LobbyCode("TRPM"),
+                    state = state,
+                    requesterPlayerId = playerOne,
+                    request =
+                        TradeInCardsRequest(
+                            lobbyCode = LobbyCode("TRPM"),
+                            playerId = playerOne,
+                            cardIds = listOf(cardA.cardId, cardB.cardId, cardJ.cardId),
+                        ),
+                )
+
+            assertEquals(TradeInCardsErrorCode.PHASE_MISMATCH, error.code)
+            assertEquals(state.stateVersion, snapshot.stateVersion)
+            assertEquals(0, snapshot.tradedInSetCount)
+        }
+
+    @Test
     fun `security rejects trade when cards are not owned by requester`() =
         testApplication {
             val playerOne = PlayerId(1)
@@ -372,12 +457,13 @@ class TradeInCardsIntegrationTest {
         pendingPlayerId: PlayerId,
         pendingAmount: Int,
         handState: HandState,
+        turnPhase: TurnPhase = TurnPhase.REINFORCEMENTS,
     ): GameState {
         val mapDefinition = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
         val turnState =
             TurnState(
                 activePlayerId = activePlayerId,
-                turnPhase = TurnPhase.REINFORCEMENTS,
+                turnPhase = turnPhase,
                 turnCount = 1,
                 startPlayerId = players.first(),
             )

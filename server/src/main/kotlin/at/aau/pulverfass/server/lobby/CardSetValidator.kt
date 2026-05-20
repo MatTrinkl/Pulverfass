@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server.lobby
 
+import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
 
 /**
@@ -35,5 +36,18 @@ object CardSetValidator {
 
             remainingByType.values.sum() == jokers
         }
+    }
+
+    fun canMakeAnySet(cards: List<CardState>): Boolean {
+        if (cards.size < 3) return false
+        val types = cards.map { it.type }
+        for (i in types.indices) {
+            for (j in i + 1 until types.size) {
+                for (k in j + 1 until types.size) {
+                    if (isValidSet(listOf(types[i], types[j], types[k]))) return true
+                }
+            }
+        }
+        return false
     }
 }

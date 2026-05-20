@@ -45,4 +45,40 @@ class HandStateTest {
             )
         }
     }
+
+    @Test
+    fun `withCardAdded rejects card whose id already exists in another hand`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val card = CardState(cardId = CardId("shared-card"), type = CardType.A)
+        val hand = HandState().withCardAdded(playerOne, card)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            hand.withCardAdded(playerTwo, card)
+        }
+    }
+
+    @Test
+    fun `withoutCard rejects removal of card not held by player`() {
+        val playerId = PlayerId(1)
+        val card = CardState(cardId = CardId("present"), type = CardType.B)
+        val absentId = CardId("absent")
+        val hand = HandState().withCardAdded(playerId, card)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            hand.withoutCard(playerId, absentId)
+        }
+    }
+
+    @Test
+    fun `withoutCard removes player entry when last card is taken out`() {
+        val playerId = PlayerId(1)
+        val card = CardState(cardId = CardId("only-card"), type = CardType.C)
+        val hand = HandState().withCardAdded(playerId, card)
+
+        val empty = hand.withoutCard(playerId, card.cardId)
+
+        assertFalse(empty.cardsByPlayer.containsKey(playerId))
+        assertEquals(0, empty.handSizeOf(playerId))
+    }
 }

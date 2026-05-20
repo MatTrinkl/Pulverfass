@@ -168,6 +168,29 @@ class PublicGameStateBuilderTest {
         )
     }
 
+    @Test
+    fun `buildSnapshot throws when game state has no turn state`() {
+        val gameState =
+            GameState.initial(
+                lobbyCode = LobbyCode("PGB2"),
+                mapDefinition = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault(),
+            ).copy(
+                turnState = null,
+                activePlayer = null,
+                turnOrder = emptyList(),
+                turnNumber = 0,
+            )
+
+        val exception =
+            assertThrows(IllegalStateException::class.java) {
+                builder.buildSnapshot(gameState)
+            }
+        assertEquals(
+            "GameState enthält keinen TurnState für einen Snapshot.",
+            exception.message,
+        )
+    }
+
     private fun sampleGameState(): GameState =
         GameState.initial(
             lobbyCode = LobbyCode("PGB0"),

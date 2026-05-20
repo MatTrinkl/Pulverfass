@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server.lobby
 
+import at.aau.pulverfass.shared.ids.CardId
+import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -65,4 +67,65 @@ class CardSetValidatorTest {
             ),
         )
     }
+
+    @Test
+    fun `canMakeAnySet returns false for empty hand`() {
+        assertFalse(CardSetValidator.canMakeAnySet(emptyList()))
+    }
+
+    @Test
+    fun `canMakeAnySet returns false when fewer than three cards`() {
+        assertFalse(
+            CardSetValidator.canMakeAnySet(
+                listOf(card("x", CardType.A), card("y", CardType.B)),
+            ),
+        )
+    }
+
+    @Test
+    fun `canMakeAnySet returns false when no valid three-card combination exists`() {
+        assertFalse(
+            CardSetValidator.canMakeAnySet(
+                listOf(
+                    card("1", CardType.A),
+                    card("2", CardType.A),
+                    card("3", CardType.B),
+                    card("4", CardType.B),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `canMakeAnySet returns true when at least one valid set exists in the hand`() {
+        assertTrue(
+            CardSetValidator.canMakeAnySet(
+                listOf(
+                    card("1", CardType.A),
+                    card("2", CardType.A),
+                    card("3", CardType.B),
+                    card("4", CardType.B),
+                    card("5", CardType.C),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `canMakeAnySet returns true when joker completes a set`() {
+        assertTrue(
+            CardSetValidator.canMakeAnySet(
+                listOf(
+                    card("1", CardType.A),
+                    card("2", CardType.B),
+                    card("3", CardType.JOKER),
+                ),
+            ),
+        )
+    }
+
+    private fun card(
+        id: String,
+        type: CardType,
+    ) = CardState(CardId(id), type)
 }
