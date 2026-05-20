@@ -2,9 +2,11 @@ package at.aau.pulverfass.server.persistence
 
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.map.MapDefinitionRepository
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -12,6 +14,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -24,8 +27,11 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
+import at.aau.pulverfass.shared.lobby.state.DeckState
+import at.aau.pulverfass.shared.lobby.state.DiscardPileState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -47,6 +53,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -150,6 +157,10 @@ data class PersistedLobbyRecoverySnapshot(
     val territoryStates: List<MapTerritoryStateSnapshot>,
     val setupTroopsToPlaceByPlayer: List<PersistedSetupTroopsSnapshot>,
     val pendingReinforcements: PendingReinforcements? = null,
+    val handState: HandState = HandState(),
+    val deckState: DeckState = DeckState(),
+    val discardPileState: DiscardPileState = DiscardPileState(),
+    val tradedInSetCount: Int = 0,
 ) {
     companion object {
         fun fromGameState(gameState: GameState): PersistedLobbyRecoverySnapshot =
@@ -195,6 +206,10 @@ data class PersistedLobbyRecoverySnapshot(
                         )
                     },
                 pendingReinforcements = gameState.pendingReinforcements,
+                handState = gameState.handState,
+                deckState = gameState.deckState,
+                discardPileState = gameState.discardPileState,
+                tradedInSetCount = gameState.tradedInSetCount,
             )
     }
 
@@ -239,6 +254,10 @@ data class PersistedLobbyRecoverySnapshot(
             setupTroopsToPlaceByPlayer =
                 setupTroopsToPlaceByPlayer.associate { it.playerId to it.troopCount },
             pendingReinforcements = pendingReinforcements,
+            handState = handState,
+            deckState = deckState,
+            discardPileState = discardPileState,
+            tradedInSetCount = tradedInSetCount,
         )
     }
 }
@@ -323,6 +342,14 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
 
     return when (eventType) {
         "lobby_created" -> LobbyCreated(lobbyCode)
+        "card_set_traded_in" ->
+            CardSetTradedInEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                cardIds = jsonObject.stringList("cardIds").map(::CardId),
+                value = jsonObject.int("value"),
+                tradeIndex = jsonObject.int("tradeIndex"),
+            )
         "pending_reinforcements_set" ->
             PendingReinforcementsSetEvent(
                 lobbyCode = lobbyCode,
@@ -334,6 +361,12 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
                 delta = jsonObject.int("delta"),
+            )
+        "player_cards_removed" ->
+            PlayerCardsRemovedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                cardIds = jsonObject.stringList("cardIds").map(::CardId),
             )
         "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
         "player_joined" ->
@@ -417,6 +450,9 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
 }
 
 private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive.content
+
+private fun JsonObject.stringList(key: String): List<String> =
+    getValue(key).jsonArray.map { element -> element.jsonPrimitive.content }
 
 private fun JsonObject.nullableString(key: String): String? =
     this[key]?.jsonPrimitive?.contentOrNull

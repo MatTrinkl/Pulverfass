@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.lobby.state
 
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -37,6 +38,10 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
  * @property pendingReinforcements verbleibender Verstärkungspool eines Spielers für Phase 1
+ * @property handState autoritative Kartenhände aller Spieler
+ * @property deckState Platzhalter für den serverseitigen Kartenstapel
+ * @property discardPileState Platzhalter für den serverseitigen Ablagestapel
+ * @property tradedInSetCount globaler Zähler aller bereits eingetauschten Kartensets dieser Lobby
  */
 data class GameState(
     val lobbyCode: LobbyCode,
@@ -60,6 +65,10 @@ data class GameState(
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
     val pendingReinforcements: PendingReinforcements? = null,
+    val handState: HandState = HandState(),
+    val deckState: DeckState = DeckState(),
+    val discardPileState: DiscardPileState = DiscardPileState(),
+    val tradedInSetCount: Int = 0,
 ) {
     init {
         require(turnNumber >= 0) {
@@ -70,6 +79,9 @@ data class GameState(
         }
         require(processedEventCount >= 0) {
             "GameState.processedEventCount darf nicht negativ sein, war aber $processedEventCount."
+        }
+        require(tradedInSetCount >= 0) {
+            "GameState.tradedInSetCount darf nicht negativ sein, war aber $tradedInSetCount."
         }
         require(players == players.distinct()) {
             "GameState.players darf keine Duplikate enthalten."
@@ -85,6 +97,9 @@ data class GameState(
         }
         require(pendingReinforcements == null || players.contains(pendingReinforcements.playerId)) {
             "GameState.pendingReinforcements.playerId muss Teil der Spielerliste sein."
+        }
+        require(handState.cardsByPlayer.keys.all(players::contains)) {
+            "GameState.handState darf nur Karten für bekannte Spieler enthalten."
         }
         require(turnOrder == turnOrder.distinct()) {
             "GameState.turnOrder darf keine Duplikate enthalten."
@@ -129,6 +144,10 @@ data class GameState(
         require((mapDefinition == null) == territoryStates.isEmpty()) {
             "GameState.mapDefinition und GameState.territoryStates müssen " +
                 "gemeinsam gesetzt oder leer sein."
+        }
+        require(allCardIds().distinct().size == allCardIds().size) {
+            "GameState.handState, deckState und discardPileState dürfen " +
+                "keine CardIds mehrfach enthalten."
         }
 
         if (mapDefinition != null) {
@@ -211,6 +230,24 @@ data class GameState(
      * Prüft, ob aktuell noch ausstehende Verstärkungen vorhanden sind.
      */
     fun hasPendingReinforcements(): Boolean = (pendingReinforcements?.amount ?: 0) > 0
+
+    /**
+     * Liefert die Kartenhand eines Spielers in stabiler Einfügereihenfolge.
+     */
+    fun handOf(playerId: PlayerId): List<CardState> = handState.cardsOf(playerId)
+
+    /**
+     * Liefert die aktuelle Handgröße eines Spielers.
+     */
+    fun handSizeOf(playerId: PlayerId): Int = handState.handSizeOf(playerId)
+
+    /**
+     * Prüft, ob ein Spieler eine konkrete Karte besitzt.
+     */
+    fun playerHasCard(
+        playerId: PlayerId,
+        cardId: CardId,
+    ): Boolean = handState.contains(playerId, cardId)
 
     /**
      * Liefert alle Laufzeit-Territorien in stabiler Map-Reihenfolge.
@@ -482,6 +519,49 @@ data class GameState(
     internal fun withoutPendingReinforcements(): GameState = copy(pendingReinforcements = null)
 
     /**
+     * Fügt der Hand eines Spielers eine Karte hinzu.
+     */
+    internal fun withCardAddedToHand(
+        playerId: PlayerId,
+        card: CardState,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        require(card.cardId !in deckState.cards.map(CardState::cardId)) {
+            "Card '${card.cardId.value}' ist noch im Deck vorhanden."
+        }
+        require(card.cardId !in discardPileState.cards.map(CardState::cardId)) {
+            "Card '${card.cardId.value}' ist bereits im DiscardPile vorhanden."
+        }
+
+        return copy(
+            handState = handState.withCardAdded(playerId, card),
+        )
+    }
+
+    /**
+     * Entfernt genau eine Karte aus der Hand eines Spielers.
+     */
+    internal fun withoutCardFromHand(
+        playerId: PlayerId,
+        cardId: CardId,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+
+        return copy(
+            handState = handState.withoutCard(playerId, cardId),
+        )
+    }
+
+    /**
+     * Setzt den globalen Trade-In-Zähler auf einen absoluten Wert.
+     */
+    internal fun withTradedInSetCount(count: Int): GameState = copy(tradedInSetCount = count)
+
+    /**
      * Liefert einen initialen State für eine einzelne Lobby.
      */
     companion object {
@@ -531,6 +611,11 @@ data class GameState(
             processedEventCount = processedEventCount + 1,
             lastEventContext = context,
         )
+
+    private fun allCardIds(): List<CardId> =
+        handState.cardsByPlayer.values.flatten().map(CardState::cardId) +
+            deckState.cards.map(CardState::cardId) +
+            discardPileState.cards.map(CardState::cardId)
 
     private fun requireMapDefinition(): MapDefinition =
         mapDefinition

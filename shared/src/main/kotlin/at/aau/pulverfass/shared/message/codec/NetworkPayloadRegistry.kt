@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -28,6 +29,7 @@ import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
+import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
@@ -42,6 +44,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
@@ -55,6 +58,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.MessageType
@@ -108,6 +112,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            PlayerHandUpdatedEvent::class.java to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
             GameStateDeltaEvent::class.java to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
             PhaseBoundaryEvent::class.java to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
             GameStateSnapshotBroadcast::class.java to
@@ -133,6 +138,10 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_PLACE_REINFORCEMENTS_RESPONSE,
             PlaceReinforcementsErrorResponse::class.java to
                 MessageType.LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE,
+            TradeInCardsRequest::class.java to MessageType.LOBBY_TRADE_IN_CARDS_REQUEST,
+            TradeInCardsResponse::class.java to MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE,
+            TradeInCardsErrorResponse::class.java to
+                MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE,
             StartPlayerSetRequest::class.java to
                 MessageType.LOBBY_START_PLAYER_SET_REQUEST,
             StartPlayerSetResponse::class.java to
@@ -199,6 +208,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to encodeWith(StartGameResponse.serializer()),
             StartGameErrorResponse::class.java to encodeWith(StartGameErrorResponse.serializer()),
             GameStartedEvent::class.java to encodeWith(GameStartedEvent.serializer()),
+            PlayerHandUpdatedEvent::class.java to encodeWith(PlayerHandUpdatedEvent.serializer()),
             GameStateDeltaEvent::class.java to encodeWith(GameStateDeltaEvent.serializer()),
             PhaseBoundaryEvent::class.java to encodeWith(PhaseBoundaryEvent.serializer()),
             GameStateSnapshotBroadcast::class.java to
@@ -223,6 +233,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(PlaceReinforcementsResponse.serializer()),
             PlaceReinforcementsErrorResponse::class.java to
                 encodeWith(PlaceReinforcementsErrorResponse.serializer()),
+            TradeInCardsRequest::class.java to encodeWith(TradeInCardsRequest.serializer()),
+            TradeInCardsResponse::class.java to encodeWith(TradeInCardsResponse.serializer()),
+            TradeInCardsErrorResponse::class.java to
+                encodeWith(TradeInCardsErrorResponse.serializer()),
             StartPlayerSetRequest::class.java to encodeWith(StartPlayerSetRequest.serializer()),
             StartPlayerSetResponse::class.java to encodeWith(StartPlayerSetResponse.serializer()),
             StartPlayerSetErrorResponse::class.java to
@@ -292,6 +306,8 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_START_ERROR_RESPONSE to
                 decodeWith(StartGameErrorResponse.serializer()),
             MessageType.LOBBY_GAME_STARTED_BROADCAST to decodeWith(GameStartedEvent.serializer()),
+            MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT to
+                decodeWith(PlayerHandUpdatedEvent.serializer()),
             MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST to
                 decodeWith(GameStateDeltaEvent.serializer()),
             MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST to
@@ -320,6 +336,12 @@ internal object NetworkPayloadRegistry {
                 decodeWith(PlaceReinforcementsResponse.serializer()),
             MessageType.LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE to
                 decodeWith(PlaceReinforcementsErrorResponse.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_REQUEST to
+                decodeWith(TradeInCardsRequest.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE to
+                decodeWith(TradeInCardsResponse.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE to
+                decodeWith(TradeInCardsErrorResponse.serializer()),
             MessageType.LOBBY_START_PLAYER_SET_REQUEST to
                 decodeWith(StartPlayerSetRequest.serializer()),
             MessageType.LOBBY_START_PLAYER_SET_RESPONSE to

@@ -1,9 +1,11 @@
 package at.aau.pulverfass.server.persistence
 
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -18,8 +20,13 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.CardState
+import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.DeckState
+import at.aau.pulverfass.shared.lobby.state.DiscardPileState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
@@ -49,7 +56,45 @@ class LobbyRecoveryLoaderTest {
                 gameStarted = true,
                 stateVersion = 7,
                 processedEventCount = 7,
+                tradedInSetCount = 2,
                 lastInvalidActionReason = "none",
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                hostId to
+                                    listOf(
+                                        CardState(
+                                            cardId = CardId("card-a"),
+                                            type = CardType.A,
+                                        ),
+                                        CardState(
+                                            cardId = CardId("card-joker"),
+                                            type = CardType.JOKER,
+                                        ),
+                                    ),
+                            ),
+                    ),
+                deckState =
+                    DeckState(
+                        cards =
+                            listOf(
+                                CardState(
+                                    cardId = CardId("deck-1"),
+                                    type = CardType.B,
+                                ),
+                            ),
+                    ),
+                discardPileState =
+                    DiscardPileState(
+                        cards =
+                            listOf(
+                                CardState(
+                                    cardId = CardId("discard-1"),
+                                    type = CardType.C,
+                                ),
+                            ),
+                    ),
             )
 
         val restored = PersistedLobbyRecoverySnapshot.fromGameState(state).toGameState()
@@ -83,6 +128,22 @@ class LobbyRecoveryLoaderTest {
     fun `toLobbyEvent maps all supported persisted event types`() {
         val createdAt = Instant.parse("2026-01-01T00:00:00Z")
 
+        assertEquals(
+            CardSetTradedInEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(5),
+                cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
+                value = 6,
+                tradeIndex = 3,
+            ),
+            record(
+                "card_set_traded_in",
+                """
+                {"lobbyCode":"LR11","playerId":5,"cardIds":["card-a","card-b","card-c"],"value":6,"tradeIndex":3}
+                """.trimIndent(),
+                createdAt,
+            ).toLobbyEvent(),
+        )
         assertEquals(
             LobbyCreated(lobbyCode),
             record(

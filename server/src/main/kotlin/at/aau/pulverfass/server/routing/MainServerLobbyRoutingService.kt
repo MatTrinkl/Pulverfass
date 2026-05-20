@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.server.ServerNetwork
+import at.aau.pulverfass.server.lobby.CardSetValidator
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
@@ -10,8 +11,10 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -19,6 +22,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TradeInProgression
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -28,6 +32,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
@@ -43,6 +48,7 @@ import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
+import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
@@ -57,6 +63,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
@@ -77,6 +84,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcements
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
@@ -169,6 +178,7 @@ class MainServerLobbyRoutingService(
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
             is PlaceReinforcementsRequest -> routePlaceReinforcementsRequest(request)
             is StartPlayerSetRequest -> routeStartPlayerSetRequest(request)
+            is TradeInCardsRequest -> routeTradeInCardsRequest(request)
             is TurnStateGetRequest -> routeTurnStateGetRequest(request)
             is TurnAdvanceRequest -> routeTurnAdvanceRequest(request)
             else -> routeDecodedRequest(request)
@@ -539,6 +549,43 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = placeReinforcementsErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeTradeInCardsRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as TradeInCardsRequest
+
+        runCatching {
+            val events = buildTradeInCardsEvents(request, payload)
+            events.forEach { event -> lobbyManager.submit(event, request.context) }
+            network.send(
+                request.connectionId,
+                TradeInCardsResponse(lobbyCode = payload.lobbyCode),
+            )
+            val updatedState =
+                lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                    ?: throw IllegalStateException("GAME_NOT_FOUND")
+            gameStateDelivery.sendPrivateState(
+                payload.lobbyCode,
+                PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+            )
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = tradeInCardsErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -1150,6 +1197,61 @@ class MainServerLobbyRoutingService(
             )
     }
 
+    private fun buildTradeInCardsEvents(
+        request: DecodedNetworkRequest,
+        payload: TradeInCardsRequest,
+    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val state = lobby.currentState()
+        val contextPlayerId = request.context.playerId
+        val currentTurnState =
+            state.resolvedTurnState
+                ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
+
+        require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
+            "REQUESTER_MISMATCH"
+        }
+        require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
+        check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
+        require(currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) { "PHASE_MISMATCH" }
+        require(payload.cardIds.size == 3) { "INVALID_REQUEST" }
+        require(payload.cardIds.distinct().size == payload.cardIds.size) { "INVALID_REQUEST" }
+
+        val cardsById = state.handOf(payload.playerId).associateBy { card -> card.cardId }
+        val selectedCards =
+            payload.cardIds.map { cardId ->
+                cardsById[cardId] ?: throw IllegalArgumentException("CARDS_NOT_OWNED")
+            }
+        require(CardSetValidator.isValidSet(selectedCards.map { card -> card.type })) {
+            "INVALID_SET"
+        }
+
+        val tradeIndex = state.tradedInSetCount + 1
+        val tradeValue = TradeInProgression.tradeInValue(tradeIndex)
+
+        return listOf(
+            CardSetTradedInEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                cardIds = payload.cardIds,
+                value = tradeValue,
+                tradeIndex = tradeIndex,
+            ),
+            PendingReinforcementsChangedEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                delta = tradeValue,
+            ),
+            PlayerCardsRemovedEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                cardIds = payload.cardIds,
+            ),
+        )
+    }
+
     private fun buildConfirmReinforcementsDoneEvent(
         request: DecodedNetworkRequest,
         payload: ConfirmReinforcementsDoneRequest,
@@ -1388,6 +1490,75 @@ class MainServerLobbyRoutingService(
             }
 
         return PlaceReinforcementsErrorResponse(code = code, reason = reason)
+    }
+
+    private fun tradeInCardsErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: TradeInCardsRequest,
+        cause: Throwable,
+    ): TradeInCardsErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> TradeInCardsErrorCode.GAME_NOT_FOUND
+                "REQUESTER_MISMATCH" -> TradeInCardsErrorCode.REQUESTER_MISMATCH
+                "GAME_PAUSED" -> TradeInCardsErrorCode.GAME_PAUSED
+                "PHASE_MISMATCH" -> TradeInCardsErrorCode.PHASE_MISMATCH
+                "CARDS_NOT_OWNED" -> TradeInCardsErrorCode.CARDS_NOT_OWNED
+                "INVALID_SET" -> TradeInCardsErrorCode.INVALID_SET
+                "INVALID_REQUEST" -> TradeInCardsErrorCode.INVALID_REQUEST
+                else -> TradeInCardsErrorCode.NOT_ACTIVE_PLAYER
+            }
+
+        val reason =
+            when (code) {
+                TradeInCardsErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                TradeInCardsErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        "Connection ist keinem Spieler fuer Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
+                    } else {
+                        "Requester '${payload.playerId.value}' passt nicht " +
+                            "zur aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                TradeInCardsErrorCode.NOT_ACTIVE_PLAYER -> {
+                    val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                    val activePlayer = currentState?.activePlayer
+                    when {
+                        activePlayer == null ->
+                            "Fuer Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver " +
+                                "Spieler gesetzt."
+                        else ->
+                            "Nur der aktive Spieler '${activePlayer.value}' darf waehrend der " +
+                                "Reinforcements-Phase Karten eintauschen."
+                    }
+                }
+                TradeInCardsErrorCode.GAME_PAUSED ->
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; Karten-Trade-In ist " +
+                        "aktuell nicht erlaubt."
+                TradeInCardsErrorCode.PHASE_MISMATCH -> {
+                    val currentPhase =
+                        lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.activeTurnPhase
+                    if (currentPhase == null) {
+                        "Die Reinforcements-Phase ist fuer Lobby '${payload.lobbyCode.value}' " +
+                            "aktuell nicht aktiv."
+                    } else {
+                        "Karten-Trade-In ist nur in Phase 'REINFORCEMENTS' erlaubt, " +
+                            "aktueller Serverzustand ist '${currentPhase.name}'."
+                    }
+                }
+                TradeInCardsErrorCode.CARDS_NOT_OWNED ->
+                    "Alle eingetauschten Karten muessen Spieler " +
+                        "'${payload.playerId.value}' gehoeren."
+                TradeInCardsErrorCode.INVALID_SET ->
+                    "Die ausgewaehlten Karten bilden kein gueltiges Trade-In-Set."
+                TradeInCardsErrorCode.INVALID_REQUEST ->
+                    "Ein Karten-Trade-In muss genau drei unterschiedliche Karten enthalten."
+            }
+
+        return TradeInCardsErrorResponse(code = code, reason = reason)
     }
 
     private fun confirmReinforcementsDoneErrorResponse(

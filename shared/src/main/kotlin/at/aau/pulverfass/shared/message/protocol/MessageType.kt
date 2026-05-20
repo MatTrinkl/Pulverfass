@@ -61,6 +61,18 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf das Beenden der Reinforcements-Phase. */
     LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE(63),
 
+    /** Anfrage zum Trade-In eines Kartensets waehrend der Reinforcements-Phase. */
+    LOBBY_TRADE_IN_CARDS_REQUEST(64),
+
+    /** Erfolgsantwort auf einen Karten-Trade-In. */
+    LOBBY_TRADE_IN_CARDS_RESPONSE(65),
+
+    /** Fehlantwort auf einen Karten-Trade-In. */
+    LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE(66),
+
+    /** Private S2C-Aktualisierung der autoritativen Kartenhand eines Spielers. */
+    LOBBY_PLAYER_HAND_UPDATED_EVENT(67),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

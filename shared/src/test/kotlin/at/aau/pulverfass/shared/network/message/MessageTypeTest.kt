@@ -89,6 +89,10 @@ class MessageTypeTest {
                 MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE,
             ),
         )
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_TRADE_IN_CARDS_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_LEFT_BROADCAST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_MAP_GET_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_MAP_GET_RESPONSE))

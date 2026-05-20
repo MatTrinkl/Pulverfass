@@ -2,17 +2,20 @@ package at.aau.pulverfass.shared.lobby.reducer
 
 import at.aau.pulverfass.shared.event.CorrelationId
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -23,6 +26,8 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.CardState
+import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
@@ -1100,6 +1105,74 @@ class DefaultLobbyEventReducerTest {
                 "verlassen: aktuell=2147483647, delta=1.",
             exception.message,
         )
+    }
+
+    @Test
+    fun `card set traded in increments global count deterministically`() {
+        val lobbyCode = LobbyCode("TM17")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val firstTrade =
+            reducer.apply(
+                initialState,
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    cardIds = listOf(CardId("card-1"), CardId("card-2"), CardId("card-3")),
+                    value = 2,
+                    tradeIndex = 1,
+                ),
+            )
+        val secondTrade =
+            reducer.apply(
+                firstTrade,
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    cardIds = listOf(CardId("card-4"), CardId("card-5"), CardId("card-6")),
+                    value = 4,
+                    tradeIndex = 2,
+                ),
+            )
+
+        assertEquals(1, firstTrade.tradedInSetCount)
+        assertEquals(2, secondTrade.tradedInSetCount)
+    }
+
+    @Test
+    fun `player cards removed event updates hand deterministically`() {
+        val lobbyCode = LobbyCode("TM18")
+        val playerOne = PlayerId(1)
+        val cardOne = CardState(CardId("card-1"), CardType.A)
+        val cardTwo = CardState(CardId("card-2"), CardType.B)
+        val cardThree = CardState(CardId("card-3"), CardType.JOKER)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+                .withCardAddedToHand(playerOne, cardOne)
+                .withCardAddedToHand(playerOne, cardTwo)
+                .withCardAddedToHand(playerOne, cardThree)
+
+        val updatedState =
+            reducer.apply(
+                initialState,
+                PlayerCardsRemovedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    cardIds = listOf(cardOne.cardId, cardThree.cardId),
+                ),
+            )
+
+        assertEquals(listOf(cardTwo), updatedState.handOf(playerOne))
     }
 
     @Test

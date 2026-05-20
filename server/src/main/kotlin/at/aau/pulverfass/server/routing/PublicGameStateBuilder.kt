@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -163,6 +164,17 @@ class PublicGameStateBuilder {
             }
 
             when (event) {
+                is CardSetTradedInEvent ->
+                    add(
+                        ReinforcementsGrantedEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = event.playerId,
+                            amount = event.value,
+                            territoryBonus = 0,
+                            continentBonus = 0,
+                            cardBonus = event.value,
+                        ),
+                    )
                 is PendingReinforcementsChangedEvent -> add(event)
                 is PendingReinforcementsSetEvent -> {
                     val breakdown =

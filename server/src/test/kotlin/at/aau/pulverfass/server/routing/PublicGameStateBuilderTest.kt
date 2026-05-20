@@ -1,7 +1,9 @@
 package at.aau.pulverfass.server.routing
 
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
@@ -125,6 +127,41 @@ class PublicGameStateBuilderTest {
                     territoryBonus = 3,
                     continentBonus = 0,
                     cardBonus = 0,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `card trade in projects to public reinforcement grant with card bonus only`() {
+        val previousState = sampleGameState()
+        val currentState = previousState.copy(stateVersion = 1, tradedInSetCount = 1)
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    CardSetTradedInEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        playerId = PlayerId(2),
+                        cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
+                        value = 2,
+                        tradeIndex = 1,
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                ReinforcementsGrantedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    amount = 2,
+                    territoryBonus = 0,
+                    continentBonus = 0,
+                    cardBonus = 2,
                 ),
             ),
             delta?.events,

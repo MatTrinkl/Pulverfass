@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.lobby.reducer
 
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -9,6 +10,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -22,6 +24,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TradeInProgression
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -70,9 +73,11 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                         pendingReinforcements = null,
                     )
 
+                is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
                 is PendingReinforcementsSetEvent -> onPendingReinforcementsSet(state, event)
+                is PlayerCardsRemovedEvent -> onPlayerCardsRemoved(state, event)
                 is PlayerJoined -> onPlayerJoined(state, event.playerId, event.playerDisplayName)
                 is PlayerLeft -> onPlayerLeft(state, event.playerId)
                 is PlayerKicked ->
@@ -463,6 +468,42 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             )
         }
         return state.withPendingReinforcements(event.playerId, updatedAmount)
+    }
+
+    private fun onCardSetTradedIn(
+        state: GameState,
+        event: CardSetTradedInEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+
+        val expectedTradeIndex = state.tradedInSetCount + 1
+        if (event.tradeIndex != expectedTradeIndex) {
+            throw InvalidLobbyEventException(
+                "CardSetTradedInEvent.tradeIndex muss den naechsten globalen " +
+                    "Trade-In abbilden: erwartet=$expectedTradeIndex, war=${event.tradeIndex}.",
+            )
+        }
+
+        val expectedValue = TradeInProgression.tradeInValue(event.tradeIndex)
+        if (event.value != expectedValue) {
+            throw InvalidLobbyEventException(
+                "CardSetTradedInEvent.value passt nicht zur Progression: " +
+                    "erwartet=$expectedValue, war=${event.value}.",
+            )
+        }
+
+        return state.withTradedInSetCount(event.tradeIndex)
+    }
+
+    private fun onPlayerCardsRemoved(
+        state: GameState,
+        event: PlayerCardsRemovedEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+
+        return event.cardIds.fold(state) { currentState, cardId ->
+            currentState.withoutCardFromHand(event.playerId, cardId)
+        }
     }
 
     private fun applyTurnStateUpdate(

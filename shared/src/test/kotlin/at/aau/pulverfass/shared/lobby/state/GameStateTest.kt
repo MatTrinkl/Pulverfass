@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.lobby.state
 
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -37,6 +38,7 @@ class GameStateTest {
         assertEquals(0, state.stateVersion)
         assertEquals(0, state.playerCount)
         assertFalse(state.hasPendingReinforcements())
+        assertEquals(0, state.tradedInSetCount)
     }
 
     @Test
@@ -306,6 +308,30 @@ class GameStateTest {
     }
 
     @Test
+    fun `should add and remove hand cards through game state helpers`() {
+        val playerOne = PlayerId(1)
+        val alphaCard = CardState(cardId = CardId("card-alpha"), type = CardType.A)
+        val jokerCard = CardState(cardId = CardId("card-joker"), type = CardType.JOKER)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("HC12"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+        val withCards =
+            baseState
+                .withCardAddedToHand(playerOne, alphaCard)
+                .withCardAddedToHand(playerOne, jokerCard)
+        val withoutAlpha = withCards.withoutCardFromHand(playerOne, alphaCard.cardId)
+
+        assertEquals(listOf(alphaCard, jokerCard), withCards.handOf(playerOne))
+        assertEquals(2, withCards.handSizeOf(playerOne))
+        assertTrue(withCards.playerHasCard(playerOne, jokerCard.cardId))
+        assertEquals(listOf(jokerCard), withoutAlpha.handOf(playerOne))
+        assertFalse(withoutAlpha.playerHasCard(playerOne, alphaCard.cardId))
+    }
+
+    @Test
     fun `should resolve legacy turn state when only legacy fields are set`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
@@ -457,6 +483,9 @@ class GameStateTest {
             GameState(lobbyCode = LobbyCode("PQ56"), processedEventCount = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
+            GameState(lobbyCode = LobbyCode("PQ57"), tradedInSetCount = -1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             GameState(
                 lobbyCode = LobbyCode("RS78"),
                 players = listOf(playerOne, playerOne),
@@ -520,6 +549,56 @@ class GameStateTest {
             GameState(
                 lobbyCode = LobbyCode("XZ56"),
                 mapDefinition = sampleMapDefinition(),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("XZ78"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                playerTwo to
+                                    listOf(
+                                        CardState(
+                                            cardId = CardId("card-foreign"),
+                                            type = CardType.C,
+                                        ),
+                                    ),
+                            ),
+                    ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("YZ12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                playerOne to
+                                    listOf(
+                                        CardState(
+                                            cardId = CardId("shared-card"),
+                                            type = CardType.A,
+                                        ),
+                                    ),
+                            ),
+                    ),
+                deckState =
+                    DeckState(
+                        cards =
+                            listOf(
+                                CardState(
+                                    cardId = CardId("shared-card"),
+                                    type = CardType.B,
+                                ),
+                            ),
+                    ),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
