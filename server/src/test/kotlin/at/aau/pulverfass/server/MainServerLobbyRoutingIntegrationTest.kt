@@ -2146,7 +2146,10 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                     receivePayloadOfType<PlayerConnectionLostEvent>(bobSession),
                 )
-                assertEquals(expectedPause, receivePayloadOfType<TurnStateUpdatedEvent>(bobSession))
+                assertEquals(
+                    expectedPause,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
+                )
                 assertEquals(
                     PlayerConnectionLostEvent(
                         lobbyCode = lobbyCode,
@@ -2155,7 +2158,10 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                     receivePayloadOfType<PlayerConnectionLostEvent>(carolSession),
                 )
-                assertEquals(expectedPause, receivePayloadOfType<TurnStateUpdatedEvent>(carolSession))
+                assertEquals(
+                    expectedPause,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
+                )
 
                 val reconnectingSession = client.webSocketSession("/ws")
                 discardConnectionHandshake(reconnectingSession)
@@ -2190,8 +2196,14 @@ class MainServerLobbyRoutingIntegrationTest {
                         maxMessages = 10,
                     ),
                 )
-                assertEquals(expectedResume, receivePayloadOfType<TurnStateUpdatedEvent>(bobSession))
-                assertEquals(expectedResume, receivePayloadOfType<TurnStateUpdatedEvent>(carolSession))
+                assertEquals(
+                    expectedResume,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
+                )
+                assertEquals(
+                    expectedResume,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
+                )
 
                 reconnectingSession.send(
                     Frame.Binary(
