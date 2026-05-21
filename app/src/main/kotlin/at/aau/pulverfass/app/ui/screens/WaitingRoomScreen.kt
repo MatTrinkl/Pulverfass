@@ -1,5 +1,8 @@
 package at.aau.pulverfass.app.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,22 +20,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.MainButton
+import at.aau.pulverfass.app.ui.components.PulverfassPanel
 import at.aau.pulverfass.app.ui.navigation.Screen
+import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
- * Bildschirm für den Warteraum vor Spielbeginn.
- *
- * @param navController Navigation in den Spielbildschirm nach Startsignal
- * @param controller gemeinsamer LobbyController der laufenden WebSocket-Session
- * @param lobbyCode Lobbycode aus der Navigation als Fallback-Anzeige
- * @param isHost Host-Flag aus der Navigation als Fallback-Anzeige
- * @param playerName Spielername aus der Navigation als Fallback-Anzeige
+ * Warteraum-Screen im Pulverfass-Theme.
+ * Logic 1:1 wie vorher, nur visuell neu mit Parchment-Player-List.
  */
 @Composable
 fun WaitingRoomScreen(
@@ -72,60 +70,135 @@ fun WaitingRoomScreen(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors =
+                            listOf(
+                                PulverfassColors.SurfaceWood,
+                                PulverfassColors.SurfaceVoid,
+                            ),
+                        radius = 1400f,
+                    ),
+                ),
     ) {
-        WaitingRoomHeader(lobbyCode, effectiveIsHost)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        PlayerListCard(
-            players = players,
-            modifier = Modifier.fillMaxWidth(0.7f).weight(1f),
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        HostActions(
-            isHost = effectiveIsHost,
-            playersCount = players.size,
-            onStartGame = controller::startGame,
-        )
-
-        state.errorText?.let { errorText ->
-            Spacer(modifier = Modifier.height(8.dp))
+        // Left side: Host/Lobby Info
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 48.dp)
+                    .fillMaxWidth(0.25f),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            if (effectiveIsHost) {
+                Text(
+                    text = "DU BIST DER HOST",
+                    color = PulverfassColors.SurfaceCard,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 2.sp,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
             Text(
-                text = errorText,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
+                text = "LOBBY: $lobbyCode",
+                color = PulverfassColors.GoldBright,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                controller.leaveLobby()
-                navController.popBackStack()
-            },
-            modifier = Modifier.fillMaxWidth(0.4f),
+        // Center: Player List in Parchment
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.5f),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(stringResource(id = R.string.leave_lobby))
+            PulverfassPanel(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "SPIELER (${players.size}/6)",
+                    color = PulverfassColors.TextOnParchment,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 3.sp,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn {
+                    items(players) { player ->
+                        PlayerRow(player = player)
+                    }
+                }
+            }
+        }
+
+        // Bottom: Action Buttons
+        Row(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 32.dp)
+                    .fillMaxWidth(0.6f),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            if (effectiveIsHost) {
+                val canStart = players.size >= 3
+                MainButton(
+                    text = "SPIEL STARTEN",
+                    onClick = controller::startGame,
+                    enabled = canStart,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            MainButton(
+                text = "LOBBY VERLASSEN",
+                onClick = {
+                    controller.leaveLobby()
+                    navController.popBackStack()
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        // Bottom-Right: Error Text
+        state.errorText?.let { error ->
+            Text(
+                text = "ERROR: $error".uppercase(),
+                color = PulverfassColors.DangerBright,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 24.dp, bottom = 96.dp),
+            )
+        }
+
+        // Min-players warning (host only)
+        if (effectiveIsHost && players.size < 3) {
+            Text(
+                text = "MIND. 3 SPIELER",
+                color = PulverfassColors.DangerBright,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 96.dp),
+            )
         }
     }
 }
 
-/**
- * Kompakte View-Projektion für die reine Darstellung im Warteraum.
- *
- * Der Typ trennt die visuelle Liste bewusst von [LobbyController], damit die
- * Screen-Logik Fallbackwerte aus Navigation und Live-State vereinheitlichen kann.
- *
- * @property displayName anzuzeigender Spielername
- * @property isHost markiert den Host-Eintrag in der Liste
- * @property isDisconnected blendet einen Verbindungsverlust im Warteraum ein
- */
 private data class WaitingRoomPlayerUi(
     val displayName: String,
     val isHost: Boolean,
@@ -133,113 +206,38 @@ private data class WaitingRoomPlayerUi(
 )
 
 @Composable
-private fun WaitingRoomHeader(
-    lobbyCode: String,
-    isHost: Boolean,
-) {
-    Text(
-        text = "${stringResource(id = R.string.lobby_id)}: $lobbyCode",
-        style = MaterialTheme.typography.displaySmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-    )
-
-    Spacer(modifier = Modifier.height(8.dp))
-
-    val hostStatusText =
-        if (isHost) {
-            stringResource(id = R.string.you_are_host)
-        } else {
-            stringResource(id = R.string.waiting_for_host)
-        }
-
-    Text(
-        text = hostStatusText,
-        style = MaterialTheme.typography.bodyLarge,
-    )
-}
-
-@Composable
-private fun PlayerListCard(
-    players: List<WaitingRoomPlayerUi>,
-    modifier: Modifier = Modifier,
-) {
-    Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "${stringResource(id = R.string.players)} (${players.size}/6)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn {
-                items(players) { player ->
-                    PlayerRow(
-                        player = player.displayName,
-                        isHostPlayer = player.isHost,
-                        isDisconnected = player.isDisconnected,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerRow(
-    player: String,
-    isHostPlayer: Boolean,
-    isDisconnected: Boolean,
-) {
+private fun PlayerRow(player: WaitingRoomPlayerUi) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = player, style = MaterialTheme.typography.bodyLarge)
-        if (isHostPlayer) {
+        Text(
+            text = player.displayName.uppercase(),
+            color = PulverfassColors.TextOnParchment,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+        )
+        if (player.isHost) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = stringResource(id = R.string.host_tag),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
+                text = "(HOST)",
+                color = PulverfassColors.GoldDark,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.sp,
             )
         }
-        if (isDisconnected) {
+        if (player.isDisconnected) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = stringResource(id = R.string.disconnected_tag),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HostActions(
-    isHost: Boolean,
-    playersCount: Int,
-    onStartGame: () -> Unit,
-) {
-    /*
-     * Die App spiegelt hier nur die offensichtliche Startbedingung. Der Server
-     * validiert den Spielstart weiterhin endgültig, damit manipulierte Clients
-     * keine Lobby in einen ungültigen Zustand bringen können.
-     */
-    if (isHost) {
-        val canStart = playersCount >= 3
-        Button(
-            onClick = onStartGame,
-            modifier = Modifier.fillMaxWidth(0.4f),
-            enabled = canStart,
-        ) {
-            Text(stringResource(id = R.string.start_game))
-        }
-        if (!canStart) {
-            Text(
-                text = stringResource(id = R.string.need_players),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
+                text = "(DISCONNECTED)",
+                color = PulverfassColors.Danger,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
             )
         }
     }

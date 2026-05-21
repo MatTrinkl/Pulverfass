@@ -29,11 +29,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import at.aau.pulverfass.app.audio.musicManager
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
 import at.aau.pulverfass.app.ui.navigation.Screen
-import at.aau.pulverfass.app.ui.navigation.canAutoNavigateToRestoredGame
 import at.aau.pulverfass.app.ui.navigation.restoredGameNavigationTarget
 import at.aau.pulverfass.app.ui.screens.GameScreen
 import at.aau.pulverfass.app.ui.screens.LoadGameScreen
@@ -208,20 +208,17 @@ private fun RestoredGameNavigationEffect(
     val currentRoute = currentBackStackEntry?.destination?.route
     val targetRoute = restoredGameNavigationTarget(lobbyState)
 
-    LaunchedEffect(currentRoute, targetRoute) {
-        if (
-            targetRoute != null &&
-            canAutoNavigateToRestoredGame(currentRoute)
-        ) {
-            /*
-             * Der Zielscreen lädt die Kartenassets wie beim normalen Spielstart.
-             * launchSingleTop verhindert doppelte Einträge, falls Load- und
-             * Lobby-Screen sehr kurz hintereinander denselben Reconnect-Zustand
-             * sehen.
-             */
-            navController.navigate(targetRoute) {
-                launchSingleTop = true
-            }
+    LaunchedEffect(currentBackStackEntry) {
+        val route = currentBackStackEntry?.destination?.route
+        when {
+            route == Screen.MainMenu.route ||
+                route == Screen.Lobby.route ||
+                route == Screen.LoadGame.route ||
+                route?.startsWith(Screen.WaitingRoom.route) == true ->
+                musicManager.play(R.raw.menu_theme2)
+
+            route == Screen.Game.route ->
+                musicManager.stop()
         }
     }
 }

@@ -54,6 +54,7 @@ fun MainMenuScreen(
             videoResId = R.raw.menuvid,
             loop = true,
             cover = true,
+            muted = true,
             modifier = Modifier.fillMaxSize(),
         )
     },
