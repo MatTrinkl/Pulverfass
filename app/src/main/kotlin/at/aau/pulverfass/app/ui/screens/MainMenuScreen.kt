@@ -71,7 +71,8 @@ fun MainMenuScreen(
                     // Vertikales Padding reduziert, damit mehr Platz für die Buttons ist
                     .padding(horizontal = 48.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center, // Zentriert jetzt alles richtig, da es reinpasst
+            verticalArrangement = Arrangement.Center,
+            // Zentriert jetzt alles richtig, da es reinpasst
         ) {
             // Pulverfass Logo — verkleinert für Landscape!
             Image(
@@ -110,9 +111,8 @@ fun MainMenuScreen(
                 )
             }
         }
-        }
     }
-
+}
 
 @Preview(showBackground = true, widthDp = 1000, heightDp = 500)
 @Composable
