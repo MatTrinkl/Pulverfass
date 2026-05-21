@@ -9,7 +9,7 @@ package at.aau.pulverfass.app.lobby
  * sinnvoll, aktuell existiert aber nur ein gemeinsamer Konfigurationspunkt.
  */
 data class LobbyControllerConfig(
-    val defaultServerUrl: String = "ws://10.0.2.2:8080/ws",
+    val defaultServerUrl: String = "ws://5.189.160.80:8080/ws",
     val disconnectReason: String = "Client disconnected",
     val lobbyCodeLength: Int = 4,
     val reconnectMaxAttempts: Int = 5,
