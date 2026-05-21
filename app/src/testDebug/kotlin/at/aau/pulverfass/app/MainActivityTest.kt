@@ -31,15 +31,15 @@ class MainActivityTest {
         // 3. Click START → sollte zur Lobby navigieren.
         composeTestRule.onNodeWithText("START").performClick()
 
-        // 4. Warte bis Lobby mit "Spiel-Lobby" erscheint (10s).
+// 4. Warte bis Lobby mit "SPIEL-LOBBY" erscheint (10s).
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             composeTestRule
-                .onAllNodesWithText("Spiel-Lobby")
+                .onAllNodesWithText("SPIEL-LOBBY", ignoreCase = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Spiel-Lobby").assertExists()
-        composeTestRule.onNodeWithText("Lobby erstellen").assertExists()
-        composeTestRule.onNodeWithText("Lobby beitreten").assertExists()
+        composeTestRule.onNodeWithText("SPIEL-LOBBY", ignoreCase = true).assertExists()
+        composeTestRule.onNodeWithText("LOBBY ERSTELLEN", ignoreCase = true).assertExists()
+        composeTestRule.onNodeWithText("LOBBY BEITRETEN", ignoreCase = true).assertExists()
     }
 }

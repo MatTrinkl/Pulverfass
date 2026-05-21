@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
+import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
  * Pulverfass-Standard-Button mit Wood-Skin Background.
@@ -49,6 +50,7 @@ fun MainButton(
             text = text.uppercase(),
             color = PulverfassColors.Parchment,
             fontSize = fontSize.sp,
+            fontFamily = PulverfassFonts.CinzelDecorative,
             fontWeight = FontWeight.Bold,
             letterSpacing = 3.sp,
             modifier = Modifier.padding(PaddingValues(horizontal = 24.dp, vertical = 14.dp)),

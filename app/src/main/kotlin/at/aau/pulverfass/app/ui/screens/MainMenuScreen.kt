@@ -1,47 +1,32 @@
 package at.aau.pulverfass.app.ui.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
- * Main-Menu Screen.
- * Design: Branding (Logo & Title) auf der linken Seite, Navigations-Buttons auf der rechten Seite.
- * Hintergrund: Video-Loop.
+ * Main-Menu Screen mit gamelogo.png groß über den Buttons.
+ * Video-Background (menuvid.mp4), kein freischwebendes Logo mehr.
  */
 @Composable
 fun MainMenuScreen(
@@ -69,109 +54,65 @@ fun MainMenuScreen(
         // Video Background
         background()
 
-        // Overlay Gradient for visibility
+        // Dark overlay für Kontrast zwischen Logo und Video
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors =
-                                listOf(
-                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.5f),
-                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.1f),
-                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.6f),
-                                ),
-                        ),
-                    ),
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.4f)),
         )
 
-        Row(
+        // Main Content: Logo groß über Buttons
+// Main Content: Logo groß über Buttons
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 64.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+                    // Vertikales Padding reduziert, damit mehr Platz für die Buttons ist
+                    .padding(horizontal = 48.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center, // Zentriert jetzt alles richtig, da es reinpasst
         ) {
-            // Branding Area (Left)
+            // Pulverfass Logo — verkleinert für Landscape!
+            Image(
+                painter = painterResource(id = R.drawable.gamelogo),
+                contentDescription = "Pulverfass Logo",
+                contentScale = ContentScale.Fit,
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(120.dp) // FIX 1: Vorher 180.dp (viel zu groß für Landscape)
+                        .testTag("GameLogo"),
+            )
+
+            Spacer(modifier = Modifier.height(24.dp)) // FIX 2: Spacer etwas verkleinert
+
+            // Button-Column unter dem Logo
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.width(280.dp),
             ) {
-                val infiniteTransition = rememberInfiniteTransition(label = "branding")
-                val sway by infiniteTransition.animateFloat(
-                    initialValue = -2f,
-                    targetValue = 2f,
-                    animationSpec =
-                        infiniteRepeatable(
-                            animation = tween(4000, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse,
-                        ),
-                    label = "sway",
+                MainButton(
+                    text = "START",
+                    onClick = onStartClick,
+                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Start"),
                 )
-
-                // Game Logo Image
-                Image(
-                    painter = painterResource(id = R.drawable.gamelogo),
-                    contentDescription = "Pulverfass Game Logo",
-                    modifier =
-                        Modifier
-                            .size(280.dp)
-                            .graphicsLayer { rotationZ = sway }
-                            .testTag("GameLogo"),
+                MainButton(
+                    text = "OPTIONS",
+                    onClick = onOptionsClick,
+                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Options"),
                 )
-            }
-
-            // Navigation Area (Right)
-            Column(
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                MenuButton("START", onStartClick, Modifier.testTag("MenuButton_Start"))
-                MenuButton("OPTIONS", onOptionsClick, Modifier.testTag("MenuButton_Options"))
-                MenuButton("EXIT", onExitClick, Modifier.testTag("MenuButton_Exit"))
+                MainButton(
+                    text = "EXIT",
+                    onClick = onExitClick,
+                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
+                )
             }
         }
+        }
     }
-}
 
-@Composable
-private fun MenuButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Button(
-        onClick = onClick,
-        modifier =
-            modifier
-                .width(220.dp)
-                .border(
-                    width = 2.dp,
-                    brush =
-                        Brush.verticalGradient(
-                            colors = listOf(PulverfassColors.GoldBright, PulverfassColors.GoldDark),
-                        ),
-                    shape = RoundedCornerShape(8.dp),
-                ),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                contentColor = PulverfassColors.Gold,
-            ),
-        shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(vertical = 16.dp, horizontal = 24.dp),
-    ) {
-        Text(
-            text = text,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp,
-        )
-    }
-}
 
 @Preview(showBackground = true, widthDp = 1000, heightDp = 500)
 @Composable

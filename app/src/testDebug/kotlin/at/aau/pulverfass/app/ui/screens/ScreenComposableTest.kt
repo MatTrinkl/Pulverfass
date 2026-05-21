@@ -63,9 +63,6 @@ class ScreenComposableTest {
             }
         }
 
-        // The "v1.0.0" and "Pulverfass" text checks were removed here
-        // because the new UI no longer hardcodes them.
-
         // Fast-forward past the 1,000ms delay in preloadAssets
         composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
@@ -86,11 +83,12 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Spiel-Lobby").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Spielername eingeben").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Lobby erstellen").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Lobby beitreten").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Karte direkt testen").assertIsDisplayed()
+        // Exakte Übereinstimmung mit deinem extrahierten Semantics-Tree
+        composeTestRule.onNodeWithText("SPIEL-LOBBY").assertIsDisplayed()
+        composeTestRule.onNodeWithText("SPIELERNAME").assertIsDisplayed()
+        composeTestRule.onNodeWithText("LOBBY ERSTELLEN").assertIsDisplayed()
+        composeTestRule.onNodeWithText("LOBBY BEITRETEN").assertIsDisplayed()
+        composeTestRule.onNodeWithText("MAP-TEST").assertIsDisplayed()
     }
 
     @Test
@@ -166,9 +164,11 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Lobby: AB12").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Du bist der Host").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Carol").assertIsDisplayed()
+        // Exakte Übereinstimmung mit den neuen Redesign-Strings aus dem Tree
+        composeTestRule.onNodeWithText("LOBBY: AB12").assertIsDisplayed()
+        composeTestRule.onNodeWithText("DU BIST DER HOST").assertIsDisplayed()
+        composeTestRule.onNodeWithText("CAROL").assertIsDisplayed()
+        composeTestRule.onNodeWithText("(HOST)").assertIsDisplayed()
     }
 
     @Test

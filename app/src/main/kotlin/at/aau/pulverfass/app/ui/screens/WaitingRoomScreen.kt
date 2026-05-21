@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,20 +21,22 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.components.MainButton
-import at.aau.pulverfass.app.ui.components.PulverfassPanel
+import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
  * Warteraum-Screen im Pulverfass-Theme.
- * Logic 1:1 wie vorher, nur visuell neu mit Parchment-Player-List.
+ * Video-BG (lobby.mp4), Parchment-Player-List via lobbylist.png Asset.
  */
 @Composable
 fun WaitingRoomScreen(
@@ -74,17 +77,24 @@ fun WaitingRoomScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors =
-                            listOf(
-                                PulverfassColors.SurfaceWood,
-                                PulverfassColors.SurfaceVoid,
-                            ),
-                        radius = 1400f,
-                    ),
-                ),
+                .background(PulverfassColors.SurfaceVoid),
     ) {
+        // Video Background
+        VideoPlayer(
+            videoResId = R.raw.lobby,
+            loop = true,
+            cover = true,
+            muted = true,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Dark overlay für Lesbarkeit
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
+        )
+
         // Left side: Host/Lobby Info
         Column(
             modifier =
@@ -97,7 +107,7 @@ fun WaitingRoomScreen(
             if (effectiveIsHost) {
                 Text(
                     text = "DU BIST DER HOST",
-                    color = PulverfassColors.SurfaceCard,
+                    color = PulverfassColors.TextOnDark,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 2.sp,
@@ -113,16 +123,31 @@ fun WaitingRoomScreen(
             )
         }
 
-        // Center: Player List in Parchment
+        // Center: Player List on lobbylist.png Parchment
         Box(
             modifier =
                 Modifier
                     .align(Alignment.Center)
-                    .fillMaxWidth(0.5f),
+                    .fillMaxWidth(0.55f),
             contentAlignment = Alignment.Center,
         ) {
-            PulverfassPanel(
-                modifier = Modifier.fillMaxWidth(),
+            Image(
+                painter = painterResource(id = R.drawable.lobbylist),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 64.dp,
+                            end = 64.dp,
+                            top = 48.dp,
+                            bottom = 80.dp,
+                        ),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = "SPIELER (${players.size}/6)",
@@ -132,7 +157,9 @@ fun WaitingRoomScreen(
                     letterSpacing = 3.sp,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                LazyColumn {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     items(players) { player ->
                         PlayerRow(player = player)
                     }

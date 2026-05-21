@@ -43,6 +43,7 @@ import at.aau.pulverfass.app.ui.components.MainInputField
 import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
+import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 import kotlinx.coroutines.launch
 
 /**
@@ -278,6 +279,7 @@ private fun LobbyTitle(text: String) {
     Text(
         text = text,
         color = PulverfassColors.GoldBright,
+        fontFamily = PulverfassFonts.CinzelDecorative,
         fontSize = 56.sp,
         fontWeight = FontWeight.Black,
         letterSpacing = 4.sp,

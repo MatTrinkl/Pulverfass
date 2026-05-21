@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
+import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
  * Pulverfass-Standard-Input mit Wood-Skin Background.
@@ -56,6 +57,7 @@ fun MainInputField(
                 TextStyle(
                     color = PulverfassColors.Parchment,
                     fontSize = fontSize.sp,
+                    fontFamily = PulverfassFonts.CinzelDecorative,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                     letterSpacing = 2.sp,
@@ -73,6 +75,7 @@ fun MainInputField(
                         Text(
                             text = placeholder,
                             color = PulverfassColors.Parchment.copy(alpha = 0.5f),
+                            fontFamily = PulverfassFonts.CinzelDecorative,
                             fontSize = fontSize.sp,
                             fontWeight = FontWeight.Medium,
                             letterSpacing = 2.sp,
