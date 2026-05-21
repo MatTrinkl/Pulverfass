@@ -31,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
@@ -51,15 +52,21 @@ import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 /**
  * Compose-basierter Einstiegspunkt der Android-App.
  *
- * Die Activity initialisiert aktuell genau eine [LobbyController]-Instanz,
- * verdrahtet die Navigationsziele des Lobby-Flows und gibt den Controller beim
- * Verlassen der Composition wieder frei.
+ * Die Activity initialisiert genau eine [LobbyController]-Instanz und
+ * verwaltet den [BackgroundMusicManager] als Activity-Field, damit
+ * Lifecycle-Callbacks (onPause/onResume/onDestroy) auf die selbe Instanz
+ * zugreifen können wie der Compose-Tree.
  */
 class MainActivity : AppCompatActivity() {
+    private lateinit var musicManager: BackgroundMusicManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Fullscreen Immersive: System-Bars verstecken (nutzt hideSystemBars())
+        // Background-Music-Manager als Field, damit onPause/onResume drauf zugreifen können
+        musicManager = BackgroundMusicManager(applicationContext)
+
+        // Fullscreen Immersive: System-Bars verstecken
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
@@ -78,7 +85,7 @@ class MainActivity : AppCompatActivity() {
                 val lobbyState by lobbyController.state.collectAsState()
                 val serverHealthStatus by rememberServerHealthStatus()
 
-                // === IMMERSIVE ENFORCEMENT ON EVERY NAV CHANGE ===
+                // Immersive Enforcement bei jeder Navigation
                 val view = LocalView.current
                 val currentBackStackEntry by navController.currentBackStackEntryAsState()
                 LaunchedEffect(currentBackStackEntry) {
@@ -88,6 +95,24 @@ class MainActivity : AppCompatActivity() {
                     controller.hide(WindowInsetsCompat.Type.systemBars())
                     controller.systemBarsBehavior =
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+
+                // Audio: SFX bei Studio-Intro, Music erst wenn MainMenu erreicht
+                LaunchedEffect(currentBackStackEntry) {
+                    val route = currentBackStackEntry?.destination?.route
+                    when {
+                        route == Screen.StudioIntro.route ->
+                            musicManager.playSfx(R.raw.gabumon_intro)
+
+                        route == Screen.MainMenu.route ||
+                            route == Screen.Lobby.route ||
+                            route == Screen.LoadGame.route ||
+                            route?.startsWith(Screen.WaitingRoom.route) == true ->
+                            musicManager.play(R.raw.menu_theme2)
+
+                        route == Screen.Game.route ->
+                            musicManager.stop()
+                    }
                 }
 
                 DisposableEffect(Unit) {
@@ -133,7 +158,6 @@ class MainActivity : AppCompatActivity() {
                                     },
                                 )
                             }
-
                             composable(Screen.Lobby.route) {
                                 LobbyScreen(
                                     navController = navController,
@@ -189,7 +213,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Fix für das Problem das Screen Videos nicht vollscreen sind und der Content sich nicht über den ganzen screen anpasst
+    override fun onPause() {
+        super.onPause()
+        musicManager.pause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        musicManager.resume()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        musicManager.release()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
