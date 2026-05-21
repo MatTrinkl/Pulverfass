@@ -18,11 +18,13 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
+import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
@@ -1993,6 +1995,258 @@ class MainServerLobbyRoutingIntegrationTest {
 
                 assertNull(receivePayloadOrNull(bobSession))
                 assertNull(receivePayloadOrNull(carolSession))
+
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(TurnStateGetRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+                    receivePayloadOfType<TurnStateGetResponse>(reconnectingSession),
+                )
+
+                reconnectingSession.close()
+                bobSession.close()
+                carolSession.close()
+            }
+        }
+
+    @Test
+    fun `failed reconnect does not dispatch lobby snapshot`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val session = client.webSocketSession("/ws")
+                discardConnectionHandshake(session)
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data =
+                            MessageCodec.encode(
+                                ReconnectRequest(
+                                    SessionToken("123e4567-e89b-12d3-a456-426614174999"),
+                                ),
+                            ),
+                    ),
+                )
+
+                assertEquals(
+                    ReconnectResponse(
+                        success = false,
+                        errorCode = ReconnectErrorCode.TOKEN_INVALID,
+                    ),
+                    receivePayload(session),
+                )
+                assertNull(receivePayloadOrNull(session))
+
+                session.close()
+            }
+        }
+
+    @Test
+    fun `active player reconnect resumes paused turn`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val aliceSession = client.webSocketSession("/ws")
+                val aliceToken = discardConnectionHandshake(aliceSession)
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(CreateLobbyRequest),
+                    ),
+                )
+                val lobbyCode =
+                    assertIs<CreateLobbyResponse>(
+                        receivePayload(aliceSession),
+                    ).lobbyCode
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+                receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession)
+
+                val bobSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(bobSession)
+                bobSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+
+                val carolSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(carolSession)
+                carolSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
+                )
+
+                aliceSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(StartGameRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(StartGameResponse(), receivePayload(aliceSession))
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(aliceSession))
+                receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession)
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(bobSession))
+                receivePayloadOfType<TurnStateUpdatedEvent>(bobSession)
+                assertEquals(GameStartedEvent(lobbyCode), receivePayload(carolSession))
+                receivePayloadOfType<TurnStateUpdatedEvent>(carolSession)
+
+                aliceSession.close()
+                awaitDetachedSession(network, aliceToken)
+
+                val expectedPause =
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                        isPaused = true,
+                        pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                        pausedPlayerId = PlayerId(1),
+                    )
+                assertEquals(
+                    PlayerConnectionLostEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                    ),
+                    receivePayloadOfType<PlayerConnectionLostEvent>(bobSession),
+                )
+                assertEquals(
+                    expectedPause,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
+                )
+                assertEquals(
+                    PlayerConnectionLostEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                    ),
+                    receivePayloadOfType<PlayerConnectionLostEvent>(carolSession),
+                )
+                assertEquals(
+                    expectedPause,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
+                )
+
+                val reconnectingSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(reconnectingSession)
+                reconnectingSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(aliceToken)),
+                    ),
+                )
+                assertEquals(
+                    ReconnectResponse(
+                        success = true,
+                        playerId = PlayerId(1),
+                        lobbyCode = lobbyCode,
+                        playerDisplayName = "Alice",
+                    ),
+                    receivePayload(reconnectingSession),
+                )
+
+                val expectedResume =
+                    TurnStateUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    )
+                assertEquals(
+                    expectedResume,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(
+                        session = reconnectingSession,
+                        maxMessages = 10,
+                    ),
+                )
+                assertEquals(
+                    expectedResume,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
+                )
+                assertEquals(
+                    expectedResume,
+                    receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
+                )
 
                 reconnectingSession.send(
                     Frame.Binary(

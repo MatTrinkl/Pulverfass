@@ -290,6 +290,10 @@ class MainServerLobbyRoutingService(
      * @param playerId fachlich identifizierter Spieler nach Connect/Reconnect
      */
     suspend fun onPlayerConnected(playerId: PlayerId) {
+        resumeWaitingTurnForPlayer(playerId)
+    }
+
+    private suspend fun resumeWaitingTurnForPlayer(playerId: PlayerId) {
         val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId) ?: return
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
@@ -577,6 +581,10 @@ class MainServerLobbyRoutingService(
         connectionId: ConnectionId,
         payload: ReconnectRequest,
     ) {
+        if (resolveSessionToken(connectionId) != payload.sessionToken) {
+            return
+        }
+
         val reconnectContext =
             sessionContextRegistry?.contextFor(payload.sessionToken)
                 ?: return
@@ -607,6 +615,8 @@ class MainServerLobbyRoutingService(
                 ),
             )
         }
+
+        resumeWaitingTurnForPlayer(reconnectingPlayerId)
     }
 
     private suspend fun dispatchCreateErrorResponse(
