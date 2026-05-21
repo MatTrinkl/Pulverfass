@@ -54,7 +54,7 @@ class LobbyControllerTest {
         try {
             val state = controller.state.value
 
-            assertEquals("ws://10.0.2.2:8080/ws", state.serverUrl)
+            assertEquals("ws://5.189.160.80:8080/ws", state.serverUrl)
             assertEquals("", state.playerName)
             assertEquals("", state.lobbyCode)
             assertFalse(state.isJoining)

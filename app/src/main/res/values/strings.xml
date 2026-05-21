@@ -47,4 +47,7 @@
     <string name="connect_server">Mit Server verbinden</string>
     <string name="disconnect_server">Server trennen</string>
     <string name="connecting">Verbinde...</string>
+    <string name="server_status_ok">Serverstatus: OK</string>
+    <string name="server_status_error">Serverstatus: Fehler</string>
+    <string name="server_status_unreachable">Serverstatus: Nicht erreichbar</string>
 </resources>
