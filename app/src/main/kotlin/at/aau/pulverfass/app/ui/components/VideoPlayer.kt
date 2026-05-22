@@ -27,7 +27,6 @@ fun VideoPlayer(
     onCompleted: () -> Unit = {},
     loop: Boolean = false,
     cover: Boolean = false,
-    muted: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (cover) {
