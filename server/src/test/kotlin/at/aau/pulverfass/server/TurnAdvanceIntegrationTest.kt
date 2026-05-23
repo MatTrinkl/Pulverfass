@@ -19,6 +19,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -478,9 +479,28 @@ class TurnAdvanceIntegrationTest {
                         receiveAnyPayload(playerTwoSession.first),
                     )
                     assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events =
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerTwo,
+                                        amount = 3,
+                                        territoryBonus = 3,
+                                        continentBonus = 0,
+                                        cardBonus = 0,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 1,
+                            stateVersion = 2,
                             previousPhase = TurnPhase.DRAW_CARD,
                             nextPhase = TurnPhase.REINFORCEMENTS,
                             activePlayerId = playerTwo,
@@ -504,7 +524,7 @@ class TurnAdvanceIntegrationTest {
                             receiveAnyPayload(playerTwoSession.first),
                         )
                     assertEquals(lobbyCode, snapshot.lobbyCode)
-                    assertEquals(1, snapshot.stateVersion)
+                    assertEquals(2, snapshot.stateVersion)
                     assertEquals(defaultMapDefinition().mapHash, snapshot.determinism.mapHash)
                     assertEquals(
                         defaultMapDefinition().schemaVersion,
@@ -810,7 +830,7 @@ class TurnAdvanceIntegrationTest {
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 1,
+                            stateVersion = 2,
                             previousPhase = TurnPhase.DRAW_CARD,
                             nextPhase = TurnPhase.REINFORCEMENTS,
                             activePlayerId = playerTwo,
@@ -841,6 +861,7 @@ class TurnAdvanceIntegrationTest {
                         snapshot.turnState?.pauseReason,
                     )
                     assertEquals(playerTwo, snapshot.turnState?.pausedPlayerId)
+                    assertEquals(3, snapshot.pendingReinforcementsFor(playerTwo))
 
                     playerOneSession.first.close()
                 }

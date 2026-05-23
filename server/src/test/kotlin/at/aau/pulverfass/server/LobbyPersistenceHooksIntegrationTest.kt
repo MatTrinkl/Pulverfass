@@ -183,7 +183,7 @@ class LobbyPersistenceHooksIntegrationTest {
                         )
                     assertEquals(1, persistedSnapshots.size)
                     val snapshot = persistedSnapshots.single()
-                    assertEquals(4L, snapshot.stateVersion)
+                    assertEquals(5L, snapshot.stateVersion)
                     assertEquals(1, snapshot.turnCount)
 
                     val snapshotJson = Json.parseToJsonElement(snapshot.snapshotJson).jsonObject

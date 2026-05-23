@@ -1,10 +1,17 @@
 package at.aau.pulverfass.server.routing
 
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -80,6 +87,106 @@ class PublicGameStateBuilderTest {
         assertEquals(
             "GameStateDeltaEvent darf nur PublicGameEvent enthalten. " +
                 "Nicht-oeffentliche Payloads: FakePrivateEvent.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `pending reinforcement set projects to public reinforcement grant event`() {
+        val previousState =
+            sampleGameState().copy(
+                activePlayer = PlayerId(2),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+        val currentState =
+            previousState.copy(
+                pendingReinforcements = PendingReinforcements(PlayerId(2), 3),
+                stateVersion = 5,
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event = PendingReinforcementsSetEvent(previousState.lobbyCode, PlayerId(2), 3),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                ReinforcementsGrantedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    amount = 3,
+                    territoryBonus = 3,
+                    continentBonus = 0,
+                    cardBonus = 0,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `card trade in projects to public reinforcement grant with card bonus only`() {
+        val previousState = sampleGameState()
+        val currentState = previousState.copy(stateVersion = 1, tradedInSetCount = 1)
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    CardSetTradedInEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        playerId = PlayerId(2),
+                        cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
+                        value = 2,
+                        tradeIndex = 1,
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                ReinforcementsGrantedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    amount = 2,
+                    territoryBonus = 0,
+                    continentBonus = 0,
+                    cardBonus = 2,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `buildSnapshot throws when game state has no turn state`() {
+        val gameState =
+            GameState.initial(
+                lobbyCode = LobbyCode("PGB2"),
+                mapDefinition = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault(),
+            ).copy(
+                turnState = null,
+                activePlayer = null,
+                turnOrder = emptyList(),
+                turnNumber = 0,
+            )
+
+        val exception =
+            assertThrows(IllegalStateException::class.java) {
+                builder.buildSnapshot(gameState)
+            }
+        assertEquals(
+            "GameState enthält keinen TurnState für einen Snapshot.",
             exception.message,
         )
     }

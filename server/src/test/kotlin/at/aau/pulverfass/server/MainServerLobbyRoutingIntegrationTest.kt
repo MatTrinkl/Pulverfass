@@ -134,7 +134,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val response = assertIs<MapGetResponse>(payload)
 
                     assertEquals(lobbyCode, response.lobbyCode)
-                    assertEquals(1, response.schemaVersion)
+                    assertEquals(2, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(3, response.stateVersion)
                     assertEquals(24, response.definition.territories.size)
@@ -237,7 +237,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val response = assertIs<MapGetResponse>(receivePayload(session))
 
                     assertEquals(createResponse.lobbyCode, response.lobbyCode)
-                    assertEquals(1, response.schemaVersion)
+                    assertEquals(2, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(1, response.stateVersion)
                     assertEquals(24, response.definition.territories.size)
