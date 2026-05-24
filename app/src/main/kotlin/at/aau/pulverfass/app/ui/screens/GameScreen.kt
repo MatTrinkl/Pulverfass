@@ -83,7 +83,7 @@ private val TopBarHeight = 52.dp
 private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
-private const val SyncFeedbackDelayMillis = 500L
+private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -240,7 +240,7 @@ internal fun GameScreenContent(
     LaunchedEffect(uiState.isCatchingUp) {
         showCatchUpFeedback = false
         if (uiState.isCatchingUp) {
-            delay(SyncFeedbackDelayMillis)
+            delay(SYNC_FEEDBACK_DELAY_MILLIS)
             showCatchUpFeedback = true
         }
     }
