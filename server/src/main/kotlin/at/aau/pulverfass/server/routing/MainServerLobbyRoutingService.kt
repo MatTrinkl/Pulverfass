@@ -1054,7 +1054,7 @@ class MainServerLobbyRoutingService(
         check(
             !(
                 state.gameStarted ||
-                    state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING
+                    state.status == GameStatus.RUNNING
             ),
         ) { "GAME_ALREADY_STARTED" }
         require(state.lobbyOwner == payload.requesterPlayerId) { "NOT_HOST" }
