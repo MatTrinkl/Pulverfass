@@ -173,18 +173,6 @@ fun createServerWithLobbyRuntime(
     }
 
 /**
- * Test-Hilfsmethode für Low-Level-Transporttests.
- *
- * Die Transportvariante bleibt bewusst intern, damit Produktionscode nicht am
- * High-Level-Network vorbei integriert wird.
- */
-internal fun createServer(
-    host: String,
-    port: Int,
-    transport: ServerWebSocketTransport,
-): ApplicationEngine = createServer(host, port, ServerNetwork(transport = transport))
-
-/**
  * Konfiguriert die Ktor-Anwendung mit WebSocket-Unterstützung auf `/ws`.
  *
  * Der Endpunkt delegiert den kompletten Verbindungslebenszyklus an
