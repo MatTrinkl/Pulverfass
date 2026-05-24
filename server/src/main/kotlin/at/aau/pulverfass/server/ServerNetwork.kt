@@ -170,7 +170,6 @@ class ServerNetwork(
             connectionId.value,
             reason,
         )
-        _events.emit(Network.Event.Disconnected(connectionId, reason))
     }
 
     /**
@@ -207,10 +206,17 @@ class ServerNetwork(
         connectionId: ConnectionId,
         payload: ReconnectRequest,
     ) {
+        logger.info("Reconnect requested connectionId={}", connectionId.value)
         var reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
         if (reconnectError == ReconnectErrorCode.TOKEN_INVALID) {
             val persistedSession = reconnectSessionProvider(payload.sessionToken)
             if (persistedSession != null) {
+                logger.info(
+                    "Reconnect session restored connectionId={} playerId={} lobbyCode={}",
+                    connectionId.value,
+                    persistedSession.context.playerId?.value,
+                    persistedSession.context.lobbyCode?.value,
+                )
                 sessionManager.restoreDetachedSession(
                     sessionToken = payload.sessionToken,
                     expiresAtEpochMillis = persistedSession.expiresAtEpochMillis,
@@ -220,6 +226,11 @@ class ServerNetwork(
             }
         }
         if (reconnectError != null) {
+            logger.warn(
+                "Reconnect rejected connectionId={} errorCode={}",
+                connectionId.value,
+                reconnectError,
+            )
             sendReconnectResponse(
                 connectionId = connectionId,
                 payload =
@@ -236,9 +247,16 @@ class ServerNetwork(
 
         if (currentSession.sessionToken == payload.sessionToken) {
             onReconnectSucceeded(payload.sessionToken)
+            val response = createReconnectSuccessResponse(payload.sessionToken)
+            logger.info(
+                "Reconnect confirmed existing session connectionId={} playerId={} lobbyCode={}",
+                connectionId.value,
+                response.playerId?.value,
+                response.lobbyCode?.value,
+            )
             sendReconnectResponse(
                 connectionId = connectionId,
-                payload = createReconnectSuccessResponse(payload.sessionToken),
+                payload = response,
             )
             return
         }
@@ -252,9 +270,18 @@ class ServerNetwork(
             closeConnectionForReconnect(previousConnectionId)
         }
 
+        val response = createReconnectSuccessResponse(payload.sessionToken)
+        logger.info(
+            "Reconnect rebound session connectionId={} previousConnectionId={} " +
+                "playerId={} lobbyCode={}",
+            connectionId.value,
+            previousConnectionId?.value,
+            response.playerId?.value,
+            response.lobbyCode?.value,
+        )
         sendReconnectResponse(
             connectionId = connectionId,
-            payload = createReconnectSuccessResponse(payload.sessionToken),
+            payload = response,
         )
     }
 

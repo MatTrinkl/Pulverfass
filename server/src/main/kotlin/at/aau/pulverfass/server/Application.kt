@@ -45,13 +45,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
 
 internal const val DEFAULT_HOST = "0.0.0.0"
 internal const val DEFAULT_PORT = 8080
-private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
-private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Runtime")
+private val runtimeLogger = ServerLoggers.technical("Runtime")
 private const val SERVER_MODE_ENV = "SERVER_MODE"
 private const val SERVER_MODE_MIGRATE = "migrate"
 private val applicationLogger = ServerLoggers.technical("Application")
@@ -61,13 +59,12 @@ private val webSocketLogger = ServerLoggers.technical("WebSocketEndpoint")
  * Startet den eingebetteten Ktor-Server mit der Standardkonfiguration.
  */
 fun main() {
+    val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
     applicationLogger.info(
         "Starting Pulverfass server host={} port={}",
-        DEFAULT_HOST,
-        DEFAULT_PORT,
+        runtimeConfig.host,
+        runtimeConfig.port,
     )
-    createServerWithLobbyRuntime().start(wait = true)
-    val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
     prepareServerEngine(runtimeConfig)?.start(wait = true)
 }
 
@@ -468,7 +465,26 @@ private fun Application.installLobbyRuntime(
             mapper = DefaultNetworkToLobbyEventMapper(),
         )
 
-    val nextPlayerId = AtomicLong(1)
+    val nextPlayerId =
+        AtomicLong(
+            maxOf(
+                recoverableStates.maxPlayerId(),
+                sessionStore?.maxPersistedPlayerId() ?: 0L,
+            ) + 1,
+        )
+    network.sessionManager.installLifecycleHooks(
+        onSessionUpsert = { session ->
+            persistReconnectSessionIfPossible(
+                network = network,
+                sessionStore = sessionStore,
+                sessionContextRegistry = sessionContextRegistry,
+                sessionToken = session.sessionToken,
+            )
+        },
+        onSessionRemoved = { sessionToken ->
+            sessionStore?.deleteSession(sessionToken)
+        },
+    )
     network.installReconnectHooks(
         reconnectSessionProvider = { sessionToken ->
             sessionStore?.loadSession(sessionToken)

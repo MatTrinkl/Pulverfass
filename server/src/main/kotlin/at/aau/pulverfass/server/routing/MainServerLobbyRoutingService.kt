@@ -150,6 +150,7 @@ class MainServerLobbyRoutingService(
                     payload = payload,
                 )
             is CreateLobbyRequest -> routeCreateLobbyRequest(request)
+            is LobbyPlayerCountRequest -> routeLobbyPlayerCountRequest(request)
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
@@ -583,19 +584,75 @@ class MainServerLobbyRoutingService(
         payload: ReconnectRequest,
     ) {
         if (resolveSessionToken(connectionId) != payload.sessionToken) {
+            logger.warn(
+                "Reconnect snapshot skipped connectionId={} reason=session-token-mismatch",
+                connectionId.value,
+            )
             return
         }
 
         val reconnectContext =
             sessionContextRegistry?.contextFor(payload.sessionToken)
-                ?: return
-        val lobbyCode = reconnectContext.lobbyCode ?: return
-        val reconnectingPlayerId = reconnectContext.playerId ?: return
-        val lobbyState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} reason=context-missing",
+                        connectionId.value,
+                    )
+                    return
+                }
+        val lobbyCode =
+            reconnectContext.lobbyCode
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} " +
+                            "reason=lobby-missing-in-context",
+                        connectionId.value,
+                    )
+                    return
+                }
+        val reconnectingPlayerId =
+            reconnectContext.playerId
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                            "reason=player-missing-in-context",
+                        connectionId.value,
+                        lobbyCode.value,
+                    )
+                    return
+                }
+        val lobbyState =
+            lobbyManager.getLobby(lobbyCode)?.currentState()
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                            "playerId={} reason=lobby-not-found",
+                        connectionId.value,
+                        lobbyCode.value,
+                        reconnectingPlayerId.value,
+                    )
+                    return
+                }
 
         if (!lobbyState.players.contains(reconnectingPlayerId)) {
+            logger.warn(
+                "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                    "playerId={} reason=player-not-in-lobby",
+                connectionId.value,
+                lobbyCode.value,
+                reconnectingPlayerId.value,
+            )
             return
         }
+
+        logger.info(
+            "Reconnect lobby snapshot dispatch connectionId={} lobbyCode={} " +
+                "playerId={} memberCount={}",
+            connectionId.value,
+            lobbyCode.value,
+            reconnectingPlayerId.value,
+            lobbyState.players.size,
+        )
 
         /*
          * Ein echter Reconnect durchläuft keinen JoinRequest mehr. Deshalb muss
