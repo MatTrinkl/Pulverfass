@@ -55,6 +55,7 @@ data class GameState(
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
+    val fortifyUsedThisTurn: Boolean = false,
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
@@ -354,6 +355,12 @@ data class GameState(
 
         return false
     }
+
+    fun canFortifyMove(
+        playerId: PlayerId,
+        from: TerritoryId,
+        to: TerritoryId,
+    ): Boolean = isConnectedByOwnedPath(playerId, from, to)
 
     /**
      * Berechnet den Gesamtbonus eines Spielers aus vollständig kontrollierten Kontinenten.

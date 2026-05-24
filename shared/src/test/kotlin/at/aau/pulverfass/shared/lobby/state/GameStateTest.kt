@@ -285,6 +285,13 @@ class GameStateTest {
                 to = TerritoryId("beta"),
             ),
         )
+        assertTrue(
+            connectedState.canFortifyMove(
+                playerId = playerOne,
+                from = TerritoryId("beta"),
+                to = TerritoryId("gamma"),
+            ),
+        )
     }
 
     @Test
