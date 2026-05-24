@@ -464,6 +464,19 @@ private fun Application.installLobbyRuntime(
                 sessionStore?.maxPersistedPlayerId() ?: 0L,
             ) + 1,
         )
+    val playerIdAssignmentLock = Any()
+    fun ensurePlayerId(sessionToken: SessionToken): PlayerId {
+        sessionContextRegistry.playerIdForSession(sessionToken)?.let { return it }
+        synchronized(playerIdAssignmentLock) {
+            sessionContextRegistry.playerIdForSession(sessionToken)?.let { return it }
+            val assignedPlayerId = PlayerId(nextPlayerId.getAndIncrement())
+            sessionContextRegistry.assignPlayer(
+                sessionToken = sessionToken,
+                playerId = assignedPlayerId,
+            )
+            return assignedPlayerId
+        }
+    }
     network.sessionManager.installLifecycleHooks(
         onSessionUpsert = { session ->
             persistReconnectSessionIfPossible(
@@ -511,7 +524,7 @@ private fun Application.installLobbyRuntime(
                 network.sessionManager
                     .getByConnectionId(connectionId)
                     ?.sessionToken
-                    ?.let(sessionContextRegistry::playerIdForSession)
+                    ?.let(::ensurePlayerId)
             },
             connectionIdResolver = { playerId ->
                 sessionContextRegistry
@@ -538,14 +551,7 @@ private fun Application.installLobbyRuntime(
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
-                    val playerId =
-                        sessionContextRegistry.playerIdForSession(session.sessionToken)
-                            ?: PlayerId(nextPlayerId.getAndIncrement()).also { assignedPlayerId ->
-                                sessionContextRegistry.assignPlayer(
-                                    sessionToken = session.sessionToken,
-                                    playerId = assignedPlayerId,
-                                )
-                            }
+                    val playerId = ensurePlayerId(session.sessionToken)
                     routingService.onPlayerConnected(playerId)
                 }
 
