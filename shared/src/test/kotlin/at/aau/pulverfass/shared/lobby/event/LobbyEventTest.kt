@@ -17,6 +17,14 @@ class LobbyEventTest {
 
         val events =
             listOf<LobbyEvent>(
+                FortifyMoveAppliedEvent(
+                    lobbyCode,
+                    playerId,
+                    TerritoryId("alpha"),
+                    TerritoryId("beta"),
+                    2,
+                ),
+                FortifyUsedSetEvent(lobbyCode, used = true),
                 PlayerJoined(lobbyCode, playerId, "Alice"),
                 PlayerLeft(lobbyCode, playerId, "quit"),
                 StartPlayerConfigured(lobbyCode, playerId, PlayerId(1)),
@@ -37,9 +45,9 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(12, events.size)
+        assertEquals(14, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
-        assertEquals("finished", (events[5] as LobbyClosed).reason)
+        assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
 
     @Test
@@ -53,7 +61,17 @@ class LobbyEventTest {
             }
 
         val externalResult =
-            when (val event: ExternalLobbyEvent = TurnEnded(lobbyCode, PlayerId(3))) {
+            when (
+                val event: ExternalLobbyEvent =
+                    FortifyMoveAppliedEvent(
+                        lobbyCode,
+                        PlayerId(3),
+                        TerritoryId("alpha"),
+                        TerritoryId("beta"),
+                        1,
+                    )
+            ) {
+                is FortifyMoveAppliedEvent -> "fortify:${event.playerId.value}"
                 is GameStarted -> "gameStarted:${event.lobbyCode.value}"
                 is PlayerJoined -> "joined:${event.playerId.value}"
                 is PlayerKicked -> "kicked:${event.targetPlayerId.value}"
@@ -64,6 +82,7 @@ class LobbyEventTest {
 
         val internalResult =
             when (val event: InternalLobbyEvent = LobbyClosed(lobbyCode, "done")) {
+                is FortifyUsedSetEvent -> event.used.toString()
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
@@ -75,7 +94,7 @@ class LobbyEventTest {
             }
 
         assertEquals("internal:CD34", rootResult)
-        assertEquals("turnEnded:3", externalResult)
+        assertEquals("fortify:3", externalResult)
         assertEquals("done", internalResult)
     }
 
@@ -86,6 +105,14 @@ class LobbyEventTest {
 
         val events =
             listOf<LobbyEvent>(
+                FortifyMoveAppliedEvent(
+                    lobbyCode,
+                    playerId,
+                    TerritoryId("alpha"),
+                    TerritoryId("beta"),
+                    1,
+                ),
+                FortifyUsedSetEvent(lobbyCode, used = true),
                 PlayerJoined(lobbyCode, playerId, "Bob"),
                 PlayerLeft(lobbyCode, playerId),
                 StartPlayerConfigured(lobbyCode, playerId, PlayerId(1)),
@@ -120,10 +147,22 @@ class LobbyEventTest {
 
     @Test
     fun `should expose technical event properties consistently`() {
+        val fortifyApplied =
+            FortifyMoveAppliedEvent(
+                LobbyCode("AA10"),
+                PlayerId(3),
+                TerritoryId("alpha"),
+                TerritoryId("beta"),
+                2,
+            )
+        val fortifyUsed = FortifyUsedSetEvent(LobbyCode("AA12"), used = true)
         val invalidAction = InvalidActionDetected(LobbyCode("AA11"), PlayerId(2), "invalid")
         val tick = SystemTick(LobbyCode("BB22"), 4)
         val timeout = TimeoutTriggered(LobbyCode("CC33"), "turn", 3_000)
 
+        assertEquals(PlayerId(3), fortifyApplied.playerId)
+        assertEquals(TerritoryId("alpha"), fortifyApplied.fromTerritoryId)
+        assertEquals(true, fortifyUsed.used)
         assertEquals(PlayerId(2), invalidAction.playerId)
         assertEquals("invalid", invalidAction.reason)
         assertEquals(4, tick.tick)
@@ -133,6 +172,24 @@ class LobbyEventTest {
 
     @Test
     fun `should validate technical event arguments`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FortifyMoveAppliedEvent(
+                LobbyCode("FC10"),
+                PlayerId(1),
+                TerritoryId("alpha"),
+                TerritoryId("alpha"),
+                1,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            FortifyMoveAppliedEvent(
+                LobbyCode("FC12"),
+                PlayerId(1),
+                TerritoryId("alpha"),
+                TerritoryId("beta"),
+                0,
+            )
+        }
         assertThrows(IllegalArgumentException::class.java) {
             InvalidActionDetected(LobbyCode("DD44"), reason = " ")
         }

@@ -2,6 +2,8 @@ package at.aau.pulverfass.shared.lobby.reducer
 
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -80,6 +82,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                         startPlayerId = event.startPlayerId,
                         requesterPlayerId = event.requesterPlayerId,
                     )
+                is FortifyMoveAppliedEvent -> onFortifyMoveApplied(state, event)
+                is FortifyUsedSetEvent -> state.copy(fortifyUsedThisTurn = event.used)
                 is GameStarted -> onGameStarted(state, event)
                 is SystemTick -> state
                 is TerritoryOwnerChangedEvent -> onTerritoryOwnerChanged(state, event)
@@ -419,6 +423,43 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         event: TurnStateUpdatedEvent,
     ): GameState = applyTurnStateUpdate(state, event)
 
+    private fun onFortifyMoveApplied(
+        state: GameState,
+        event: FortifyMoveAppliedEvent,
+    ): GameState {
+        requireMapLoaded(state)
+        requireKnownTerritory(state, event.fromTerritoryId)
+        requireKnownTerritory(state, event.toTerritoryId)
+
+        if (
+            state.ownerOf(event.fromTerritoryId) != event.playerId ||
+            state.ownerOf(event.toTerritoryId) != event.playerId
+        ) {
+            throw InvalidLobbyEventException(
+                "FortifyMoveAppliedEvent benötigt zwei Territorien von Spieler " +
+                    "'${event.playerId.value}'.",
+            )
+        }
+
+        val sourceTroops = state.troopCountOf(event.fromTerritoryId)
+        if (sourceTroops <= event.troopCount) {
+            throw InvalidLobbyEventException(
+                "FortifyMoveAppliedEvent von '${event.fromTerritoryId.value}' nach " +
+                    "'${event.toTerritoryId.value}' muss mindestens eine Truppe " +
+                    "zurücklassen: vorhanden=$sourceTroops, bewegt=${event.troopCount}.",
+            )
+        }
+
+        return state
+            .withTerritoryTroops(
+                territoryId = event.fromTerritoryId,
+                troopCount = sourceTroops - event.troopCount,
+            ).withTerritoryTroops(
+                territoryId = event.toTerritoryId,
+                troopCount = state.troopCountOf(event.toTerritoryId) + event.troopCount,
+            )
+    }
+
     private fun applyTurnStateUpdate(
         state: GameState,
         event: TurnStateUpdatedEvent,
@@ -486,12 +527,16 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 pauseReason = event.pauseReason,
                 pausedPlayerId = event.pausedPlayerId,
             )
+        val shouldResetFortifyUsed =
+            state.activePlayer != updatedTurnState.activePlayerId ||
+                state.turnNumber != updatedTurnState.turnCount
 
         return state.copy(
             activePlayer = updatedTurnState.activePlayerId,
             configuredStartPlayerId = updatedTurnState.startPlayerId,
             turnNumber = updatedTurnState.turnCount,
             turnState = updatedTurnState,
+            fortifyUsedThisTurn = if (shouldResetFortifyUsed) false else state.fortifyUsedThisTurn,
         )
     }
 

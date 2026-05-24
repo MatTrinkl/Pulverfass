@@ -2,6 +2,8 @@ package at.aau.pulverfass.shared.lobby.command
 
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -10,7 +12,9 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 /**
  * Standard-Regelservice für Map-bezogene Domain-Commands.
  */
-class DefaultMapCommandRuleService : MapCommandRuleService {
+class DefaultMapCommandRuleService(
+    private val fortifyMoveValidator: FortifyMoveValidator = DefaultFortifyMoveValidator(),
+) : MapCommandRuleService {
     override fun createEvents(
         state: GameState,
         command: MapCommand,
@@ -22,6 +26,7 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
         return when (command) {
             is PlaceTroopsCommand -> createPlaceTroopsEvents(state, command)
             is MoveTroopsCommand -> createMoveTroopsEvents(state, command)
+            is FortifyMoveCommand -> createFortifyMoveEvents(state, command)
             is AttackCommand -> createAttackEvents(state, command)
         }
     }
@@ -71,6 +76,43 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
                 territoryId = command.toTerritoryId,
                 troopCount =
                     state.troopCountOf(command.toTerritoryId) + command.troopCount,
+            ),
+        )
+    }
+
+    private fun createFortifyMoveEvents(
+        state: GameState,
+        command: FortifyMoveCommand,
+    ): List<LobbyEvent> {
+        val validationError =
+            fortifyMoveValidator.validateFortifyMove(
+                state = state,
+                playerId = command.playerId,
+                fromTerritoryId = command.fromTerritoryId,
+                toTerritoryId = command.toTerritoryId,
+                troopCount = command.troopCount,
+            )
+        if (validationError != null) {
+            throw InvalidMapCommandException(
+                fortifyValidationErrorMessage(
+                    state = state,
+                    command = command,
+                    error = validationError,
+                ),
+            )
+        }
+
+        return listOf(
+            FortifyMoveAppliedEvent(
+                lobbyCode = command.lobbyCode,
+                playerId = command.playerId,
+                fromTerritoryId = command.fromTerritoryId,
+                toTerritoryId = command.toTerritoryId,
+                troopCount = command.troopCount,
+            ),
+            FortifyUsedSetEvent(
+                lobbyCode = command.lobbyCode,
+                used = true,
             ),
         )
     }
@@ -273,4 +315,32 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
             )
         }
     }
+
+    private fun fortifyValidationErrorMessage(
+        state: GameState,
+        command: FortifyMoveCommand,
+        error: FortifyMoveValidationError,
+    ): String =
+        when (error) {
+            FortifyMoveValidationError.NOT_ACTIVE_PLAYER ->
+                "Fortify ist nur für den aktiven Spieler erlaubt. Aktiv ist " +
+                    "'${state.activePlayer?.value}', angefordert wurde '${command.playerId.value}'."
+            FortifyMoveValidationError.WRONG_PHASE ->
+                "Fortify ist nur in Phase 'FORTIFY' erlaubt, aktuell ist " +
+                    "'${state.activeTurnPhase?.name}'."
+            FortifyMoveValidationError.TERRITORY_NOT_OWNED ->
+                "Fortify von '${command.fromTerritoryId.value}' nach " +
+                    "'${command.toTerritoryId.value}' erfordert zwei eigene Territorien."
+            FortifyMoveValidationError.NO_PATH ->
+                "Fortify von '${command.fromTerritoryId.value}' nach " +
+                    "'${command.toTerritoryId.value}' benötigt einen zusammenhängenden " +
+                    "Pfad über eigene Gebiete."
+            FortifyMoveValidationError.INSUFFICIENT_TROOPS ->
+                "Fortify von '${command.fromTerritoryId.value}' nach " +
+                    "'${command.toTerritoryId.value}' muss mindestens eine Truppe " +
+                    "zurücklassen: vorhanden=${state.troopCountOf(command.fromTerritoryId)}, " +
+                    "bewegt=${command.troopCount}."
+            FortifyMoveValidationError.FORTIFY_ALREADY_USED ->
+                "Fortify wurde in diesem Zug bereits verwendet."
+        }
 }
