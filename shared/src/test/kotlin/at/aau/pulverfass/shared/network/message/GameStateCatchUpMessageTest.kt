@@ -58,6 +58,7 @@ class GameStateCatchUpMessageTest {
                         turnPhase = TurnPhase.REINFORCEMENTS,
                         turnCount = 2,
                         startPlayerId = PlayerId(1),
+                        pendingReinforcements = 3,
                     ),
                 definition =
                     MapDefinitionSnapshot(
@@ -85,6 +86,7 @@ class GameStateCatchUpMessageTest {
 
         assertTrue(serialized.contains("determinism"))
         assertTrue(serialized.contains("turnState"))
+        assertTrue(serialized.contains("pendingReinforcements"))
         assertFalse(serialized.contains("recipientPlayerId"))
         assertEquals(response, deserialized)
     }

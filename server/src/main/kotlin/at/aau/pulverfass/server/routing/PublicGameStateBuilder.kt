@@ -52,7 +52,12 @@ class PublicGameStateBuilder {
             lobbyCode = gameState.lobbyCode,
             stateVersion = gameState.stateVersion,
             determinism = mapProjection.determinism,
-            turnState = PublicTurnStateSnapshot.from(resolvedTurnState),
+            turnState =
+                PublicTurnStateSnapshot.from(
+                    turnState = resolvedTurnState,
+                    pendingReinforcements =
+                        gameState.pendingReinforcementsFor(resolvedTurnState.activePlayerId),
+                ),
             definition = mapProjection.definition,
             territoryStates = mapProjection.territoryStates,
         )

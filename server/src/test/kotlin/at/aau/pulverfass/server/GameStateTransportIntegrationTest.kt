@@ -227,6 +227,7 @@ class GameStateTransportIntegrationTest {
                     assertEquals(5, catchUp.stateVersion)
                     assertEquals(playerTwo, catchUp.turnState.activePlayerId)
                     assertEquals(TurnPhase.REINFORCEMENTS, catchUp.turnState.turnPhase)
+                    assertEquals(3, catchUp.turnState.pendingReinforcements)
                     assertEquals(defaultMapDefinition().mapHash, catchUp.determinism.mapHash)
                     assertNull(receivePayloadOrNull(playerOneSession.first))
 

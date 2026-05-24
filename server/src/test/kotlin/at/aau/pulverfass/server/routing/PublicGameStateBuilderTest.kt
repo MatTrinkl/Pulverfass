@@ -27,7 +27,19 @@ class PublicGameStateBuilderTest {
 
     @Test
     fun `snapshot builder exposes all required public fields consistently`() {
-        val gameState = sampleGameState().copy(stateVersion = 9)
+        val gameState =
+            sampleGameState().copy(
+                stateVersion = 9,
+                activePlayer = PlayerId(2),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 2,
+                        startPlayerId = PlayerId(1),
+                    ),
+                pendingReinforcements = PendingReinforcements(PlayerId(2), 4),
+            )
 
         val snapshot = builder.buildSnapshot(gameState)
         val mapGet = builder.buildMapGetResponse(gameState)
@@ -39,6 +51,7 @@ class PublicGameStateBuilderTest {
         assertEquals(gameState.mapDefinition?.mapHash, snapshot.determinism.mapHash)
         assertEquals(gameState.mapDefinition?.schemaVersion, snapshot.determinism.schemaVersion)
         assertNotNull(snapshot.turnState)
+        assertEquals(4, snapshot.turnState.pendingReinforcements)
         assertEquals(gameState.allTerritoryStates().size, snapshot.territoryStates.size)
 
         assertEquals(snapshot.lobbyCode, mapGet.lobbyCode)
