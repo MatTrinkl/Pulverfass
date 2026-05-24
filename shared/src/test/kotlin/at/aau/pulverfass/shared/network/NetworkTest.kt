@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.network
 
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -27,10 +28,16 @@ class NetworkTest {
 
     @Test
     fun `should expose disconnected event data`() {
-        val event = Network.Event.Disconnected(ConnectionId(3), reason = "closed")
+        val event =
+            Network.Event.Disconnected(
+                connectionId = ConnectionId(3),
+                reason = "closed",
+                sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174299"),
+            )
 
         assertEquals(ConnectionId(3), event.connectionId)
         assertEquals("closed", event.reason)
+        assertEquals(SessionToken("123e4567-e89b-12d3-a456-426614174299"), event.sessionToken)
     }
 
     @Test

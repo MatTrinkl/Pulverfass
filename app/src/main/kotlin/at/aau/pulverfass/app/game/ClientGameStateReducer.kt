@@ -235,7 +235,8 @@ object ClientGameStateReducer {
      * Verarbeitet die Auswahl einer Kartenregion nach einem Tap.
      *
      * Die UI liefert Android-Region-IDs aus der Farbhitmap. Der Reducer übersetzt
-     * diese ID zuerst in die fachliche [TerritoryId], prüft dann den aktuellen
+     * diese ID zuerst in die fachliche
+     * [at.aau.pulverfass.shared.ids.TerritoryId], prüft dann den aktuellen
      * TurnState und hält anschließend die einfache `from/to`-Auswahl.
      *
      * @param current bisheriger lokaler GameState

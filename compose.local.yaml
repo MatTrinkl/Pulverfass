@@ -1,0 +1,13 @@
+services:
+  server:
+    image: se2risiko-server-local:${APP_VERSION:-dev}
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+
+  dokka:
+    image: se2risiko-dokka-local:${APP_VERSION:-dev}
+    build:
+      context: .
+      dockerfile: Dockerfile.dokka

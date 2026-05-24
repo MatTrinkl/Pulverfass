@@ -284,10 +284,17 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             )
         }
 
-        return state.withTerritoryOwner(
-            territoryId = event.territoryId,
-            ownerId = event.ownerId,
-        )
+        val updatedState =
+            state.withTerritoryOwner(
+                territoryId = event.territoryId,
+                ownerId = event.ownerId,
+            )
+
+        return if (hasWinningPlayer(updatedState)) {
+            updatedState.copy(status = GameStatus.FINISHED)
+        } else {
+            updatedState
+        }
     }
 
     private fun onTerritoryTroopsChanged(
@@ -394,6 +401,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             state.copy(
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 gameStarted = true,
+                gameRandomSeed = event.randomSeed,
                 status = GameStatus.RUNNING,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,
@@ -509,6 +517,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         when {
             state.status == GameStatus.CLOSED -> GameStatus.CLOSED
             state.status == GameStatus.FINISHED -> GameStatus.FINISHED
+            hasStartedGame(state) && updatedPlayers.size <= 1 -> GameStatus.FINISHED
             hasStartedGame(state) && updatedPlayers.size >= 2 -> GameStatus.RUNNING
             else -> GameStatus.WAITING_FOR_PLAYERS
         }
@@ -539,6 +548,18 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
     private fun hasStartedGame(state: GameState): Boolean =
         state.gameStarted || state.status == GameStatus.RUNNING
+
+    private fun hasWinningPlayer(state: GameState): Boolean {
+        if (!hasStartedGame(state) || !state.hasMap()) {
+            return false
+        }
+
+        val territoryStates = state.allTerritoryStates()
+        val owners = territoryStates.mapNotNull { territoryState -> territoryState.ownerId }.toSet()
+        return territoryStates.isNotEmpty() &&
+            owners.size == 1 &&
+            territoryStates.all { territoryState -> territoryState.ownerId != null }
+    }
 
     private fun requireMapLoaded(state: GameState) {
         if (!state.hasMap()) {

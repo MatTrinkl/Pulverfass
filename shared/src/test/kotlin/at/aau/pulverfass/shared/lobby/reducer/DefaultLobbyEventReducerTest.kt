@@ -296,6 +296,36 @@ class DefaultLobbyEventReducerTest {
         assertEquals(listOf(playerOne, playerThree), removingActive.turnOrder)
         assertEquals(TurnPhase.REINFORCEMENTS, removingActive.turnState?.turnPhase)
 
+        val twoPlayerRunningState =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                playerDisplayNames =
+                    mapOf(
+                        playerOne to "1",
+                        playerTwo to "2",
+                    ),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerTwo,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerTwo,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                setupTroopsToPlaceByPlayer =
+                    mapOf(
+                        playerOne to 0,
+                        playerTwo to 0,
+                    ),
+            )
+        val finishedByLastRemainingPlayer =
+            reducer.apply(twoPlayerRunningState, PlayerLeft(lobbyCode, playerTwo))
+        assertEquals(GameStatus.FINISHED, finishedByLastRemainingPlayer.status)
+
         val singlePlayerState =
             GameState(
                 lobbyCode = lobbyCode,
@@ -678,7 +708,7 @@ class DefaultLobbyEventReducerTest {
         assertEquals(listOf(owner), updated.players)
         assertEquals(listOf(owner), updated.turnOrder)
         assertEquals(owner, updated.activePlayer)
-        assertEquals(GameStatus.WAITING_FOR_PLAYERS, updated.status)
+        assertEquals(GameStatus.FINISHED, updated.status)
     }
 
     @Test
@@ -699,7 +729,7 @@ class DefaultLobbyEventReducerTest {
         val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
 
         assertEquals(listOf(owner), updated.players)
-        assertEquals(GameStatus.WAITING_FOR_PLAYERS, updated.status)
+        assertEquals(GameStatus.FINISHED, updated.status)
     }
 
     @Test
@@ -1146,6 +1176,40 @@ class DefaultLobbyEventReducerTest {
         assertNull(afterBeta.continentOwner(ContinentId("south")))
         assertEquals(playerTwo, afterGamma.continentOwner(ContinentId("south")))
         assertEquals(1, afterGamma.bonusFor(playerTwo))
+    }
+
+    @Test
+    fun `territory ownership finishes running game when one player owns all territories`() {
+        val lobbyCode = LobbyCode("WX78")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val runningState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            ).copy(
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+            )
+
+        val afterAlpha =
+            reducer.apply(
+                runningState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+            )
+        val afterBeta =
+            reducer.apply(
+                afterAlpha,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+            )
+        val finishedState =
+            reducer.apply(
+                afterBeta,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("gamma"), playerOne),
+            )
+
+        assertEquals(GameStatus.FINISHED, finishedState.status)
     }
 
     private fun sampleMapDefinition(): MapDefinition =

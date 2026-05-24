@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pulverfass}
+      POSTGRES_USER: ${POSTGRES_USER:-pulverfass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell or .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  server:
+    image: ${SERVER_IMAGE:-se2risiko-server-local:dev}
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: ${PORT:-8080}
+      APP_VERSION: ${APP_VERSION:-dev}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-pulverfass}
+      DB_USER: ${DB_USER:-pulverfass}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your shell or .env}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent "http://127.0.0.1:$${PORT}/ready" >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+
+  dokka:
+    image: ${DOKKA_IMAGE:-se2risiko-dokka-local:dev}
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/index.html
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    ports:
+      - "${DOKKA_PORT:-8081}:8080"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:

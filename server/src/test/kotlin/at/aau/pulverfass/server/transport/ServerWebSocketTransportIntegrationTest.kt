@@ -14,6 +14,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
@@ -44,7 +45,7 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val connectedEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<Connected>().first()
                         }
@@ -75,7 +76,7 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val messageEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<BinaryMessageReceived>().first()
                         }
@@ -109,13 +110,13 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val connectedEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<Connected>().first()
                         }
                     }
                 val messageEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<BinaryMessageReceived>().first()
                         }
@@ -165,13 +166,13 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val connectedEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<Connected>().first()
                         }
                     }
                 val disconnectedEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<Disconnected>().first()
                         }
@@ -204,7 +205,7 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val connectedEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
                             transport.events.filterIsInstance<Connected>().first()
                         }
@@ -244,7 +245,7 @@ class ServerWebSocketTransportIntegrationTest {
 
             coroutineScope {
                 val binaryEvent =
-                    async {
+                    async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeoutOrNull(500) {
                             transport.events.filterIsInstance<BinaryMessageReceived>().first()
                         }

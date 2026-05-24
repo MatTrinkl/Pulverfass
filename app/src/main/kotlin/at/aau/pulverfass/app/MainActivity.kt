@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app
 
+import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -15,7 +16,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -23,9 +31,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
+import at.aau.pulverfass.app.ui.components.ServerStatusIndicator
+import at.aau.pulverfass.app.ui.components.rememberServerHealthStatus
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.navigation.canAutoNavigateToRestoredGame
 import at.aau.pulverfass.app.ui.navigation.restoredGameNavigationTarget
@@ -33,19 +44,32 @@ import at.aau.pulverfass.app.ui.screens.GameScreen
 import at.aau.pulverfass.app.ui.screens.LoadGameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
+import at.aau.pulverfass.app.ui.screens.MainMenuScreen
+import at.aau.pulverfass.app.ui.screens.StudioIntroScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 
 /**
  * Compose-basierter Einstiegspunkt der Android-App.
  *
- * Die Activity initialisiert aktuell genau eine [LobbyController]-Instanz,
- * verdrahtet die Navigationsziele des Lobby-Flows und gibt den Controller beim
- * Verlassen der Composition wieder frei.
+ * Die Activity initialisiert genau eine [LobbyController]-Instanz und
+ * verwaltet den [BackgroundMusicManager] als Activity-Field, damit
+ * Lifecycle-Callbacks (onPause/onResume/onDestroy) auf die selbe Instanz
+ * zugreifen können wie der Compose-Tree.
  */
 class MainActivity : AppCompatActivity() {
+    private lateinit var musicManager: BackgroundMusicManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Background-Music-Manager als Field, damit onPause/onResume drauf zugreifen können
+        musicManager = BackgroundMusicManager(applicationContext)
+
+        // Fullscreen Immersive: System-Bars verstecken
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        hideSystemBars()
+
         enableEdgeToEdge()
         setContent {
             AndroidAppTheme {
@@ -59,6 +83,37 @@ class MainActivity : AppCompatActivity() {
                         LobbyController(reconnectSessionStore = reconnectSessionStore)
                     }
                 val lobbyState by lobbyController.state.collectAsState()
+                val serverHealthStatus by rememberServerHealthStatus()
+
+                // Immersive Enforcement bei jeder Navigation
+                val view = LocalView.current
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
+                LaunchedEffect(currentBackStackEntry) {
+                    val window = (view.context as Activity).window
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    val controller = WindowInsetsControllerCompat(window, window.decorView)
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+
+                // Audio: SFX bei Studio-Intro, Music erst wenn MainMenu erreicht
+                LaunchedEffect(currentBackStackEntry) {
+                    val route = currentBackStackEntry?.destination?.route
+                    when {
+                        route == Screen.StudioIntro.route ->
+                            musicManager.playSfx(R.raw.gabumon_intro)
+
+                        route == Screen.MainMenu.route ||
+                            route == Screen.Lobby.route ||
+                            route == Screen.LoadGame.route ||
+                            route?.startsWith(Screen.WaitingRoom.route) == true ->
+                            musicManager.play(R.raw.menu_theme2)
+
+                        route == Screen.Game.route ->
+                            musicManager.stop()
+                    }
+                }
 
                 DisposableEffect(Unit) {
                     onDispose {
@@ -81,10 +136,27 @@ class MainActivity : AppCompatActivity() {
                          */
                         NavHost(
                             navController = navController,
-                            startDestination = Screen.Load.route,
+                            startDestination = Screen.StudioIntro.route,
                         ) {
+                            composable(Screen.StudioIntro.route) {
+                                StudioIntroScreen(navController)
+                            }
                             composable(Screen.Load.route) {
                                 LoadScreen(navController)
+                            }
+                            composable(Screen.MainMenu.route) {
+                                val activity = LocalContext.current as? Activity
+                                MainMenuScreen(
+                                    onStartClick = {
+                                        navController.navigate(Screen.Lobby.route)
+                                    },
+                                    onOptionsClick = {
+                                        // in planung
+                                    },
+                                    onExitClick = {
+                                        activity?.finish()
+                                    },
+                                )
                             }
                             composable(Screen.Lobby.route) {
                                 LobbyScreen(
@@ -127,10 +199,45 @@ class MainActivity : AppCompatActivity() {
                                 GameScreen(controller = lobbyController)
                             }
                         }
+
+                        ServerStatusIndicator(
+                            status = serverHealthStatus,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 12.dp, end = 12.dp),
+                        )
                     }
                 }
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        musicManager.pause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        musicManager.resume()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        musicManager.release()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }
 

@@ -25,6 +25,8 @@ class SessionManager(
     private val sessionsByToken = ConcurrentHashMap<SessionToken, Session>()
     private val tokensByConnection = ConcurrentHashMap<ConnectionId, SessionToken>()
     private val lifecycleLock = Any()
+    private var onSessionUpsert: (Session) -> Unit = {}
+    private var onSessionRemoved: (SessionToken) -> Unit = {}
 
     init {
         require(sessionTtlMillis > 0) {
@@ -36,30 +38,34 @@ class SessionManager(
      * Erstellt eine neue Session und bindet sie sofort an die angegebene Verbindung.
      */
     fun createSession(connectionId: ConnectionId): Session {
-        synchronized(lifecycleLock) {
-            purgeRetiredSessions()
+        val created =
+            synchronized(lifecycleLock) {
+                purgeRetiredSessions()
 
-            if (tokensByConnection.containsKey(connectionId)) {
-                throw DuplicateConnectionIdException(connectionId)
-            }
-
-            while (true) {
-                val token = tokenFactory()
-                if (sessionsByToken.containsKey(token)) {
-                    continue
+                if (tokensByConnection.containsKey(connectionId)) {
+                    throw DuplicateConnectionIdException(connectionId)
                 }
 
-                val session =
-                    Session(
-                        sessionToken = token,
-                        connectionId = connectionId,
-                        expiresAtEpochMillis = expiresAtEpochMillis(),
-                    )
-                sessionsByToken[token] = session
-                tokensByConnection[connectionId] = token
-                return session
+                var createdSession: Session? = null
+                while (createdSession == null) {
+                    val token = tokenFactory()
+                    if (sessionsByToken.containsKey(token)) {
+                        continue
+                    }
+
+                    createdSession =
+                        Session(
+                            sessionToken = token,
+                            connectionId = connectionId,
+                            expiresAtEpochMillis = expiresAtEpochMillis(),
+                        )
+                    sessionsByToken[token] = createdSession
+                    tokensByConnection[connectionId] = token
+                }
+                requireNotNull(createdSession)
             }
-        }
+        onSessionUpsert(created)
+        return created
     }
 
     /**
@@ -89,7 +95,7 @@ class SessionManager(
             sessionsByToken[sessionToken] = updated
             tokensByConnection[connectionId] = sessionToken
             updated
-        }
+        }.also(onSessionUpsert)
 
     /**
      * Liefert die Session einer aktiven Verbindung oder `null`.
@@ -101,6 +107,34 @@ class SessionManager(
      * Liefert eine Session über ihren stabilen Token oder `null`.
      */
     fun getByToken(sessionToken: SessionToken): Session? = sessionsByToken[sessionToken]
+
+    /**
+     * Stellt eine bekannte, aktuell nicht verbundene Session wieder her.
+     *
+     * Dieser Pfad wird für Restart-Recovery genutzt, wenn der fachliche
+     * Reconnect-Kontext persistiert wurde, aber der technische Session-Index
+     * beim Boot neu aufgebaut werden musste.
+     */
+    fun restoreDetachedSession(
+        sessionToken: SessionToken,
+        expiresAtEpochMillis: Long,
+        revokedAtEpochMillis: Long? = null,
+    ): Session =
+        synchronized(lifecycleLock) {
+            purgeRetiredSessions()
+
+            sessionsByToken[sessionToken]?.let { return it }
+
+            val restored =
+                Session(
+                    sessionToken = sessionToken,
+                    connectionId = null,
+                    expiresAtEpochMillis = expiresAtEpochMillis,
+                    revokedAtEpochMillis = revokedAtEpochMillis,
+                )
+            sessionsByToken[sessionToken] = restored
+            restored
+        }.also(onSessionUpsert)
 
     /**
      * Prüft, ob ein Token aktuell für einen Reconnect verwendbar ist.
@@ -130,18 +164,22 @@ class SessionManager(
     /**
      * Invalidiert eine Session dauerhaft für spätere Reconnect-Versuche.
      */
-    fun invalidate(sessionToken: SessionToken): Session? =
-        synchronized(lifecycleLock) {
-            val session = sessionsByToken[sessionToken] ?: return null
-            session.connectionId?.let(tokensByConnection::remove)
-            val invalidated =
-                session.copy(
-                    connectionId = null,
-                    revokedAtEpochMillis = nowEpochMillis(),
-                )
-            sessionsByToken[sessionToken] = invalidated
-            invalidated
-        }
+    fun invalidate(sessionToken: SessionToken): Session? {
+        val invalidated =
+            synchronized(lifecycleLock) {
+                val session = sessionsByToken[sessionToken] ?: return null
+                session.connectionId?.let(tokensByConnection::remove)
+                val invalidated =
+                    session.copy(
+                        connectionId = null,
+                        revokedAtEpochMillis = nowEpochMillis(),
+                    )
+                sessionsByToken[sessionToken] = invalidated
+                invalidated
+            }
+        onSessionUpsert(invalidated)
+        return invalidated
+    }
 
     /**
      * Entfernt die Session einer Verbindung vollständig.
@@ -151,8 +189,14 @@ class SessionManager(
      */
     fun removeByConnectionId(connectionId: ConnectionId): Session? =
         synchronized(lifecycleLock) {
-            val sessionToken = tokensByConnection.remove(connectionId) ?: return null
-            sessionsByToken.remove(sessionToken)
+            val sessionToken = tokensByConnection.remove(connectionId)
+            if (sessionToken == null) {
+                null
+            } else {
+                sessionsByToken.remove(sessionToken)
+            }
+        }.also { removed ->
+            removed?.let { onSessionRemoved(it.sessionToken) }
         }
 
     /**
@@ -160,12 +204,26 @@ class SessionManager(
      */
     fun detachConnection(connectionId: ConnectionId): Session? =
         synchronized(lifecycleLock) {
-            val sessionToken = tokensByConnection.remove(connectionId) ?: return null
-            val session = sessionsByToken[sessionToken] ?: return null
-            val detached = session.copy(connectionId = null)
-            sessionsByToken[sessionToken] = detached
-            detached
+            val sessionToken = tokensByConnection.remove(connectionId)
+            if (sessionToken == null) {
+                null
+            } else {
+                val session = sessionsByToken[sessionToken] ?: return@synchronized null
+                val detached = session.copy(connectionId = null)
+                sessionsByToken[sessionToken] = detached
+                detached
+            }
+        }.also { detached ->
+            detached?.let(onSessionUpsert)
         }
+
+    fun installLifecycleHooks(
+        onSessionUpsert: (Session) -> Unit = {},
+        onSessionRemoved: (SessionToken) -> Unit = {},
+    ) {
+        this.onSessionUpsert = onSessionUpsert
+        this.onSessionRemoved = onSessionRemoved
+    }
 
     /**
      * Entfernt abgelaufene oder bereits invalidierte Sessions ohne aktive
@@ -186,7 +244,10 @@ class SessionManager(
                         }
                 }.keys
 
-        retiredTokens.forEach(sessionsByToken::remove)
+        retiredTokens.forEach { sessionToken ->
+            sessionsByToken.remove(sessionToken)
+            onSessionRemoved(sessionToken)
+        }
     }
 
     private fun expiresAtEpochMillis(): Long = nowEpochMillis() + sessionTtlMillis
