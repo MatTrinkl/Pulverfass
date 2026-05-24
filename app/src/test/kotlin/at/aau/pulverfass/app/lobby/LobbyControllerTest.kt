@@ -44,6 +44,12 @@ import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadata
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -460,7 +466,11 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("RF12")
             val playerId = PlayerId(1)
             val cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c"))
+            val config = LobbyControllerConfig()
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            var placeAttempts = 0
+            var tradeInAttempts = 0
+            var confirmAttempts = 0
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -573,63 +583,110 @@ class LobbyControllerTest {
                                 ),
                             )
                         is PlaceReinforcementsRequest -> {
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(
-                                        GameStateDeltaEvent(
-                                            lobbyCode = lobbyCode,
-                                            fromVersion = 2,
-                                            toVersion = 3,
-                                            events =
-                                                listOf(
-                                                    PendingReinforcementsChangedEvent(
-                                                        lobbyCode = lobbyCode,
-                                                        playerId = playerId,
-                                                        delta = -2,
-                                                    ),
-                                                ),
+                            placeAttempts += 1
+                            if (placeAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            PlaceReinforcementsErrorResponse(
+                                                PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED,
+                                                "not owned",
+                                            ),
                                         ),
                                     ),
-                                ),
-                            )
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(PlaceReinforcementsResponse(lobbyCode)),
-                                ),
-                            )
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            GameStateDeltaEvent(
+                                                lobbyCode = lobbyCode,
+                                                fromVersion = 2,
+                                                toVersion = 3,
+                                                events =
+                                                    listOf(
+                                                        PendingReinforcementsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            playerId = playerId,
+                                                            delta = -2,
+                                                        ),
+                                                    ),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(PlaceReinforcementsResponse(lobbyCode)),
+                                    ),
+                                )
+                            }
                         }
                         is TradeInCardsRequest -> {
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
-                                ),
-                            )
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(
-                                        PlayerHandUpdatedEvent(
-                                            lobbyCode = lobbyCode,
-                                            recipientPlayerId = playerId,
-                                            stateVersion = 3,
-                                            handCards = emptyList(),
+                            tradeInAttempts += 1
+                            if (tradeInAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            TradeInCardsErrorResponse(
+                                                TradeInCardsErrorCode.INVALID_SET,
+                                                "invalid set",
+                                            ),
                                         ),
                                     ),
-                                ),
-                            )
-                        }
-                        is ConfirmReinforcementsDoneRequest ->
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(
-                                        ConfirmReinforcementsDoneResponse(lobbyCode),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
                                     ),
-                                ),
-                            )
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            PlayerHandUpdatedEvent(
+                                                lobbyCode = lobbyCode,
+                                                recipientPlayerId = playerId,
+                                                stateVersion = 3,
+                                                handCards = emptyList(),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+                        is ConfirmReinforcementsDoneRequest -> {
+                            confirmAttempts += 1
+                            if (confirmAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ConfirmReinforcementsDoneErrorResponse(
+                                                ConfirmReinforcementsDoneErrorCode
+                                                    .PENDING_REINFORCEMENTS_REMAINING,
+                                                "pending",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ConfirmReinforcementsDoneResponse(lobbyCode),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             val controller = createController()
@@ -642,26 +699,56 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 2 }
                 waitUntil { controller.state.value.gameState.privateHandCards.size == 3 }
 
+                controller.placeReinforcements()
+                assertEquals(
+                    config.errorReinforcementTargetMissing,
+                    controller.state.value.errorText,
+                )
+                controller.confirmReinforcementsDone()
+                assertEquals(config.errorReinforcementsNotAllowed, controller.state.value.errorText)
+
                 controller.selectGameRegion("brazil")
                 controller.adjustReinforcementPlacementAmount(1)
                 controller.placeReinforcements()
-                waitUntil { seenPayloads.any { it is PlaceReinforcementsRequest } }
-                val placement = seenPayloads.filterIsInstance<PlaceReinforcementsRequest>().single()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Verstärkungen können nur auf eigene Gebiete gesetzt werden."
+                }
+                controller.placeReinforcements()
+                waitUntil { seenPayloads.filterIsInstance<PlaceReinforcementsRequest>().size == 2 }
+                val placement = seenPayloads.filterIsInstance<PlaceReinforcementsRequest>().last()
                 assertEquals(TerritoryId("brasilien"), placement.placements.single().territoryId)
                 assertEquals(2, placement.placements.single().amount)
                 waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 0 }
 
+                controller.placeReinforcements()
+                assertEquals(config.errorReinforcementsNotAllowed, controller.state.value.errorText)
+                controller.tradeInCards()
+                assertEquals(config.errorTradeInNotAllowed, controller.state.value.errorText)
+
                 cardIds.forEach(controller::toggleTradeInCard)
                 controller.tradeInCards()
-                waitUntil { seenPayloads.any { it is TradeInCardsRequest } }
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Die gewählten Karten bilden kein gültiges Set."
+                }
+                controller.tradeInCards()
+                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 2 }
                 assertEquals(
                     cardIds.toSet(),
-                    seenPayloads.filterIsInstance<TradeInCardsRequest>().single().cardIds.toSet(),
+                    seenPayloads.filterIsInstance<TradeInCardsRequest>().last().cardIds.toSet(),
                 )
                 waitUntil { controller.state.value.gameState.privateHandCards.isEmpty() }
 
                 controller.confirmReinforcementsDone()
-                waitUntil { seenPayloads.any { it is ConfirmReinforcementsDoneRequest } }
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Verbleibende Verstärkungen müssen zuerst platziert werden."
+                }
+                controller.confirmReinforcementsDone()
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().size == 2
+                }
                 waitUntil {
                     !controller.state.value.pendingCommandKeys.contains(
                         LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE,
@@ -671,6 +758,24 @@ class LobbyControllerTest {
                 controller.close()
                 server.close()
             }
+        }
+    }
+
+    @Test
+    fun `reinforcement actions require a local player context`() {
+        val config = LobbyControllerConfig()
+        val controller = createController(config = config)
+        try {
+            controller.placeReinforcements()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.confirmReinforcementsDone()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.tradeInCards()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+        } finally {
+            controller.close()
         }
     }
 

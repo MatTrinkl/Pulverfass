@@ -598,6 +598,102 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `reinforcement phase updates retain local pool and guard card selection`() {
+        val cards =
+            listOf(
+                PrivateHandCardUi(CardId("a"), CardType.A),
+                PrivateHandCardUi(CardId("b"), CardType.B),
+                PrivateHandCardUi(CardId("c"), CardType.C),
+                PrivateHandCardUi(CardId("d"), CardType.JOKER),
+            )
+        val initial =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                reinforcementState = ReinforcementUiState(aliceId, pendingAmount = 4),
+                privateHandCards = cards,
+                selectedTradeInCardIds = setOf(CardId("a"), CardId("b"), CardId("c")),
+            )
+
+        val boundary =
+            ClientGameStateReducer.applyPhaseBoundary(
+                initial,
+                PhaseBoundaryEvent(
+                    lobbyCode = lobbyCode,
+                    stateVersion = 2,
+                    previousPhase = TurnPhase.ATTACK,
+                    nextPhase = TurnPhase.REINFORCEMENTS,
+                    activePlayerId = aliceId,
+                    turnCount = 2,
+                ),
+            )
+        val turn =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                initial,
+                TurnStateGetResponse(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = aliceId,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 2,
+                    startPlayerId = aliceId,
+                ),
+            )
+        val publicUpdate =
+            ClientGameStateReducer.applyDelta(
+                current = initial,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                TurnStateUpdatedEvent(
+                                    lobbyCode = lobbyCode,
+                                    activePlayerId = aliceId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    turnCount = 2,
+                                    startPlayerId = aliceId,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+        val deselected = ClientGameStateReducer.toggleTradeInCard(initial, CardId("a"))
+        val capped = ClientGameStateReducer.toggleTradeInCard(initial, CardId("d"))
+        val unrelatedPendingEvent =
+            ClientGameStateReducer.applyDelta(
+                current = initial,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                PendingReinforcementsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = bobId,
+                                    delta = -1,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals(initial.reinforcementState, boundary.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, boundary.selectedTradeInCardIds)
+        assertEquals(initial.reinforcementState, turn.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, turn.selectedTradeInCardIds)
+        assertEquals(initial.reinforcementState, publicUpdate.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, publicUpdate.selectedTradeInCardIds)
+        assertEquals(setOf(CardId("b"), CardId("c")), deselected.selectedTradeInCardIds)
+        assertEquals(initial, capped)
+        assertEquals(initial.reinforcementState, unrelatedPendingEvent.reinforcementState)
+    }
+
+    @Test
     fun `region selection toggles source target and card visibility`() {
         val sourceSelected =
             ClientGameStateReducer.selectRegion(
