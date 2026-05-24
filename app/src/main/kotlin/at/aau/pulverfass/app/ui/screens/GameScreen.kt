@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,20 +52,27 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
+import at.aau.pulverfass.app.game.PrivateHandCardUi
+import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import kotlinx.coroutines.delay
 
 private val HudSurfaceColor = Color.White
 private val HudSurfaceMutedColor = Color(0xFFF1F1F1)
@@ -72,6 +83,7 @@ private val TopBarHeight = 52.dp
 private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
+private const val SyncFeedbackDelayMillis = 500L
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -100,6 +112,12 @@ fun GameScreen(controller: LobbyController) {
                 onRegionSelected = controller::selectGameRegion,
                 onToggleCards = controller::toggleCards,
                 onAdvanceTurn = controller::advanceTurn,
+                onAdjustReinforcementPlacementAmount =
+                    controller::adjustReinforcementPlacementAmount,
+                onPlaceReinforcements = controller::placeReinforcements,
+                onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
+                onToggleTradeInCard = controller::toggleTradeInCard,
+                onTradeInCards = controller::tradeInCards,
                 onRefreshGameState = controller::refreshGameState,
             ),
     )
@@ -118,22 +136,26 @@ internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
     val onToggleCards: () -> Unit,
     val onAdvanceTurn: () -> Unit,
+    val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
+    val onPlaceReinforcements: () -> Unit = {},
+    val onConfirmReinforcementsDone: () -> Unit = {},
+    val onToggleTradeInCard: (CardId) -> Unit = {},
+    val onTradeInCards: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
 )
 
 /**
- * Baut das eigentliche Game-Layout aus Karte, HUD, Seitenteilen und Aktionen.
+ * Baut das aktive Spielfeld aus Karte, HUD, Seitenteilen und servergebundenen Aktionen.
  *
- * @param players sichtbare Spieler im Spiel
- * @param localPlayerId eigener Spieler für Gating und Highlighting
- * @param uiState serverbasierter GameState für Karte und HUD
- * @param isConnected aktueller Verbindungszustand
- * @param pendingCommandKeys ausstehende Requests für Button-Sperren
- * @param onRegionSelected Callback für erfolgreiche Kartenauswahl
- * @param onToggleCards Callback zum Ein-/Ausblenden der privaten Hand
- * @param onAdvanceTurn Callback für den aktuell vorhandenen TurnAdvance-Request
- * @param onRefreshGameState Callback für manuelles Snapshot-Refresh
- * @param mapPainter sichtbares Kartenbild
+ * Der Screen sendet selbst keine Protokollnachrichten. Er entscheidet anhand
+ * des serverautoritativen Zustands und der ausstehenden Commands, welche
+ * Bedienhandlungen angeboten werden, und reicht diese an den Controller
+ * weiter. Normale Phasenwechsel und das Abschließen der Verstärkungsphase
+ * teilen sich beispielsweise denselben sichtbaren Button, benötigen aber
+ * unterschiedliche Backend-Requests.
+ *
+ * @param contentState darstellbarer Zustand inklusive Karte, Spieler und Pending-Requests
+ * @param actions Controller-Callbacks für die ausgelösten Bedienhandlungen
  */
 @Composable
 internal fun GameScreenContent(
@@ -149,6 +171,11 @@ internal fun GameScreenContent(
     val onRegionSelected = actions.onRegionSelected
     val onToggleCards = actions.onToggleCards
     val onAdvanceTurn = actions.onAdvanceTurn
+    val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
+    val onPlaceReinforcements = actions.onPlaceReinforcements
+    val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
+    val onToggleTradeInCard = actions.onToggleTradeInCard
+    val onTradeInCards = actions.onTradeInCards
     val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
@@ -164,16 +191,72 @@ internal fun GameScreenContent(
                 it == LobbyCommandKey.TURN_STATE_GET ||
                 it == LobbyCommandKey.CATCH_UP
         }
+    val isReinforcementCommandPending =
+        pendingCommandKeys.any {
+            it == LobbyCommandKey.PLACE_REINFORCEMENTS ||
+                it == LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE ||
+                it == LobbyCommandKey.TRADE_IN_CARDS
+        }
+    val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
+    val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
+
+    /*
+     * Das Platzierungs-Panel ist keine dauerhafte Phasenanzeige: Es wird nur
+     * mit einem ausgewählten Ziel und einem positiven Restpool eingeblendet.
+     * Ohne diese Voraussetzung würde es nur den zoombaren Kartenausschnitt
+     * verdecken; bei einem leeren Pool übernimmt "Phase beenden".
+     */
+    val reinforcementPanelRegionId =
+        if (
+            uiState.turnPhase == TurnPhase.REINFORCEMENTS &&
+            canManageReinforcements &&
+            remainingReinforcementAmount > 0
+        ) {
+            uiState.selectedRegionId
+        } else {
+            null
+        }
+
+    /*
+     * Der bestehende Button "Phase beenden" hat je nach Phase eine andere
+     * Protokollbedeutung: TurnAdvance in regulären Phasen, aber
+     * ConfirmReinforcementsDone nach vollständiger Verstärkungsplatzierung.
+     */
+    val canEndCurrentPhase =
+        if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
+            uiState.canConfirmReinforcementsDone(localPlayerId, isConnected) &&
+                !isReinforcementCommandPending
+        } else {
+            uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
+        }
+    val onEndCurrentPhase =
+        if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
+            onConfirmReinforcementsDone
+        } else {
+            onAdvanceTurn
+        }
+    var showCatchUpFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.isCatchingUp) {
+        showCatchUpFeedback = false
+        if (uiState.isCatchingUp) {
+            delay(SyncFeedbackDelayMillis)
+            showCatchUpFeedback = true
+        }
+    }
 
     /*
      * Priorität der Statusanzeige: Verbindungsausfall schlägt Catch-up,
      * Catch-up schlägt Desync, danach kommen konkrete Fehler und zuletzt reine
-     * Auswahlhinweise. So sieht der Nutzer immer den dringendsten Zustand.
+     * Auswahlhinweise. Sehr kurze Catch-ups bleiben unsichtbar, damit normale
+     * Serverantworten keinen flackernden Synchronisationshinweis auslösen.
      */
     val statusMessage =
         when {
             !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
-            uiState.isCatchingUp -> stringResource(id = R.string.game_sync_catching_up)
+            uiState.isCatchingUp && showCatchUpFeedback ->
+                stringResource(id = R.string.game_sync_catching_up)
+            uiState.isCatchingUp -> null
             uiState.isDesynced ->
                 uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
             uiState.lastSyncError != null -> uiState.lastSyncError
@@ -230,7 +313,7 @@ internal fun GameScreenContent(
             )
         }
 
-        if (uiState.isCatchingUp) {
+        if (uiState.isCatchingUp && showCatchUpFeedback) {
             SyncProgressOverlay(
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -239,6 +322,18 @@ internal fun GameScreenContent(
         CardsSidebar(
             player = personalPlayer,
             handCards = uiState.handCards,
+            privateHandCards = uiState.privateHandCards,
+            selectedTradeInCardIds = uiState.selectedTradeInCardIds,
+            showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
+            canSelectTradeCards =
+                uiState.canUseGameActions(localPlayerId, isConnected) &&
+                    !isReinforcementCommandPending,
+            canTradeInCards =
+                uiState.canTradeInCards(localPlayerId, isConnected) &&
+                    !isReinforcementCommandPending,
+            isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
+            onToggleTradeInCard = onToggleTradeInCard,
+            onTradeInCards = onTradeInCards,
             isVisible = uiState.cardsVisible,
             modifier =
                 Modifier
@@ -259,15 +354,35 @@ internal fun GameScreenContent(
                     .fillMaxHeight(),
         )
 
+        reinforcementPanelRegionId?.let { selectedRegionId ->
+            ReinforcementPanel(
+                reinforcementState = uiState.reinforcementState,
+                remainingAmount = remainingReinforcementAmount,
+                placementAmount = uiState.reinforcementPlacementAmount,
+                selectedRegionId = selectedRegionId,
+                canAdjust =
+                    canManageReinforcements &&
+                        !isReinforcementCommandPending,
+                canPlace =
+                    uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
+                        !isReinforcementCommandPending,
+                onDismiss = { onRegionSelected(selectedRegionId) },
+                onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+                onPlace = onPlaceReinforcements,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = BottomBarHeight + 8.dp),
+            )
+        }
+
         BottomActionClusters(
             currentPhase = uiState.turnPhase,
             canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
-            canAdvanceTurn =
-                uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
-                    !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE),
+            canEndPhase = canEndCurrentPhase,
             cardsVisible = uiState.cardsVisible,
             onToggleCards = onToggleCards,
-            onAdvanceTurn = onAdvanceTurn,
+            onEndPhase = onEndCurrentPhase,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -446,6 +561,14 @@ private fun GameTopBar(
 private fun CardsSidebar(
     player: GamePlayerUi,
     handCards: List<String>,
+    privateHandCards: List<PrivateHandCardUi>,
+    selectedTradeInCardIds: Set<CardId>,
+    showTradeControls: Boolean,
+    canSelectTradeCards: Boolean,
+    canTradeInCards: Boolean,
+    isTradePending: Boolean,
+    onToggleTradeInCard: (CardId) -> Unit,
+    onTradeInCards: () -> Unit,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -461,6 +584,14 @@ private fun CardsSidebar(
             PrivateHandPanel(
                 playerName = player.name,
                 handCards = handCards,
+                privateHandCards = privateHandCards,
+                selectedTradeInCardIds = selectedTradeInCardIds,
+                showTradeControls = showTradeControls,
+                canSelectTradeCards = canSelectTradeCards,
+                canTradeInCards = canTradeInCards,
+                isTradePending = isTradePending,
+                onToggleTradeInCard = onToggleTradeInCard,
+                onTradeInCards = onTradeInCards,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -647,15 +778,47 @@ private fun PlayerAvatar(
 internal fun PrivateHandPanel(
     playerName: String,
     handCards: List<String>,
+    privateHandCards: List<PrivateHandCardUi> = emptyList(),
+    selectedTradeInCardIds: Set<CardId> = emptySet(),
+    showTradeControls: Boolean = false,
+    canSelectTradeCards: Boolean = false,
+    canTradeInCards: Boolean = false,
+    isTradePending: Boolean = false,
+    onToggleTradeInCard: (CardId) -> Unit = {},
+    onTradeInCards: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
+    val typeLabels =
+        mapOf(
+            CardType.A to stringResource(id = R.string.game_card_type_a),
+            CardType.B to stringResource(id = R.string.game_card_type_b),
+            CardType.C to stringResource(id = R.string.game_card_type_c),
+            CardType.JOKER to stringResource(id = R.string.game_card_type_joker),
+        )
     val handCardItems =
-        remember(handCards, unknownCardLabel) {
-            buildHandCardItems(
-                handCards = handCards,
-                unknownCardLabel = unknownCardLabel,
-            )
+        remember(
+            handCards,
+            privateHandCards,
+            selectedTradeInCardIds,
+            unknownCardLabel,
+            typeLabels,
+        ) {
+            if (privateHandCards.isNotEmpty()) {
+                privateHandCards.map { card ->
+                    HandCardItemUi(
+                        stableKey = card.cardId.value,
+                        label = typeLabels.getValue(card.type),
+                        cardId = card.cardId,
+                        isSelected = card.cardId in selectedTradeInCardIds,
+                    )
+                }
+            } else {
+                buildHandCardItems(
+                    handCards = handCards,
+                    unknownCardLabel = unknownCardLabel,
+                )
+            }
         }
 
     Column(
@@ -692,7 +855,31 @@ internal fun PrivateHandPanel(
                     items = handCardItems,
                     key = HandCardItemUi::stableKey,
                 ) { item ->
-                    HandCardRow(item = item)
+                    HandCardRow(
+                        item = item,
+                        selectable = showTradeControls && canSelectTradeCards,
+                        onSelected = { cardId -> onToggleTradeInCard(cardId) },
+                    )
+                }
+            }
+            if (showTradeControls && privateHandCards.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = onTradeInCards,
+                    enabled = canTradeInCards,
+                    modifier = Modifier.fillMaxWidth().testTag("trade_in_cards_button"),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.game_cards_trade_in),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+                if (isTradePending) {
+                    Text(
+                        text = stringResource(id = R.string.loading),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
         }
@@ -700,11 +887,21 @@ internal fun PrivateHandPanel(
 }
 
 @Composable
-private fun HandCardRow(item: HandCardItemUi) {
+private fun HandCardRow(
+    item: HandCardItemUi,
+    selectable: Boolean,
+    onSelected: (CardId) -> Unit,
+) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag("game_hand_card_${item.stableKey}")
+                .clickable(enabled = selectable && item.cardId != null) {
+                    item.cardId?.let(onSelected)
+                },
         shape = RoundedCornerShape(6.dp),
-        color = HudSurfaceMutedColor,
+        color = if (item.isSelected) Color(0xFFD7EEE9) else HudSurfaceMutedColor,
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -722,14 +919,17 @@ private fun HandCardRow(item: HandCardItemUi) {
 internal data class HandCardItemUi(
     val stableKey: String,
     val label: String,
+    val cardId: CardId? = null,
+    val isSelected: Boolean = false,
 )
 
 /**
- * Erzeugt Listeneinträge mit stabilen Keys aus dem privaten Hand-Snapshot.
+ * Erzeugt Listeneinträge mit stabilen Keys aus einer älteren privaten Handdarstellung.
  *
- * Das Backend liefert aktuell nur Kartenlabels ohne Karten-ID. Der Key nutzt
- * deshalb Label plus laufende Duplikatnummer, damit gleiche Karten mehrfach
- * ohne LazyList-Key-Kollision angezeigt werden.
+ * Aktuelle Responses liefern [PrivateHandCardUi] mit stabilen IDs, damit
+ * Karten für einen Trade-in auswählbar sind. Die Stringliste bleibt als
+ * kompatibler Lesepfad für ältere Snapshots erhalten. Weil in diesem Pfad
+ * keine Karten-ID vorhanden ist, nutzt der Key Label plus Duplikatnummer.
  */
 internal fun buildHandCardItems(
     handCards: List<String>,
@@ -749,14 +949,141 @@ internal fun buildHandCardItems(
     }
 }
 
+/**
+ * Zeigt die Platzierungssteuerung für ein bereits ausgewähltes eigenes Gebiet.
+ *
+ * Diese Composable wird ausschließlich bei einem positiven [remainingAmount]
+ * und einem konkreten [selectedRegionId] erzeugt. Ein leerer Restpool erscheint
+ * daher nicht als Popup; das Abschließen erfolgt über die untere Aktionsleiste.
+ */
+@Composable
+private fun ReinforcementPanel(
+    reinforcementState: ReinforcementUiState,
+    remainingAmount: Int,
+    placementAmount: Int,
+    selectedRegionId: String,
+    canAdjust: Boolean,
+    canPlace: Boolean,
+    onDismiss: () -> Unit,
+    onAdjustPlacementAmount: (Int) -> Unit,
+    onPlace: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .widthIn(max = 560.dp)
+                .testTag("reinforcement_panel"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.game_reinforcements_remaining,
+                            remainingAmount.toString(),
+                        ),
+                    modifier = Modifier.testTag("reinforcement_remaining"),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (reinforcementState.isBonusBreakdownKnown) {
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.game_reinforcements_bonus,
+                                reinforcementState.territoryBonus,
+                                reinforcementState.continentBonus,
+                                reinforcementState.cardBonus,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                val closePanelDescription =
+                    stringResource(id = R.string.game_reinforcements_close)
+                BlockActionButton(
+                    label = "X",
+                    onClick = onDismiss,
+                    selected = false,
+                    enabled = true,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .semantics {
+                                contentDescription = closePanelDescription
+                            }
+                            .testTag("close_reinforcement_panel"),
+                )
+            }
+            Text(
+                text = stringResource(id = R.string.game_reinforcements_target, selectedRegionId),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BlockActionButton(
+                    label = "-",
+                    onClick = { onAdjustPlacementAmount(-1) },
+                    selected = false,
+                    enabled = canAdjust && placementAmount > 1,
+                    modifier = Modifier.size(42.dp).testTag("reinforcement_decrease"),
+                )
+                Text(
+                    text = placementAmount.toString(),
+                    modifier = Modifier.width(32.dp).testTag("reinforcement_amount"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                BlockActionButton(
+                    label = "+",
+                    onClick = { onAdjustPlacementAmount(1) },
+                    selected = false,
+                    enabled =
+                        canAdjust &&
+                            placementAmount < remainingAmount,
+                    modifier = Modifier.size(42.dp).testTag("reinforcement_increase"),
+                )
+                BlockActionButton(
+                    label = stringResource(id = R.string.game_reinforcements_place),
+                    onClick = onPlace,
+                    selected = true,
+                    enabled = canPlace,
+                    modifier = Modifier.testTag("place_reinforcements_button"),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ *
+ * [onEndPhase] ist bereits vom aufrufenden Screen auf den fachlich korrekten
+ * Request abgebildet: `TurnAdvance` außerhalb von Verstärkungen und
+ * `ConfirmReinforcementsDone` nach vollständigem Verbrauch des Restpools.
+ */
 @Composable
 private fun BottomActionClusters(
     currentPhase: TurnPhase?,
     canUseLocalInput: Boolean,
-    canAdvanceTurn: Boolean,
+    canEndPhase: Boolean,
     cardsVisible: Boolean,
     onToggleCards: () -> Unit,
-    onAdvanceTurn: () -> Unit,
+    onEndPhase: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -819,9 +1146,9 @@ private fun BottomActionClusters(
             ) {
                 BlockActionButton(
                     label = stringResource(id = R.string.game_end_round_button),
-                    onClick = onAdvanceTurn,
+                    onClick = onEndPhase,
                     selected = true,
-                    enabled = canAdvanceTurn,
+                    enabled = canEndPhase,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                 )
             }

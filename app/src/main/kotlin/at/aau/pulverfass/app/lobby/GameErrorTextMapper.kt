@@ -1,11 +1,17 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorCode
@@ -55,5 +61,59 @@ object GameErrorTextMapper {
             TurnAdvanceErrorCode.PHASE_MISMATCH ->
                 "Die Phase hat sich geändert. Lade den Spielstand neu."
             TurnAdvanceErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+        }
+
+    fun map(error: PlaceReinforcementsErrorResponse): String =
+        when (error.code) {
+            PlaceReinforcementsErrorCode.REQUESTER_MISMATCH ->
+                "Die Spielerzuordnung stimmt nicht mehr. Lade den Spielstand neu."
+            PlaceReinforcementsErrorCode.NOT_ACTIVE_PLAYER ->
+                "Verstärkungen können nur im eigenen Zug platziert werden."
+            PlaceReinforcementsErrorCode.GAME_PAUSED -> "Das Spiel ist aktuell pausiert."
+            PlaceReinforcementsErrorCode.PHASE_MISMATCH ->
+                "Die Verstärkungsphase ist bereits beendet."
+            PlaceReinforcementsErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED ->
+                "Verstärkungen können nur auf eigene Gebiete gesetzt werden."
+            PlaceReinforcementsErrorCode.OVERSPEND ->
+                "Es sind nicht genügend Verstärkungen verfügbar."
+            PlaceReinforcementsErrorCode.INVALID_PLACEMENT ->
+                "Die gewählte Platzierung ist ungültig."
+            PlaceReinforcementsErrorCode.FORCED_TRADE_REQUIRED ->
+                "Vor dem Platzieren muss ein Kartenset eingetauscht werden."
+        }
+
+    fun map(error: ConfirmReinforcementsDoneErrorResponse): String =
+        when (error.code) {
+            ConfirmReinforcementsDoneErrorCode.REQUESTER_MISMATCH ->
+                "Die Spielerzuordnung stimmt nicht mehr. Lade den Spielstand neu."
+            ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER ->
+                "Die Verstärkungsphase kann nur im eigenen Zug beendet werden."
+            ConfirmReinforcementsDoneErrorCode.GAME_PAUSED -> "Das Spiel ist aktuell pausiert."
+            ConfirmReinforcementsDoneErrorCode.PHASE_MISMATCH ->
+                "Die Verstärkungsphase ist bereits beendet."
+            ConfirmReinforcementsDoneErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING ->
+                "Verbleibende Verstärkungen müssen zuerst platziert werden."
+            ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED ->
+                "Vor dem Beenden muss ein Kartenset eingetauscht werden."
+        }
+
+    fun map(error: TradeInCardsErrorResponse): String =
+        when (error.code) {
+            TradeInCardsErrorCode.REQUESTER_MISMATCH ->
+                "Die Spielerzuordnung stimmt nicht mehr. Lade den Spielstand neu."
+            TradeInCardsErrorCode.NOT_ACTIVE_PLAYER ->
+                "Karten können nur im eigenen Zug eingetauscht werden."
+            TradeInCardsErrorCode.GAME_PAUSED -> "Das Spiel ist aktuell pausiert."
+            TradeInCardsErrorCode.PHASE_MISMATCH ->
+                "Karten können nur während der Verstärkungsphase eingetauscht werden."
+            TradeInCardsErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            TradeInCardsErrorCode.CARDS_NOT_OWNED ->
+                "Mindestens eine gewählte Karte ist nicht mehr auf der Hand."
+            TradeInCardsErrorCode.INVALID_SET ->
+                "Die gewählten Karten bilden kein gültiges Set."
+            TradeInCardsErrorCode.INVALID_REQUEST ->
+                "Für einen Tausch müssen genau drei Karten ausgewählt werden."
         }
 }

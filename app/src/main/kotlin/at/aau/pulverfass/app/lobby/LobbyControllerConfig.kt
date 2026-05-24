@@ -37,6 +37,13 @@ data class LobbyControllerConfig(
     val errorPlayerIdMissing: String = "Eigene Spieler-ID fehlt noch",
     val errorTurnAdvanceNotAllowed: String = "Du kannst die aktuelle Phase nicht beenden",
     val errorTurnAdvanceFailed: String = "Phasenwechsel fehlgeschlagen",
+    val errorReinforcementsNotAllowed: String =
+        "Verstärkungen können gerade nicht platziert werden",
+    val errorReinforcementTargetMissing: String = "Wähle zuerst ein eigenes Gebiet aus",
+    val errorPlaceReinforcementsFailed: String = "Verstärkungen konnten nicht platziert werden",
+    val errorConfirmReinforcementsFailed: String = "Verstärkungsphase konnte nicht beendet werden",
+    val errorTradeInNotAllowed: String = "Wähle genau drei Karten zum Eintauschen aus",
+    val errorTradeInFailed: String = "Kartentausch fehlgeschlagen",
     val errorDisconnectedDuringGame: String =
         "Verbindung getrennt. Reconnect wird vorbereitet.",
     val errorReconnectFailed: String = "Session konnte nicht wiederhergestellt werden",

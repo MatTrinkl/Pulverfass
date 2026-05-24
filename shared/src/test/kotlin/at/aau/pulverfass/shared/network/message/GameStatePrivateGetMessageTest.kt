@@ -1,7 +1,10 @@
 package at.aau.pulverfass.shared.network.message
 
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -42,6 +45,10 @@ class GameStatePrivateGetMessageTest {
                 stateVersion = 9,
                 handCards = listOf("infantry", "cavalry"),
                 secretObjectives = listOf("hold_europe"),
+                privateHandCards =
+                    listOf(
+                        PrivateHandCardSnapshot(CardId("card-a"), CardType.A),
+                    ),
             )
 
         val serialized = json.encodeToString(GameStatePrivateGetResponse.serializer(), response)
@@ -54,6 +61,7 @@ class GameStatePrivateGetMessageTest {
         assertTrue(serialized.contains("recipientPlayerId"))
         assertTrue(serialized.contains("stateVersion"))
         assertTrue(serialized.contains("handCards"))
+        assertTrue(serialized.contains("privateHandCards"))
         assertEquals(response, deserialized)
     }
 
