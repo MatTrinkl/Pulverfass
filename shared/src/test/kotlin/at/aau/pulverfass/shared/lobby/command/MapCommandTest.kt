@@ -42,6 +42,20 @@ class MapCommandTest {
     }
 
     @Test
+    fun `fortify move command validates troop count and distinct territories`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FortifyMoveCommand(lobbyCode, playerId, alpha, beta, troopCount = 0)
+        }
+
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                FortifyMoveCommand(lobbyCode, playerId, alpha, alpha, troopCount = 1)
+            }
+
+        assertTrue(exception.message.orEmpty().contains("unterschiedliche Territorien"))
+    }
+
+    @Test
     fun `attack command validates losses occupation and distinct territories`() {
         assertThrows(IllegalArgumentException::class.java) {
             AttackCommand(lobbyCode, playerId, alpha, alpha, attackerLosses = 1, defenderLosses = 0)

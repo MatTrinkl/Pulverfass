@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -27,6 +28,7 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -39,6 +41,7 @@ import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
@@ -79,6 +82,10 @@ internal object NetworkPayloadRegistry {
             LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
             LobbyPlayerCountErrorResponse::class.java to
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
+            FortifyMoveRequest::class.java to MessageType.LOBBY_FORTIFY_MOVE_REQUEST,
+            FortifyMoveResponse::class.java to MessageType.LOBBY_FORTIFY_MOVE_RESPONSE,
+            FortifyMoveErrorResponse::class.java to
+                MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE,
             LeaveLobbyRequest::class.java to MessageType.LOBBY_LEAVE_REQUEST,
             LeaveLobbyResponse::class.java to MessageType.LOBBY_LEAVE_RESPONSE,
             PlayerLeftLobbyEvent::class.java to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
@@ -153,6 +160,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(LobbyPlayerCountResponse.serializer()),
             LobbyPlayerCountErrorResponse::class.java to
                 encodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            FortifyMoveRequest::class.java to encodeWith(FortifyMoveRequest.serializer()),
+            FortifyMoveResponse::class.java to encodeWith(FortifyMoveResponse.serializer()),
+            FortifyMoveErrorResponse::class.java to
+                encodeWith(FortifyMoveErrorResponse.serializer()),
             LeaveLobbyRequest::class.java to encodeWith(LeaveLobbyRequest.serializer()),
             LeaveLobbyResponse::class.java to encodeWith(LeaveLobbyResponse.serializer()),
             PlayerLeftLobbyEvent::class.java to encodeWith(PlayerLeftLobbyEvent.serializer()),
@@ -227,6 +238,12 @@ internal object NetworkPayloadRegistry {
                 decodeWith(LobbyPlayerCountResponse.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE to
                 decodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_REQUEST to
+                decodeWith(FortifyMoveRequest.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_RESPONSE to
+                decodeWith(FortifyMoveResponse.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE to
+                decodeWith(FortifyMoveErrorResponse.serializer()),
             MessageType.LOBBY_LEAVE_REQUEST to decodeWith(LeaveLobbyRequest.serializer()),
             MessageType.LOBBY_LEAVE_RESPONSE to decodeWith(LeaveLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_LEFT_BROADCAST to

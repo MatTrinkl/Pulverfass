@@ -21,6 +21,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
@@ -29,6 +30,7 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
@@ -43,6 +45,8 @@ import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
@@ -278,6 +282,53 @@ class NetworkPayloadRegistryTest {
 
         assertEquals(MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE, messageType)
         assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for fortify move request`() {
+        val payload =
+            FortifyMoveRequest(
+                lobbyCode = LobbyCode("FM12"),
+                playerId = PlayerId(3),
+                fromTerritoryId = TerritoryId("alpha"),
+                toTerritoryId = TerritoryId("beta"),
+                troopCount = 2,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_FORTIFY_MOVE_REQUEST, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for fortify move response and error`() {
+        val response = FortifyMoveResponse(LobbyCode("FM34"))
+        val error =
+            FortifyMoveErrorResponse(
+                code = FortifyMoveErrorCode.NO_PATH,
+                reason = "Fortify benötigt einen zusammenhängenden Pfad über eigene Gebiete.",
+            )
+
+        val responseType = NetworkPayloadRegistry.messageTypeFor(response)
+        val responseSerialized = NetworkPayloadRegistry.serializePayload(response)
+        val responseDeserialized =
+            NetworkPayloadRegistry.deserializePayload(responseType, responseSerialized)
+
+        val errorType = NetworkPayloadRegistry.messageTypeFor(error)
+        val errorSerialized = NetworkPayloadRegistry.serializePayload(error)
+        val errorDeserialized =
+            NetworkPayloadRegistry.deserializePayload(
+                errorType,
+                errorSerialized,
+            )
+
+        assertEquals(MessageType.LOBBY_FORTIFY_MOVE_RESPONSE, responseType)
+        assertEquals(response, responseDeserialized)
+        assertEquals(MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE, errorType)
+        assertEquals(error, errorDeserialized)
     }
 
     @Test
