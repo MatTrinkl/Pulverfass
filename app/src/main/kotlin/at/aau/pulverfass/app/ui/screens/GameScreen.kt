@@ -281,19 +281,17 @@ internal fun GameScreenContent(
                     .fillMaxWidth(),
         )
 
-        if (statusMessage != null) {
-            GameStatusBanner(
-                message = statusMessage,
-                canRefresh = isConnected && !isRefreshPending,
-                isRefreshPending = isRefreshPending,
-                onRefreshGameState = onRefreshGameState,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = TopBarHeight)
-                        .fillMaxWidth(),
-            )
-        }
+        OptionalGameStatusBanner(
+            message = statusMessage,
+            canRefresh = isConnected && !isRefreshPending,
+            isRefreshPending = isRefreshPending,
+            onRefreshGameState = onRefreshGameState,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TopBarHeight)
+                    .fillMaxWidth(),
+        )
 
         if (uiState.isCatchingUp && showCatchUpFeedback) {
             SyncProgressOverlay(
@@ -380,6 +378,28 @@ internal fun GameScreenContent(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding(),
+        )
+    }
+}
+
+/**
+ * Rendert den Statusbereich nur dann, wenn eine synchronisationsrelevante Meldung vorliegt.
+ */
+@Composable
+private fun OptionalGameStatusBanner(
+    message: String?,
+    canRefresh: Boolean,
+    isRefreshPending: Boolean,
+    onRefreshGameState: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (message != null) {
+        GameStatusBanner(
+            message = message,
+            canRefresh = canRefresh,
+            isRefreshPending = isRefreshPending,
+            onRefreshGameState = onRefreshGameState,
+            modifier = modifier,
         )
     }
 }
