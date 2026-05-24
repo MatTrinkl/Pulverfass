@@ -1,16 +1,21 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.event.VisibleGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
@@ -47,7 +52,12 @@ class PublicGameStateBuilder {
             lobbyCode = gameState.lobbyCode,
             stateVersion = gameState.stateVersion,
             determinism = mapProjection.determinism,
-            turnState = PublicTurnStateSnapshot.from(resolvedTurnState),
+            turnState =
+                PublicTurnStateSnapshot.from(
+                    turnState = resolvedTurnState,
+                    pendingReinforcements =
+                        gameState.pendingReinforcementsFor(resolvedTurnState.activePlayerId),
+                ),
             definition = mapProjection.definition,
             territoryStates = mapProjection.territoryStates,
         )
@@ -159,6 +169,35 @@ class PublicGameStateBuilder {
             }
 
             when (event) {
+                is CardSetTradedInEvent ->
+                    add(
+                        ReinforcementsGrantedEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = event.playerId,
+                            amount = event.value,
+                            territoryBonus = 0,
+                            continentBonus = 0,
+                            cardBonus = event.value,
+                        ),
+                    )
+                is PendingReinforcementsChangedEvent -> add(event)
+                is PendingReinforcementsSetEvent -> {
+                    val breakdown =
+                        BaseReinforcementRuleEngine.computeBaseReinforcements(
+                            playerId = event.playerId,
+                            state = currentState,
+                        )
+                    add(
+                        ReinforcementsGrantedEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = event.playerId,
+                            amount = event.amount,
+                            territoryBonus = breakdown.territoryBonus,
+                            continentBonus = breakdown.continentBonus,
+                            cardBonus = event.amount - breakdown.total,
+                        ),
+                    )
+                }
                 is TerritoryOwnerChangedEvent,
                 is TerritoryTroopsChangedEvent,
                 ->

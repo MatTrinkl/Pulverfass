@@ -37,6 +37,42 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf eine PlayerCount-Anfrage. */
     LOBBY_PLAYER_COUNT_ERROR_RESPONSE(55),
 
+    /** Öffentlicher Broadcast für neu gewährte Verstärkungen eines Spielers. */
+    LOBBY_REINFORCEMENTS_GRANTED_BROADCAST(56),
+
+    /** Öffentliches Delta-Event für Veränderungen am Pending-Reinforcement-Pool. */
+    LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST(57),
+
+    /** Anfrage zum Platzieren von Verstärkungen in der Reinforcements-Phase. */
+    LOBBY_PLACE_REINFORCEMENTS_REQUEST(58),
+
+    /** Erfolgsantwort auf eine Platzierungsanfrage für Verstärkungen. */
+    LOBBY_PLACE_REINFORCEMENTS_RESPONSE(59),
+
+    /** Fehlantwort auf eine Platzierungsanfrage für Verstärkungen. */
+    LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE(60),
+
+    /** Anfrage zum expliziten Beenden der Reinforcements-Phase. */
+    LOBBY_CONFIRM_REINFORCEMENTS_DONE_REQUEST(61),
+
+    /** Erfolgsantwort auf das Beenden der Reinforcements-Phase. */
+    LOBBY_CONFIRM_REINFORCEMENTS_DONE_RESPONSE(62),
+
+    /** Fehlantwort auf das Beenden der Reinforcements-Phase. */
+    LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE(63),
+
+    /** Anfrage zum Trade-In eines Kartensets waehrend der Reinforcements-Phase. */
+    LOBBY_TRADE_IN_CARDS_REQUEST(64),
+
+    /** Erfolgsantwort auf einen Karten-Trade-In. */
+    LOBBY_TRADE_IN_CARDS_RESPONSE(65),
+
+    /** Fehlantwort auf einen Karten-Trade-In. */
+    LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE(66),
+
+    /** Private S2C-Aktualisierung der autoritativen Kartenhand eines Spielers. */
+    LOBBY_PLAYER_HAND_UPDATED_EVENT(67),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

@@ -17,7 +17,7 @@ data class MapConfig(
     val continents: List<ContinentConfig>,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION: Int = 1
+        const val CURRENT_SCHEMA_VERSION: Int = 2
     }
 }
 
@@ -46,11 +46,5 @@ data class TerritoryEdgeConfig(
 data class ContinentConfig(
     val continentId: ContinentId,
     val territoryIds: List<TerritoryId>,
-    val bonusValue: Int,
-) {
-    init {
-        require(bonusValue >= 0) {
-            "ContinentConfig.bonusValue darf nicht negativ sein, war aber $bonusValue."
-        }
-    }
-}
+    val bonus: Int,
+)

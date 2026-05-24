@@ -62,8 +62,7 @@ jobs:
     name: Build and Unit Tests
     runs-on: self-hosted
     env:
-      TEST_DB_CONTAINER: pulverfass-ci-postgres-build
-      TEST_DB_PORT: '55432'
+      TEST_DB_CONTAINER: pulverfass-ci-postgres-build-${{ github.run_id }}
 
     steps:
       - name: Check out repository
@@ -84,14 +83,16 @@ jobs:
       - name: Start test PostgreSQL
         run: |
           set -eu
-          docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
           docker run -d \
             --name "${TEST_DB_CONTAINER}" \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=pulverfass_test \
-            -p "${TEST_DB_PORT}:5432" \
+            -p 0:5432 \
             postgres:17-alpine
+
+          actual_port="$(docker port "${TEST_DB_CONTAINER}" 5432/tcp | head -1 | sed 's/.*://')"
+          echo "TEST_DB_PORT=${actual_port}" >> "${GITHUB_ENV}"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
             if docker exec "${TEST_DB_CONTAINER}" pg_isready -U postgres -d pulverfass_test >/dev/null 2>&1; then
@@ -764,8 +765,7 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      TEST_DB_CONTAINER: pulverfass-ci-postgres-analyze
-      TEST_DB_PORT: '55432'
+      TEST_DB_CONTAINER: pulverfass-ci-postgres-analyze-${{ github.run_id }}
 
     steps:
       - name: Check out repository
@@ -803,14 +803,16 @@ jobs:
       - name: Start test PostgreSQL
         run: |
           set -eu
-          docker rm -f "${TEST_DB_CONTAINER}" >/dev/null 2>&1 || true
           docker run -d \
             --name "${TEST_DB_CONTAINER}" \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=pulverfass_test \
-            -p "${TEST_DB_PORT}:5432" \
+            -p 0:5432 \
             postgres:17-alpine
+
+          actual_port="$(docker port "${TEST_DB_CONTAINER}" 5432/tcp | head -1 | sed 's/.*://')"
+          echo "TEST_DB_PORT=${actual_port}" >> "${GITHUB_ENV}"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
             if docker exec "${TEST_DB_CONTAINER}" pg_isready -U postgres -d pulverfass_test >/dev/null 2>&1; then

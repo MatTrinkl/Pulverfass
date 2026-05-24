@@ -23,13 +23,13 @@ class MapDefinitionHashingTest {
             MapConfigLoader.loadFromJson(
                 """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "territories": [
                     { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                     { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
                   ],
                   "continents": [
-                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                   ]
                 }
                 """.trimIndent(),
@@ -40,7 +40,7 @@ class MapDefinitionHashingTest {
                 {
                   "continents": [
                     {
-                      "bonusValue": 2,
+                      "bonus": 2,
                       "territoryIds": ["alpha", "beta"],
                       "continentId": "north"
                     }
@@ -57,7 +57,7 @@ class MapDefinitionHashingTest {
                       "edges": [{ "targetId": "alpha" }]
                     }
                   ],
-                  "schemaVersion": 1
+                  "schemaVersion": 2
                 }
                 """.trimIndent(),
             )
@@ -73,7 +73,7 @@ class MapDefinitionHashingTest {
             MapConfigLoader.loadFromJson(
                 """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "territories": [
                     {
                       "territoryId": "alpha",
@@ -98,8 +98,8 @@ class MapDefinitionHashingTest {
                     }
                   ],
                   "continents": [
-                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-                    { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+                    { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+                    { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
                   ]
                 }
                 """.trimIndent(),
@@ -199,7 +199,7 @@ class MapDefinitionHashingTest {
         val definition = MapConfigLoader.loadDefault()
 
         assertEquals(
-            "73224ce6c8944f5413b4afff99f77ad3964f90b91b5de6807bf8891b33e6ec56",
+            "fbb6d67f4b4f0994ab6bcfe7a875b5411b1eeac9b3b5493fdbdc27c1e48128e4",
             definition.mapHash,
         )
     }
@@ -207,7 +207,7 @@ class MapDefinitionHashingTest {
     private fun validEdgesJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",
@@ -230,8 +230,8 @@ class MapDefinitionHashingTest {
             }
           ],
           "continents": [
-            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-            { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+            { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
           ]
         }
         """.trimIndent()
