@@ -1121,6 +1121,9 @@ class LobbyController(
          * technische Connection-Payloads bleiben hier, Lobby-Events pflegen die
          * Playerliste und Game-Payloads werden an den GameStateReducer delegiert.
          */
+        if (handleReinforcementPayload(payload)) {
+            return
+        }
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)
@@ -1205,30 +1208,6 @@ class LobbyController(
                 clearPendingCommand(LobbyCommandKey.TURN_ADVANCE)
                 updateGameError(GameErrorTextMapper.map(payload))
             }
-            is PlaceReinforcementsResponse -> {
-                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
-                _state.update { it.copy(errorText = null) }
-            }
-            is PlaceReinforcementsErrorResponse -> {
-                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
-                updateGameError(GameErrorTextMapper.map(payload))
-            }
-            is ConfirmReinforcementsDoneResponse -> {
-                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
-                _state.update { it.copy(errorText = null) }
-            }
-            is ConfirmReinforcementsDoneErrorResponse -> {
-                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
-                updateGameError(GameErrorTextMapper.map(payload))
-            }
-            is TradeInCardsResponse -> {
-                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
-                _state.update { it.copy(errorText = null) }
-            }
-            is TradeInCardsErrorResponse -> {
-                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
-                updateGameError(GameErrorTextMapper.map(payload))
-            }
             is TurnStateGetErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.TURN_STATE_GET)
                 updateGameError(GameErrorTextMapper.map(payload))
@@ -1249,6 +1228,48 @@ class LobbyController(
                 }
         }
     }
+
+    /**
+     * Verarbeitet die drei Requests der Verstärkungsphase außerhalb des allgemeinen
+     * Payload-Routers. Dadurch bleibt der zentrale Router auf fachliche Gruppen
+     * begrenzt, während Success- und Error-Antworten weiterhin identisch wirken.
+     *
+     * @return `true`, wenn [payload] vollständig verarbeitet wurde
+     */
+    private fun handleReinforcementPayload(payload: NetworkMessagePayload): Boolean =
+        when (payload) {
+            is PlaceReinforcementsResponse -> {
+                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is PlaceReinforcementsErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            is ConfirmReinforcementsDoneResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ConfirmReinforcementsDoneErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            is TradeInCardsResponse -> {
+                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is TradeInCardsErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            else -> false
+        }
 
     private fun handlePlayerJoined(payload: PlayerJoinedLobbyEvent) {
         val existingPlayer = playersById[payload.playerId.value]

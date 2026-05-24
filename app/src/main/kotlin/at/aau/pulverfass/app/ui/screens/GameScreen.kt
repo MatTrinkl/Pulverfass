@@ -145,6 +145,43 @@ internal data class GameScreenActions(
 )
 
 /**
+ * Kompakter Anzeige- und Interaktionszustand der privaten Kartenhand.
+ *
+ * Die Gruppierung hält die Panel-Schnittstelle stabil, wenn weitere
+ * kartenspezifische Eigenschaften aus dem privaten Snapshot hinzukommen.
+ */
+internal data class PrivateHandPanelState(
+    val playerName: String,
+    val handCards: List<String>,
+    val privateHandCards: List<PrivateHandCardUi> = emptyList(),
+    val selectedTradeInCardIds: Set<CardId> = emptySet(),
+    val showTradeControls: Boolean = false,
+    val canSelectTradeCards: Boolean = false,
+    val canTradeInCards: Boolean = false,
+    val isTradePending: Boolean = false,
+)
+
+internal data class PrivateHandPanelActions(
+    val onToggleTradeInCard: (CardId) -> Unit = {},
+    val onTradeInCards: () -> Unit = {},
+)
+
+private data class ReinforcementPanelState(
+    val reinforcementState: ReinforcementUiState,
+    val remainingAmount: Int,
+    val placementAmount: Int,
+    val selectedRegionId: String,
+    val canAdjust: Boolean,
+    val canPlace: Boolean,
+)
+
+private data class ReinforcementPanelActions(
+    val onDismiss: () -> Unit,
+    val onAdjustPlacementAmount: (Int) -> Unit,
+    val onPlace: () -> Unit,
+)
+
+/**
  * Baut das aktive Spielfeld aus Karte, HUD, Seitenteilen und servergebundenen Aktionen.
  *
  * Der Screen sendet selbst keine Protokollnachrichten. Er entscheidet anhand
@@ -180,62 +217,23 @@ internal fun GameScreenContent(
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
 
-    /*
-     * Refresh-Pending bündelt die drei Snapshot-Requests, aus denen der aktuelle
-     * öffentliche und private Spielstand besteht. Der Reload-Button bleibt
-     * gesperrt, bis diese Runde abgeschlossen ist.
-     */
-    val isRefreshPending =
-        pendingCommandKeys.any {
-            it == LobbyCommandKey.MAP_GET ||
-                it == LobbyCommandKey.TURN_STATE_GET ||
-                it == LobbyCommandKey.CATCH_UP
-        }
-    val isReinforcementCommandPending =
-        pendingCommandKeys.any {
-            it == LobbyCommandKey.PLACE_REINFORCEMENTS ||
-                it == LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE ||
-                it == LobbyCommandKey.TRADE_IN_CARDS
-        }
+    val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
+    val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
 
-    /*
-     * Das Platzierungs-Panel ist keine dauerhafte Phasenanzeige: Es wird nur
-     * mit einem ausgewählten Ziel und einem positiven Restpool eingeblendet.
-     * Ohne diese Voraussetzung würde es nur den zoombaren Kartenausschnitt
-     * verdecken; bei einem leeren Pool übernimmt "Phase beenden".
-     */
     val reinforcementPanelRegionId =
-        if (
-            uiState.turnPhase == TurnPhase.REINFORCEMENTS &&
-            canManageReinforcements &&
-            remainingReinforcementAmount > 0
-        ) {
-            uiState.selectedRegionId
-        } else {
-            null
-        }
-
-    /*
-     * Der bestehende Button "Phase beenden" hat je nach Phase eine andere
-     * Protokollbedeutung: TurnAdvance in regulären Phasen, aber
-     * ConfirmReinforcementsDone nach vollständiger Verstärkungsplatzierung.
-     */
+        visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
     val canEndCurrentPhase =
-        if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
-            uiState.canConfirmReinforcementsDone(localPlayerId, isConnected) &&
-                !isReinforcementCommandPending
-        } else {
-            uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
-                !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
-        }
+        canEndCurrentPhase(
+            uiState = uiState,
+            localPlayerId = localPlayerId,
+            isConnected = isConnected,
+            isReinforcementCommandPending = isReinforcementCommandPending,
+            pendingCommandKeys = pendingCommandKeys,
+        )
     val onEndCurrentPhase =
-        if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
-            onConfirmReinforcementsDone
-        } else {
-            onAdvanceTurn
-        }
+        endCurrentPhaseAction(uiState, onConfirmReinforcementsDone, onAdvanceTurn)
     var showCatchUpFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.isCatchingUp) {
         showCatchUpFeedback = false
@@ -245,24 +243,8 @@ internal fun GameScreenContent(
         }
     }
 
-    /*
-     * Priorität der Statusanzeige: Verbindungsausfall schlägt Catch-up,
-     * Catch-up schlägt Desync, danach kommen konkrete Fehler und zuletzt reine
-     * Auswahlhinweise. Sehr kurze Catch-ups bleiben unsichtbar, damit normale
-     * Serverantworten keinen flackernden Synchronisationshinweis auslösen.
-     */
     val statusMessage =
-        when {
-            !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
-            uiState.isCatchingUp && showCatchUpFeedback ->
-                stringResource(id = R.string.game_sync_catching_up)
-            uiState.isCatchingUp -> null
-            uiState.isDesynced ->
-                uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
-            uiState.lastSyncError != null -> uiState.lastSyncError
-            uiState.selectionMessage != null -> uiState.selectionMessage
-            else -> null
-        }
+        gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
 
     Box(
         modifier =
@@ -320,20 +302,26 @@ internal fun GameScreenContent(
         }
 
         CardsSidebar(
-            player = personalPlayer,
-            handCards = uiState.handCards,
-            privateHandCards = uiState.privateHandCards,
-            selectedTradeInCardIds = uiState.selectedTradeInCardIds,
-            showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
-            canSelectTradeCards =
-                uiState.canUseGameActions(localPlayerId, isConnected) &&
-                    !isReinforcementCommandPending,
-            canTradeInCards =
-                uiState.canTradeInCards(localPlayerId, isConnected) &&
-                    !isReinforcementCommandPending,
-            isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
-            onToggleTradeInCard = onToggleTradeInCard,
-            onTradeInCards = onTradeInCards,
+            state =
+                PrivateHandPanelState(
+                    playerName = personalPlayer.name,
+                    handCards = uiState.handCards,
+                    privateHandCards = uiState.privateHandCards,
+                    selectedTradeInCardIds = uiState.selectedTradeInCardIds,
+                    showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
+                    canSelectTradeCards =
+                        uiState.canUseGameActions(localPlayerId, isConnected) &&
+                            !isReinforcementCommandPending,
+                    canTradeInCards =
+                        uiState.canTradeInCards(localPlayerId, isConnected) &&
+                            !isReinforcementCommandPending,
+                    isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
+                ),
+            actions =
+                PrivateHandPanelActions(
+                    onToggleTradeInCard = onToggleTradeInCard,
+                    onTradeInCards = onTradeInCards,
+                ),
             isVisible = uiState.cardsVisible,
             modifier =
                 Modifier
@@ -356,19 +344,23 @@ internal fun GameScreenContent(
 
         reinforcementPanelRegionId?.let { selectedRegionId ->
             ReinforcementPanel(
-                reinforcementState = uiState.reinforcementState,
-                remainingAmount = remainingReinforcementAmount,
-                placementAmount = uiState.reinforcementPlacementAmount,
-                selectedRegionId = selectedRegionId,
-                canAdjust =
-                    canManageReinforcements &&
-                        !isReinforcementCommandPending,
-                canPlace =
-                    uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
-                        !isReinforcementCommandPending,
-                onDismiss = { onRegionSelected(selectedRegionId) },
-                onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
-                onPlace = onPlaceReinforcements,
+                state =
+                    ReinforcementPanelState(
+                        reinforcementState = uiState.reinforcementState,
+                        remainingAmount = remainingReinforcementAmount,
+                        placementAmount = uiState.reinforcementPlacementAmount,
+                        selectedRegionId = selectedRegionId,
+                        canAdjust = canManageReinforcements && !isReinforcementCommandPending,
+                        canPlace =
+                            uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
+                                !isReinforcementCommandPending,
+                    ),
+                actions =
+                    ReinforcementPanelActions(
+                        onDismiss = { onRegionSelected(selectedRegionId) },
+                        onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+                        onPlace = onPlaceReinforcements,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -391,6 +383,90 @@ internal fun GameScreenContent(
         )
     }
 }
+
+/**
+ * Liefert `true`, solange ein Request eines vollständigen Refresh-Zyklus aussteht.
+ */
+private fun Set<LobbyCommandKey>.hasRefreshRequest(): Boolean =
+    any {
+        it == LobbyCommandKey.MAP_GET ||
+            it == LobbyCommandKey.TURN_STATE_GET ||
+            it == LobbyCommandKey.CATCH_UP
+    }
+
+private fun Set<LobbyCommandKey>.hasReinforcementRequest(): Boolean =
+    any {
+        it == LobbyCommandKey.PLACE_REINFORCEMENTS ||
+            it == LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE ||
+            it == LobbyCommandKey.TRADE_IN_CARDS
+    }
+
+/**
+ * Das Platzierungs-Panel erscheint nur mit einem ausgewählten Ziel und Restpool.
+ * Andernfalls bleibt die Karte frei; ein leerer Pool wird in der Aktionsleiste beendet.
+ */
+private fun visibleReinforcementTarget(
+    uiState: GameUiState,
+    canManageReinforcements: Boolean,
+    remainingAmount: Int,
+): String? =
+    if (
+        uiState.turnPhase == TurnPhase.REINFORCEMENTS &&
+        canManageReinforcements &&
+        remainingAmount > 0
+    ) {
+        uiState.selectedRegionId
+    } else {
+        null
+    }
+
+private fun canEndCurrentPhase(
+    uiState: GameUiState,
+    localPlayerId: PlayerId?,
+    isConnected: Boolean,
+    isReinforcementCommandPending: Boolean,
+    pendingCommandKeys: Set<LobbyCommandKey>,
+): Boolean =
+    if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
+        uiState.canConfirmReinforcementsDone(localPlayerId, isConnected) &&
+            !isReinforcementCommandPending
+    } else {
+        uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+            !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
+    }
+
+private fun endCurrentPhaseAction(
+    uiState: GameUiState,
+    onConfirmReinforcementsDone: () -> Unit,
+    onAdvanceTurn: () -> Unit,
+): () -> Unit =
+    if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
+        onConfirmReinforcementsDone
+    } else {
+        onAdvanceTurn
+    }
+
+/**
+ * Priorisiert Verbindungs- und Synchronisationszustände vor Bedienhinweisen.
+ * Sehr kurze Catch-ups bleiben unsichtbar, damit reguläre Antworten nicht flackern.
+ */
+@Composable
+private fun gameStatusMessage(
+    uiState: GameUiState,
+    isConnected: Boolean,
+    showCatchUpFeedback: Boolean,
+): String? =
+    when {
+        !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
+        uiState.isCatchingUp && showCatchUpFeedback ->
+            stringResource(id = R.string.game_sync_catching_up)
+        uiState.isCatchingUp -> null
+        uiState.isDesynced ->
+            uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
+        uiState.lastSyncError != null -> uiState.lastSyncError
+        uiState.selectionMessage != null -> uiState.selectionMessage
+        else -> null
+    }
 
 @Composable
 private fun GameStatusBanner(
@@ -559,16 +635,8 @@ private fun GameTopBar(
 
 @Composable
 private fun CardsSidebar(
-    player: GamePlayerUi,
-    handCards: List<String>,
-    privateHandCards: List<PrivateHandCardUi>,
-    selectedTradeInCardIds: Set<CardId>,
-    showTradeControls: Boolean,
-    canSelectTradeCards: Boolean,
-    canTradeInCards: Boolean,
-    isTradePending: Boolean,
-    onToggleTradeInCard: (CardId) -> Unit,
-    onTradeInCards: () -> Unit,
+    state: PrivateHandPanelState,
+    actions: PrivateHandPanelActions,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -582,16 +650,8 @@ private fun CardsSidebar(
             shadowElevation = 0.dp,
         ) {
             PrivateHandPanel(
-                playerName = player.name,
-                handCards = handCards,
-                privateHandCards = privateHandCards,
-                selectedTradeInCardIds = selectedTradeInCardIds,
-                showTradeControls = showTradeControls,
-                canSelectTradeCards = canSelectTradeCards,
-                canTradeInCards = canTradeInCards,
-                isTradePending = isTradePending,
-                onToggleTradeInCard = onToggleTradeInCard,
-                onTradeInCards = onTradeInCards,
+                state = state,
+                actions = actions,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -776,16 +836,8 @@ private fun PlayerAvatar(
 
 @Composable
 internal fun PrivateHandPanel(
-    playerName: String,
-    handCards: List<String>,
-    privateHandCards: List<PrivateHandCardUi> = emptyList(),
-    selectedTradeInCardIds: Set<CardId> = emptySet(),
-    showTradeControls: Boolean = false,
-    canSelectTradeCards: Boolean = false,
-    canTradeInCards: Boolean = false,
-    isTradePending: Boolean = false,
-    onToggleTradeInCard: (CardId) -> Unit = {},
-    onTradeInCards: () -> Unit = {},
+    state: PrivateHandPanelState,
+    actions: PrivateHandPanelActions = PrivateHandPanelActions(),
     modifier: Modifier = Modifier,
 ) {
     val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
@@ -798,24 +850,24 @@ internal fun PrivateHandPanel(
         )
     val handCardItems =
         remember(
-            handCards,
-            privateHandCards,
-            selectedTradeInCardIds,
+            state.handCards,
+            state.privateHandCards,
+            state.selectedTradeInCardIds,
             unknownCardLabel,
             typeLabels,
         ) {
-            if (privateHandCards.isNotEmpty()) {
-                privateHandCards.map { card ->
+            if (state.privateHandCards.isNotEmpty()) {
+                state.privateHandCards.map { card ->
                     HandCardItemUi(
                         stableKey = card.cardId.value,
                         label = typeLabels.getValue(card.type),
                         cardId = card.cardId,
-                        isSelected = card.cardId in selectedTradeInCardIds,
+                        isSelected = card.cardId in state.selectedTradeInCardIds,
                     )
                 }
             } else {
                 buildHandCardItems(
-                    handCards = handCards,
+                    handCards = state.handCards,
                     unknownCardLabel = unknownCardLabel,
                 )
             }
@@ -832,7 +884,7 @@ internal fun PrivateHandPanel(
             color = HudContentColor,
         )
         Text(
-            text = playerName,
+            text = state.playerName,
             style = MaterialTheme.typography.labelMedium,
             color = HudContentColor,
         )
@@ -857,15 +909,15 @@ internal fun PrivateHandPanel(
                 ) { item ->
                     HandCardRow(
                         item = item,
-                        selectable = showTradeControls && canSelectTradeCards,
-                        onSelected = { cardId -> onToggleTradeInCard(cardId) },
+                        selectable = state.showTradeControls && state.canSelectTradeCards,
+                        onSelected = { cardId -> actions.onToggleTradeInCard(cardId) },
                     )
                 }
             }
-            if (showTradeControls && privateHandCards.isNotEmpty()) {
+            if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
                 FilledTonalButton(
-                    onClick = onTradeInCards,
-                    enabled = canTradeInCards,
+                    onClick = actions.onTradeInCards,
+                    enabled = state.canTradeInCards,
                     modifier = Modifier.fillMaxWidth().testTag("trade_in_cards_button"),
                     shape = RoundedCornerShape(6.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
@@ -875,7 +927,7 @@ internal fun PrivateHandPanel(
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
-                if (isTradePending) {
+                if (state.isTradePending) {
                     Text(
                         text = stringResource(id = R.string.loading),
                         style = MaterialTheme.typography.bodySmall,
@@ -952,21 +1004,14 @@ internal fun buildHandCardItems(
 /**
  * Zeigt die Platzierungssteuerung für ein bereits ausgewähltes eigenes Gebiet.
  *
- * Diese Composable wird ausschließlich bei einem positiven [remainingAmount]
- * und einem konkreten [selectedRegionId] erzeugt. Ein leerer Restpool erscheint
+ * Diese Composable wird ausschließlich bei einem positiven Restpool in [state]
+ * und einem konkreten ausgewählten Gebiet erzeugt. Ein leerer Restpool erscheint
  * daher nicht als Popup; das Abschließen erfolgt über die untere Aktionsleiste.
  */
 @Composable
 private fun ReinforcementPanel(
-    reinforcementState: ReinforcementUiState,
-    remainingAmount: Int,
-    placementAmount: Int,
-    selectedRegionId: String,
-    canAdjust: Boolean,
-    canPlace: Boolean,
-    onDismiss: () -> Unit,
-    onAdjustPlacementAmount: (Int) -> Unit,
-    onPlace: () -> Unit,
+    state: ReinforcementPanelState,
+    actions: ReinforcementPanelActions,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -992,20 +1037,20 @@ private fun ReinforcementPanel(
                     text =
                         stringResource(
                             id = R.string.game_reinforcements_remaining,
-                            remainingAmount.toString(),
+                            state.remainingAmount.toString(),
                         ),
                     modifier = Modifier.testTag("reinforcement_remaining"),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                if (reinforcementState.isBonusBreakdownKnown) {
+                if (state.reinforcementState.isBonusBreakdownKnown) {
                     Text(
                         text =
                             stringResource(
                                 id = R.string.game_reinforcements_bonus,
-                                reinforcementState.territoryBonus,
-                                reinforcementState.continentBonus,
-                                reinforcementState.cardBonus,
+                                state.reinforcementState.territoryBonus,
+                                state.reinforcementState.continentBonus,
+                                state.reinforcementState.cardBonus,
                             ),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1015,7 +1060,7 @@ private fun ReinforcementPanel(
                     stringResource(id = R.string.game_reinforcements_close)
                 BlockActionButton(
                     label = "X",
-                    onClick = onDismiss,
+                    onClick = actions.onDismiss,
                     selected = false,
                     enabled = true,
                     modifier =
@@ -1028,7 +1073,11 @@ private fun ReinforcementPanel(
                 )
             }
             Text(
-                text = stringResource(id = R.string.game_reinforcements_target, selectedRegionId),
+                text =
+                    stringResource(
+                        id = R.string.game_reinforcements_target,
+                        state.selectedRegionId,
+                    ),
                 style = MaterialTheme.typography.bodySmall,
             )
             Row(
@@ -1037,31 +1086,31 @@ private fun ReinforcementPanel(
             ) {
                 BlockActionButton(
                     label = "-",
-                    onClick = { onAdjustPlacementAmount(-1) },
+                    onClick = { actions.onAdjustPlacementAmount(-1) },
                     selected = false,
-                    enabled = canAdjust && placementAmount > 1,
+                    enabled = state.canAdjust && state.placementAmount > 1,
                     modifier = Modifier.size(42.dp).testTag("reinforcement_decrease"),
                 )
                 Text(
-                    text = placementAmount.toString(),
+                    text = state.placementAmount.toString(),
                     modifier = Modifier.width(32.dp).testTag("reinforcement_amount"),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
                 BlockActionButton(
                     label = "+",
-                    onClick = { onAdjustPlacementAmount(1) },
+                    onClick = { actions.onAdjustPlacementAmount(1) },
                     selected = false,
                     enabled =
-                        canAdjust &&
-                            placementAmount < remainingAmount,
+                        state.canAdjust &&
+                            state.placementAmount < state.remainingAmount,
                     modifier = Modifier.size(42.dp).testTag("reinforcement_increase"),
                 )
                 BlockActionButton(
                     label = stringResource(id = R.string.game_reinforcements_place),
-                    onClick = onPlace,
+                    onClick = actions.onPlace,
                     selected = true,
-                    enabled = canPlace,
+                    enabled = state.canPlace,
                     modifier = Modifier.testTag("place_reinforcements_button"),
                 )
             }

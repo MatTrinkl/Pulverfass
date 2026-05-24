@@ -213,8 +213,11 @@ class ScreenComposableTest {
         composeTestRule.setContent {
             AndroidAppTheme {
                 PrivateHandPanel(
-                    playerName = "Alice",
-                    handCards = listOf("Infanterie", "Infanterie", "Kavallerie"),
+                    state =
+                        PrivateHandPanelState(
+                            playerName = "Alice",
+                            handCards = listOf("Infanterie", "Infanterie", "Kavallerie"),
+                        ),
                 )
             }
         }
