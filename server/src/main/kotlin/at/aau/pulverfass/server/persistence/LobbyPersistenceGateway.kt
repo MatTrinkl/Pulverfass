@@ -5,6 +5,8 @@ import at.aau.pulverfass.server.DatabaseReadinessProbe
 import at.aau.pulverfass.server.DatabaseReadinessState
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -242,6 +244,21 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 "territoryId" to territoryId.value,
                 "troopCount" to troopCount,
                 "stateVersion" to stateVersion,
+            )
+        is FortifyMoveAppliedEvent ->
+            persistedPayload(
+                type = "fortify_move_applied",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "fromTerritoryId" to fromTerritoryId.value,
+                "toTerritoryId" to toTerritoryId.value,
+                "troopCount" to troopCount,
+            )
+        is FortifyUsedSetEvent ->
+            persistedPayload(
+                type = "fortify_used_set",
+                "lobbyCode" to lobbyCode.value,
+                "used" to used,
             )
         is TimeoutTriggered ->
             persistedPayload(

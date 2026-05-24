@@ -5,6 +5,8 @@ import at.aau.pulverfass.server.map.MapDefinitionRepository
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -142,6 +144,7 @@ data class PersistedLobbyRecoverySnapshot(
     val status: String,
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
+    val fortifyUsedThisTurn: Boolean = false,
     val determinism: PublicDeterminismMetadataSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
@@ -169,6 +172,7 @@ data class PersistedLobbyRecoverySnapshot(
                 status = gameState.status.name,
                 closedReason = gameState.closedReason,
                 lastInvalidActionReason = gameState.lastInvalidActionReason,
+                fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
                 determinism =
                     PublicDeterminismMetadataSnapshot.from(
                         gameState.mapDefinition
@@ -221,6 +225,7 @@ data class PersistedLobbyRecoverySnapshot(
             lastEventContext = null,
             closedReason = closedReason,
             lastInvalidActionReason = lastInvalidActionReason,
+            fortifyUsedThisTurn = fortifyUsedThisTurn,
             mapDefinition = restoredDefinition,
             territoryStates =
                 territoryStates.associate { snapshot ->
@@ -371,6 +376,19 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 territoryId = TerritoryId(jsonObject.string("territoryId")),
                 troopCount = jsonObject.int("troopCount"),
                 stateVersion = jsonObject.nullableLong("stateVersion"),
+            )
+        "fortify_move_applied" ->
+            FortifyMoveAppliedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                fromTerritoryId = TerritoryId(jsonObject.string("fromTerritoryId")),
+                toTerritoryId = TerritoryId(jsonObject.string("toTerritoryId")),
+                troopCount = jsonObject.int("troopCount"),
+            )
+        "fortify_used_set" ->
+            FortifyUsedSetEvent(
+                lobbyCode = lobbyCode,
+                used = jsonObject.boolean("used"),
             )
         "timeout_triggered" ->
             TimeoutTriggered(
