@@ -465,6 +465,7 @@ private fun Application.installLobbyRuntime(
             ) + 1,
         )
     val playerIdAssignmentLock = Any()
+
     fun ensurePlayerId(sessionToken: SessionToken): PlayerId {
         sessionContextRegistry.playerIdForSession(sessionToken)?.let { return it }
         synchronized(playerIdAssignmentLock) {
