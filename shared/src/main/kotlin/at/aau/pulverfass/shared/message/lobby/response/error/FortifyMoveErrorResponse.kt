@@ -14,6 +14,7 @@ import kotlinx.serialization.encoding.Encoder
 enum class FortifyMoveErrorCode {
     GAME_NOT_FOUND,
     REQUESTER_MISMATCH,
+    GAME_PAUSED,
     NOT_ACTIVE_PLAYER,
     WRONG_PHASE,
     TERRITORY_NOT_OWNED,
