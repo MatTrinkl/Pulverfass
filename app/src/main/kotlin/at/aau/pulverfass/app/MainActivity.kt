@@ -97,13 +97,13 @@ class MainActivity : AppCompatActivity() {
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
 
-                // Audio: SFX bei Studio-Intro, Music erst wenn MainMenu erreicht
+                // Audio: route-based playback
+                // - Menu-Flow (MainMenu / Lobby / WaitingRoom / LoadGame): looped menu theme
+                // - Game: stop menu music
+                // - StudioIntro / Load: video plays its own audio (or silence)
                 LaunchedEffect(currentBackStackEntry) {
                     val route = currentBackStackEntry?.destination?.route
                     when {
-                        route == Screen.StudioIntro.route ->
-                            musicManager.playSfx(R.raw.gabumon_intro)
-
                         route == Screen.MainMenu.route ||
                             route == Screen.Lobby.route ||
                             route == Screen.LoadGame.route ||

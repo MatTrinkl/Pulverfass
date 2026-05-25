@@ -82,6 +82,7 @@ fun LoadScreen(
             videoResId = R.raw.pulverfass_loading,
             loop = true,
             cover = true,
+            muted = true,
             modifier = Modifier.fillMaxSize(),
         )
     },

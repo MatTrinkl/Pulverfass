@@ -18,6 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
  * @param onCompleted Wird gerufen wenn Video zu Ende (nur ohne loop)
  * @param loop true → Endlos-Schleife
  * @param cover true → Video füllt Container (CSS object-fit: cover), overflow geclippt
+ * @param muted true → Video-Audio stummgeschaltet (für BG-Videos unter Music)
  * @param modifier Compose-Modifier für Parent-Layout
  */
 @Composable
@@ -26,6 +27,7 @@ fun VideoPlayer(
     onCompleted: () -> Unit = {},
     loop: Boolean = false,
     cover: Boolean = false,
+    muted: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (cover) {
@@ -38,6 +40,7 @@ fun VideoPlayer(
                 onCompleted = onCompleted,
                 loop = loop,
                 centerCrop = true,
+                muted = muted,
             )
         }
     } else {
@@ -46,6 +49,7 @@ fun VideoPlayer(
             onCompleted = onCompleted,
             loop = loop,
             centerCrop = false,
+            muted = muted,
             modifier = modifier,
         )
     }
@@ -57,6 +61,7 @@ private fun VideoViewInterop(
     onCompleted: () -> Unit,
     loop: Boolean,
     centerCrop: Boolean,
+    muted: Boolean,
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
@@ -69,6 +74,9 @@ private fun VideoViewInterop(
                 setVideoURI(uri)
                 setOnPreparedListener { mediaPlayer ->
                     mediaPlayer.isLooping = loop
+                    if (muted) {
+                        mediaPlayer.setVolume(0f, 0f)
+                    }
                     (view as? CenterCropVideoView)?.setVideoSize(
                         mediaPlayer.videoWidth,
                         mediaPlayer.videoHeight,
