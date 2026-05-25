@@ -86,14 +86,18 @@ fun LobbyScreen(
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
         )
 
-        // Top-Left: Server-Status-Pill
-        ServerStatusPill(
-            isConnected = state.isConnected,
+        // Top-Left: Server-Status-Pill + Online-Count-Pill
+        Row(
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 24.dp, top = 16.dp),
-        )
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ServerStatusPill(isConnected = state.isConnected)
+            OnlinePlayersPill(count = null)
+        }
 
         // Top-Right: Dev-Info-Panel (S-URL, S-Message, MAP-TEST)
         DevInfoPanel(
@@ -123,6 +127,16 @@ fun LobbyScreen(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 24.dp, bottom = 24.dp),
+        )
+
+        // Bottom-Left: Zurück zum MainMenu
+        MainButton(
+            text = "ZURÜCK",
+            onClick = { navController.popBackStack() },
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 24.dp, bottom = 24.dp),
         )
 
         // Center: Main Form
@@ -347,6 +361,31 @@ private fun ServerStatusPill(
 }
 
 @Composable
+private fun OnlinePlayersPill(
+    count: Int?,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .background(
+                    color = PulverfassColors.SurfaceDark.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(4.dp),
+                )
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "ONLINE: ${count ?: "—"}",
+            color = PulverfassColors.TextOnDark,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+        )
+    }
+}
+
+@Composable
 private fun DevInfoPanel(
     serverUrl: String,
     lastMessageType: String?,
@@ -381,6 +420,7 @@ private fun DevInfoPanel(
     }
 }
 
+// Groups connection state for DevControlsPanel (keeps param count ≤ 7)
 private data class DevControlsState(
     val isConnected: Boolean,
     val isConnecting: Boolean,

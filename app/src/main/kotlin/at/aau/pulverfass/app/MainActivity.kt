@@ -45,6 +45,7 @@ import at.aau.pulverfass.app.ui.screens.LoadGameScreen
 import at.aau.pulverfass.app.ui.screens.LoadScreen
 import at.aau.pulverfass.app.ui.screens.LobbyScreen
 import at.aau.pulverfass.app.ui.screens.MainMenuScreen
+import at.aau.pulverfass.app.ui.screens.OptionsScreen
 import at.aau.pulverfass.app.ui.screens.StudioIntroScreen
 import at.aau.pulverfass.app.ui.screens.WaitingRoomScreen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
@@ -98,8 +99,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // Audio: route-based playback
-                // - Menu-Flow (MainMenu / Lobby / WaitingRoom / LoadGame): looped menu theme
+                // - Menu-Flow (MainMenu / Lobby / WaitingRoom / LoadGame / Settings): looped menu theme
                 // - Game: stop menu music
+                // - Settings: change Music to "settings"-music
                 // - StudioIntro / Load: video plays its own audio (or silence)
                 LaunchedEffect(currentBackStackEntry) {
                     val route = currentBackStackEntry?.destination?.route
@@ -109,6 +111,8 @@ class MainActivity : AppCompatActivity() {
                             route == Screen.LoadGame.route ||
                             route?.startsWith(Screen.WaitingRoom.route) == true ->
                             musicManager.play(R.raw.menu_theme2)
+                        route == Screen.Options.route ->
+                            musicManager.play(R.raw.settings)
 
                         route == Screen.Game.route ->
                             musicManager.stop()
@@ -151,7 +155,7 @@ class MainActivity : AppCompatActivity() {
                                         navController.navigate(Screen.Lobby.route)
                                     },
                                     onOptionsClick = {
-                                        // in planung
+                                        navController.navigate(Screen.Options.route)
                                     },
                                     onExitClick = {
                                         activity?.finish()
@@ -164,6 +168,7 @@ class MainActivity : AppCompatActivity() {
                                     controller = lobbyController,
                                 )
                             }
+
                             composable(Screen.LoadGame.route) {
                                 LoadGameScreen(navController = navController)
                             }
@@ -197,6 +202,15 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Screen.Game.route) {
                                 GameScreen(controller = lobbyController)
+                            }
+                            composable(Screen.Options.route) {
+                                val optionsState by lobbyController.state.collectAsState()
+                                OptionsScreen(
+                                    navController = navController,
+                                    playerName = optionsState.playerName,
+                                    onPlayerNameChange = lobbyController::updatePlayerName,
+                                    musicManager = musicManager,
+                                )
                             }
                         }
 

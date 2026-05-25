@@ -14,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArraySet
  *  - [playSfx] für einmalige Sound-Effects (auto-released onCompletion)
  *  - [release] beim onDestroy gibt alles frei (inkl. aktiver SFX)
  *
- * Mute-State persistiert via SharedPreferences (app-restart-stabil).
+ * Music- und SFX-Mute getrennt persistiert via SharedPreferences.
  */
 class BackgroundMusicManager(context: Context) {
     private val appContext = context.applicationContext
@@ -30,8 +30,11 @@ class BackgroundMusicManager(context: Context) {
      */
     private val activeSfxPlayers = CopyOnWriteArraySet<MediaPlayer>()
 
-    val isMuted: Boolean
-        get() = prefs.getBoolean(KEY_MUTED, false)
+    val isMusicMuted: Boolean
+        get() = prefs.getBoolean(KEY_MUSIC_MUTED, false)
+
+    val isSfxMuted: Boolean
+        get() = prefs.getBoolean(KEY_SFX_MUTED, false)
 
     fun play(
         @RawRes resId: Int,
@@ -40,7 +43,7 @@ class BackgroundMusicManager(context: Context) {
         if (currentTrack == resId && player?.isPlaying == true) return
         stop()
         currentTrack = resId
-        if (isMuted) return
+        if (isMusicMuted) return
         player =
             MediaPlayer.create(appContext, resId)?.apply {
                 isLooping = loop
@@ -64,12 +67,12 @@ class BackgroundMusicManager(context: Context) {
     }
 
     fun resume() {
-        if (isMuted) return
+        if (isMusicMuted) return
         player?.takeIf { !it.isPlaying }?.start()
     }
 
-    fun setMuted(muted: Boolean) {
-        prefs.edit().putBoolean(KEY_MUTED, muted).apply()
+    fun setMusicMuted(muted: Boolean) {
+        prefs.edit().putBoolean(KEY_MUSIC_MUTED, muted).apply()
         if (muted) {
             pause()
         } else {
@@ -81,17 +84,17 @@ class BackgroundMusicManager(context: Context) {
         }
     }
 
+    fun setSfxMuted(muted: Boolean) {
+        prefs.edit().putBoolean(KEY_SFX_MUTED, muted).apply()
+    }
+
     /**
      * Spielt einen Sound-Effect einmalig ab.
-     *
-     * Player wird in [activeSfxPlayers] getrackt und gibt sich selbst frei
-     * via [MediaPlayer.OnCompletionListener] / [MediaPlayer.OnErrorListener].
-     * Falls die App zerstört wird bevor das passiert, räumt [release] auf.
      */
     fun playSfx(
         @RawRes resId: Int,
     ) {
-        if (isMuted) return
+        if (isSfxMuted) return
         val sfxPlayer = MediaPlayer.create(appContext, resId) ?: return
         activeSfxPlayers.add(sfxPlayer)
         sfxPlayer.setOnCompletionListener { mp ->
@@ -119,6 +122,7 @@ class BackgroundMusicManager(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "pulverfass_audio"
-        private const val KEY_MUTED = "is_muted"
+        private const val KEY_MUSIC_MUTED = "is_music_muted"
+        private const val KEY_SFX_MUTED = "is_sfx_muted"
     }
 }

@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -20,13 +24,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.ui.components.ExitConfirmationDialog
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
  * Main-Menu Screen mit gamelogo.png groß über den Buttons.
- * Video-Background (menuvid.mp4), kein freischwebendes Logo mehr.
+ * Video-Background (menuvid.mp4).
+ * EXIT zeigt Bestätigungsdialog via ExitConfirmationDialog (lobbylist.png Parchment).
  */
 @Composable
 fun MainMenuScreen(
@@ -44,6 +50,8 @@ fun MainMenuScreen(
         )
     },
 ) {
+    var showExitDialog by remember { mutableStateOf(false) }
+
     Box(
         modifier =
             modifier
@@ -63,18 +71,14 @@ fun MainMenuScreen(
         )
 
         // Main Content: Logo groß über Buttons
-// Main Content: Logo groß über Buttons
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    // Vertikales Padding reduziert, damit mehr Platz für die Buttons ist
                     .padding(horizontal = 48.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            // Zentriert jetzt alles richtig, da es reinpasst
         ) {
-            // Pulverfass Logo — verkleinert für Landscape!
             Image(
                 painter = painterResource(id = R.drawable.gamelogo),
                 contentDescription = "Pulverfass Logo",
@@ -82,13 +86,12 @@ fun MainMenuScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth(0.5f)
-                        .height(120.dp) // FIX 1: Vorher 180.dp (viel zu groß für Landscape)
+                        .height(120.dp)
                         .testTag("GameLogo"),
             )
 
-            Spacer(modifier = Modifier.height(24.dp)) // FIX 2: Spacer etwas verkleinert
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Button-Column unter dem Logo
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -106,10 +109,18 @@ fun MainMenuScreen(
                 )
                 MainButton(
                     text = "EXIT",
-                    onClick = onExitClick,
+                    onClick = { showExitDialog = true },
                     modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
                 )
             }
+        }
+
+        // Exit Confirmation Overlay
+        if (showExitDialog) {
+            ExitConfirmationDialog(
+                onConfirm = onExitClick,
+                onDismiss = { showExitDialog = false },
+            )
         }
     }
 }
