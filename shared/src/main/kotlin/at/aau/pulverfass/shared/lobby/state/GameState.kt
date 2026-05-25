@@ -363,6 +363,38 @@ data class GameState(
     ): Boolean = isConnectedByOwnedPath(playerId, from, to)
 
     /**
+     * Liefert alle gültigen Fortify-Ziele für ein Ursprungsterritorium.
+     *
+     * Die Query ist rein lesend und eignet sich für UI-Hilfen oder
+     * serverseitige Vorvalidierung. Sie respektiert denselben Turn-Kontext wie
+     * ein echter Fortify-Move.
+     */
+    fun validFortifyTargets(
+        playerId: PlayerId,
+        fromTerritoryId: TerritoryId,
+    ): List<TerritoryId> {
+        if (
+            activePlayer != playerId ||
+            activeTurnPhase != TurnPhase.FORTIFY ||
+            fortifyUsedThisTurn
+        ) {
+            return emptyList()
+        }
+
+        val sourceState = territoryStateOf(fromTerritoryId) ?: return emptyList()
+        if (sourceState.ownerId != playerId || sourceState.troopCount <= 1) {
+            return emptyList()
+        }
+
+        return territoriesOwnedBy(playerId)
+            .asSequence()
+            .map(TerritoryState::territoryId)
+            .filterNot { territoryId -> territoryId == fromTerritoryId }
+            .filter { territoryId -> canFortifyMove(playerId, fromTerritoryId, territoryId) }
+            .toList()
+    }
+
+    /**
      * Berechnet den Gesamtbonus eines Spielers aus vollständig kontrollierten Kontinenten.
      */
     fun bonusFor(playerId: PlayerId): Int =

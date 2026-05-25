@@ -71,30 +71,5 @@ class DefaultFortifyMoveValidator : FortifyMoveValidator {
         state: GameState,
         playerId: PlayerId,
         fromTerritoryId: TerritoryId,
-    ): List<TerritoryId> {
-        if (state.activePlayer != playerId) {
-            return emptyList()
-        }
-        if (state.activeTurnPhase != TurnPhase.FORTIFY) {
-            return emptyList()
-        }
-        if (state.fortifyUsedThisTurn) {
-            return emptyList()
-        }
-        val sourceState = state.territoryStateOf(fromTerritoryId) ?: return emptyList()
-        if (sourceState.ownerId != playerId) {
-            return emptyList()
-        }
-        if (sourceState.troopCount < 2) {
-            return emptyList()
-        }
-
-        return state
-            .territoriesOwnedBy(playerId)
-            .map { territoryState -> territoryState.territoryId }
-            .filterNot { territoryId -> territoryId == fromTerritoryId }
-            .filter { territoryId ->
-                state.canFortifyMove(playerId, fromTerritoryId, territoryId)
-            }
-    }
+    ): List<TerritoryId> = state.validFortifyTargets(playerId, fromTerritoryId)
 }
