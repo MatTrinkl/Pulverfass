@@ -34,6 +34,7 @@ import androidx.navigation.navArgument
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
+import at.aau.pulverfass.app.storage.SharedPreferencesPlayerNameStore
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
 import at.aau.pulverfass.app.ui.components.ServerStatusIndicator
 import at.aau.pulverfass.app.ui.components.rememberServerHealthStatus
@@ -79,9 +80,16 @@ class MainActivity : AppCompatActivity() {
                     remember {
                         SharedPreferencesReconnectSessionStore(applicationContext)
                     }
+                val playerNameStore =
+                    remember {
+                        SharedPreferencesPlayerNameStore(applicationContext)
+                    }
                 val lobbyController =
                     remember {
-                        LobbyController(reconnectSessionStore = reconnectSessionStore)
+                        LobbyController(
+                            reconnectSessionStore = reconnectSessionStore,
+                            playerNameStore = playerNameStore,
+                        )
                     }
                 val lobbyState by lobbyController.state.collectAsState()
                 val serverHealthStatus by rememberServerHealthStatus()

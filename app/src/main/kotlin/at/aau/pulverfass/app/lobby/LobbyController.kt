@@ -3,7 +3,9 @@ package at.aau.pulverfass.app.lobby
 import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.network.ClientNetwork
+import at.aau.pulverfass.app.storage.NoOpPlayerNameStore
 import at.aau.pulverfass.app.storage.NoOpReconnectSessionStore
+import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -73,12 +75,14 @@ import kotlinx.coroutines.launch
  * @param config zentrale Texte und Retry-Grenzen für den Lobby-Flow
  * @param reconnectSessionStore kleine lokale Persistenz für Session-Token und
  * Reconnect-Metadaten nach App-Neustart
+ * @param playerNameStore lokale Persistenz für den zuletzt gewählten Anzeigenamen
  */
 class LobbyController(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val network: ClientNetwork = ClientNetwork(scope),
     private val config: LobbyControllerConfig = LobbyControllerConfig(),
     private val reconnectSessionStore: ReconnectSessionStore = NoOpReconnectSessionStore,
+    private val playerNameStore: PlayerNameStore = NoOpPlayerNameStore,
 ) {
     private enum class PendingLobbyAction {
         CREATE,
@@ -92,6 +96,7 @@ class LobbyController(
         MutableStateFlow(
             LobbyUiState(
                 serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
+                playerName = playerNameStore.readPlayerName().orEmpty(),
                 statusText = config.statusNotConnected,
                 sessionToken = reconnectSessionStore.readSessionToken(),
                 gameStarted = wasGameStartedOnLastAppRun,
@@ -195,6 +200,7 @@ class LobbyController(
     }
 
     fun updatePlayerName(playerName: String) {
+        playerNameStore.savePlayerName(playerName)
         _state.update { it.copy(playerName = playerName) }
     }
 
