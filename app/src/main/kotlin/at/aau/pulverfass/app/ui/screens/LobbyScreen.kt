@@ -20,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -105,14 +108,17 @@ fun LobbyScreen(
 
         // Bottom-Right: Dev-Controls (DEV-MOD, CONNECTION TEST)
         DevControlsPanel(
-            isConnected = state.isConnected,
-            isConnecting = state.isConnecting,
+            controlsState =
+                DevControlsState(
+                    isConnected = state.isConnected,
+                    isConnecting = state.isConnecting,
+                    serverUrl = state.serverUrl,
+                ),
             showDevPanel = showDevPanel,
             onToggleDevMod = { showDevPanel = !showDevPanel },
             onConnectClick = controller::connect,
             onDisconnectClick = controller::disconnect,
             onUpdateServerUrl = controller::updateServerUrl,
-            serverUrl = state.serverUrl,
             modifier =
                 Modifier
                     .align(Alignment.BottomEnd)
@@ -375,33 +381,64 @@ private fun DevInfoPanel(
     }
 }
 
+private data class DevControlsState(
+    val isConnected: Boolean,
+    val isConnecting: Boolean,
+    val serverUrl: String,
+)
+
 @Composable
 private fun DevControlsPanel(
-    isConnected: Boolean,
-    isConnecting: Boolean,
+    controlsState: DevControlsState,
     showDevPanel: Boolean,
     onToggleDevMod: () -> Unit,
     onConnectClick: () -> Unit,
     onDisconnectClick: () -> Unit,
     onUpdateServerUrl: (String) -> Unit,
-    serverUrl: String,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        DevPillButton(text = "DEV-MOD", onClick = onToggleDevMod)
-        DevPillButton(
-            text =
-                when {
-                    isConnecting -> "CONNECTING..."
-                    isConnected -> "DISCONNECT"
-                    else -> "CONNECTION TEST"
-                },
-            onClick = if (isConnected) onDisconnectClick else onConnectClick,
-            enabled = !isConnecting,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DevPillButton(text = "DEV-MOD", onClick = onToggleDevMod)
+            DevPillButton(
+                text =
+                    when {
+                        controlsState.isConnecting -> "CONNECTING..."
+                        controlsState.isConnected -> "DISCONNECT"
+                        else -> "CONNECTION TEST"
+                    },
+                onClick = if (controlsState.isConnected) onDisconnectClick else onConnectClick,
+                enabled = !controlsState.isConnecting,
+            )
+        }
+        if (showDevPanel) {
+            OutlinedTextField(
+                value = controlsState.serverUrl,
+                onValueChange = onUpdateServerUrl,
+                modifier = Modifier.width(220.dp),
+                label = { Text(text = "SERVER URL", fontSize = 8.sp) },
+                textStyle = LocalTextStyle.current.copy(fontSize = 10.sp),
+                singleLine = true,
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PulverfassColors.GoldDark,
+                        unfocusedBorderColor = PulverfassColors.GoldDark.copy(alpha = 0.5f),
+                        focusedTextColor = PulverfassColors.TextOnDark,
+                        unfocusedTextColor = PulverfassColors.TextOnDark,
+                        focusedLabelColor = PulverfassColors.Gold,
+                        unfocusedLabelColor = PulverfassColors.GoldMuted,
+                        cursorColor = PulverfassColors.Gold,
+                        focusedContainerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
+                        unfocusedContainerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
+                    ),
+            )
+        }
     }
 }
 
