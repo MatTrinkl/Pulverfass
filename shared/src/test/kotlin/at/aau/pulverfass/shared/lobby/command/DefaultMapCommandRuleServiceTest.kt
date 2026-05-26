@@ -4,6 +4,8 @@ import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
@@ -292,28 +294,10 @@ class DefaultMapCommandRuleServiceTest {
     }
 
     @Test
-    fun `attack command creates deterministic conquest events`() {
+    fun `attack command creates deterministic resolved conquest event with rng trace`() {
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
-        val state =
-            sampleState().copy(
-                territoryStates =
-                    sampleState().territoryStates +
-                        mapOf(
-                            TerritoryId("alpha") to
-                                TerritoryState(
-                                    territoryId = TerritoryId("alpha"),
-                                    ownerId = attacker,
-                                    troopCount = 5,
-                                ),
-                            TerritoryId("beta") to
-                                TerritoryState(
-                                    territoryId = TerritoryId("beta"),
-                                    ownerId = defender,
-                                    troopCount = 2,
-                                ),
-                        ),
-            )
+        val state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2)
 
         val events =
             ruleService.createEvents(
@@ -324,31 +308,43 @@ class DefaultMapCommandRuleServiceTest {
                         playerId = attacker,
                         fromTerritoryId = TerritoryId("alpha"),
                         toTerritoryId = TerritoryId("beta"),
-                        attackerLosses = 1,
-                        defenderLosses = 2,
-                        occupyingTroopCount = 2,
+                        requestedAttackDice = 3,
+                        committedTroopCount = 3,
+                        occupyingTroopCount = 3,
                     ),
             )
 
-        assertEquals(
-            listOf(
-                TerritoryTroopsChangedEvent(state.lobbyCode, TerritoryId("alpha"), 2),
-                TerritoryOwnerChangedEvent(state.lobbyCode, TerritoryId("beta"), attacker),
-                TerritoryTroopsChangedEvent(state.lobbyCode, TerritoryId("beta"), 2),
-            ),
-            events,
-        )
+        assertEquals(2, events.size)
+        val event = events[0] as AttackResolvedEvent
+        val eliminationEvent = events[1] as PlayerEliminatedEvent
+        assertEquals(attacker, event.attackerPlayerId)
+        assertEquals(defender, event.defenderPlayerId)
+        assertEquals(3, event.attackTroops)
+        assertEquals(5, event.sourceTroopsBefore)
+        assertEquals(2, event.targetTroopsBefore)
+        assertEquals(3, event.requestedAttackDice)
+        assertEquals(3, event.attackDice)
+        assertEquals(2, event.defendDice)
+        assertEquals(listOf(5, 3, 4, 1, 2), event.rngTrace)
+        assertEquals(listOf(5, 4, 3), event.attackerRolls)
+        assertEquals(listOf(2, 1), event.defenderRolls)
+        assertEquals(0, event.attackerLosses)
+        assertEquals(2, event.defenderLosses)
+        assertEquals(5, event.attackerRemaining)
+        assertEquals(0, event.defenderRemaining)
+        assertEquals(3, event.occupyingTroopCount)
+        assertEquals(3, event.minOccupyingTroops)
+        assertEquals(2L, event.rngStateBefore)
+        assertTrue(event.rngStateAfter != event.rngStateBefore)
+        assertEquals(defender, eliminationEvent.playerId)
+        assertEquals(attacker, eliminationEvent.eliminatedByPlayerId)
     }
 
     @Test
-    fun `attack without conquest updates both troop counts only`() {
+    fun `attack without conquest creates deterministic resolved event`() {
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
-        val state =
-            sampleState().withTerritories(
-                TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
-                TerritoryId("beta") to TerritoryState(TerritoryId("beta"), defender, 4),
-            )
+        val state = attackState(rngState = 19L, sourceTroops = 5, targetTroops = 4)
 
         val events =
             ruleService.createEvents(
@@ -359,18 +355,29 @@ class DefaultMapCommandRuleServiceTest {
                         playerId = attacker,
                         fromTerritoryId = TerritoryId("alpha"),
                         toTerritoryId = TerritoryId("beta"),
-                        attackerLosses = 1,
-                        defenderLosses = 2,
+                        requestedAttackDice = 3,
+                        committedTroopCount = 3,
+                        occupyingTroopCount = 3,
                     ),
             )
 
-        assertEquals(
-            listOf(
-                TerritoryTroopsChangedEvent(state.lobbyCode, TerritoryId("alpha"), 4),
-                TerritoryTroopsChangedEvent(state.lobbyCode, TerritoryId("beta"), 2),
-            ),
-            events,
-        )
+        val event = events.single() as AttackResolvedEvent
+        assertEquals(attacker, event.attackerPlayerId)
+        assertEquals(defender, event.defenderPlayerId)
+        assertEquals(3, event.attackTroops)
+        assertEquals(5, event.sourceTroopsBefore)
+        assertEquals(4, event.targetTroopsBefore)
+        assertEquals(listOf(1, 3, 6, 2, 1), event.rngTrace)
+        assertEquals(listOf(6, 3, 1), event.attackerRolls)
+        assertEquals(listOf(2, 1), event.defenderRolls)
+        assertEquals(0, event.attackerLosses)
+        assertEquals(2, event.defenderLosses)
+        assertEquals(5, event.attackerRemaining)
+        assertEquals(2, event.defenderRemaining)
+        assertEquals(null, event.occupyingTroopCount)
+        assertEquals(null, event.minOccupyingTroops)
+        assertEquals(19L, event.rngStateBefore)
+        assertTrue(event.rngStateAfter != event.rngStateBefore)
     }
 
     @Test
@@ -430,100 +437,152 @@ class DefaultMapCommandRuleServiceTest {
     }
 
     @Test
-    fun `attack rejects invalid target ownership and troop constraints`() {
+    fun `attack rejects invalid target ownership troop constraints and missing rng`() {
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
 
         assertMapCommandFailure(
             state =
-                sampleState().withTerritories(
-                    TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
-                    TerritoryId("beta") to TerritoryState(TerritoryId("beta"), null, 2),
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    territoryStates =
+                        attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2)
+                            .territoryStates +
+                            (TerritoryId("beta") to TerritoryState(TerritoryId("beta"), null, 2)),
                 ),
-            command = attackCommand(attacker = attacker, defenderLosses = 1),
+            command = attackCommand(attacker = attacker),
             expectedMessagePart = "muss einen Besitzer haben",
         )
         assertMapCommandFailure(
             state =
-                sampleState().withTerritories(
-                    TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
-                    TerritoryId("beta") to TerritoryState(TerritoryId("beta"), attacker, 2),
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    territoryStates =
+                        attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2)
+                            .territoryStates +
+                            (
+                                TerritoryId("beta") to
+                                    TerritoryState(TerritoryId("beta"), attacker, 2)
+                            ),
                 ),
-            command = attackCommand(attacker = attacker, defenderLosses = 1),
+            command = attackCommand(attacker = attacker),
             expectedMessagePart = "beide Territorien",
         )
         assertMapCommandFailure(
-            state =
-                sampleState().withTerritories(
-                    TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 1),
-                    TerritoryId("beta") to TerritoryState(TerritoryId("beta"), defender, 2),
-                ),
-            command = attackCommand(attacker = attacker, defenderLosses = 1),
+            state = attackState(rngState = 2L, sourceTroops = 1, targetTroops = 2),
+            command = attackCommand(attacker = attacker),
             expectedMessagePart = "mindestens 2 Truppen",
         )
         assertMapCommandFailure(
+            state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2),
+            command = attackCommand(attacker = attacker, committedTroopCount = null),
+            expectedMessagePart = "committedTroopCount",
+        )
+        assertMapCommandFailure(
             state =
-                sampleState().withTerritories(
-                    TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
-                    TerritoryId("beta") to TerritoryState(TerritoryId("beta"), defender, 2),
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    gameRandomSeed = null,
+                    gameRandomState = null,
                 ),
-            command = attackCommand(attacker = attacker, defenderLosses = 3),
-            expectedMessagePart = "mehr Verteidiger entfernen",
+            command = attackCommand(attacker = attacker),
+            expectedMessagePart = "initialisierten gameRandomSeed",
         )
     }
 
     @Test
     fun `attack rejects invalid occupation combinations`() {
         val attacker = PlayerId(1)
-        val defender = PlayerId(2)
-        val state =
-            sampleState().withTerritories(
-                TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 3),
-                TerritoryId("beta") to TerritoryState(TerritoryId("beta"), defender, 3),
-            )
 
+        val captureState = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2)
         assertMapCommandFailure(
-            state = state,
+            state = captureState,
             command =
                 attackCommand(
                     attacker = attacker,
-                    attackerLosses = 1,
-                    defenderLosses = 1,
-                    occupyingTroopCount = 1,
-                ),
-            expectedMessagePart = "darf keine occupyingTroopCount",
-        )
-        assertMapCommandFailure(
-            state = state,
-            command =
-                attackCommand(
-                    attacker = attacker,
-                    attackerLosses = 3,
-                    defenderLosses = 1,
-                ),
-            expectedMessagePart = "leer",
-        )
-        assertMapCommandFailure(
-            state = state,
-            command =
-                attackCommand(
-                    attacker = attacker,
-                    attackerLosses = 0,
-                    defenderLosses = 3,
-                ),
-            expectedMessagePart = "occupyingTroopCount",
-        )
-        assertMapCommandFailure(
-            state = state,
-            command =
-                attackCommand(
-                    attacker = attacker,
-                    attackerLosses = 1,
-                    defenderLosses = 3,
+                    requestedAttackDice = 3,
                     occupyingTroopCount = 2,
                 ),
-            expectedMessagePart = "muss mindestens eine",
+            expectedMessagePart = "mindestens 3",
         )
+        assertMapCommandFailure(
+            state = captureState,
+            command =
+                attackCommand(
+                    attacker = attacker,
+                    requestedAttackDice = 3,
+                    occupyingTroopCount = 5,
+                ),
+            expectedMessagePart = "darf committedTroopCount nicht überschreiten",
+        )
+        assertMapCommandFailure(
+            state = captureState,
+            command =
+                attackCommand(
+                    attacker = attacker,
+                    requestedAttackDice = 3,
+                    occupyingTroopCount = 5,
+                ),
+            expectedMessagePart = "darf committedTroopCount nicht überschreiten",
+        )
+    }
+
+    @Test
+    fun `attack rejects committed troop and rng guard edge cases`() {
+        val attacker = PlayerId(1)
+
+        assertMapCommandFailure(
+            state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2),
+            command = attackCommand(attacker = attacker, committedTroopCount = 1),
+            expectedMessagePart = "committedTroopCount muss mindestens 2",
+        )
+        assertMapCommandFailure(
+            state = attackState(rngState = 2L, sourceTroops = 4, targetTroops = 2),
+            command = attackCommand(attacker = attacker, committedTroopCount = 4),
+            expectedMessagePart = "muss mindestens eine Truppe zurücklassen",
+        )
+        assertMapCommandFailure(
+            state =
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    gameRandomState = null,
+                ),
+            command = attackCommand(attacker = attacker),
+            expectedMessagePart = "initialisierten gameRandomState",
+        )
+    }
+
+    @Test
+    fun `spectator cannot execute map commands`() {
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val spectatorState =
+            sampleState().copy(
+                gameStarted = true,
+                turnOrder = listOf(attacker),
+                territoryStates =
+                    sampleState().territoryStates +
+                        mapOf(
+                            TerritoryId("alpha") to
+                                TerritoryState(TerritoryId("alpha"), attacker, 3),
+                            TerritoryId("beta") to
+                                TerritoryState(TerritoryId("beta"), attacker, 2),
+                            TerritoryId("gamma") to
+                                TerritoryState(TerritoryId("gamma"), attacker, 1),
+                        ),
+            )
+
+        val exception =
+            assertThrows(InvalidMapCommandException::class.java) {
+                ruleService.createEvents(
+                    state = spectatorState,
+                    command =
+                        PlaceTroopsCommand(
+                            lobbyCode = spectatorState.lobbyCode,
+                            playerId = defender,
+                            territoryId = TerritoryId("alpha"),
+                            troopCount = 1,
+                        ),
+                )
+            }
+
+        assertEquals("PLAYER_ELIMINATED", exception.reasonCode)
     }
 
     private fun GameState.withTerritories(
@@ -533,10 +592,39 @@ class DefaultMapCommandRuleServiceTest {
             territoryStates = territoryStates + territories.toMap(),
         )
 
+    private fun attackState(
+        rngState: Long,
+        sourceTroops: Int,
+        targetTroops: Int,
+    ): GameState {
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        return sampleState().copy(
+            gameRandomSeed = 1L,
+            gameRandomState = rngState,
+            territoryStates =
+                sampleState().territoryStates +
+                    mapOf(
+                        TerritoryId("alpha") to
+                            TerritoryState(
+                                territoryId = TerritoryId("alpha"),
+                                ownerId = attacker,
+                                troopCount = sourceTroops,
+                            ),
+                        TerritoryId("beta") to
+                            TerritoryState(
+                                territoryId = TerritoryId("beta"),
+                                ownerId = defender,
+                                troopCount = targetTroops,
+                            ),
+                    ),
+        )
+    }
+
     private fun attackCommand(
         attacker: PlayerId,
-        attackerLosses: Int = 0,
-        defenderLosses: Int,
+        requestedAttackDice: Int = 3,
+        committedTroopCount: Int? = 3,
         occupyingTroopCount: Int? = null,
     ): AttackCommand =
         AttackCommand(
@@ -544,8 +632,8 @@ class DefaultMapCommandRuleServiceTest {
             playerId = attacker,
             fromTerritoryId = TerritoryId("alpha"),
             toTerritoryId = TerritoryId("beta"),
-            attackerLosses = attackerLosses,
-            defenderLosses = defenderLosses,
+            requestedAttackDice = requestedAttackDice,
+            committedTroopCount = committedTroopCount,
             occupyingTroopCount = occupyingTroopCount,
         )
 
@@ -570,7 +658,7 @@ class DefaultMapCommandRuleServiceTest {
             lobbyCode = LobbyCode("CM12"),
             mapDefinition = sampleMapDefinition(),
             players = listOf(PlayerId(1), PlayerId(2)),
-        )
+        ).copy(gameRandomSeed = 1L, gameRandomState = 1L)
 
     private fun sampleMapDefinition(): MapDefinition =
         MapDefinition(

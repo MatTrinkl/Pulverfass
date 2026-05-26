@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.lobby.reducer
 
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
@@ -13,6 +14,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -23,6 +25,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.CardSetValidator
 import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
@@ -75,10 +78,12 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                         pendingReinforcements = null,
                     )
 
+                is AttackResolvedEvent -> onAttackResolved(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
                 is PendingReinforcementsSetEvent -> onPendingReinforcementsSet(state, event)
+                is PlayerEliminatedEvent -> onPlayerEliminated(state, event)
                 is PlayerCardsRemovedEvent -> onPlayerCardsRemoved(state, event)
                 is PlayerJoined -> onPlayerJoined(state, event.playerId, event.playerDisplayName)
                 is PlayerLeft -> onPlayerLeft(state, event.playerId)
@@ -132,6 +137,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 lobbyOwner = updatedLobbyOwner,
                 pendingReinforcements = state.pendingReinforcements,
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    state.tradeRequiredOnNextReinforcementPhaseByPlayer + (playerId to false),
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 status = updatedStatus,
@@ -182,6 +189,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 pendingReinforcements =
                     state.pendingReinforcements?.takeIf { it.playerId != playerId },
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    state.tradeRequiredOnNextReinforcementPhaseByPlayer - playerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -238,6 +247,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 pendingReinforcements =
                     state.pendingReinforcements?.takeIf { it.playerId != targetPlayerId },
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    state.tradeRequiredOnNextReinforcementPhaseByPlayer - targetPlayerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -423,6 +434,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 gameStarted = true,
                 gameRandomSeed = event.randomSeed,
+                gameRandomState = event.randomSeed,
                 pendingReinforcements = null,
                 status = GameStatus.RUNNING,
                 turnOrder = preparedStart.randomizedTurnOrder,
@@ -441,12 +453,182 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         event: TurnStateUpdatedEvent,
     ): GameState = applyTurnStateUpdate(state, event)
 
+    private fun onAttackResolved(
+        state: GameState,
+        event: AttackResolvedEvent,
+    ): GameState {
+        requireMapLoaded(state)
+        requireKnownPlayer(state, event.attackerPlayerId)
+        requireKnownPlayer(state, event.defenderPlayerId)
+        requireKnownTerritory(state, event.fromTerritoryId)
+        requireKnownTerritory(state, event.toTerritoryId)
+
+        val currentRngSeed =
+            state.gameRandomSeed
+                ?: throw InvalidLobbyEventException(
+                    "AttackResolvedEvent benötigt initialisierten gameRandomSeed.",
+                )
+        val currentRngState =
+            state.gameRandomState
+                ?: throw InvalidLobbyEventException(
+                    "AttackResolvedEvent benötigt initialisierten gameRandomState.",
+                )
+        if (currentRngState != event.rngStateBefore) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.rngStateBefore passt nicht zum aktuellen GameState: " +
+                    "erwartet=$currentRngState, war=${event.rngStateBefore}.",
+            )
+        }
+        if (state.ownerOf(event.fromTerritoryId) != event.attackerPlayerId) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.fromTerritoryId '${event.fromTerritoryId.value}' gehoert " +
+                    "nicht dem Angreifer '${event.attackerPlayerId.value}'.",
+            )
+        }
+        if (state.ownerOf(event.toTerritoryId) != event.defenderPlayerId) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.toTerritoryId '${event.toTerritoryId.value}' gehoert " +
+                    "nicht dem Verteidiger '${event.defenderPlayerId.value}'.",
+            )
+        }
+        if (state.troopCountOf(event.fromTerritoryId) != event.sourceTroopsBefore) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.sourceTroopsBefore passt nicht zum aktuellen GameState.",
+            )
+        }
+        if (state.troopCountOf(event.toTerritoryId) != event.targetTroopsBefore) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.targetTroopsBefore passt nicht zum aktuellen GameState.",
+            )
+        }
+
+        val stateAfterLosses =
+            state
+                .withTerritoryTroops(event.fromTerritoryId, event.attackerRemaining)
+                .withTerritoryTroops(event.toTerritoryId, event.defenderRemaining)
+
+        val updatedState =
+            if (event.capture) {
+                val occupyingTroopCount =
+                    event.occupyingTroopCount
+                        ?: throw InvalidLobbyEventException(
+                            "Capture-AttackResolvedEvent benötigt occupyingTroopCount.",
+                        )
+                val minOccupyingTroops =
+                    event.minOccupyingTroops
+                        ?: throw InvalidLobbyEventException(
+                            "Capture-AttackResolvedEvent benötigt minOccupyingTroops.",
+                        )
+                if (occupyingTroopCount < minOccupyingTroops) {
+                    throw InvalidLobbyEventException(
+                        "AttackResolvedEvent.occupyingTroopCount unterschreitet " +
+                            "minOccupyingTroops: minimum=$minOccupyingTroops, " +
+                            "war=$occupyingTroopCount.",
+                    )
+                }
+                if (occupyingTroopCount >= event.attackerRemaining) {
+                    throw InvalidLobbyEventException(
+                        "AttackResolvedEvent muss mindestens eine Truppe im " +
+                            "Ursprungsterritorium lassen.",
+                    )
+                }
+
+                stateAfterLosses
+                    .withTerritoryTroops(
+                        event.fromTerritoryId,
+                        event.attackerRemaining - occupyingTroopCount,
+                    )
+                    .withTerritoryOwner(event.toTerritoryId, event.attackerPlayerId)
+                    .withTerritoryTroops(event.toTerritoryId, occupyingTroopCount)
+            } else {
+                if (event.occupyingTroopCount != null || event.minOccupyingTroops != null) {
+                    throw InvalidLobbyEventException(
+                        "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
+                    )
+                }
+                stateAfterLosses
+            }
+
+        check(currentRngSeed == state.gameRandomSeed)
+        return updatedState.withGameRandomState(event.rngStateAfter)
+    }
+
     private fun onPendingReinforcementsSet(
         state: GameState,
         event: PendingReinforcementsSetEvent,
     ): GameState {
         requireKnownPlayer(state, event.playerId)
         return state.withPendingReinforcements(event.playerId, event.amount)
+    }
+
+    private fun onPlayerEliminated(
+        state: GameState,
+        event: PlayerEliminatedEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+        requireKnownPlayer(state, event.eliminatedByPlayerId)
+        require(hasStartedGame(state)) {
+            "PlayerEliminatedEvent darf nur in einem gestarteten Spiel angewendet werden."
+        }
+        require(state.turnOrder.contains(event.playerId)) {
+            "PlayerEliminatedEvent.playerId '${event.playerId.value}' ist bereits nicht mehr " +
+                "Teil der aktiven TurnOrder."
+        }
+        require(state.ownedTerritoryCount(event.playerId) == 0) {
+            "PlayerEliminatedEvent.playerId '${event.playerId.value}' besitzt noch Territorien."
+        }
+
+        val updatedTurnOrder = state.turnOrder.filterNot { it == event.playerId }
+        val stateWithTransferredCards =
+            state.withAllCardsTransferred(
+                fromPlayerId = event.playerId,
+                toPlayerId = event.eliminatedByPlayerId,
+            )
+        val attackerHandAfterTransfer = stateWithTransferredCards.handOf(event.eliminatedByPlayerId)
+        val attackerNeedsTradeOnNextReinforcementPhase =
+            attackerHandAfterTransfer.size > 4 &&
+                CardSetValidator.canMakeAnySet(attackerHandAfterTransfer)
+        val updatedTurnState =
+            synchronizedTurnStateForLobbySetup(
+                state = state,
+                turnOrder = updatedTurnOrder,
+                previousTurnOrder = state.turnOrder,
+                removedPlayerId = event.playerId,
+            )
+        val updatedStatus =
+            preserveLobbyStatus(
+                state = state,
+                updatedPlayers = state.players,
+                updatedActivePlayers = updatedTurnOrder,
+            )
+        val baseUpdatedState =
+            stateWithTransferredCards
+                .withTradeRequiredOnNextReinforcementPhase(event.playerId, false)
+                .withTradeRequiredOnNextReinforcementPhase(
+                    event.eliminatedByPlayerId,
+                    attackerNeedsTradeOnNextReinforcementPhase,
+                ).copy(
+                    activePlayer = state.activePlayer?.takeIf(updatedTurnOrder::contains),
+                    pendingReinforcements =
+                        state.pendingReinforcements?.takeIf { it.playerId != event.playerId },
+                    configuredStartPlayerId = updatedTurnState?.startPlayerId,
+                    turnOrder = updatedTurnOrder,
+                    turnState =
+                        state.turnState?.takeIf { turnState ->
+                            updatedTurnOrder.contains(turnState.activePlayerId) &&
+                                updatedTurnOrder.contains(turnState.startPlayerId)
+                        },
+                    status = updatedStatus,
+                )
+
+        return updatedTurnState?.let {
+            applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
+        }
+            ?: baseUpdatedState.copy(
+                activePlayer = null,
+                turnNumber = 0,
+                turnState = null,
+            )
     }
 
     private fun onPendingReinforcementsChanged(
@@ -496,7 +678,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             )
         }
 
-        return state.withTradedInSetCount(event.tradeIndex)
+        return state
+            .withTradedInSetCount(event.tradeIndex)
+            .withTradeRequiredOnNextReinforcementPhase(event.playerId, false)
     }
 
     private fun onPlayerCardsRemoved(
@@ -645,12 +829,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     private fun preserveLobbyStatus(
         state: GameState,
         updatedPlayers: List<PlayerId>,
+        updatedActivePlayers: List<PlayerId> = updatedPlayers,
     ): GameStatus =
         when {
             state.status == GameStatus.CLOSED -> GameStatus.CLOSED
             state.status == GameStatus.FINISHED -> GameStatus.FINISHED
-            hasStartedGame(state) && updatedPlayers.size <= 1 -> GameStatus.FINISHED
-            hasStartedGame(state) && updatedPlayers.size >= 2 -> GameStatus.RUNNING
+            hasStartedGame(state) && updatedActivePlayers.size <= 1 -> GameStatus.FINISHED
+            hasStartedGame(state) && updatedActivePlayers.size >= 2 -> GameStatus.RUNNING
             else -> GameStatus.WAITING_FOR_PLAYERS
         }
 

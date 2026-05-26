@@ -10,6 +10,8 @@ Dieser Ordner beschreibt die aktuell implementierten Kernsysteme des Projekts. D
   Map-Definition, Loader, Validierung, Hashing und Server-Integration.
 - `turn-state-machine.md`
   Turn-/Phasenlogik, Requests, Broadcasts und Pause/Resume-Regeln.
+- `battle-resolution.md`
+  Verbindliche Kampf-Formel, deterministische RNG-Ableitung und Golden Vectors.
 - `gamestate-versioning.md`
   `stateVersion`, Delta-Übertragung und 2-Runden-History-Buffer.
 - `game-state-visibility.md`
@@ -28,11 +30,12 @@ Für einen Gesamteinstieg:
 1. `lobby-event-system.md`
 2. `map-config.md`
 3. `turn-state-machine.md`
-4. `gamestate-versioning.md`
-5. `game-state-visibility.md`
-6. `network-api-integration.md`
-7. `client-systems.md`
-8. `reconnect-session-flow.md`
+4. `battle-resolution.md`
+5. `gamestate-versioning.md`
+6. `game-state-visibility.md`
+7. `network-api-integration.md`
+8. `client-systems.md`
+9. `reconnect-session-flow.md`
 
 ## Status
 

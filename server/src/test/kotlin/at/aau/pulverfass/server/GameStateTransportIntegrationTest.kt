@@ -609,6 +609,7 @@ class GameStateTransportIntegrationTest {
                     ),
                 status = GameStatus.RUNNING,
             )
+            .withAttackableTerritories(players)
 
     private fun runningTurnStateGameWithFortifySetup(
         lobbyCode: LobbyCode,

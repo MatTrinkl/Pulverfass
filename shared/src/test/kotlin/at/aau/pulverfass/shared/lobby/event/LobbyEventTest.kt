@@ -39,6 +39,35 @@ class LobbyEventTest {
                     value = 2,
                     tradeIndex = 1,
                 ),
+                AttackResolvedEvent(
+                    lobbyCode = lobbyCode,
+                    attackerPlayerId = playerId,
+                    defenderPlayerId = PlayerId(8),
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(6, 5, 4),
+                    defenderRolls = listOf(2, 1),
+                    rngTrace = listOf(6, 4, 5, 1, 2),
+                    rngStateBefore = 1,
+                    rngStateAfter = 2,
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                ),
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = PlayerId(8),
+                    eliminatedByPlayerId = playerId,
+                ),
                 PendingReinforcementsSetEvent(lobbyCode, playerId, 5),
                 PendingReinforcementsChangedEvent(lobbyCode, playerId, 2),
                 PlayerCardsRemovedEvent(
@@ -97,6 +126,7 @@ class LobbyEventTest {
 
         val internalResult =
             when (val event: InternalLobbyEvent = LobbyClosed(lobbyCode, "done")) {
+                is AttackResolvedEvent -> event.rngTrace.size.toString()
                 is CardSetTradedInEvent -> event.value.toString()
                 is FortifyUsedSetEvent -> event.used.toString()
                 is InvalidActionDetected -> event.reason
@@ -104,6 +134,7 @@ class LobbyEventTest {
                 is LobbyCreated -> "created"
                 is PendingReinforcementsChangedEvent -> event.delta.toString()
                 is PendingReinforcementsSetEvent -> event.amount.toString()
+                is PlayerEliminatedEvent -> event.eliminatedByPlayerId.value.toString()
                 is PlayerCardsRemovedEvent -> event.cardIds.size.toString()
                 is SystemTick -> event.tick.toString()
                 is TerritoryOwnerChangedEvent -> event.territoryId.value
@@ -144,6 +175,35 @@ class LobbyEventTest {
                     cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
                     value = 2,
                     tradeIndex = 1,
+                ),
+                AttackResolvedEvent(
+                    lobbyCode = lobbyCode,
+                    attackerPlayerId = playerId,
+                    defenderPlayerId = PlayerId(5),
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(6, 5, 4),
+                    defenderRolls = listOf(2, 1),
+                    rngTrace = listOf(6, 4, 5, 1, 2),
+                    rngStateBefore = 1,
+                    rngStateAfter = 2,
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                ),
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = PlayerId(5),
+                    eliminatedByPlayerId = playerId,
                 ),
                 PendingReinforcementsSetEvent(lobbyCode, playerId, 4),
                 PendingReinforcementsChangedEvent(lobbyCode, playerId, -1),

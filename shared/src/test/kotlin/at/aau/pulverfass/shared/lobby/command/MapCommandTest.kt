@@ -56,18 +56,15 @@ class MapCommandTest {
     }
 
     @Test
-    fun `attack command validates losses occupation and distinct territories`() {
+    fun `attack command validates requested dice occupation and distinct territories`() {
         assertThrows(IllegalArgumentException::class.java) {
-            AttackCommand(lobbyCode, playerId, alpha, alpha, attackerLosses = 1, defenderLosses = 0)
+            AttackCommand(lobbyCode, playerId, alpha, alpha)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            AttackCommand(lobbyCode, playerId, alpha, beta, attackerLosses = -1, defenderLosses = 1)
+            AttackCommand(lobbyCode, playerId, alpha, beta, requestedAttackDice = 0)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            AttackCommand(lobbyCode, playerId, alpha, beta, attackerLosses = 1, defenderLosses = -1)
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            AttackCommand(lobbyCode, playerId, alpha, beta, attackerLosses = 0, defenderLosses = 0)
+            AttackCommand(lobbyCode, playerId, alpha, beta, requestedAttackDice = 4)
         }
 
         val exception =
@@ -77,8 +74,6 @@ class MapCommandTest {
                     playerId = playerId,
                     fromTerritoryId = alpha,
                     toTerritoryId = beta,
-                    attackerLosses = 1,
-                    defenderLosses = 0,
                     occupyingTroopCount = 0,
                 )
             }

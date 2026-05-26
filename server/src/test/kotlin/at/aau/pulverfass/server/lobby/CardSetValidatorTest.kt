@@ -45,6 +45,15 @@ class CardSetValidatorTest {
     }
 
     @Test
+    fun `should allow three jokers as a valid wildcard set`() {
+        assertTrue(
+            CardSetValidator.isValidSet(
+                listOf(CardType.JOKER, CardType.JOKER, CardType.JOKER),
+            ),
+        )
+    }
+
+    @Test
     fun `should reject invalid non joker combinations`() {
         assertFalse(
             CardSetValidator.isValidSet(
@@ -119,6 +128,21 @@ class CardSetValidatorTest {
                     card("1", CardType.A),
                     card("2", CardType.B),
                     card("3", CardType.JOKER),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `canMakeAnySet scans past invalid triples until it finds a later valid set`() {
+        assertTrue(
+            CardSetValidator.canMakeAnySet(
+                listOf(
+                    card("1", CardType.A),
+                    card("2", CardType.A),
+                    card("3", CardType.B),
+                    card("4", CardType.JOKER),
+                    card("5", CardType.JOKER),
                 ),
             ),
         )

@@ -71,7 +71,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState =
-                    reinforcementState(
+                    reinforcementStateWithGuaranteedAttack(
                         lobbyCode = lobbyCode,
                         players = listOf(playerOne, playerTwo),
                         activePlayerId = playerOne,
@@ -171,6 +171,207 @@ class ConfirmReinforcementsDoneIntegrationTest {
                     assertEquals(TurnPhase.ATTACK, updatedState.activeTurnPhase)
                     assertNull(receiveRelevantTestPayloadOrNull(actorSession.first))
                     assertNull(receiveRelevantTestPayloadOrNull(watcherSession.first))
+
+                    actorSession.first.close()
+                    watcherSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `confirm auto advances to fortify when no valid attacks exist after phase entry`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("CRI3")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    reinforcementState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        pendingAmount = 0,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val actorSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val watcherSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    actorSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ConfirmReinforcementsDoneRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val attackUpdate =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.ATTACK,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+                    val fortifyUpdate =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.FORTIFY,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events = listOf(attackUpdate),
+                        ),
+                        receiveAnyPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        ConfirmReinforcementsDoneResponse(lobbyCode),
+                        receiveAnyPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(actorSession.first),
+                    )
+                    assertEquals(attackUpdate, receiveAnyPayload(actorSession.first))
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events = listOf(fortifyUpdate),
+                        ),
+                        receiveAnyPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 2,
+                            previousPhase = TurnPhase.ATTACK,
+                            nextPhase = TurnPhase.FORTIFY,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(actorSession.first),
+                    )
+                    assertEquals(fortifyUpdate, receiveAnyPayload(actorSession.first))
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events = listOf(attackUpdate),
+                        ),
+                        receiveAnyPayload(watcherSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 1,
+                            previousPhase = TurnPhase.REINFORCEMENTS,
+                            nextPhase = TurnPhase.ATTACK,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(watcherSession.first),
+                    )
+                    assertEquals(attackUpdate, receiveAnyPayload(watcherSession.first))
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events = listOf(fortifyUpdate),
+                        ),
+                        receiveAnyPayload(watcherSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 2,
+                            previousPhase = TurnPhase.ATTACK,
+                            nextPhase = TurnPhase.FORTIFY,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(watcherSession.first),
+                    )
+                    assertEquals(fortifyUpdate, receiveAnyPayload(watcherSession.first))
+
+                    val updatedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("state missing")
+                    assertEquals(TurnPhase.FORTIFY, updatedState.activeTurnPhase)
 
                     actorSession.first.close()
                     watcherSession.first.close()
@@ -359,6 +560,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
         activePlayerId: PlayerId,
         pendingAmount: Int,
         turnPhase: TurnPhase = TurnPhase.REINFORCEMENTS,
+        withValidAttack: Boolean = false,
     ): GameState =
         GameState
             .initial(
@@ -366,21 +568,137 @@ class ConfirmReinforcementsDoneIntegrationTest {
                 mapDefinition = defaultMapDefinition(),
                 players = players,
                 playerDisplayNames = players.associateWith { "Player ${it.value}" },
-            ).copy(
-                lobbyOwner = players.firstOrNull(),
-                activePlayer = activePlayerId,
-                turnOrder = players,
-                turnNumber = 1,
-                turnState =
-                    TurnState(
-                        activePlayerId = activePlayerId,
-                        turnPhase = turnPhase,
-                        turnCount = 1,
-                        startPlayerId = players.first(),
+            ).let { baseState ->
+                val configuredTerritories =
+                    if (!withValidAttack) {
+                        baseState.territoryStates
+                    } else {
+                        val sourceTerritoryId = baseState.allTerritoryStates().first().territoryId
+                        val targetTerritoryId =
+                            baseState.mapDefinition
+                                ?.territoriesById
+                                ?.getValue(sourceTerritoryId)
+                                ?.edges
+                                ?.first()
+                                ?.targetId
+                                ?: error("target territory missing")
+                        baseState.allTerritoryStates().associate { territoryState ->
+                            territoryState.territoryId to
+                                when (territoryState.territoryId) {
+                                    sourceTerritoryId ->
+                                        territoryState.copy(
+                                            ownerId = activePlayerId,
+                                            troopCount = 3,
+                                        )
+                                    targetTerritoryId ->
+                                        territoryState.copy(
+                                            ownerId = players.first { it != activePlayerId },
+                                            troopCount = 1,
+                                        )
+                                    else -> territoryState
+                                }
+                        }
+                    }
+
+                baseState.copy(
+                    lobbyOwner = players.firstOrNull(),
+                    activePlayer = activePlayerId,
+                    turnOrder = players,
+                    turnNumber = 1,
+                    turnState =
+                        TurnState(
+                            activePlayerId = activePlayerId,
+                            turnPhase = turnPhase,
+                            turnCount = 1,
+                            startPlayerId = players.first(),
+                        ),
+                    status = GameStatus.RUNNING,
+                    pendingReinforcements = PendingReinforcements(activePlayerId, pendingAmount),
+                    territoryStates = configuredTerritories,
+                )
+            }
+
+    private fun reinforcementStateWithGuaranteedAttack(
+        lobbyCode: LobbyCode,
+        players: List<PlayerId>,
+        activePlayerId: PlayerId,
+        pendingAmount: Int,
+    ): GameState {
+        val alpha = at.aau.pulverfass.shared.ids.TerritoryId("alpha")
+        val beta = at.aau.pulverfass.shared.ids.TerritoryId("beta")
+        val mapDefinition =
+            at.aau.pulverfass.shared.map.config.MapDefinition(
+                schemaVersion = 1,
+                territories =
+                    listOf(
+                        at.aau.pulverfass.shared.map.config.TerritoryDefinition(
+                            territoryId = alpha,
+                            edges =
+                                listOf(
+                                    at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition(
+                                        beta,
+                                    ),
+                                ),
+                        ),
+                        at.aau.pulverfass.shared.map.config.TerritoryDefinition(
+                            territoryId = beta,
+                            edges =
+                                listOf(
+                                    at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition(
+                                        alpha,
+                                    ),
+                                ),
+                        ),
                     ),
-                status = GameStatus.RUNNING,
-                pendingReinforcements = PendingReinforcements(activePlayerId, pendingAmount),
+                continents =
+                    listOf(
+                        at.aau.pulverfass.shared.map.config.ContinentDefinition(
+                            continentId = at.aau.pulverfass.shared.ids.ContinentId("north"),
+                            territoryIds = listOf(alpha, beta),
+                            bonusValue = 1,
+                        ),
+                    ),
             )
+        val defendingPlayer = players.first { it != activePlayerId }
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = mapDefinition,
+                players = players,
+                playerDisplayNames = players.associateWith { "Player ${it.value}" },
+            )
+
+        return baseState.copy(
+            lobbyOwner = players.firstOrNull(),
+            activePlayer = activePlayerId,
+            turnOrder = players,
+            turnNumber = 1,
+            turnState =
+                TurnState(
+                    activePlayerId = activePlayerId,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 1,
+                    startPlayerId = players.first(),
+                ),
+            status = GameStatus.RUNNING,
+            pendingReinforcements = PendingReinforcements(activePlayerId, pendingAmount),
+            territoryStates =
+                mapOf(
+                    alpha to
+                        at.aau.pulverfass.shared.lobby.state.TerritoryState(
+                            territoryId = alpha,
+                            ownerId = activePlayerId,
+                            troopCount = 3,
+                        ),
+                    beta to
+                        at.aau.pulverfass.shared.lobby.state.TerritoryState(
+                            territoryId = beta,
+                            ownerId = defendingPlayer,
+                            troopCount = 1,
+                        ),
+                ),
+        )
+    }
 
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,
