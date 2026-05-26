@@ -443,7 +443,13 @@ class TurnSystemIntegrationTest {
                             watchers = listOf(connectedWatcherSession),
                             request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.ATTACK),
                             expectedUpdate =
-                                TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.FORTIFY, 1, hostId),
+                                TurnStateUpdatedEvent(
+                                    lobbyCode,
+                                    hostId,
+                                    TurnPhase.FORTIFY,
+                                    1,
+                                    hostId,
+                                ),
                         )
                     }
                     advanceAndAssertBroadcast(

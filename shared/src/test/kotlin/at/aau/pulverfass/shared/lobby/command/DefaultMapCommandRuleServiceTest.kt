@@ -356,7 +356,10 @@ class DefaultMapCommandRuleServiceTest {
                     territoryStates =
                         attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2)
                             .territoryStates +
-                            (TerritoryId("beta") to TerritoryState(TerritoryId("beta"), attacker, 2)),
+                            (
+                                TerritoryId("beta") to
+                                    TerritoryState(TerritoryId("beta"), attacker, 2)
+                            ),
                 ),
             command = attackCommand(attacker = attacker),
             expectedMessagePart = "beide Territorien",
@@ -372,10 +375,11 @@ class DefaultMapCommandRuleServiceTest {
             expectedMessagePart = "committedTroopCount",
         )
         assertMapCommandFailure(
-            state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
-                gameRandomSeed = null,
-                gameRandomState = null,
-            ),
+            state =
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    gameRandomSeed = null,
+                    gameRandomState = null,
+                ),
             command = attackCommand(attacker = attacker),
             expectedMessagePart = "initialisierten gameRandomSeed",
         )

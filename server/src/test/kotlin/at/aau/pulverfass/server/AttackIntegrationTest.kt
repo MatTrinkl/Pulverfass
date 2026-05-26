@@ -334,7 +334,7 @@ class AttackIntegrationTest {
         }
 
     @Test
-    fun `attack resolved details are broadcast publicly to uninvolved watcher without private leaks`() =
+    fun `attack resolved details are public to uninvolved watcher`() =
         testApplication {
             val lobbyCode = LobbyCode("AT13")
             val attacker = PlayerId(1)
@@ -572,13 +572,19 @@ class AttackIntegrationTest {
                         )
 
                     assertEquals(delta, receiveRelevantTestPayload(attackerSession.first))
-                    assertEquals(eliminationDelta, receiveRelevantTestPayload(attackerSession.first))
+                    assertEquals(
+                        eliminationDelta,
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
                     assertEquals(
                         AttackResponse(lobbyCode = lobbyCode, requestId = "req-capture"),
                         receiveRelevantTestPayload(attackerSession.first),
                     )
                     assertEquals(delta, receiveRelevantTestPayload(defenderSession.first))
-                    assertEquals(eliminationDelta, receiveRelevantTestPayload(defenderSession.first))
+                    assertEquals(
+                        eliminationDelta,
+                        receiveRelevantTestPayload(defenderSession.first),
+                    )
                     assertNull(receiveRelevantTestPayloadOrNull(attackerSession.first))
                     assertNull(receiveRelevantTestPayloadOrNull(defenderSession.first))
 
@@ -601,7 +607,7 @@ class AttackIntegrationTest {
         }
 
     @Test
-    fun `elimination keeps hand updates private while public phase changes reach all lobby members`() =
+    fun `elimination keeps hand updates private and phase changes public`() =
         testApplication {
             val lobbyCode = LobbyCode("AT14")
             val attacker = PlayerId(1)
@@ -781,7 +787,10 @@ class AttackIntegrationTest {
                         )
 
                     assertEquals(captureDelta, receiveRelevantTestPayload(attackerSession.first))
-                    assertEquals(eliminationDelta, receiveRelevantTestPayload(attackerSession.first))
+                    assertEquals(
+                        eliminationDelta,
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
                     assertEquals(
                         AttackResponse(lobbyCode = lobbyCode, requestId = "req-private-scope"),
                         receiveRelevantTestPayload(attackerSession.first),
@@ -800,12 +809,21 @@ class AttackIntegrationTest {
                         ),
                         receiveRelevantTestPayload(attackerSession.first),
                     )
-                    assertEquals(autoAdvanceDelta, receiveRelevantTestPayload(attackerSession.first))
+                    assertEquals(
+                        autoAdvanceDelta,
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
                     assertEquals(phaseBoundary, receiveRelevantTestPayload(attackerSession.first))
-                    assertEquals(fortifyTurnState, receiveRelevantTestPayload(attackerSession.first))
+                    assertEquals(
+                        fortifyTurnState,
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
 
                     assertEquals(captureDelta, receiveRelevantTestPayload(defenderSession.first))
-                    assertEquals(eliminationDelta, receiveRelevantTestPayload(defenderSession.first))
+                    assertEquals(
+                        eliminationDelta,
+                        receiveRelevantTestPayload(defenderSession.first),
+                    )
                     assertEquals(
                         PlayerHandUpdatedEvent(
                             lobbyCode = lobbyCode,
@@ -815,9 +833,15 @@ class AttackIntegrationTest {
                         ),
                         receiveRelevantTestPayload(defenderSession.first),
                     )
-                    assertEquals(autoAdvanceDelta, receiveRelevantTestPayload(defenderSession.first))
+                    assertEquals(
+                        autoAdvanceDelta,
+                        receiveRelevantTestPayload(defenderSession.first),
+                    )
                     assertEquals(phaseBoundary, receiveRelevantTestPayload(defenderSession.first))
-                    assertEquals(fortifyTurnState, receiveRelevantTestPayload(defenderSession.first))
+                    assertEquals(
+                        fortifyTurnState,
+                        receiveRelevantTestPayload(defenderSession.first),
+                    )
 
                     assertEquals(captureDelta, receiveRelevantTestPayload(watcherSession.first))
                     assertEquals(eliminationDelta, receiveRelevantTestPayload(watcherSession.first))
@@ -867,7 +891,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.ATTACK,
                             rngSeed = 1L,
                             rngState = 2L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerTwo),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerTwo,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1105,7 +1133,7 @@ class AttackIntegrationTest {
         }
 
     @Test
-    fun `elimination transfers defender cards immediately and only sets forced trade for next reinforcement phase`() =
+    fun `elimination transfers cards and defers forced trade to reinforcement`() =
         testApplication {
             val lobbyCode = LobbyCode("AK10")
             val attacker = PlayerId(1)
@@ -1211,7 +1239,10 @@ class AttackIntegrationTest {
                             ?: error("state missing")
                     assertEquals(attackerCards + defenderCards, updatedState.handOf(attacker))
                     assertEquals(emptyList<CardState>(), updatedState.handOf(defender))
-                    assertEquals(true, updatedState.tradeRequiredOnNextReinforcementPhaseFor(attacker))
+                    assertEquals(
+                        true,
+                        updatedState.tradeRequiredOnNextReinforcementPhaseFor(attacker),
+                    )
                     assertEquals(TurnPhase.ATTACK, updatedState.activeTurnPhase)
                     assertEquals(true, updatedState.isSpectator(defender))
 
@@ -1244,7 +1275,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.ATTACK,
                             rngSeed = 1L,
                             rngState = 16L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerTwo),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerTwo,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1284,7 +1319,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.REINFORCEMENTS,
                             rngSeed = 1L,
                             rngState = 16L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerTwo),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerTwo,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1324,7 +1363,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.ATTACK,
                             rngSeed = 1L,
                             rngState = 16L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerTwo),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerTwo,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1364,7 +1407,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.ATTACK,
                             rngSeed = 1L,
                             rngState = 16L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerTwo),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerTwo,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 3, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1404,7 +1451,11 @@ class AttackIntegrationTest {
                             turnPhase = TurnPhase.ATTACK,
                             rngSeed = 1L,
                             rngState = 16L,
-                            owners = mapOf(fromTerritoryId to playerOne, toTerritoryId to playerOne),
+                            owners =
+                                mapOf(
+                                    fromTerritoryId to playerOne,
+                                    toTerritoryId to playerOne,
+                                ),
                             troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
                         ),
                     requesterPlayerId = playerOne,
@@ -1443,7 +1494,10 @@ class AttackIntegrationTest {
                     ),
                 )
 
-                val error = receiveRelevantTestPayload(requesterSession.first) as AttackErrorResponse
+                val error =
+                    receiveRelevantTestPayload(
+                        requesterSession.first,
+                    ) as AttackErrorResponse
                 assertNull(receiveRelevantTestPayloadOrNull(requesterSession.first))
 
                 val snapshot =

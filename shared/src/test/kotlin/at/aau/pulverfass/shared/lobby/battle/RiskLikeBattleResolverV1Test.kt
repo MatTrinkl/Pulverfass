@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 
 class RiskLikeBattleResolverV1Test {
     private val resolver = RiskLikeBattleResolverV1()
+
     private fun battleRng(
         seed: Long,
         stateVersion: Long,

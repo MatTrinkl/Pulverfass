@@ -262,7 +262,10 @@ class GameStateTest {
             )
 
         assertTrue(ownedState.canAttackFrom(TerritoryId("alpha"), playerOne))
-        assertEquals(listOf(TerritoryId("beta")), ownedState.validAttackTargets(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            listOf(TerritoryId("beta")),
+            ownedState.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
         assertTrue(ownedState.hasAnyValidAttack(playerOne))
 
         val blockedState =
@@ -299,7 +302,10 @@ class GameStateTest {
             )
 
         assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
-        assertEquals(emptyList<TerritoryId>(), state.validAttackTargets(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
         assertFalse(state.hasAnyValidAttack(playerOne))
     }
 
@@ -321,7 +327,11 @@ class GameStateTest {
                                     mapDefinition = sampleMapDefinition(),
                                     players = listOf(playerOne, playerTwo, playerThree),
                                 ),
-                                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+                                TerritoryOwnerChangedEvent(
+                                    lobbyCode,
+                                    TerritoryId("alpha"),
+                                    playerOne,
+                                ),
                             ),
                             TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
                         ),
@@ -364,7 +374,10 @@ class GameStateTest {
             )
 
         assertTrue(state.canAttackFrom(TerritoryId("harbor"), attacker))
-        assertEquals(listOf(TerritoryId("island")), state.validAttackTargets(TerritoryId("harbor"), attacker))
+        assertEquals(
+            listOf(TerritoryId("island")),
+            state.validAttackTargets(TerritoryId("harbor"), attacker),
+        )
         assertTrue(state.hasAnyValidAttack(attacker))
     }
 

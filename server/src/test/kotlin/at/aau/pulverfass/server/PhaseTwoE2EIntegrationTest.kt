@@ -404,7 +404,10 @@ class PhaseTwoE2EIntegrationTest {
                     assertEquals(emptyList<CardState>(), updatedState.handOf(defender))
                     assertEquals(listOf(attacker), updatedState.turnOrder)
                     assertEquals(true, updatedState.isSpectator(defender))
-                    assertEquals(true, updatedState.tradeRequiredOnNextReinforcementPhaseFor(attacker))
+                    assertEquals(
+                        true,
+                        updatedState.tradeRequiredOnNextReinforcementPhaseFor(attacker),
+                    )
 
                     actorSession.first.close()
                     defenderSession.first.close()

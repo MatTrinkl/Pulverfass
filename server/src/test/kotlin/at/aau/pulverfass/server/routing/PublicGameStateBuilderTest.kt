@@ -8,6 +8,8 @@ import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -16,8 +18,6 @@ import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
-import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
-import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString

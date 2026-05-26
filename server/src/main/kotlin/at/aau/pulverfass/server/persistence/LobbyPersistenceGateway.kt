@@ -15,8 +15,8 @@ import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
-import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -203,15 +203,24 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                         put("defendDice", defendDice)
                         put(
                             "attackerRolls",
-                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), attackerRolls),
+                            Json.Default.encodeToJsonElement(
+                                ListSerializer(Int.serializer()),
+                                attackerRolls,
+                            ),
                         )
                         put(
                             "defenderRolls",
-                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), defenderRolls),
+                            Json.Default.encodeToJsonElement(
+                                ListSerializer(Int.serializer()),
+                                defenderRolls,
+                            ),
                         )
                         put(
                             "rngTrace",
-                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), rngTrace),
+                            Json.Default.encodeToJsonElement(
+                                ListSerializer(Int.serializer()),
+                                rngTrace,
+                            ),
                         )
                         put("rngStateBefore", rngStateBefore)
                         put("rngStateAfter", rngStateAfter)

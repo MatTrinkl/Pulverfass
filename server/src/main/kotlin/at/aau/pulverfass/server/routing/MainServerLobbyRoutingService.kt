@@ -14,12 +14,12 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.command.AttackCommand
 import at.aau.pulverfass.shared.lobby.command.DefaultMapCommandRuleService
 import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
-import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
-import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -58,12 +58,12 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
-import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
@@ -75,17 +75,17 @@ import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
@@ -1879,11 +1879,11 @@ class MainServerLobbyRoutingService(
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Fuer Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver " +
-                                    "Spieler gesetzt."
+                                "Fuer Lobby '${payload.lobbyCode.value}' ist aktuell " +
+                                    "kein aktiver Spieler gesetzt."
                             else ->
-                                "Nur der aktive Spieler '${activePlayer.value}' darf waehrend der " +
-                                    "Reinforcements-Phase Karten eintauschen."
+                                "Nur der aktive Spieler '${activePlayer.value}' darf " +
+                                    "waehrend der Reinforcements-Phase Karten eintauschen."
                         }
                     }
                 }

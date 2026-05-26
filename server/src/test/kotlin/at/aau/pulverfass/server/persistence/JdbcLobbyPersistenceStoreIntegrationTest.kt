@@ -1,7 +1,7 @@
 package at.aau.pulverfass.server.persistence
 
-import at.aau.pulverfass.server.assumeDockerAvailableForTestcontainers
 import at.aau.pulverfass.server.DatabaseRuntimeConfig
+import at.aau.pulverfass.server.assumeDockerAvailableForTestcontainers
 import at.aau.pulverfass.server.migrateDatabaseSchema
 import at.aau.pulverfass.shared.ids.LobbyCode
 import kotlinx.serialization.json.buildJsonObject

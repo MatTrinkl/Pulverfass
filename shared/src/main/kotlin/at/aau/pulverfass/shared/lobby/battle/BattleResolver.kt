@@ -11,12 +11,13 @@ interface BattleResolver {
         attackTroops: Int,
         defendTroops: Int,
         rng: DeterministicRng,
-    ): BattleOutcome = resolve(
-        attackTroops = attackTroops,
-        defendTroops = defendTroops,
-        requestedAttackDice = null,
-        rng = rng,
-    )
+    ): BattleOutcome =
+        resolve(
+            attackTroops = attackTroops,
+            defendTroops = defendTroops,
+            requestedAttackDice = null,
+            rng = rng,
+        )
 
     fun resolve(
         attackTroops: Int,

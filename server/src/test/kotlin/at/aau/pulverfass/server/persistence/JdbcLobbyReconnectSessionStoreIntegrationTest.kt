@@ -1,7 +1,7 @@
 package at.aau.pulverfass.server.persistence
 
-import at.aau.pulverfass.server.assumeDockerAvailableForTestcontainers
 import at.aau.pulverfass.server.DatabaseRuntimeConfig
+import at.aau.pulverfass.server.assumeDockerAvailableForTestcontainers
 import at.aau.pulverfass.server.migrateDatabaseSchema
 import at.aau.pulverfass.server.session.Session
 import at.aau.pulverfass.server.session.SessionReconnectContext
