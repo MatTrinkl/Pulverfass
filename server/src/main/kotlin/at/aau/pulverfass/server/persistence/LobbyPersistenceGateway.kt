@@ -6,6 +6,7 @@ import at.aau.pulverfass.server.DatabaseReadinessState
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
@@ -14,6 +15,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
@@ -182,6 +184,52 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
             persistedPayload(
                 type = "lobby_created",
                 "lobbyCode" to lobbyCode.value,
+            )
+        is AttackResolvedEvent ->
+            PersistedEventPayload(
+                type = "attack_resolved",
+                payload =
+                    buildJsonObject {
+                        put("lobbyCode", lobbyCode.value)
+                        put("attackerPlayerId", attackerPlayerId.value)
+                        put("defenderPlayerId", defenderPlayerId.value)
+                        put("fromTerritoryId", fromTerritoryId.value)
+                        put("toTerritoryId", toTerritoryId.value)
+                        put("attackTroops", attackTroops)
+                        put("sourceTroopsBefore", sourceTroopsBefore)
+                        put("targetTroopsBefore", targetTroopsBefore)
+                        put("requestedAttackDice", requestedAttackDice)
+                        put("attackDice", attackDice)
+                        put("defendDice", defendDice)
+                        put(
+                            "attackerRolls",
+                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), attackerRolls),
+                        )
+                        put(
+                            "defenderRolls",
+                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), defenderRolls),
+                        )
+                        put(
+                            "rngTrace",
+                            Json.Default.encodeToJsonElement(ListSerializer(Int.serializer()), rngTrace),
+                        )
+                        put("rngStateBefore", rngStateBefore)
+                        put("rngStateAfter", rngStateAfter)
+                        put("attackerLosses", attackerLosses)
+                        put("defenderLosses", defenderLosses)
+                        put("attackerRemaining", attackerRemaining)
+                        put("defenderRemaining", defenderRemaining)
+                        put("occupyingTroopCount", occupyingTroopCount)
+                        put("minOccupyingTroops", minOccupyingTroops)
+                    },
+            )
+        is PlayerEliminatedEvent ->
+            persistedPayload(
+                type = "player_eliminated",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "eliminatedByPlayerId" to eliminatedByPlayerId.value,
+                "stateVersion" to stateVersion,
             )
         is CardSetTradedInEvent ->
             PersistedEventPayload(

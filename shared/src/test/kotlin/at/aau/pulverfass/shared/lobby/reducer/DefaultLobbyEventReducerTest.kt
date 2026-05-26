@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
@@ -361,6 +362,132 @@ class DefaultLobbyEventReducerTest {
             GameStatus.FINISHED,
             reducer.apply(finishedState, PlayerLeft(lobbyCode, playerThree)).status,
         )
+    }
+
+    @Test
+    fun `player eliminated removes player from turn order but keeps spectator in lobby`() {
+        val lobbyCode = LobbyCode("EL10")
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(attacker, defender),
+            ).copy(
+                activePlayer = attacker,
+                turnOrder = listOf(attacker, defender),
+                turnState =
+                    TurnState(
+                        activePlayerId = attacker,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = attacker,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                territoryStates =
+                    GameState.initial(
+                        lobbyCode = lobbyCode,
+                        mapDefinition = sampleMapDefinition(),
+                        players = listOf(attacker, defender),
+                    ).allTerritoryStates().associate { territoryState ->
+                        val territoryId = territoryState.territoryId
+                        territoryId to
+                            when (territoryId.value) {
+                                "alpha" -> TerritoryState(territoryId, attacker, 2)
+                                "beta" -> TerritoryState(territoryId, attacker, 3)
+                                else -> TerritoryState(territoryId, attacker, 1)
+                            }
+                    },
+            )
+
+        val updated =
+            reducer.apply(
+                baseState,
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = defender,
+                    eliminatedByPlayerId = attacker,
+                ),
+            )
+
+        assertEquals(listOf(attacker, defender), updated.players)
+        assertEquals(listOf(attacker), updated.turnOrder)
+        assertEquals(true, updated.isSpectator(defender))
+        assertEquals(GameStatus.FINISHED, updated.status)
+    }
+
+    @Test
+    fun `player eliminated transfers defender cards and sets next reinforcement trade flag`() {
+        val lobbyCode = LobbyCode("EL11")
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val attackerCardA = CardState(CardId("a-1"), CardType.A)
+        val attackerCardB = CardState(CardId("b-1"), CardType.B)
+        val defenderCardC = CardState(CardId("c-1"), CardType.C)
+        val defenderCardJoker = CardState(CardId("j-1"), CardType.JOKER)
+        val defenderCardA = CardState(CardId("a-2"), CardType.A)
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(attacker, defender),
+            ).copy(
+                activePlayer = attacker,
+                turnOrder = listOf(attacker, defender),
+                turnState =
+                    TurnState(
+                        activePlayerId = attacker,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = attacker,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                territoryStates =
+                    GameState.initial(
+                        lobbyCode = lobbyCode,
+                        mapDefinition = sampleMapDefinition(),
+                        players = listOf(attacker, defender),
+                    ).allTerritoryStates().associate { territoryState ->
+                        territoryState.territoryId to
+                            TerritoryState(
+                                territoryId = territoryState.territoryId,
+                                ownerId = attacker,
+                                troopCount = 2,
+                            )
+                    },
+            )
+                .withCardAddedToHand(attacker, attackerCardA)
+                .withCardAddedToHand(attacker, attackerCardB)
+                .withCardAddedToHand(defender, defenderCardC)
+                .withCardAddedToHand(defender, defenderCardJoker)
+                .withCardAddedToHand(defender, defenderCardA)
+
+        val updated =
+            reducer.apply(
+                baseState,
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = defender,
+                    eliminatedByPlayerId = attacker,
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                attackerCardA,
+                attackerCardB,
+                defenderCardC,
+                defenderCardJoker,
+                defenderCardA,
+            ),
+            updated.handOf(attacker),
+        )
+        assertEquals(emptyList<CardState>(), updated.handOf(defender))
+        assertEquals(true, updated.tradeRequiredOnNextReinforcementPhaseFor(attacker))
+        assertEquals(false, updated.tradeRequiredOnNextReinforcementPhaseFor(defender))
     }
 
     @Test
@@ -1143,6 +1270,32 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(1, firstTrade.tradedInSetCount)
         assertEquals(2, secondTrade.tradedInSetCount)
+    }
+
+    @Test
+    fun `card set traded in clears next reinforcement trade requirement`() {
+        val lobbyCode = LobbyCode("T17A")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            ).withTradeRequiredOnNextReinforcementPhase(playerOne, true)
+
+        val updatedState =
+            reducer.apply(
+                initialState,
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    cardIds = listOf(CardId("card-1"), CardId("card-2"), CardId("card-3")),
+                    value = 2,
+                    tradeIndex = 1,
+                ),
+            )
+
+        assertEquals(false, updatedState.tradeRequiredOnNextReinforcementPhaseFor(playerOne))
     }
 
     @Test

@@ -3,6 +3,7 @@ package at.aau.pulverfass.shared.network.message
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -24,6 +25,31 @@ class GameStateDeltaMessageTest {
                 toVersion = 4,
                 events =
                     listOf(
+                        AttackResolvedEvent(
+                            lobbyCode = LobbyCode("AB12"),
+                            attackerPlayerId = PlayerId(7),
+                            defenderPlayerId = PlayerId(8),
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("beta"),
+                            attackTroops = 3,
+                            sourceTroopsBefore = 5,
+                            targetTroopsBefore = 2,
+                            requestedAttackDice = 3,
+                            attackDice = 3,
+                            defendDice = 2,
+                            attackerRolls = listOf(5, 4, 3),
+                            defenderRolls = listOf(2, 1),
+                            rngTrace = listOf(5, 3, 4, 1, 2),
+                            rngStateBefore = 2L,
+                            rngStateAfter = 3L,
+                            attackerLosses = 0,
+                            defenderLosses = 2,
+                            attackerRemaining = 5,
+                            defenderRemaining = 0,
+                            occupyingTroopCount = 3,
+                            minOccupyingTroops = 3,
+                            stateVersion = 4,
+                        ),
                         TerritoryOwnerChangedEvent(
                             lobbyCode = LobbyCode("AB12"),
                             territoryId = TerritoryId("alpha"),

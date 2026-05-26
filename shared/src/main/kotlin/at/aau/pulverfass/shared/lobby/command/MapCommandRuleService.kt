@@ -25,4 +25,5 @@ fun interface MapCommandRuleService {
  */
 class InvalidMapCommandException(
     message: String,
+    val reasonCode: String? = null,
 ) : RuntimeException(message)

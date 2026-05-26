@@ -5,11 +5,13 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -54,6 +56,8 @@ class LobbyRecoveryLoaderTest {
                 lobbyOwner = hostId,
                 status = GameStatus.RUNNING,
                 gameStarted = true,
+                gameRandomSeed = 99L,
+                gameRandomState = 1234L,
                 stateVersion = 7,
                 processedEventCount = 7,
                 tradedInSetCount = 2,
@@ -128,6 +132,58 @@ class LobbyRecoveryLoaderTest {
     fun `toLobbyEvent maps all supported persisted event types`() {
         val createdAt = Instant.parse("2026-01-01T00:00:00Z")
 
+        assertEquals(
+            AttackResolvedEvent(
+                lobbyCode = lobbyCode,
+                attackerPlayerId = PlayerId(1),
+                defenderPlayerId = PlayerId(2),
+                fromTerritoryId = TerritoryId("alpha"),
+                toTerritoryId = TerritoryId("beta"),
+                attackTroops = 3,
+                sourceTroopsBefore = 5,
+                targetTroopsBefore = 2,
+                requestedAttackDice = 3,
+                attackDice = 3,
+                defendDice = 2,
+                attackerRolls = listOf(5, 4, 3),
+                defenderRolls = listOf(2, 1),
+                rngTrace = listOf(5, 3, 4, 1, 2),
+                rngStateBefore = 2L,
+                rngStateAfter = 3L,
+                attackerLosses = 0,
+                defenderLosses = 2,
+                attackerRemaining = 5,
+                defenderRemaining = 0,
+                occupyingTroopCount = 3,
+                minOccupyingTroops = 3,
+            ),
+            record(
+                "attack_resolved",
+                """
+                {"lobbyCode":"LR11","attackerPlayerId":1,"defenderPlayerId":2,
+                "fromTerritoryId":"alpha","toTerritoryId":"beta","attackTroops":3,"sourceTroopsBefore":5,
+                "targetTroopsBefore":2,"requestedAttackDice":3,"attackDice":3,"defendDice":2,
+                "attackerRolls":[5,4,3],"defenderRolls":[2,1],"rngTrace":[5,3,4,1,2],
+                "rngStateBefore":2,"rngStateAfter":3,"attackerLosses":0,"defenderLosses":2,
+                "attackerRemaining":5,"defenderRemaining":0,"occupyingTroopCount":3,
+                "minOccupyingTroops":3}
+                """.trimIndent().replace("\n", ""),
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            PlayerEliminatedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(2),
+                eliminatedByPlayerId = PlayerId(1),
+                stateVersion = 2L,
+            ),
+            record(
+                "player_eliminated",
+                """{"lobbyCode":"LR11","playerId":2,"eliminatedByPlayerId":1,"stateVersion":2}""",
+                createdAt,
+            ).toLobbyEvent(),
+        )
         assertEquals(
             CardSetTradedInEvent(
                 lobbyCode = lobbyCode,

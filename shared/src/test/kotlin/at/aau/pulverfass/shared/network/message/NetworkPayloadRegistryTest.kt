@@ -4,7 +4,9 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
@@ -22,6 +24,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -33,6 +36,7 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -52,6 +56,8 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
@@ -279,6 +285,114 @@ class NetworkPayloadRegistryTest {
 
         assertEquals(MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST, messageType)
         assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for attack request`() {
+        val payload =
+            AttackRequest(
+                lobbyCode = LobbyCode("AT13"),
+                playerId = PlayerId(3),
+                fromTerritoryId = TerritoryId("alpha"),
+                toTerritoryId = TerritoryId("beta"),
+                attackTroops = 3,
+                moveAfterCapture = 3,
+                requestId = "req-1",
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ATTACK_REQUEST, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for attack response`() {
+        val payload = AttackResponse(lobbyCode = LobbyCode("AT14"), requestId = "req-2")
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ATTACK_RESPONSE, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for attack error response`() {
+        val payload =
+            AttackErrorResponse(
+                code = AttackErrorCode.INSUFFICIENT_TROOPS,
+                reason = "Nicht genug Truppen.",
+                requestId = "req-3",
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ATTACK_ERROR_RESPONSE, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for attack resolved event`() {
+        val payload =
+            AttackResolvedEvent(
+                lobbyCode = LobbyCode("AT15"),
+                attackerPlayerId = PlayerId(3),
+                defenderPlayerId = PlayerId(4),
+                fromTerritoryId = TerritoryId("alpha"),
+                toTerritoryId = TerritoryId("beta"),
+                attackTroops = 3,
+                sourceTroopsBefore = 5,
+                targetTroopsBefore = 2,
+                requestedAttackDice = 3,
+                attackDice = 3,
+                defendDice = 2,
+                attackerRolls = listOf(5, 4, 3),
+                defenderRolls = listOf(2, 1),
+                rngTrace = listOf(5, 3, 4, 1, 2),
+                rngStateBefore = 2L,
+                rngStateAfter = 3L,
+                attackerLosses = 0,
+                defenderLosses = 2,
+                attackerRemaining = 5,
+                defenderRemaining = 0,
+                occupyingTroopCount = 3,
+                minOccupyingTroops = 3,
+                stateVersion = 7L,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("attackTroops"))
+        assertTrue(serialized.contains("rngTrace"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for player eliminated event`() {
+        val payload =
+            PlayerEliminatedEvent(
+                lobbyCode = LobbyCode("AT16"),
+                playerId = PlayerId(4),
+                eliminatedByPlayerId = PlayerId(3),
+                stateVersion = 8L,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("eliminatedByPlayerId"))
     }
 
     @Test

@@ -73,6 +73,30 @@ enum class MessageType(val id: Int) {
     /** Private S2C-Aktualisierung der autoritativen Kartenhand eines Spielers. */
     LOBBY_PLAYER_HAND_UPDATED_EVENT(67),
 
+    /** Anfrage, genau einen Angriff in Phase 2 serverautoritativ auszuführen. */
+    LOBBY_ATTACK_REQUEST(68),
+
+    /** Erfolgsantwort auf eine einzelne Angriffsanfrage. */
+    LOBBY_ATTACK_RESPONSE(69),
+
+    /** Fehlantwort auf eine einzelne Angriffsanfrage. */
+    LOBBY_ATTACK_ERROR_RESPONSE(70),
+
+    /** Oeffentliches Ergebnis eines serverautoritativ aufgeloesten Angriffs. */
+    LOBBY_ATTACK_RESOLVED_BROADCAST(71),
+
+    /** Oeffentlicher Broadcast fuer eine Spieler-Eliminierung im laufenden Match. */
+    LOBBY_PLAYER_ELIMINATED_BROADCAST(72),
+
+    /** Anfrage zum expliziten Beenden der Attack-Phase. */
+    LOBBY_CONFIRM_ATTACK_DONE_REQUEST(73),
+
+    /** Erfolgsantwort auf das Beenden der Attack-Phase. */
+    LOBBY_CONFIRM_ATTACK_DONE_RESPONSE(74),
+
+    /** Fehlantwort auf das Beenden der Attack-Phase. */
+    LOBBY_CONFIRM_ATTACK_DONE_ERROR_RESPONSE(75),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

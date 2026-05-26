@@ -2,7 +2,12 @@ package at.aau.pulverfass.shared.lobby.command
 
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.battle.BattleResolver
+import at.aau.pulverfass.shared.lobby.battle.BattleRngFactory
+import at.aau.pulverfass.shared.lobby.battle.RiskLikeBattleResolverV1
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
@@ -10,7 +15,9 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 /**
  * Standard-Regelservice für Map-bezogene Domain-Commands.
  */
-class DefaultMapCommandRuleService : MapCommandRuleService {
+class DefaultMapCommandRuleService(
+    private val battleResolver: BattleResolver = RiskLikeBattleResolverV1(),
+) : MapCommandRuleService {
     override fun createEvents(
         state: GameState,
         command: MapCommand,
@@ -18,6 +25,7 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
         requireSameLobby(state, command)
         requireMapLoaded(state)
         requireKnownPlayer(state, command.playerId)
+        requireActiveMatchParticipant(state, command.playerId)
 
         return when (command) {
             is PlaceTroopsCommand -> createPlaceTroopsEvents(state, command)
@@ -106,99 +114,125 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
                     "vorhanden sind $sourceTroops.",
             )
         }
-        if (command.defenderLosses > targetTroops) {
-            throw InvalidMapCommandException(
-                "Attack kann nicht mehr Verteidiger entfernen als vorhanden: " +
-                    "vorhanden=$targetTroops, Verluste=${command.defenderLosses}.",
-            )
-        }
-
-        val remainingTargetTroops = targetTroops - command.defenderLosses
-        return if (remainingTargetTroops > 0) {
-            createResolvedAttackEventsWithoutCapture(
-                command = command,
-                sourceTroops = sourceTroops,
-                remainingTargetTroops = remainingTargetTroops,
-            )
-        } else {
-            createResolvedAttackEventsWithCapture(
-                command = command,
-                sourceTroops = sourceTroops,
-            )
-        }
-    }
-
-    private fun createResolvedAttackEventsWithoutCapture(
-        command: AttackCommand,
-        sourceTroops: Int,
-        remainingTargetTroops: Int,
-    ): List<LobbyEvent> {
-        if (command.occupyingTroopCount != null) {
-            throw InvalidMapCommandException(
-                "Attack auf '${command.toTerritoryId.value}' darf keine " +
-                    "occupyingTroopCount setzen, solange das Territorium nicht " +
-                    "erobert wurde.",
-            )
-        }
-
-        val remainingSourceTroops = sourceTroops - command.attackerLosses
-        if (remainingSourceTroops < 1) {
-            throw InvalidMapCommandException(
-                "Attack von '${command.fromTerritoryId.value}' würde " +
-                    "das Ursprungsterritorium leer räumen.",
-            )
-        }
-
-        return listOf(
-            TerritoryTroopsChangedEvent(
-                lobbyCode = command.lobbyCode,
-                territoryId = command.fromTerritoryId,
-                troopCount = remainingSourceTroops,
-            ),
-            TerritoryTroopsChangedEvent(
-                lobbyCode = command.lobbyCode,
-                territoryId = command.toTerritoryId,
-                troopCount = remainingTargetTroops,
-            ),
-        )
-    }
-
-    private fun createResolvedAttackEventsWithCapture(
-        command: AttackCommand,
-        sourceTroops: Int,
-    ): List<LobbyEvent> {
-        val occupyingTroopCount =
-            command.occupyingTroopCount
+        val committedTroopCount =
+            command.committedTroopCount
                 ?: throw InvalidMapCommandException(
-                    "Eroberte Attack auf '${command.toTerritoryId.value}' " +
-                        "benötigt occupyingTroopCount.",
+                    "Attack benötigt committedTroopCount für ein replayfaehiges Ergebnis-Event.",
                 )
-        val remainingSourceTroops =
-            sourceTroops - command.attackerLosses - occupyingTroopCount
-        if (remainingSourceTroops < 1) {
+        if (committedTroopCount < 2) {
             throw InvalidMapCommandException(
-                "Attack-Eroberung von '${command.toTerritoryId.value}' muss mindestens eine " +
-                    "Truppe auf '${command.fromTerritoryId.value}' zurücklassen.",
+                "AttackCommand.committedTroopCount muss mindestens 2 sein, war aber " +
+                    "$committedTroopCount.",
             )
         }
+        if (committedTroopCount > sourceTroops - 1) {
+            throw InvalidMapCommandException(
+                "Attack von '${command.fromTerritoryId.value}' muss mindestens eine Truppe " +
+                    "zurücklassen: vorhanden=$sourceTroops, committed=$committedTroopCount.",
+            )
+        }
+        if (command.requestedAttackDice > committedTroopCount) {
+            throw InvalidMapCommandException(
+                "AttackCommand.requestedAttackDice darf committedTroopCount nicht " +
+                    "überschreiten: dice=${command.requestedAttackDice}, " +
+                    "committed=$committedTroopCount.",
+            )
+        }
+        state.gameRandomSeed
+            ?: throw InvalidMapCommandException(
+                "Attack benötigt einen initialisierten gameRandomSeed.",
+            )
+        val rngState =
+            state.gameRandomState
+                ?: throw InvalidMapCommandException(
+                    "Attack benötigt einen initialisierten gameRandomState.",
+                )
 
-        return listOf(
-            TerritoryTroopsChangedEvent(
+        val rng = BattleRngFactory.fromState(rngState)
+        val outcome =
+            battleResolver.resolve(
+                attackTroops = sourceTroops,
+                defendTroops = targetTroops,
+                requestedAttackDice = command.requestedAttackDice,
+                rng = rng,
+            )
+        val occupyingTroopCount = command.occupyingTroopCount
+
+        if (outcome.capture) {
+            val minOccupyingTroops =
+                outcome.minOccupyingTroops
+                    ?: throw InvalidMapCommandException(
+                        "Capture-Outcome benötigt minOccupyingTroops.",
+                    )
+            val resolvedOccupyingTroopCount = occupyingTroopCount ?: committedTroopCount
+            if (resolvedOccupyingTroopCount < minOccupyingTroops) {
+                throw InvalidMapCommandException(
+                    "occupyingTroopCount muss mindestens $minOccupyingTroops sein, war aber " +
+                        "$resolvedOccupyingTroopCount.",
+                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+                )
+            }
+            if (resolvedOccupyingTroopCount > committedTroopCount) {
+                throw InvalidMapCommandException(
+                    "occupyingTroopCount darf committedTroopCount nicht überschreiten: " +
+                        "occupying=$resolvedOccupyingTroopCount, committed=$committedTroopCount.",
+                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+                )
+            }
+            if (resolvedOccupyingTroopCount >= outcome.attackerRemaining) {
+                throw InvalidMapCommandException(
+                    "Attack-Eroberung von '${command.toTerritoryId.value}' muss mindestens " +
+                        "eine Truppe auf '${command.fromTerritoryId.value}' zurücklassen.",
+                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+                )
+            }
+        }
+
+        val resolvedOccupyingTroopCount =
+            if (outcome.capture) {
+                occupyingTroopCount ?: committedTroopCount
+            } else {
+                null
+            }
+
+        val resolvedEvent =
+            AttackResolvedEvent(
                 lobbyCode = command.lobbyCode,
-                territoryId = command.fromTerritoryId,
-                troopCount = remainingSourceTroops,
-            ),
-            TerritoryOwnerChangedEvent(
-                lobbyCode = command.lobbyCode,
-                territoryId = command.toTerritoryId,
-                ownerId = command.playerId,
-            ),
-            TerritoryTroopsChangedEvent(
-                lobbyCode = command.lobbyCode,
-                territoryId = command.toTerritoryId,
-                troopCount = occupyingTroopCount,
-            ),
-        )
+                attackerPlayerId = command.playerId,
+                defenderPlayerId = defenderId,
+                fromTerritoryId = command.fromTerritoryId,
+                toTerritoryId = command.toTerritoryId,
+                attackTroops = committedTroopCount,
+                sourceTroopsBefore = sourceTroops,
+                targetTroopsBefore = targetTroops,
+                requestedAttackDice = command.requestedAttackDice,
+                attackDice = outcome.attackDice,
+                defendDice = outcome.defendDice,
+                attackerRolls = outcome.attackerRolls,
+                defenderRolls = outcome.defenderRolls,
+                rngTrace = outcome.rngTrace,
+                rngStateBefore = rngState,
+                rngStateAfter = rng.snapshotState(),
+                attackerLosses = outcome.attackerLosses,
+                defenderLosses = outcome.defenderLosses,
+                attackerRemaining = outcome.attackerRemaining,
+                defenderRemaining = outcome.defenderRemaining,
+                occupyingTroopCount = resolvedOccupyingTroopCount,
+                minOccupyingTroops = outcome.minOccupyingTroops,
+            )
+
+        val eliminationEvent =
+            if (resolvedEvent.capture && state.ownedTerritoryCount(defenderId) == 1) {
+                PlayerEliminatedEvent(
+                    lobbyCode = command.lobbyCode,
+                    playerId = defenderId,
+                    eliminatedByPlayerId = command.playerId,
+                )
+            } else {
+                null
+            }
+
+        return listOfNotNull(resolvedEvent, eliminationEvent)
     }
 
     private fun requireSameLobby(
@@ -228,6 +262,19 @@ class DefaultMapCommandRuleService : MapCommandRuleService {
         if (!state.hasPlayer(playerId)) {
             throw InvalidMapCommandException(
                 "Spieler '${playerId.value}' ist nicht Teil der Lobby '${state.lobbyCode.value}'.",
+            )
+        }
+    }
+
+    private fun requireActiveMatchParticipant(
+        state: GameState,
+        playerId: PlayerId,
+    ) {
+        if (state.isSpectator(playerId)) {
+            throw InvalidMapCommandException(
+                "Spieler '${playerId.value}' ist eliminiert und kann keine Match-Aktionen " +
+                    "mehr ausführen.",
+                reasonCode = "PLAYER_ELIMINATED",
             )
         }
     }

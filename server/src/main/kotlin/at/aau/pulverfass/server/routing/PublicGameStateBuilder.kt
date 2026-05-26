@@ -1,10 +1,12 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -198,6 +200,9 @@ class PublicGameStateBuilder {
                         ),
                     )
                 }
+                is PlayerEliminatedEvent -> add(event.copy(stateVersion = currentState.stateVersion))
+                is AttackResolvedEvent ->
+                    addAll(buildAttackPayloads(event, currentState.stateVersion))
                 is TerritoryOwnerChangedEvent,
                 is TerritoryTroopsChangedEvent,
                 ->
@@ -225,6 +230,54 @@ class PublicGameStateBuilder {
                 throw IllegalArgumentException(
                     "Unsupported territory event: ${event::class.simpleName}",
                 )
+        }
+
+    private fun buildAttackPayloads(
+        event: AttackResolvedEvent,
+        stateVersion: Long,
+    ): List<PublicGameEvent> =
+        buildList {
+            add(event.copy(stateVersion = stateVersion))
+            add(
+                TerritoryTroopsChangedEvent(
+                    lobbyCode = event.lobbyCode,
+                    territoryId = event.fromTerritoryId,
+                    troopCount =
+                        if (event.capture) {
+                            event.attackerRemaining - (event.occupyingTroopCount ?: 0)
+                        } else {
+                            event.attackerRemaining
+                        },
+                    stateVersion = stateVersion,
+                ),
+            )
+            if (event.capture) {
+                add(
+                    TerritoryOwnerChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        ownerId = event.attackerPlayerId,
+                        stateVersion = stateVersion,
+                    ),
+                )
+                add(
+                    TerritoryTroopsChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        troopCount = event.occupyingTroopCount ?: 0,
+                        stateVersion = stateVersion,
+                    ),
+                )
+            } else {
+                add(
+                    TerritoryTroopsChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        troopCount = event.defenderRemaining,
+                        stateVersion = stateVersion,
+                    ),
+                )
+            }
         }
 
     private fun at.aau.pulverfass.shared.lobby.state.TurnState.toUpdatedEvent(

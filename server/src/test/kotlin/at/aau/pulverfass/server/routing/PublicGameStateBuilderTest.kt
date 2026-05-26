@@ -3,8 +3,11 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -12,6 +15,8 @@ import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -175,6 +180,128 @@ class PublicGameStateBuilderTest {
                     territoryBonus = 0,
                     continentBonus = 0,
                     cardBonus = 2,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `attack resolved event projects to visible territory delta`() {
+        val previousState = sampleGameState()
+        val currentState = previousState.copy(stateVersion = 1)
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    AttackResolvedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        attackerPlayerId = PlayerId(1),
+                        defenderPlayerId = PlayerId(2),
+                        fromTerritoryId = TerritoryId("territory-1"),
+                        toTerritoryId = TerritoryId("territory-2"),
+                        attackTroops = 3,
+                        sourceTroopsBefore = 5,
+                        targetTroopsBefore = 2,
+                        requestedAttackDice = 3,
+                        attackDice = 3,
+                        defendDice = 2,
+                        attackerRolls = listOf(5, 4, 3),
+                        defenderRolls = listOf(2, 1),
+                        rngTrace = listOf(5, 3, 4, 1, 2),
+                        rngStateBefore = 2L,
+                        rngStateAfter = 3L,
+                        attackerLosses = 0,
+                        defenderLosses = 2,
+                        attackerRemaining = 5,
+                        defenderRemaining = 0,
+                        occupyingTroopCount = 3,
+                        minOccupyingTroops = 3,
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                AttackResolvedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    attackerPlayerId = PlayerId(1),
+                    defenderPlayerId = PlayerId(2),
+                    fromTerritoryId = TerritoryId("territory-1"),
+                    toTerritoryId = TerritoryId("territory-2"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(5, 4, 3),
+                    defenderRolls = listOf(2, 1),
+                    rngTrace = listOf(5, 3, 4, 1, 2),
+                    rngStateBefore = 2L,
+                    rngStateAfter = 3L,
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                    stateVersion = 1L,
+                ),
+                TerritoryTroopsChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-1"),
+                    2,
+                    1L,
+                ),
+                TerritoryOwnerChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-2"),
+                    PlayerId(1),
+                    1L,
+                ),
+                TerritoryTroopsChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-2"),
+                    3,
+                    1L,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `player eliminated event projects to public elimination event`() {
+        val previousState = sampleGameState()
+        val currentState =
+            previousState.copy(
+                stateVersion = 2,
+                turnOrder = listOf(PlayerId(1)),
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    PlayerEliminatedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        playerId = PlayerId(2),
+                        eliminatedByPlayerId = PlayerId(1),
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                PlayerEliminatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    eliminatedByPlayerId = PlayerId(1),
+                    stateVersion = 2L,
                 ),
             ),
             delta?.events,
