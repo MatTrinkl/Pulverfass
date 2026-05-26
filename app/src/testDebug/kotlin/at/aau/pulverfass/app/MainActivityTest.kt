@@ -2,6 +2,7 @@ package at.aau.pulverfass.app
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -29,17 +30,17 @@ class MainActivityTest {
         composeTestRule.onNodeWithText("EXIT").assertExists()
 
         // 3. Click START → sollte zur Lobby navigieren.
-        composeTestRule.onNodeWithText("START").performClick()
+        composeTestRule.onNodeWithTag("MenuButton_Start").performClick()
 
-        // 4. Warte bis Lobby mit "Spiel-Lobby" erscheint (10s).
+// 4. Warte bis Lobby mit "SPIEL-LOBBY" erscheint (10s).
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             composeTestRule
-                .onAllNodesWithText("Spiel-Lobby")
+                .onAllNodesWithText("SPIEL-LOBBY", ignoreCase = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Spiel-Lobby").assertExists()
-        composeTestRule.onNodeWithText("Lobby erstellen").assertExists()
-        composeTestRule.onNodeWithText("Lobby beitreten").assertExists()
+        composeTestRule.onNodeWithText("SPIEL-LOBBY", ignoreCase = true).assertExists()
+        composeTestRule.onNodeWithText("LOBBY ERSTELLEN", ignoreCase = true).assertExists()
+        composeTestRule.onNodeWithText("LOBBY BEITRETEN", ignoreCase = true).assertExists()
     }
 }
