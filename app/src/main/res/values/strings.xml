@@ -41,6 +41,16 @@
     <string name="game_cards_title">Kartenhand</string>
     <string name="game_cards_empty">Keine Karten</string>
     <string name="game_cards_unknown">Unbekannte Karte</string>
+    <string name="game_cards_trade_in">Set eintauschen</string>
+    <string name="game_card_type_a">Infanterie</string>
+    <string name="game_card_type_b">Kavallerie</string>
+    <string name="game_card_type_c">Artillerie</string>
+    <string name="game_card_type_joker">Joker</string>
+    <string name="game_reinforcements_remaining">Verfügbar: %1$s</string>
+    <string name="game_reinforcements_bonus">Gebiet %1$d · Kontinent %2$d · Karten %3$d</string>
+    <string name="game_reinforcements_target">Ziel: %1$s</string>
+    <string name="game_reinforcements_place">Platzieren</string>
+    <string name="game_reinforcements_close">Schließen</string>
     <string name="server_url">Server URL</string>
     <string name="connection_status">Status</string>
     <string name="last_message_type">Letzte Message</string>

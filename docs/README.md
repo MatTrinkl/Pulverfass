@@ -46,6 +46,8 @@ Hinweis:
   Map-Schema, Loader, Validierung, Hashing und Runtime-Integration.
 - `architecture/turn-state-machine.md`
   Turn-/Phasenmodell, Broadcast-Reihenfolge und Pause/Resume-Regeln.
+- `architecture/battle-resolution.md`
+  Verbindliche Battle-Formel inklusive deterministischer RNG-Ableitung und Golden Vectors.
 - `architecture/gamestate-versioning.md`
   `stateVersion`, Delta-Sync und Round-History-Policy.
 - `architecture/game-state-visibility.md`

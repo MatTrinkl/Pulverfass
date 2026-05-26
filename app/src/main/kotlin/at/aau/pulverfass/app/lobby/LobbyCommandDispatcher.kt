@@ -19,6 +19,9 @@ enum class LobbyCommandKey {
     CATCH_UP,
     PRIVATE_STATE,
     TURN_ADVANCE,
+    PLACE_REINFORCEMENTS,
+    CONFIRM_REINFORCEMENTS_DONE,
+    TRADE_IN_CARDS,
 }
 
 /**

@@ -389,6 +389,7 @@ class GameStateTransportIntegrationTest {
                     ),
                 status = GameStatus.RUNNING,
             )
+            .withAttackableTerritories(players)
 
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,

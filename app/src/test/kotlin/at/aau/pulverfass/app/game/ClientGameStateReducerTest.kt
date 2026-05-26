@@ -1,18 +1,24 @@
 package at.aau.pulverfass.app.game
 
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
+import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
@@ -41,6 +47,7 @@ class ClientGameStateReducerTest {
                         turnPhase = TurnPhase.REINFORCEMENTS,
                         turnCount = 1,
                         startPlayerId = aliceId,
+                        pendingReinforcements = 4,
                     ),
                 definition = mapDefinition("brasilien"),
                 territoryStates =
@@ -64,6 +71,10 @@ class ClientGameStateReducerTest {
         assertFalse(state.isCatchingUp)
         assertEquals(3, state.stateVersion)
         assertEquals(TurnPhase.REINFORCEMENTS, state.turnPhase)
+        assertEquals(aliceId, state.reinforcementState.playerId)
+        assertEquals(4, state.reinforcementState.pendingAmount)
+        assertFalse(state.reinforcementState.isBonusBreakdownKnown)
+        assertTrue(state.canManageReinforcements(aliceId))
         assertEquals(5, state.regionStates.getValue("brazil").troopCount)
         assertEquals("Alice", state.regionStates.getValue("brazil").ownerName)
     }
@@ -335,14 +346,351 @@ class ClientGameStateReducerTest {
                 regionId = ownRegion,
                 localPlayerId = aliceId,
             )
+        val retainedAfterEnemyTap =
+            ClientGameStateReducer.selectRegion(
+                current = accepted,
+                regionId = enemyRegion,
+                localPlayerId = aliceId,
+            )
+        val dismissed =
+            ClientGameStateReducer.selectRegion(
+                current = accepted,
+                regionId = ownRegion,
+                localPlayerId = aliceId,
+            )
 
         assertEquals(null, rejected.selectedRegionId)
-        assertEquals(
-            "In der Verstärkungsphase kannst du nur eigene Gebiete auswählen.",
-            rejected.selectionMessage,
-        )
+        assertEquals(null, rejected.selectionMessage)
         assertEquals(ownRegion, accepted.selectedRegionId)
-        assertEquals(ownRegion, accepted.selectionFromRegionId)
+        assertEquals(null, accepted.selectionFromRegionId)
+        assertEquals(null, accepted.selectionMessage)
+        assertEquals(ownRegion, retainedAfterEnemyTap.selectedRegionId)
+        assertEquals(null, retainedAfterEnemyTap.selectionMessage)
+        assertEquals(null, dismissed.selectedRegionId)
+    }
+
+    @Test
+    fun `reinforcement events expose pending pool bonuses and bound placement amount`() {
+        val initial =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                selectedRegionId = "brazil",
+            )
+        val granted =
+            ClientGameStateReducer.applyDelta(
+                current = initial,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                ReinforcementsGrantedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = aliceId,
+                                    amount = 5,
+                                    territoryBonus = 3,
+                                    continentBonus = 2,
+                                    cardBonus = 0,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+        val increased =
+            ClientGameStateReducer.adjustReinforcementPlacementAmount(
+                current = granted,
+                delta = 20,
+            )
+        val placed =
+            ClientGameStateReducer.applyDelta(
+                current = increased,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 2,
+                        toVersion = 3,
+                        events =
+                            listOf(
+                                PendingReinforcementsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = aliceId,
+                                    delta = -5,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals(5, granted.reinforcementState.pendingAmount)
+        assertEquals(3, granted.reinforcementState.territoryBonus)
+        assertTrue(granted.reinforcementState.isBonusBreakdownKnown)
+        assertTrue(granted.canPlaceReinforcements(aliceId))
+        assertEquals(5, increased.reinforcementPlacementAmount)
+        assertEquals(0, placed.reinforcementState.pendingAmount)
+        assertEquals(1, placed.reinforcementPlacementAmount)
+        assertTrue(placed.canConfirmReinforcementsDone(aliceId))
+        assertFalse(placed.canRequestTurnAdvance(aliceId))
+    }
+
+    @Test
+    fun `trade grant adds card bonus without resetting existing pending pool`() {
+        val state =
+            GameUiState(
+                stateVersion = 1,
+                reinforcementState =
+                    ReinforcementUiState(
+                        playerId = aliceId,
+                        pendingAmount = 3,
+                        territoryBonus = 3,
+                        isBonusBreakdownKnown = true,
+                    ),
+                turnPhase = TurnPhase.REINFORCEMENTS,
+            )
+        val grant =
+            ClientGameStateReducer.applyDelta(
+                current = state,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                ReinforcementsGrantedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = aliceId,
+                                    amount = 2,
+                                    territoryBonus = 0,
+                                    continentBonus = 0,
+                                    cardBonus = 2,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+        val increased =
+            ClientGameStateReducer.applyDelta(
+                current = grant,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 2,
+                        toVersion = 3,
+                        events =
+                            listOf(
+                                PendingReinforcementsChangedEvent(lobbyCode, aliceId, 2),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals(3, grant.reinforcementState.pendingAmount)
+        assertEquals(2, grant.reinforcementState.cardBonus)
+        assertTrue(grant.reinforcementState.isBonusBreakdownKnown)
+        assertEquals(5, increased.reinforcementState.pendingAmount)
+    }
+
+    @Test
+    fun `base reinforcement grant after zero snapshot initializes a new visible pool`() {
+        val snapshotted =
+            ClientGameStateReducer.applyCatchUpResponse(
+                current = GameUiState(isCatchingUp = true),
+                response =
+                    GameStateCatchUpResponse(
+                        lobbyCode = lobbyCode,
+                        stateVersion = 1,
+                        determinism = determinism,
+                        turnState =
+                            PublicTurnStateSnapshot(
+                                activePlayerId = aliceId,
+                                turnPhase = TurnPhase.REINFORCEMENTS,
+                                turnCount = 1,
+                                startPlayerId = aliceId,
+                                pendingReinforcements = 0,
+                            ),
+                        definition = mapDefinition("brasilien"),
+                        territoryStates = emptyList(),
+                    ),
+                players = players,
+            )
+
+        val granted =
+            ClientGameStateReducer.applyDelta(
+                current = snapshotted,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                ReinforcementsGrantedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = aliceId,
+                                    amount = 3,
+                                    territoryBonus = 3,
+                                    continentBonus = 0,
+                                    cardBonus = 0,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals(3, granted.reinforcementState.pendingAmount)
+        assertEquals(3, granted.reinforcementState.territoryBonus)
+        assertTrue(granted.reinforcementState.isBonusBreakdownKnown)
+    }
+
+    @Test
+    fun `private typed hand supports selecting three cards and clears removed cards`() {
+        val cards =
+            listOf(
+                PrivateHandCardSnapshot(CardId("a"), CardType.A),
+                PrivateHandCardSnapshot(CardId("b"), CardType.B),
+                PrivateHandCardSnapshot(CardId("c"), CardType.C),
+            )
+        val private =
+            ClientGameStateReducer.applyPrivateGetResponse(
+                current =
+                    GameUiState(
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                    ),
+                response =
+                    GameStatePrivateGetResponse(
+                        lobbyCode = lobbyCode,
+                        recipientPlayerId = aliceId,
+                        stateVersion = 1,
+                        privateHandCards = cards,
+                    ),
+            )
+        val selected =
+            cards.fold(private) { current, card ->
+                ClientGameStateReducer.toggleTradeInCard(current, card.cardId)
+            }
+        val updated =
+            ClientGameStateReducer.applyPlayerHandUpdatedEvent(
+                current = selected,
+                event =
+                    PlayerHandUpdatedEvent(
+                        lobbyCode = lobbyCode,
+                        recipientPlayerId = aliceId,
+                        stateVersion = 2,
+                        handCards = listOf(cards.first()),
+                    ),
+            )
+
+        assertEquals(3, selected.privateHandCards.size)
+        assertTrue(selected.canTradeInCards(aliceId))
+        assertEquals(setOf(CardId("a")), updated.selectedTradeInCardIds)
+        assertEquals(1, updated.privateHandCards.size)
+        assertFalse(
+            ClientGameStateReducer
+                .toggleTradeInCard(updated, CardId("missing"))
+                .selectedTradeInCardIds
+                .contains(CardId("missing")),
+        )
+    }
+
+    @Test
+    fun `reinforcement phase updates retain local pool and guard card selection`() {
+        val cards =
+            listOf(
+                PrivateHandCardUi(CardId("a"), CardType.A),
+                PrivateHandCardUi(CardId("b"), CardType.B),
+                PrivateHandCardUi(CardId("c"), CardType.C),
+                PrivateHandCardUi(CardId("d"), CardType.JOKER),
+            )
+        val initial =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                reinforcementState = ReinforcementUiState(aliceId, pendingAmount = 4),
+                privateHandCards = cards,
+                selectedTradeInCardIds = setOf(CardId("a"), CardId("b"), CardId("c")),
+            )
+
+        val boundary =
+            ClientGameStateReducer.applyPhaseBoundary(
+                initial,
+                PhaseBoundaryEvent(
+                    lobbyCode = lobbyCode,
+                    stateVersion = 2,
+                    previousPhase = TurnPhase.ATTACK,
+                    nextPhase = TurnPhase.REINFORCEMENTS,
+                    activePlayerId = aliceId,
+                    turnCount = 2,
+                ),
+            )
+        val turn =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                initial,
+                TurnStateGetResponse(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = aliceId,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 2,
+                    startPlayerId = aliceId,
+                ),
+            )
+        val publicUpdate =
+            ClientGameStateReducer.applyDelta(
+                current = initial,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                TurnStateUpdatedEvent(
+                                    lobbyCode = lobbyCode,
+                                    activePlayerId = aliceId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    turnCount = 2,
+                                    startPlayerId = aliceId,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+        val deselected = ClientGameStateReducer.toggleTradeInCard(initial, CardId("a"))
+        val capped = ClientGameStateReducer.toggleTradeInCard(initial, CardId("d"))
+        val unrelatedPendingEvent =
+            ClientGameStateReducer.applyDelta(
+                current = initial,
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                PendingReinforcementsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = bobId,
+                                    delta = -1,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals(initial.reinforcementState, boundary.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, boundary.selectedTradeInCardIds)
+        assertEquals(initial.reinforcementState, turn.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, turn.selectedTradeInCardIds)
+        assertEquals(initial.reinforcementState, publicUpdate.reinforcementState)
+        assertEquals(initial.selectedTradeInCardIds, publicUpdate.selectedTradeInCardIds)
+        assertEquals(setOf(CardId("b"), CardId("c")), deselected.selectedTradeInCardIds)
+        assertEquals(initial, capped)
+        assertEquals(initial.reinforcementState, unrelatedPendingEvent.reinforcementState)
     }
 
     @Test

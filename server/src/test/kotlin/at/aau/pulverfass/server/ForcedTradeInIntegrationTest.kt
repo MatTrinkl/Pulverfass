@@ -277,6 +277,37 @@ class ForcedTradeInIntegrationTest {
             }
         }
 
+    @Test
+    fun `confirm reinforcements done is blocked by next phase trade flag from elimination`() =
+        testApplication {
+            val lobbyCode = LobbyCode("FTI5")
+            val state =
+                forcedTradeState(
+                    lobbyCode = lobbyCode,
+                    hand = fourCardHandWithSet,
+                    pendingAmount = 0,
+                ).copy(
+                    tradeRequiredOnNextReinforcementPhaseByPlayer =
+                        mapOf(
+                            playerOne to true,
+                            playerTwo to false,
+                        ),
+                )
+
+            val error =
+                exerciseFailingConfirm(
+                    lobbyCode = lobbyCode,
+                    state = state,
+                    request =
+                        ConfirmReinforcementsDoneRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED, error.code)
+        }
+
     private suspend fun ApplicationTestBuilder.exerciseFailingConfirm(
         lobbyCode: LobbyCode,
         state: GameState,
