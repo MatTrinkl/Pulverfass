@@ -1,6 +1,8 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
@@ -163,6 +165,9 @@ class PublicGameStateBuilder {
                 is TerritoryTroopsChangedEvent,
                 ->
                     add(versionedTerritoryEvent(event, currentState.stateVersion))
+                is FortifyMoveAppliedEvent ->
+                    addAll(buildFortifyMovePayloads(currentState, event))
+                is FortifyUsedSetEvent -> Unit
                 is TurnStateUpdatedEvent -> add(event)
                 else -> {
                     if (previousState.turnState != currentState.turnState) {
@@ -174,6 +179,25 @@ class PublicGameStateBuilder {
                 }
             }
         }
+
+    private fun buildFortifyMovePayloads(
+        currentState: GameState,
+        event: FortifyMoveAppliedEvent,
+    ): List<PublicGameEvent> =
+        listOf(
+            TerritoryTroopsChangedEvent(
+                lobbyCode = event.lobbyCode,
+                territoryId = event.fromTerritoryId,
+                troopCount = currentState.troopCountOf(event.fromTerritoryId),
+                stateVersion = currentState.stateVersion,
+            ),
+            TerritoryTroopsChangedEvent(
+                lobbyCode = event.lobbyCode,
+                territoryId = event.toTerritoryId,
+                troopCount = currentState.troopCountOf(event.toTerritoryId),
+                stateVersion = currentState.stateVersion,
+            ),
+        )
 
     private fun versionedTerritoryEvent(
         event: LobbyEvent,
