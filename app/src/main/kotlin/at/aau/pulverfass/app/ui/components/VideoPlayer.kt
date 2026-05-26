@@ -2,14 +2,18 @@ package at.aau.pulverfass.app.ui.components
 
 import android.content.Context
 import android.net.Uri
+import android.view.View
 import android.widget.VideoView
 import androidx.annotation.RawRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.viewinterop.AndroidView
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Wiederverwendbarer Video-Player für lokale res/raw Videos.
@@ -64,32 +68,71 @@ private fun VideoViewInterop(
     muted: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val videoRef = remember { AtomicReference<VideoView?>(null) }
+
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val view: VideoView =
-                if (centerCrop) CenterCropVideoView(ctx) else VideoView(ctx)
-            view.apply {
-                val uri = Uri.parse("android.resource://${ctx.packageName}/$videoResId")
-                setVideoURI(uri)
-                setOnPreparedListener { mediaPlayer ->
+            val view: VideoView = if (centerCrop) CenterCropVideoView(ctx) else VideoView(ctx)
+            videoRef.set(view)
+
+            // Prepared: configure looping/volume and start playback
+            view.setOnPreparedListener { mediaPlayer ->
+                try {
                     mediaPlayer.isLooping = loop
-                    if (muted) {
-                        mediaPlayer.setVolume(0f, 0f)
-                    }
+                    if (muted) mediaPlayer.setVolume(0f, 0f)
                     (view as? CenterCropVideoView)?.setVideoSize(
                         mediaPlayer.videoWidth,
                         mediaPlayer.videoHeight,
                     )
-                    // start playback once prepared to ensure settings (loop/volume) applied
-                    view.start()
+                } catch (t: Throwable) {
+                    // swallow; keep prepared flow
                 }
-                setOnCompletionListener {
-                    if (!loop) onCompleted()
+                // ensure view visible and start playback
+                view.visibility = View.VISIBLE
+                view.start()
+            }
+
+            view.setOnCompletionListener {
+                if (!loop) onCompleted()
+            }
+
+            // ensure view visible by default
+            view.visibility = View.VISIBLE
+
+            val uri = Uri.parse("android.resource://${ctx.packageName}/$videoResId")
+            // register listeners before setting URI to avoid missing callbacks on some devices
+            view.setVideoURI(uri)
+
+            view
+        },
+        update = { view ->
+            // If resource changed, reset playback cleanly
+            val expected = "android.resource://${view.context.packageName}/$videoResId"
+            if (view.tag != expected) {
+                view.tag = expected
+                try {
+                    view.stopPlayback()
+                } catch (_: Throwable) {
                 }
+                view.setVideoURI(Uri.parse(expected))
             }
         },
     )
+
+    DisposableEffect(videoResId, loop, muted) {
+        onDispose {
+            videoRef.get()?.let { v ->
+                try {
+                    v.setOnPreparedListener(null)
+                    v.setOnCompletionListener(null)
+                    v.stopPlayback()
+                } catch (_: Throwable) {
+                }
+            }
+            videoRef.set(null)
+        }
+    }
 }
 
 private class CenterCropVideoView(context: Context) : VideoView(context) {
