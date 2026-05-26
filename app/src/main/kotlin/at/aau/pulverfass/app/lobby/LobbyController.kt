@@ -20,6 +20,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
@@ -972,6 +973,9 @@ class LobbyController(
             is PlayerKickedLobbyEvent -> {
                 playersById.remove(payload.targetPlayerId.value)
                 publishPlayers()
+            }
+            is PlayerCountUpdateEvent -> {
+                _state.update { it.copy(onlinePlayerCount = payload.playerCount) }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)

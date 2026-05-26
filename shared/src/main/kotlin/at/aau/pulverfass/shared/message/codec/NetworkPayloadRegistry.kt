@@ -12,6 +12,8 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEventSerializer
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -95,6 +97,7 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
             LobbyPlayerCountRequest::class.java to MessageType.LOBBY_PLAYER_COUNT_REQUEST,
             LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
+            PlayerCountUpdateEvent::class.java to MessageType.LOBBY_PLAYER_COUNT_UPDATE_BROADCAST,
             LobbyPlayerCountErrorResponse::class.java to
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
             PendingReinforcementsChangedEvent::class.java to
@@ -190,6 +193,8 @@ internal object NetworkPayloadRegistry {
                 encodeWith(LobbyPlayerCountRequest.serializer()),
             LobbyPlayerCountResponse::class.java to
                 encodeWith(LobbyPlayerCountResponse.serializer()),
+            PlayerCountUpdateEvent::class.java to
+                encodeWith<PlayerCountUpdateEvent>(PlayerCountUpdateEventSerializer),
             LobbyPlayerCountErrorResponse::class.java to
                 encodeWith(LobbyPlayerCountErrorResponse.serializer()),
             PendingReinforcementsChangedEvent::class.java to
@@ -285,6 +290,8 @@ internal object NetworkPayloadRegistry {
                 decodeWith(LobbyPlayerCountRequest.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_RESPONSE to
                 decodeWith(LobbyPlayerCountResponse.serializer()),
+            MessageType.LOBBY_PLAYER_COUNT_UPDATE_BROADCAST to
+                decodeWith<PlayerCountUpdateEvent>(PlayerCountUpdateEventSerializer),
             MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE to
                 decodeWith(LobbyPlayerCountErrorResponse.serializer()),
             MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST to

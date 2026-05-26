@@ -32,6 +32,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -281,6 +282,9 @@ class MainServerLobbyRoutingService(
             reason = connectionLostReason(reason),
         )
 
+        // broadcast updated player count to lobby members (disconnect may affect displayed online count)
+        broadcastPlayerCount(lobbyCode)
+
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
         val currentTurnState = currentState.turnState ?: return
@@ -316,6 +320,10 @@ class MainServerLobbyRoutingService(
      */
     suspend fun onPlayerConnected(playerId: PlayerId) {
         resumeWaitingTurnForPlayer(playerId)
+        val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId)
+        if (lobbyCode != null) {
+            broadcastPlayerCount(lobbyCode)
+        }
     }
 
     private suspend fun resumeWaitingTurnForPlayer(playerId: PlayerId) {
@@ -841,6 +849,15 @@ class MainServerLobbyRoutingService(
             .forEach { connectionId ->
                 network.send(connectionId, event)
             }
+
+        // broadcast updated player count to lobby members
+        val count = lobbyState.players.size
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, PlayerCountUpdateEvent(payload.lobbyCode, count))
+            }
     }
 
     private suspend fun dispatchLeaveNetworkMessages(
@@ -869,6 +886,15 @@ class MainServerLobbyRoutingService(
             .forEach { connectionId ->
                 network.send(connectionId, event)
             }
+
+        // broadcast updated player count to lobby members
+        val count = lobbyState.players.size
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, PlayerCountUpdateEvent(payload.lobbyCode, count))
+            }
     }
 
     private suspend fun dispatchKickNetworkMessages(
@@ -893,6 +919,15 @@ class MainServerLobbyRoutingService(
             .distinct()
             .forEach { connectionId ->
                 network.send(connectionId, event)
+            }
+
+        // broadcast updated player count to lobby members
+        val count = members.size
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, PlayerCountUpdateEvent(payload.lobbyCode, count))
             }
     }
 
@@ -1383,6 +1418,19 @@ class MainServerLobbyRoutingService(
                 response.playerCount,
             )
         }
+    }
+
+    private suspend fun broadcastPlayerCount(lobbyCode: LobbyCode) {
+        val count = lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size ?: 0
+        lobbyManager.getLobby(lobbyCode)
+            ?.currentState()
+            ?.players
+            .orEmpty()
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                network.send(connectionId, PlayerCountUpdateEvent(lobbyCode, count))
+            }
     }
 
     private fun turnAdvanceErrorResponse(

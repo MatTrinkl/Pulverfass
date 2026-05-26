@@ -73,6 +73,9 @@ enum class MessageType(val id: Int) {
     /** Private S2C-Aktualisierung der autoritativen Kartenhand eines Spielers. */
     LOBBY_PLAYER_HAND_UPDATED_EVENT(67),
 
+    /** Broadcast, pushed when server-side player count changes in a lobby. */
+    LOBBY_PLAYER_COUNT_UPDATE_BROADCAST(68),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 
