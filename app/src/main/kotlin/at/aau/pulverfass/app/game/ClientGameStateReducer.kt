@@ -1,7 +1,9 @@
 package at.aau.pulverfass.app.game
 
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
@@ -10,7 +12,9 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
@@ -169,6 +173,19 @@ object ClientGameStateReducer {
             selectionMessage = null,
             isCatchingUp = false,
             isDesynced = false,
+            reinforcementState =
+                if (event.nextPhase == TurnPhase.REINFORCEMENTS) {
+                    current.reinforcementState
+                } else {
+                    ReinforcementUiState()
+                },
+            reinforcementPlacementAmount = 1,
+            selectedTradeInCardIds =
+                if (event.nextPhase == TurnPhase.REINFORCEMENTS) {
+                    current.selectedTradeInCardIds
+                } else {
+                    emptySet()
+                },
             lastSyncError = null,
         )
     }
@@ -185,19 +202,73 @@ object ClientGameStateReducer {
             isPaused = response.isPaused,
             pauseReason = response.pauseReason,
             pausedPlayerId = response.pausedPlayerId,
+            reinforcementState =
+                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
+                    current.reinforcementState
+                } else {
+                    ReinforcementUiState()
+                },
+            selectedTradeInCardIds =
+                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
+                    current.selectedTradeInCardIds
+                } else {
+                    emptySet()
+                },
             isCatchingUp = false,
             lastSyncError = null,
         )
 
+    /**
+     * Übernimmt den privaten Snapshot des lokalen Spielers.
+     *
+     * `handCards` bleibt für ältere Serverantworten als reine Anzeige
+     * erhalten. `privateHandCards` enthält bei aktuellen Antworten zusätzlich
+     * IDs und Typen; nur damit kann die UI einen Trade-in eindeutig senden.
+     * Eine Auswahl wird mit dem neuen Snapshot geschnitten, damit keine
+     * bereits eingetauschte oder anderweitig entfernte Karte auswählbar bleibt.
+     */
     fun applyPrivateGetResponse(
         current: GameUiState,
         response: GameStatePrivateGetResponse,
     ): GameUiState =
         current.copy(
             handCards = response.handCards,
+            privateHandCards =
+                response.privateHandCards.map { card ->
+                    PrivateHandCardUi(cardId = card.cardId, type = card.type)
+                },
+            selectedTradeInCardIds =
+                current.selectedTradeInCardIds.intersect(
+                    response.privateHandCards.map { it.cardId }.toSet(),
+                ),
             secretObjectives = response.secretObjectives,
             lastSyncError = null,
         )
+
+    /**
+     * Übernimmt eine private Handaktualisierung nach einem erfolgreichen Trade-in.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param event nur für den betroffenen Spieler ausgelieferte neue Hand
+     * @return State mit typisierten Karten und bereinigter lokaler Auswahl
+     */
+    fun applyPlayerHandUpdatedEvent(
+        current: GameUiState,
+        event: PlayerHandUpdatedEvent,
+    ): GameUiState {
+        val privateHandCards =
+            event.handCards.map { card ->
+                PrivateHandCardUi(cardId = card.cardId, type = card.type)
+            }
+        return current.copy(
+            privateHandCards = privateHandCards,
+            selectedTradeInCardIds =
+                current.selectedTradeInCardIds.intersect(
+                    privateHandCards.map(PrivateHandCardUi::cardId).toSet(),
+                ),
+            lastSyncError = null,
+        )
+    }
 
     /**
      * Baut die sichtbare Kartenprojektion mit einer aktualisierten Spielerliste
@@ -252,14 +323,40 @@ object ClientGameStateReducer {
         val territoryId = GameMapTerritoryMapper.toTerritoryId(regionId)
         val territory = current.territoryStates[territoryId]
 
+        /*
+         * Die Platzierungs-UI öffnet nur für eigene Gebiete. Ein Tap auf ein
+         * fremdes Gebiet wird bewusst ignoriert, statt einen Fehlerbanner zu
+         * erzeugen oder ein bereits sinnvoll gewähltes Ziel zu verlieren.
+         */
         if (
             current.turnPhase == TurnPhase.REINFORCEMENTS &&
             (localPlayerId == null || territory?.ownerId != localPlayerId)
         ) {
-            return current.copy(
-                selectionMessage =
-                    "In der Verstärkungsphase kannst du nur eigene Gebiete auswählen.",
-            )
+            return current.copy(selectionMessage = null)
+        }
+
+        if (current.turnPhase == TurnPhase.REINFORCEMENTS) {
+            /*
+             * Verstärkungen benötigen nur ein Zielgebiet. `selectionFrom` und
+             * `selectionTo` gehören zu mehrstufigen Kartenaktionen und bleiben
+             * hier leer, damit kein Zustand für eine nicht existierende
+             * Start-/Zielbewegung vorgetäuscht wird.
+             */
+            return if (current.selectedRegionId == regionId) {
+                current.copy(
+                    selectedRegionId = null,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
+                )
+            } else {
+                current.copy(
+                    selectedRegionId = regionId,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
+                )
+            }
         }
 
         return when {
@@ -288,6 +385,35 @@ object ClientGameStateReducer {
 
     fun toggleCards(current: GameUiState): GameUiState =
         current.copy(cardsVisible = !current.cardsVisible)
+
+    /** Ändert die zu platzierende Anzahl innerhalb des bekannten Restpools. */
+    fun adjustReinforcementPlacementAmount(
+        current: GameUiState,
+        delta: Int,
+    ): GameUiState {
+        val maxAmount = (current.reinforcementState.pendingAmount ?: 1).coerceAtLeast(1)
+        return current.copy(
+            reinforcementPlacementAmount =
+                (current.reinforcementPlacementAmount + delta).coerceIn(1, maxAmount),
+        )
+    }
+
+    /** Markiert maximal drei vorhandene private Karten für einen Trade-in. */
+    fun toggleTradeInCard(
+        current: GameUiState,
+        cardId: CardId,
+    ): GameUiState {
+        if (current.privateHandCards.none { it.cardId == cardId }) {
+            return current
+        }
+        if (cardId in current.selectedTradeInCardIds) {
+            return current.copy(selectedTradeInCardIds = current.selectedTradeInCardIds - cardId)
+        }
+        if (current.selectedTradeInCardIds.size >= 3) {
+            return current
+        }
+        return current.copy(selectedTradeInCardIds = current.selectedTradeInCardIds + cardId)
+    }
 
     /**
      * Ersetzt öffentliche Map-, Turn- und Determinismusdaten vollständig.
@@ -320,6 +446,22 @@ object ClientGameStateReducer {
                     isPaused = turnState.isPaused,
                     pauseReason = turnState.pauseReason,
                     pausedPlayerId = turnState.pausedPlayerId,
+                    reinforcementState =
+                        if (turnState.turnPhase == TurnPhase.REINFORCEMENTS) {
+                            ReinforcementUiState(
+                                playerId = turnState.activePlayerId,
+                                pendingAmount = turnState.pendingReinforcements,
+                            )
+                        } else {
+                            ReinforcementUiState()
+                        },
+                    reinforcementPlacementAmount = 1,
+                    selectedTradeInCardIds =
+                        if (turnState.turnPhase == TurnPhase.REINFORCEMENTS) {
+                            current.selectedTradeInCardIds
+                        } else {
+                            emptySet()
+                        },
                     selectedRegionId = null,
                     selectionFromRegionId = null,
                     selectionToRegionId = null,
@@ -372,6 +514,19 @@ object ClientGameStateReducer {
                     isPaused = event.isPaused,
                     pauseReason = event.pauseReason,
                     pausedPlayerId = event.pausedPlayerId,
+                    reinforcementState =
+                        if (event.turnPhase == TurnPhase.REINFORCEMENTS) {
+                            current.reinforcementState
+                        } else {
+                            ReinforcementUiState()
+                        },
+                    reinforcementPlacementAmount = 1,
+                    selectedTradeInCardIds =
+                        if (event.turnPhase == TurnPhase.REINFORCEMENTS) {
+                            current.selectedTradeInCardIds
+                        } else {
+                            emptySet()
+                        },
                     selectedRegionId = null,
                     selectionFromRegionId = null,
                     selectionToRegionId = null,
@@ -382,8 +537,75 @@ object ClientGameStateReducer {
                 current.updateTerritory(players = players, event = event)
             is TerritoryTroopsChangedEvent ->
                 current.updateTerritory(players = players, event = event)
+            is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
+            is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
             else -> current
         }
+
+    private fun GameUiState.applyReinforcementsGranted(
+        event: ReinforcementsGrantedEvent,
+    ): GameUiState {
+        /*
+         * Zu Beginn einer Verstärkungsphase liefert der Server einen Basisgrant
+         * mit Gebiets-/Kontinentbonus. Ein späterer Kartentausch liefert einen
+         * zusätzlichen Grant mit ausschließlich Kartenbonus; dessen Betrag
+         * wird durch das folgende PendingReinforcementsChangedEvent zum
+         * bestehenden Restpool addiert. Ein Basisgrant darf deshalb einen
+         * vorherigen Snapshot mit Restpool 0 ersetzen, ein Kartengrant nicht.
+         */
+        val isAdditionalCardGrant =
+            event.cardBonus > 0 &&
+                event.territoryBonus == 0 &&
+                event.continentBonus == 0
+        val continuesCurrentPool =
+            reinforcementState.playerId == event.playerId &&
+                reinforcementState.pendingAmount != null &&
+                isAdditionalCardGrant
+        val updatedReinforcements =
+            if (continuesCurrentPool) {
+                reinforcementState.copy(
+                    territoryBonus = reinforcementState.territoryBonus + event.territoryBonus,
+                    continentBonus = reinforcementState.continentBonus + event.continentBonus,
+                    cardBonus = reinforcementState.cardBonus + event.cardBonus,
+                )
+            } else {
+                ReinforcementUiState(
+                    playerId = event.playerId,
+                    pendingAmount = event.amount,
+                    territoryBonus = event.territoryBonus,
+                    continentBonus = event.continentBonus,
+                    cardBonus = event.cardBonus,
+                    isBonusBreakdownKnown = true,
+                )
+            }
+        val maxPlacement = (updatedReinforcements.pendingAmount ?: 1).coerceAtLeast(1)
+
+        return copy(
+            reinforcementState = updatedReinforcements,
+            reinforcementPlacementAmount = reinforcementPlacementAmount.coerceIn(1, maxPlacement),
+        )
+    }
+
+    private fun GameUiState.applyPendingReinforcementsChanged(
+        event: PendingReinforcementsChangedEvent,
+    ): GameUiState {
+        /*
+         * Der Server bleibt für den Restpool autoritativ: Platzierungen senden
+         * negative Deltas, Kartentausch positive. Events anderer Spieler oder
+         * Deltas vor der initialen Grant-/Snapshot-Basis dürfen den lokalen
+         * Bedienzustand nicht verändern.
+         */
+        if (reinforcementState.playerId != event.playerId) {
+            return this
+        }
+        val currentAmount = reinforcementState.pendingAmount ?: return this
+        val updatedAmount = (currentAmount + event.delta).coerceAtLeast(0)
+        return copy(
+            reinforcementState = reinforcementState.copy(pendingAmount = updatedAmount),
+            reinforcementPlacementAmount =
+                reinforcementPlacementAmount.coerceIn(1, updatedAmount.coerceAtLeast(1)),
+        )
+    }
 
     private fun GameUiState.updateTerritory(
         players: List<LobbyPlayerUi>,
