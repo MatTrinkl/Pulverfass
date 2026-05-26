@@ -9,10 +9,10 @@ import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
-import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -176,10 +176,25 @@ class LobbyPersistenceHooksIntegrationTest {
                             playerId = fixture.hostId,
                         )
                     if (!attackAutoEnded) {
-                        advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.ATTACK)
+                        advanceTurn(
+                            hostSession,
+                            fixture.lobbyCode,
+                            fixture.hostId,
+                            TurnPhase.ATTACK,
+                        )
                     }
-                    advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.FORTIFY)
-                    advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.DRAW_CARD)
+                    advanceTurn(
+                        hostSession,
+                        fixture.lobbyCode,
+                        fixture.hostId,
+                        TurnPhase.FORTIFY,
+                    )
+                    advanceTurn(
+                        hostSession,
+                        fixture.lobbyCode,
+                        fixture.hostId,
+                        TurnPhase.DRAW_CARD,
+                    )
 
                     val snapshotPayload =
                         receiveRelevantTestPayload(
