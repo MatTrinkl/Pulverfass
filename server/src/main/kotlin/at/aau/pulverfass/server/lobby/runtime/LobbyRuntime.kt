@@ -101,6 +101,44 @@ class LobbyRuntime private constructor(
     }
 
     /**
+     * Reicht mehrere Events als atomare Batch-Einheit ein.
+     *
+     * Alle Events werden ohne Unterbrechung durch fremde Events verarbeitet.
+     * Hook-Aufrufe feuern für jedes einzelne Event im Batch.
+     */
+    suspend fun submitAll(
+        events: List<LobbyEvent>,
+        context: EventContext? = null,
+    ) {
+        events.forEach { event -> hooks.onEventEnqueued(lobbyCode, event, context) }
+        val processedList =
+            try {
+                eventLoop.submitBatch(events, context)
+            } catch (cause: Throwable) {
+                hooks.onEventRejected(lobbyCode, events.first(), cause)
+                throw cause
+            }
+        processedList.forEach { processed ->
+            try {
+                hooks.onEventAccepted(
+                    lobbyCode,
+                    processed.event,
+                    processed.beforeState,
+                    processed.afterState,
+                )
+            } catch (cause: Exception) {
+                logger.warn(
+                    "Accepted-event hook failed for lobby {} and event {}. " +
+                        "State mutation was already applied.",
+                    lobbyCode.value,
+                    processed.event::class.simpleName,
+                    cause,
+                )
+            }
+        }
+    }
+
+    /**
      * Beendet die Runtime kontrolliert.
      *
      * Mehrfache Aufrufe sind erlaubt und wirken nur beim ersten Aufruf.

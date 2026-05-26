@@ -3,8 +3,10 @@ package at.aau.pulverfass.server.persistence
 import at.aau.pulverfass.server.DatabaseReadiness
 import at.aau.pulverfass.server.DatabaseReadinessProbe
 import at.aau.pulverfass.server.DatabaseReadinessState
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -12,6 +14,9 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -26,6 +31,8 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -169,12 +176,62 @@ private data class PersistedEventPayload(
     val payload: JsonElement,
 )
 
+private val stringListSerializer = ListSerializer(String.serializer())
+
 private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
     when (this) {
         is LobbyCreated ->
             persistedPayload(
                 type = "lobby_created",
                 "lobbyCode" to lobbyCode.value,
+            )
+        is CardSetTradedInEvent ->
+            PersistedEventPayload(
+                type = "card_set_traded_in",
+                payload =
+                    buildJsonObject {
+                        put("lobbyCode", lobbyCode.value)
+                        put("playerId", playerId.value)
+                        put("value", value)
+                        put("tradeIndex", tradeIndex)
+                        put(
+                            "cardIds",
+                            Json.Default.encodeToJsonElement(
+                                stringListSerializer,
+                                cardIds.map(CardId::value),
+                            ),
+                        )
+                    },
+            )
+        is PendingReinforcementsSetEvent ->
+            persistedPayload(
+                type = "pending_reinforcements_set",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "amount" to amount,
+            )
+        is PendingReinforcementsChangedEvent ->
+            persistedPayload(
+                type = "pending_reinforcements_changed",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "delta" to delta,
+            )
+        is PlayerCardsRemovedEvent ->
+            PersistedEventPayload(
+                type = "player_cards_removed",
+                payload =
+                    buildJsonObject {
+                        put("lobbyCode", lobbyCode.value)
+                        put("playerId", playerId.value)
+                        put(
+                            "cardIds",
+                            Json.Default.encodeToJsonElement(
+                                stringListSerializer,
+                                cardIds.map(CardId::value),
+                            ),
+                        )
+                    },
             )
         is LobbyClosed ->
             persistedPayload(

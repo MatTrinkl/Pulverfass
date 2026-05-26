@@ -18,6 +18,12 @@ class MapConfigLoaderTest {
         assertEquals(MapConfig.CURRENT_SCHEMA_VERSION, definition.schemaVersion)
         assertEquals(24, definition.territories.size)
         assertEquals(6, definition.continents.size)
+        assertEquals(3, definition.continentsById.getValue(ContinentId("nordamerika")).bonusValue)
+        assertEquals(2, definition.continentsById.getValue(ContinentId("europa")).bonusValue)
+        assertEquals(4, definition.continentsById.getValue(ContinentId("asien")).bonusValue)
+        assertEquals(2, definition.continentsById.getValue(ContinentId("suedamerika")).bonusValue)
+        assertEquals(2, definition.continentsById.getValue(ContinentId("afrika")).bonusValue)
+        assertEquals(1, definition.continentsById.getValue(ContinentId("ozeanien")).bonusValue)
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
             definition.territoriesById
@@ -59,14 +65,14 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                       ]
                     }
                     """.trimIndent(),
@@ -83,13 +89,13 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "adjacentTerritoryIds": ["beta", "missing"] },
                         { "territoryId": "beta", "adjacentTerritoryIds": ["alpha"] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                       ]
                     }
                     """.trimIndent(),
@@ -106,13 +112,13 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "adjacentTerritoryIds": ["beta"] },
                         { "territoryId": "beta", "adjacentTerritoryIds": [] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                       ]
                     }
                     """.trimIndent(),
@@ -129,13 +135,13 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "missing"], "bonusValue": 2 }
+                        { "continentId": "north", "territoryIds": ["alpha", "missing"], "bonus": 2 }
                       ]
                     }
                     """.trimIndent(),
@@ -154,14 +160,14 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "gamma" }] },
                         { "territoryId": "gamma", "edges": [{ "targetId": "beta" }] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "beta", "gamma"], "bonusValue": 3 }
+                        { "continentId": "north", "territoryIds": ["alpha", "beta", "gamma"], "bonus": 3 }
                       ]
                     }
                     """.trimIndent(),
@@ -180,7 +186,7 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         {
                           "territoryId": "alpha",
@@ -195,7 +201,7 @@ class MapConfigLoaderTest {
                         }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 }
+                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 }
                       ]
                     }
                     """.trimIndent(),
@@ -212,14 +218,14 @@ class MapConfigLoaderTest {
                 MapConfigLoader.loadFromJson(
                     """
                     {
-                      "schemaVersion": 1,
+                      "schemaVersion": 2,
                       "territories": [
                         { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
                         { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
                       ],
                       "continents": [
-                        { "continentId": "north", "territoryIds": ["alpha"], "bonusValue": 1 },
-                        { "continentId": "south", "territoryIds": ["alpha", "beta"], "bonusValue": 1 }
+                        { "continentId": "north", "territoryIds": ["alpha"], "bonus": 1 },
+                        { "continentId": "south", "territoryIds": ["alpha", "beta"], "bonus": 1 }
                       ]
                     }
                     """.trimIndent(),
@@ -282,29 +288,52 @@ class MapConfigLoaderTest {
     }
 
     @Test
-    fun `config model defaults and invariants are explicit`() {
+    fun `negative continent bonus führt zu validation fail`() {
+        val exception =
+            assertThrows<MapConfigValidationException> {
+                MapConfigLoader.loadFromJson(
+                    """
+                    {
+                      "schemaVersion": 2,
+                      "territories": [
+                        { "territoryId": "alpha", "edges": [{ "targetId": "beta" }] },
+                        { "territoryId": "beta", "edges": [{ "targetId": "alpha" }] }
+                      ],
+                      "continents": [
+                        { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": -1 }
+                      ]
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        assertTrue(exception.message.orEmpty().contains("negativen Bonus"))
+    }
+
+    @Test
+    fun `config model defaults are explicit`() {
         val territory = TerritoryConfig(territoryId = TerritoryId("alpha"))
         val edge = TerritoryEdgeConfig(TerritoryId("beta"))
         val cause = IllegalStateException("source")
         val exception = MapConfigLoadException("load failed", cause)
+        val continent =
+            ContinentConfig(
+                continentId = ContinentId("north"),
+                territoryIds = listOf(TerritoryId("alpha")),
+                bonus = 2,
+            )
 
         assertTrue(territory.edges.isEmpty())
         assertTrue(territory.adjacentTerritoryIds.isEmpty())
         assertEquals(TerritoryId("beta"), edge.targetId)
+        assertEquals(2, continent.bonus)
         assertSame(cause, exception.cause)
-        assertThrows<IllegalArgumentException> {
-            ContinentConfig(
-                continentId = ContinentId("north"),
-                territoryIds = listOf(TerritoryId("alpha")),
-                bonusValue = -1,
-            )
-        }
     }
 
     private fun validEdgesJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",
@@ -327,8 +356,8 @@ class MapConfigLoaderTest {
             }
           ],
           "continents": [
-            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-            { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+            { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
           ]
         }
         """.trimIndent()
@@ -336,7 +365,7 @@ class MapConfigLoaderTest {
     private fun validLegacyJson(): String =
         """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "territories": [
             {
               "territoryId": "alpha",
@@ -352,8 +381,8 @@ class MapConfigLoaderTest {
             }
           ],
           "continents": [
-            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonusValue": 2 },
-            { "continentId": "south", "territoryIds": ["gamma"], "bonusValue": 1 }
+            { "continentId": "north", "territoryIds": ["alpha", "beta"], "bonus": 2 },
+            { "continentId": "south", "territoryIds": ["gamma"], "bonus": 1 }
           ]
         }
         """.trimIndent()

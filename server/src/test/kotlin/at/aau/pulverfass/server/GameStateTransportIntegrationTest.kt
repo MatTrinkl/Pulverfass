@@ -22,6 +22,7 @@ import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
@@ -199,6 +200,15 @@ class GameStateTransportIntegrationTest {
                                 startPlayerId = playerOne,
                             ),
                         expectSnapshot = true,
+                        expectedGrantedEvent =
+                            ReinforcementsGrantedEvent(
+                                lobbyCode = lobbyCode,
+                                playerId = playerTwo,
+                                amount = 3,
+                                territoryBonus = 3,
+                                continentBonus = 0,
+                                cardBonus = 0,
+                            ),
                     )
 
                     playerTwoSocket.send(
@@ -220,16 +230,17 @@ class GameStateTransportIntegrationTest {
                             receiveAnyPayload(playerTwoSocket),
                         )
                     assertEquals(lobbyCode, catchUp.lobbyCode)
-                    assertEquals(4, catchUp.stateVersion)
+                    assertEquals(5, catchUp.stateVersion)
                     assertEquals(playerTwo, catchUp.turnState.activePlayerId)
                     assertEquals(TurnPhase.REINFORCEMENTS, catchUp.turnState.turnPhase)
+                    assertEquals(3, catchUp.turnState.pendingReinforcements)
                     assertEquals(defaultMapDefinition().mapHash, catchUp.determinism.mapHash)
                     assertNull(receivePayloadOrNull(playerOneSocket))
 
                     val history = routingService.roundHistory(lobbyCode)
                     assertEquals(1, history.size)
                     assertEquals(1, history.single().roundIndex)
-                    assertEquals(4, history.single().endStateVersion)
+                    assertEquals(5, history.single().endStateVersion)
                     assertTrue(history.single().deltas.isNotEmpty())
                     assertTrue(history.single().phaseBoundaries.isNotEmpty())
                     assertTrue(history.single().turnStateChanges.isNotEmpty())
@@ -465,6 +476,7 @@ class GameStateTransportIntegrationTest {
         expectedVersion: Long,
         expectedUpdate: TurnStateUpdatedEvent,
         expectSnapshot: Boolean = false,
+        expectedGrantedEvent: ReinforcementsGrantedEvent? = null,
     ) {
         actor.send(
             Frame.Binary(
@@ -482,11 +494,23 @@ class GameStateTransportIntegrationTest {
             ),
             receiveAnyPayload(actor),
         )
+        if (expectedGrantedEvent != null) {
+            assertEquals(
+                GameStateDeltaEvent(
+                    lobbyCode = request.lobbyCode,
+                    fromVersion = expectedVersion + 1,
+                    toVersion = expectedVersion + 1,
+                    events = listOf(expectedGrantedEvent),
+                ),
+                receiveAnyPayload(actor),
+            )
+        }
         assertEquals(TurnAdvanceResponse(request.lobbyCode), receiveAnyPayload(actor))
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion = expectedVersion,
+                stateVersion =
+                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,
@@ -497,7 +521,10 @@ class GameStateTransportIntegrationTest {
         assertEquals(expectedUpdate, receiveAnyPayload(actor))
         if (expectSnapshot) {
             val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(actor))
-            assertEquals(expectedVersion, snapshot.stateVersion)
+            assertEquals(
+                if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                snapshot.stateVersion,
+            )
             assertEquals(expectedUpdate.activePlayerId, snapshot.turnState.activePlayerId)
             assertEquals(expectedUpdate.turnPhase, snapshot.turnState.turnPhase)
         }
@@ -511,10 +538,22 @@ class GameStateTransportIntegrationTest {
             ),
             receiveAnyPayload(watcher),
         )
+        if (expectedGrantedEvent != null) {
+            assertEquals(
+                GameStateDeltaEvent(
+                    lobbyCode = request.lobbyCode,
+                    fromVersion = expectedVersion + 1,
+                    toVersion = expectedVersion + 1,
+                    events = listOf(expectedGrantedEvent),
+                ),
+                receiveAnyPayload(watcher),
+            )
+        }
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion = expectedVersion,
+                stateVersion =
+                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,
@@ -525,7 +564,10 @@ class GameStateTransportIntegrationTest {
         assertEquals(expectedUpdate, receiveAnyPayload(watcher))
         if (expectSnapshot) {
             val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(watcher))
-            assertEquals(expectedVersion, snapshot.stateVersion)
+            assertEquals(
+                if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                snapshot.stateVersion,
+            )
             assertEquals(expectedUpdate.activePlayerId, snapshot.turnState.activePlayerId)
             assertEquals(expectedUpdate.turnPhase, snapshot.turnState.turnPhase)
         }

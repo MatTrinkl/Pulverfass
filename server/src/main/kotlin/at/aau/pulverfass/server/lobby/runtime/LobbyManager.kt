@@ -83,6 +83,14 @@ class LobbyManager(
         return requireRuntime(event.lobbyCode).submit(event, context)
     }
 
+    suspend fun submitAll(
+        lobbyCode: LobbyCode,
+        events: List<LobbyEvent>,
+        context: EventContext? = null,
+    ) {
+        requireRuntime(lobbyCode).submitAll(events, context)
+    }
+
     /**
      * Entfernt und stoppt eine einzelne Lobby-Runtime.
      */
