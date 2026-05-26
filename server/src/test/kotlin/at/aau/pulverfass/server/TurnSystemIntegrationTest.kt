@@ -81,19 +81,10 @@ class TurnSystemIntegrationTest {
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState =
-                    GameState.initial(
+                    waitingGame(
                         lobbyCode = lobbyCode,
-                        mapDefinition = defaultMapDefinition(),
                         players = listOf(hostId, playerTwo, playerThree),
-                        playerDisplayNames =
-                            mapOf(
-                                hostId to "Host",
-                                playerTwo to "Player 2",
-                                playerThree to "Player 3",
-                            ),
-                    ).copy(
-                        lobbyOwner = hostId,
-                        status = GameStatus.WAITING_FOR_PLAYERS,
+                        hostId = hostId,
                     ),
             )
             routingService.start(serverScope)
@@ -309,19 +300,10 @@ class TurnSystemIntegrationTest {
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState =
-                    GameState.initial(
+                    waitingGame(
                         lobbyCode = lobbyCode,
-                        mapDefinition = defaultMapDefinition(),
                         players = listOf(hostId, playerTwo, playerThree),
-                        playerDisplayNames =
-                            mapOf(
-                                hostId to "Host",
-                                playerTwo to "Player 2",
-                                playerThree to "Player 3",
-                            ),
-                    ).copy(
-                        lobbyOwner = hostId,
-                        status = GameStatus.WAITING_FOR_PLAYERS,
+                        hostId = hostId,
                     ),
             )
             routingService.start(serverScope)
@@ -446,13 +428,30 @@ class TurnSystemIntegrationTest {
                         expectedUpdate =
                             TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.ATTACK, 1, hostId),
                     )
-                    advanceAndAssertBroadcast(
-                        actor = hostSession.first,
-                        watchers = listOf(connectedWatcherSession),
-                        request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.ATTACK),
-                        expectedUpdate =
-                            TurnStateUpdatedEvent(lobbyCode, hostId, TurnPhase.FORTIFY, 1, hostId),
-                    )
+                    val attackAutoEnded =
+                        consumeOptionalAttackAutoEnd(
+                            actor = hostSession.first,
+                            watchers = listOf(connectedWatcherSession),
+                            lobbyCode = lobbyCode,
+                            activePlayer = hostId,
+                            turnCount = 1,
+                            startPlayerId = hostId,
+                        )
+                    if (!attackAutoEnded) {
+                        advanceAndAssertBroadcast(
+                            actor = hostSession.first,
+                            watchers = listOf(connectedWatcherSession),
+                            request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.ATTACK),
+                            expectedUpdate =
+                                TurnStateUpdatedEvent(
+                                    lobbyCode,
+                                    hostId,
+                                    TurnPhase.FORTIFY,
+                                    1,
+                                    hostId,
+                                ),
+                        )
+                    }
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
                         watchers = listOf(connectedWatcherSession),
@@ -612,19 +611,30 @@ class TurnSystemIntegrationTest {
                     startPlayer,
                 ),
         )
-        advanceAndAssertBroadcast(
-            actor = actor,
-            watchers = watchers,
-            request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.ATTACK),
-            expectedUpdate =
-                TurnStateUpdatedEvent(
-                    lobbyCode,
-                    activePlayer,
-                    TurnPhase.FORTIFY,
-                    currentTurnCount,
-                    startPlayer,
-                ),
-        )
+        val attackAutoEnded =
+            consumeOptionalAttackAutoEnd(
+                actor = actor,
+                watchers = watchers,
+                lobbyCode = lobbyCode,
+                activePlayer = activePlayer,
+                turnCount = currentTurnCount,
+                startPlayerId = startPlayer,
+            )
+        if (!attackAutoEnded) {
+            advanceAndAssertBroadcast(
+                actor = actor,
+                watchers = watchers,
+                request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.ATTACK),
+                expectedUpdate =
+                    TurnStateUpdatedEvent(
+                        lobbyCode,
+                        activePlayer,
+                        TurnPhase.FORTIFY,
+                        currentTurnCount,
+                        startPlayer,
+                    ),
+            )
+        }
         advanceAndAssertBroadcast(
             actor = actor,
             watchers = watchers,
@@ -651,6 +661,43 @@ class TurnSystemIntegrationTest {
                     startPlayer,
                 ),
         )
+    }
+
+    private suspend fun consumeOptionalAttackAutoEnd(
+        actor: DefaultClientWebSocketSession,
+        watchers: List<DefaultClientWebSocketSession>,
+        lobbyCode: LobbyCode,
+        activePlayer: PlayerId,
+        turnCount: Int,
+        startPlayerId: PlayerId,
+    ): Boolean {
+        val boundary =
+            receivePayloadOrNull(actor)
+                ?: return false
+
+        val expectedUpdate =
+            TurnStateUpdatedEvent(
+                lobbyCode = lobbyCode,
+                activePlayerId = activePlayer,
+                turnPhase = TurnPhase.FORTIFY,
+                turnCount = turnCount,
+                startPlayerId = startPlayerId,
+            )
+        assertPhaseBoundary(
+            payload = boundary,
+            request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.ATTACK),
+            expectedUpdate = expectedUpdate,
+        )
+        assertEquals(expectedUpdate, receivePayload(actor))
+        watchers.forEach { watcher ->
+            assertPhaseBoundary(
+                payload = receivePayload(watcher),
+                request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.ATTACK),
+                expectedUpdate = expectedUpdate,
+            )
+            assertEquals(expectedUpdate, receivePayload(watcher))
+        }
+        return true
     }
 
     private fun nextPlayerAfter(
@@ -747,6 +794,27 @@ class TurnSystemIntegrationTest {
         )
         return value as T
     }
+
+    private fun waitingGame(
+        lobbyCode: LobbyCode,
+        players: List<PlayerId>,
+        hostId: PlayerId,
+    ): GameState =
+        GameState
+            .initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = players,
+                playerDisplayNames =
+                    mapOf(
+                        hostId to "Host",
+                        players[1] to "Player 2",
+                        players[2] to "Player 3",
+                    ),
+            ).copy(
+                lobbyOwner = hostId,
+                status = GameStatus.WAITING_FOR_PLAYERS,
+            )
 
     private fun defaultMapDefinition() = MapConfigLoader.loadDefault()
 }

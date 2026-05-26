@@ -3,16 +3,26 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
+import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -21,9 +31,13 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalSerializationApi::class)
 class PublicGameStateBuilderTest {
     private val builder = PublicGameStateBuilder()
-    private val json = Json
+    private val json =
+        Json {
+            explicitNulls = false
+        }
 
     @Test
     fun `snapshot builder exposes all required public fields consistently`() {
@@ -50,6 +64,7 @@ class PublicGameStateBuilderTest {
         assertEquals(9, snapshot.stateVersion)
         assertEquals(gameState.mapDefinition?.mapHash, snapshot.determinism.mapHash)
         assertEquals(gameState.mapDefinition?.schemaVersion, snapshot.determinism.schemaVersion)
+        assertEquals(null, snapshot.determinism.seed)
         assertNotNull(snapshot.turnState)
         assertEquals(4, snapshot.turnState.pendingReinforcements)
         assertEquals(gameState.allTerritoryStates().size, snapshot.territoryStates.size)
@@ -79,6 +94,7 @@ class PublicGameStateBuilderTest {
         assertFalse(serialized.contains("recipientPlayerId"))
         assertFalse(serialized.contains("handCards"))
         assertFalse(serialized.contains("secretObjectives"))
+        assertFalse(serialized.contains("\"seed\":"))
     }
 
     @Test
@@ -182,6 +198,272 @@ class PublicGameStateBuilderTest {
     }
 
     @Test
+    fun `attack resolved event projects to visible territory delta`() {
+        val previousState = sampleGameState()
+        val currentState = previousState.copy(stateVersion = 1)
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    AttackResolvedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        attackerPlayerId = PlayerId(1),
+                        defenderPlayerId = PlayerId(2),
+                        fromTerritoryId = TerritoryId("territory-1"),
+                        toTerritoryId = TerritoryId("territory-2"),
+                        attackTroops = 3,
+                        sourceTroopsBefore = 5,
+                        targetTroopsBefore = 2,
+                        requestedAttackDice = 3,
+                        attackDice = 3,
+                        defendDice = 2,
+                        attackerRolls = listOf(5, 4, 3),
+                        defenderRolls = listOf(2, 1),
+                        rngTrace = listOf(5, 3, 4, 1, 2),
+                        rngStateBefore = 2L,
+                        rngStateAfter = 3L,
+                        attackerLosses = 0,
+                        defenderLosses = 2,
+                        attackerRemaining = 5,
+                        defenderRemaining = 0,
+                        occupyingTroopCount = 3,
+                        minOccupyingTroops = 3,
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                AttackResolvedBroadcastEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    attackerPlayerId = PlayerId(1),
+                    defenderPlayerId = PlayerId(2),
+                    fromTerritoryId = TerritoryId("territory-1"),
+                    toTerritoryId = TerritoryId("territory-2"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(5, 4, 3),
+                    defenderRolls = listOf(2, 1),
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                    stateVersion = 1L,
+                ),
+                TerritoryTroopsChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-1"),
+                    2,
+                    1L,
+                ),
+                TerritoryOwnerChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-2"),
+                    PlayerId(1),
+                    1L,
+                ),
+                TerritoryTroopsChangedEvent(
+                    previousState.lobbyCode,
+                    TerritoryId("territory-2"),
+                    3,
+                    1L,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `player eliminated event projects to public elimination event`() {
+        val previousState = sampleGameState()
+        val currentState =
+            previousState.copy(
+                stateVersion = 2,
+                turnOrder = listOf(PlayerId(1)),
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    PlayerEliminatedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        playerId = PlayerId(2),
+                        eliminatedByPlayerId = PlayerId(1),
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                PlayerEliminatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    eliminatedByPlayerId = PlayerId(1),
+                    stateVersion = 2L,
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `player eliminated event also projects turn state change`() {
+        val previousState =
+            sampleGameState().copy(
+                activePlayer = PlayerId(2),
+                configuredStartPlayerId = PlayerId(2),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 3,
+                        startPlayerId = PlayerId(2),
+                    ),
+            )
+        val currentState =
+            previousState.copy(
+                stateVersion = 2,
+                activePlayer = PlayerId(1),
+                configuredStartPlayerId = PlayerId(1),
+                turnOrder = listOf(PlayerId(1)),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 3,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    PlayerEliminatedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        playerId = PlayerId(2),
+                        eliminatedByPlayerId = PlayerId(1),
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                PlayerEliminatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    playerId = PlayerId(2),
+                    eliminatedByPlayerId = PlayerId(1),
+                    stateVersion = 2L,
+                ),
+                TurnStateUpdatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    activePlayerId = PlayerId(1),
+                    turnPhase = TurnPhase.ATTACK,
+                    turnCount = 3,
+                    startPlayerId = PlayerId(1),
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `game started projects game started event and current turn state`() {
+        val previousState = sampleGameState().copy(gameStarted = false)
+        val currentState =
+            previousState.copy(
+                gameStarted = true,
+                stateVersion = 4,
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event = GameStarted(previousState.lobbyCode, 42L),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent(
+                    previousState.lobbyCode,
+                ),
+                TurnStateUpdatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    activePlayerId = PlayerId(1),
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 1,
+                    startPlayerId = PlayerId(1),
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
+    fun `start player configured projects updated turn state only`() {
+        val previousState = sampleGameState()
+        val currentState =
+            previousState.copy(
+                stateVersion = 3,
+                activePlayer = PlayerId(2),
+                configuredStartPlayerId = PlayerId(2),
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(2),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(2),
+                    ),
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    StartPlayerConfigured(
+                        lobbyCode = previousState.lobbyCode,
+                        startPlayerId = PlayerId(2),
+                        requesterPlayerId = PlayerId(1),
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+
+        assertEquals(
+            listOf(
+                TurnStateUpdatedEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    activePlayerId = PlayerId(2),
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 1,
+                    startPlayerId = PlayerId(2),
+                ),
+            ),
+            delta?.events,
+        )
+    }
+
+    @Test
     fun `buildSnapshot throws when game state has no turn state`() {
         val gameState =
             GameState.initial(
@@ -200,6 +482,37 @@ class PublicGameStateBuilderTest {
             }
         assertEquals(
             "GameState enthält keinen TurnState für einen Snapshot.",
+            exception.message,
+        )
+    }
+
+    @Test
+    fun `buildSnapshot throws when game state has no map definition`() {
+        val gameState =
+            GameState(
+                lobbyCode = LobbyCode("PGB3"),
+                players = listOf(PlayerId(1)),
+                playerDisplayNames = mapOf(PlayerId(1) to "One"),
+                activePlayer = PlayerId(1),
+                configuredStartPlayerId = PlayerId(1),
+                turnOrder = listOf(PlayerId(1)),
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                        turnCount = 1,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+
+        val exception =
+            assertThrows(IllegalStateException::class.java) {
+                builder.buildSnapshot(gameState)
+            }
+
+        assertEquals(
+            "GameState enthält keine MapDefinition für einen Snapshot.",
             exception.message,
         )
     }

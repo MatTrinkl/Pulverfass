@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -629,6 +630,51 @@ class TurnAdvanceIntegrationTest {
         }
 
     @Test
+    fun `eliminated spectator gets not active player error and no state change`() =
+        testApplication {
+            val lobbyCode = LobbyCode("TA10")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                runningTurnStateGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.ATTACK,
+                )
+            val spectatorState =
+                baseState.copy(
+                    turnOrder = listOf(playerOne),
+                    territoryStates =
+                        baseState.allTerritoryStates().associate { territoryState ->
+                            territoryState.territoryId to
+                                TerritoryState(
+                                    territoryId = territoryState.territoryId,
+                                    ownerId = playerOne,
+                                    troopCount = 1,
+                                )
+                        },
+                )
+
+            val result =
+                exerciseFailingAdvance(
+                    lobbyCode = lobbyCode,
+                    state = spectatorState,
+                    requesterPlayerId = playerTwo,
+                    request =
+                        TurnAdvanceRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            expectedPhase = TurnPhase.ATTACK,
+                        ),
+                )
+
+            assertEquals(TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER, result.first.code)
+            assertEquals(listOf(playerOne), result.second.turnOrder)
+            assertTrue(result.second.isSpectator(playerTwo))
+        }
+
+    @Test
     fun `disconnecting a non active player does not pause the game`() =
         testApplication {
             val network = ServerNetwork()
@@ -1078,6 +1124,7 @@ class TurnAdvanceIntegrationTest {
                     ),
                 status = GameStatus.RUNNING,
             )
+            .withAttackableTerritories(players)
 
     private suspend fun disconnectPlayer(
         playerId: PlayerId,

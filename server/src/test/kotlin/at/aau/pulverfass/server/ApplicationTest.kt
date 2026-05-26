@@ -2,10 +2,13 @@ package at.aau.pulverfass.server
 
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.session.SessionContextRegistry
+import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -25,7 +28,13 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -33,6 +42,11 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 class ApplicationTest {
+    private val mapDefinition =
+        at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
+            .loadDefault()
+            .defaultMapDefinition()
+
     private object ReadyDatabaseProbe : DatabaseReadinessProbe {
         override fun readiness(): DatabaseReadiness = DatabaseReadiness(DatabaseReadinessState.UP)
     }
@@ -374,6 +388,95 @@ class ApplicationTest {
     }
 
     @Test
+    fun `createServer transport overload creates startable engine that can be stopped cleanly`() {
+        val server =
+            createServer(
+                host = "127.0.0.1",
+                port = 0,
+                transport = ServerWebSocketTransport(),
+            )
+
+        try {
+            server.start(wait = false)
+            Thread.sleep(100)
+        } finally {
+            server.stop(1_000, 1_000)
+        }
+    }
+
+    @Test
+    fun `cleanupTerminalLobbyState removes lobby without persistence store`() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = at.aau.pulverfass.server.lobby.runtime.LobbyManager(scope = scope)
+        val lobbyCode = LobbyCode("CL12")
+
+        try {
+            lobbyManager.createLobby(lobbyCode)
+
+            runBlocking {
+                cleanupTerminalLobbyState(
+                    lobbyCode = lobbyCode,
+                    lobbyManager = lobbyManager,
+                    sessionContextRegistry = SessionContextRegistry(),
+                    recoveryStore = null,
+                )
+            }
+
+            assertNull(lobbyManager.getLobby(lobbyCode))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `startup helper functions classify recoverable and terminal states`() {
+        val waiting =
+            GameState
+                .initial(
+                    lobbyCode = LobbyCode("ST11"),
+                    mapDefinition = mapDefinition,
+                    players = listOf(PlayerId(3), PlayerId(7)),
+                )
+                .copy(status = GameStatus.WAITING_FOR_PLAYERS)
+        val running =
+            GameState
+                .initial(
+                    lobbyCode = LobbyCode("ST12"),
+                    mapDefinition = mapDefinition,
+                    players = listOf(PlayerId(2)),
+                )
+                .copy(status = GameStatus.RUNNING)
+        val finished =
+            GameState
+                .initial(
+                    lobbyCode = LobbyCode("ST13"),
+                    mapDefinition = mapDefinition,
+                )
+                .copy(status = GameStatus.FINISHED)
+        val closed =
+            GameState
+                .initial(
+                    lobbyCode = LobbyCode("ST14"),
+                    mapDefinition = mapDefinition,
+                )
+                .copy(status = GameStatus.CLOSED)
+
+        assertTrue(invokeBooleanHelper("isRecoverableOnStartup", waiting))
+        assertTrue(invokeBooleanHelper("isRecoverableOnStartup", running))
+        assertFalse(invokeBooleanHelper("isRecoverableOnStartup", finished))
+        assertFalse(invokeBooleanHelper("isRecoverableOnStartup", closed))
+        assertTrue(invokeBooleanHelper("isTerminal", finished))
+        assertTrue(invokeBooleanHelper("isTerminal", closed))
+        assertFalse(invokeBooleanHelper("isTerminal", waiting))
+        assertFalse(invokeBooleanHelper("isTerminal", running))
+        assertEquals(
+            7L,
+            invokeMaxPlayerId(listOf(waiting, running)),
+        )
+        assertEquals(0L, invokeMaxPlayerId(emptyList()))
+    }
+
+    @Test
     fun `moduleWithLobbyRuntime routes create and join requests end to end`() =
         testApplication {
             application {
@@ -495,5 +598,29 @@ class ApplicationTest {
             user = user,
             password = password,
         )
+    }
+
+    private fun invokeBooleanHelper(
+        name: String,
+        state: GameState,
+    ): Boolean {
+        val method =
+            Class.forName("at.aau.pulverfass.server.ApplicationKt").getDeclaredMethod(
+                name,
+                GameState::class.java,
+            )
+        method.isAccessible = true
+        return method.invoke(null, state) as Boolean
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun invokeMaxPlayerId(states: List<GameState>): Long {
+        val method =
+            Class.forName("at.aau.pulverfass.server.ApplicationKt").getDeclaredMethod(
+                "maxPlayerId",
+                List::class.java,
+            )
+        method.isAccessible = true
+        return method.invoke(null, states) as Long
     }
 }

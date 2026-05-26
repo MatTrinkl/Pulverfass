@@ -132,6 +132,7 @@ class PostgresDatabaseReadinessProbeTest {
 
     private fun testDatabaseConfig(): DatabaseRuntimeConfig {
         externalDatabaseConfig()?.let { return it }
+        assumeDockerAvailableForTestcontainers()
 
         val container =
             PostgreSQLContainer("postgres:17-alpine")
