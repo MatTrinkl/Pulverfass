@@ -11,15 +11,20 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -177,10 +182,196 @@ class ConfirmAttackDoneIntegrationTest {
             }
         }
 
+    @Test
+    fun `confirm attack done is rejected when requester is not active player`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    builder = this,
+                    lobbyCode = LobbyCode("CAD2"),
+                    state =
+                        attackState(
+                            lobbyCode = LobbyCode("CAD2"),
+                            players = listOf(playerOne, playerTwo),
+                            activePlayerId = playerTwo,
+                        ),
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmAttackDoneRequest(
+                            lobbyCode = LobbyCode("CAD2"),
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmAttackDoneErrorCode.NOT_ACTIVE_PLAYER, error.code)
+            assertEquals(TurnPhase.ATTACK, snapshot.activeTurnPhase)
+        }
+
+    @Test
+    fun `confirm attack done is rejected when phase is not attack`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    builder = this,
+                    lobbyCode = LobbyCode("CAD3"),
+                    state =
+                        attackState(
+                            lobbyCode = LobbyCode("CAD3"),
+                            players = listOf(playerOne, playerTwo),
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.FORTIFY,
+                        ),
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmAttackDoneRequest(
+                            lobbyCode = LobbyCode("CAD3"),
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmAttackDoneErrorCode.PHASE_MISMATCH, error.code)
+            assertEquals(TurnPhase.FORTIFY, snapshot.activeTurnPhase)
+        }
+
+    @Test
+    fun `confirm attack done is rejected when game is paused`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    builder = this,
+                    lobbyCode = LobbyCode("CAD4"),
+                    state =
+                        attackState(
+                            lobbyCode = LobbyCode("CAD4"),
+                            players = listOf(playerOne, playerTwo),
+                            activePlayerId = playerOne,
+                            isPaused = true,
+                        ),
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmAttackDoneRequest(
+                            lobbyCode = LobbyCode("CAD4"),
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ConfirmAttackDoneErrorCode.GAME_PAUSED, error.code)
+            assertEquals(true, snapshot.turnState?.isPaused)
+        }
+
+    @Test
+    fun `confirm attack done rejects mismatched payload player`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+
+            val (error, snapshot) =
+                exerciseFailingConfirm(
+                    builder = this,
+                    lobbyCode = LobbyCode("CAD5"),
+                    state =
+                        attackState(
+                            lobbyCode = LobbyCode("CAD5"),
+                            players = listOf(playerOne, playerTwo),
+                            activePlayerId = playerOne,
+                        ),
+                    requesterPlayerId = playerOne,
+                    request =
+                        ConfirmAttackDoneRequest(
+                            lobbyCode = LobbyCode("CAD5"),
+                            playerId = playerTwo,
+                        ),
+                )
+
+            assertEquals(ConfirmAttackDoneErrorCode.NOT_ACTIVE_PLAYER, error.code)
+            assertEquals(TurnPhase.ATTACK, snapshot.activeTurnPhase)
+        }
+
+    @Test
+    fun `confirm attack done is rejected when lobby does not exist`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+            routingService.start(serverScope)
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val session =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = PlayerId(1),
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    session.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ConfirmAttackDoneRequest(
+                                        lobbyCode = LobbyCode("MS11"),
+                                        playerId = PlayerId(1),
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val error =
+                        receiveRelevantTestPayload(session.first) as ConfirmAttackDoneErrorResponse
+
+                    assertEquals(ConfirmAttackDoneErrorCode.GAME_NOT_FOUND, error.code)
+                    assertNull(receiveRelevantTestPayloadOrNull(session.first))
+                    session.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private fun attackState(
         lobbyCode: LobbyCode,
         players: List<PlayerId>,
         activePlayerId: PlayerId,
+        turnPhase: TurnPhase = TurnPhase.ATTACK,
+        isPaused: Boolean = false,
     ): GameState =
         GameState
             .initial(
@@ -196,15 +387,19 @@ class ConfirmAttackDoneIntegrationTest {
                 turnState =
                     TurnState(
                         activePlayerId = activePlayerId,
-                        turnPhase = TurnPhase.ATTACK,
+                        turnPhase = turnPhase,
                         turnCount = 1,
                         startPlayerId = players.first(),
+                        isPaused = isPaused,
+                        pauseReason =
+                            TurnPauseReasons.WAITING_FOR_PLAYER.takeIf { isPaused },
+                        pausedPlayerId = activePlayerId.takeIf { isPaused },
                     ),
                 status = GameStatus.RUNNING,
             )
 
     private suspend fun connectSessionWithConnection(
-        client: io.ktor.client.HttpClient,
+        client: HttpClient,
         network: ServerNetwork,
         playerId: PlayerId,
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
@@ -220,4 +415,75 @@ class ConfirmAttackDoneIntegrationTest {
 
     private fun defaultMapDefinition() =
         at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault()
+
+    private suspend fun exerciseFailingConfirm(
+        builder: ApplicationTestBuilder,
+        lobbyCode: LobbyCode,
+        state: GameState,
+        requesterPlayerId: PlayerId,
+        request: ConfirmAttackDoneRequest,
+    ): Pair<ConfirmAttackDoneErrorResponse, GameState> {
+        val network = ServerNetwork()
+        val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = LobbyManager(serverScope)
+        val router =
+            MainServerRouter(
+                lobbyManager = lobbyManager,
+                mapper = DefaultNetworkToLobbyEventMapper(),
+            )
+        val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+        val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+        val routingService =
+            MainServerLobbyRoutingService(
+                network = network,
+                router = router,
+                lobbyManager = lobbyManager,
+                playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                hooks = MainServerLobbyRoutingServiceHooks(),
+            )
+
+        lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = state)
+        builder.application {
+            module(network)
+        }
+        routingService.start(serverScope)
+        val client =
+            builder.createClient {
+                install(WebSockets)
+            }
+
+        return try {
+            coroutineScope {
+                val session =
+                    connectSessionWithConnection(
+                        client = client,
+                        network = network,
+                        playerId = requesterPlayerId,
+                        playersByConnection = playersByConnection,
+                        connectionsByPlayer = connectionsByPlayer,
+                    )
+
+                session.first.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(request),
+                    ),
+                )
+
+                val error =
+                    receiveRelevantTestPayload(session.first) as ConfirmAttackDoneErrorResponse
+                assertNull(receiveRelevantTestPayloadOrNull(session.first))
+                val snapshot =
+                    lobbyManager.getLobby(lobbyCode)?.currentState()
+                        ?: error("state missing")
+                session.first.close()
+                error to snapshot
+            }
+        } finally {
+            routingService.stop()
+            lobbyManager.shutdownAll()
+            serverScope.cancel()
+        }
+    }
 }

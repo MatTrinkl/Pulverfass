@@ -34,6 +34,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -126,6 +127,101 @@ class LobbyRecoveryLoaderTest {
         assertThrows(IllegalStateException::class.java) {
             snapshot.toGameState()
         }
+    }
+
+    @Test
+    fun `persisted snapshot restores rng fields from fallback determinism metadata`() {
+        val state =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = mapDefinition,
+                players = listOf(PlayerId(1)),
+                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+            ).copy(
+                status = GameStatus.RUNNING,
+                gameStarted = true,
+                gameRandomSeed = 77L,
+                gameRandomState = 99L,
+            )
+
+        val restored =
+            PersistedLobbyRecoverySnapshot
+                .fromGameState(state)
+                .copy(
+                    gameRandomSeed = null,
+                    gameRandomState = null,
+                ).toGameState()
+
+        assertEquals(77L, restored.gameRandomSeed)
+        assertEquals(77L, restored.gameRandomState)
+    }
+
+    @Test
+    fun `persisted snapshot falls back to explicit random seed when state is missing`() {
+        val state =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = mapDefinition,
+                players = listOf(PlayerId(1)),
+                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+            ).copy(
+                status = GameStatus.RUNNING,
+                gameStarted = true,
+                gameRandomSeed = 88L,
+                gameRandomState = 144L,
+            )
+
+        val restored =
+            PersistedLobbyRecoverySnapshot
+                .fromGameState(state)
+                .copy(gameRandomState = null)
+                .toGameState()
+
+        assertEquals(88L, restored.gameRandomSeed)
+        assertEquals(88L, restored.gameRandomState)
+    }
+
+    @Test
+    fun `persisted snapshot rejects missing map definition on serialization`() {
+        val state =
+            GameState.initial(lobbyCode = lobbyCode).copy(
+                mapDefinition = null,
+            )
+
+        assertThrows(IllegalStateException::class.java) {
+            PersistedLobbyRecoverySnapshot.fromGameState(state)
+        }
+    }
+
+    @Test
+    fun `persisted turn state snapshot round trips paused and unpaused variants`() {
+        val paused =
+            PersistedTurnStateSnapshot.fromTurnState(
+                at.aau.pulverfass.shared.lobby.state.TurnState(
+                    activePlayerId = PlayerId(3),
+                    turnPhase = TurnPhase.ATTACK,
+                    turnCount = 5,
+                    startPlayerId = PlayerId(1),
+                    isPaused = true,
+                    pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                    pausedPlayerId = PlayerId(3),
+                ),
+            )
+        val unpaused =
+            PersistedTurnStateSnapshot.fromTurnState(
+                at.aau.pulverfass.shared.lobby.state.TurnState(
+                    activePlayerId = PlayerId(4),
+                    turnPhase = TurnPhase.FORTIFY,
+                    turnCount = 6,
+                    startPlayerId = PlayerId(2),
+                    isPaused = false,
+                ),
+            )
+
+        assertEquals(TurnPauseReasons.WAITING_FOR_PLAYER, paused.toTurnState().pauseReason)
+        assertEquals(PlayerId(3), paused.toTurnState().pausedPlayerId)
+        assertEquals(null, unpaused.toTurnState().pauseReason)
+        assertEquals(null, unpaused.toTurnState().pausedPlayerId)
     }
 
     @Test
@@ -345,6 +441,109 @@ class LobbyRecoveryLoaderTest {
         }
         assertThrows(IllegalStateException::class.java) {
             record("unknown_event", """{"lobbyCode":"LR11"}""").toLobbyEvent()
+        }
+    }
+
+    @Test
+    fun `toLobbyEvent maps nullable optional fields`() {
+        assertEquals(
+            LobbyClosed(lobbyCode, null),
+            record(
+                eventType = "lobby_closed",
+                eventJson = """{"lobbyCode":"LR11","reason":null}""",
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            PlayerLeft(lobbyCode, PlayerId(2), null),
+            record(
+                eventType = "player_left",
+                eventJson = """{"lobbyCode":"LR11","playerId":2,"reason":null}""",
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            InvalidActionDetected(lobbyCode, null, "invalid"),
+            record(
+                eventType = "invalid_action_detected",
+                eventJson = """{"lobbyCode":"LR11","playerId":null,"reason":"invalid"}""",
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            TerritoryOwnerChangedEvent(
+                lobbyCode = lobbyCode,
+                territoryId = TerritoryId("territory-1"),
+                ownerId = null,
+                stateVersion = null,
+            ),
+            record(
+                eventType = "territory_owner_changed",
+                eventJson =
+                    """
+                    {"lobbyCode":"LR11","territoryId":"territory-1","ownerId":null,"stateVersion":null}
+                    """.trimIndent(),
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            TurnStateUpdatedEvent(
+                lobbyCode = lobbyCode,
+                activePlayerId = PlayerId(6),
+                turnPhase = TurnPhase.ATTACK,
+                turnCount = 4,
+                startPlayerId = PlayerId(1),
+                isPaused = false,
+                pauseReason = null,
+                pausedPlayerId = null,
+            ),
+            record(
+                eventType = "turn_state_updated",
+                eventJson =
+                    """
+                    {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"ATTACK","turnCount":4,
+                    "startPlayerId":1,"isPaused":false,"pauseReason":null,"pausedPlayerId":null}
+                    """.trimIndent().replace("\n", ""),
+            ).toLobbyEvent(),
+        )
+    }
+
+    @Test
+    fun `toLobbyEvent rejects malformed persisted payload fields`() {
+        val malformedPayloads =
+            listOf(
+                record(
+                    eventType = "attack_resolved",
+                    eventJson =
+                        """
+                        {"lobbyCode":"LR11","attackerPlayerId":1,"defenderPlayerId":2,
+                        "fromTerritoryId":"alpha","toTerritoryId":"beta","attackTroops":"x",
+                        "sourceTroopsBefore":5,"targetTroopsBefore":2,"requestedAttackDice":3,
+                        "attackDice":3,"defendDice":2,"attackerRolls":[5,4,3],"defenderRolls":[2,1],
+                        "rngTrace":[5,3,4,1,2],"rngStateBefore":2,"rngStateAfter":3,
+                        "attackerLosses":0,"defenderLosses":2,"attackerRemaining":5,
+                        "defenderRemaining":0,"occupyingTroopCount":3,"minOccupyingTroops":3}
+                        """.trimIndent().replace("\n", ""),
+                ),
+                record(
+                    eventType = "turn_state_updated",
+                    eventJson =
+                        """
+                        {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"ATTACK",
+                        "turnCount":4,"startPlayerId":1,"isPaused":"nope"}
+                        """.trimIndent().replace("\n", ""),
+                ),
+                record(
+                    eventType = "card_set_traded_in",
+                    eventJson =
+                        """
+                        {"lobbyCode":"LR11","playerId":5,"cardIds":["card-a",3],"value":6,"tradeIndex":3}
+                        """.trimIndent(),
+                ),
+            )
+
+        malformedPayloads.forEach { payload ->
+            val exception =
+                assertThrows(RuntimeException::class.java) {
+                    payload.toLobbyEvent()
+                }
+            assertTrue(exception.message!!.contains("muss"))
         }
     }
 
