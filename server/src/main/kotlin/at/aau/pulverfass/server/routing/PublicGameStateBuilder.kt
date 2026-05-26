@@ -14,6 +14,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
@@ -200,7 +201,12 @@ class PublicGameStateBuilder {
                         ),
                     )
                 }
-                is PlayerEliminatedEvent -> add(event.copy(stateVersion = currentState.stateVersion))
+                is PlayerEliminatedEvent -> {
+                    add(event.copy(stateVersion = currentState.stateVersion))
+                    if (previousState.turnState != currentState.turnState) {
+                        currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
+                    }
+                }
                 is AttackResolvedEvent ->
                     addAll(buildAttackPayloads(event, currentState.stateVersion))
                 is TerritoryOwnerChangedEvent,
@@ -237,7 +243,7 @@ class PublicGameStateBuilder {
         stateVersion: Long,
     ): List<PublicGameEvent> =
         buildList {
-            add(event.copy(stateVersion = stateVersion))
+            add(AttackResolvedBroadcastEvent.from(event, stateVersion))
             add(
                 TerritoryTroopsChangedEvent(
                     lobbyCode = event.lobbyCode,
@@ -302,10 +308,7 @@ class PublicGameStateBuilder {
                 )
 
         return PublicMapProjection(
-            determinism =
-                PublicDeterminismMetadataSnapshot.from(definition).copy(
-                    seed = gameState.gameRandomSeed,
-                ),
+            determinism = PublicDeterminismMetadataSnapshot.from(definition),
             definition = MapDefinitionSnapshot.from(definition),
             territoryStates = gameState.allTerritoryStates().map(MapTerritoryStateSnapshot::from),
         )

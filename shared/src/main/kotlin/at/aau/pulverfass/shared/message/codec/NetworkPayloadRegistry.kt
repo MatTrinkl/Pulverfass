@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -89,7 +90,7 @@ internal object NetworkPayloadRegistry {
             AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
             AttackResponse::class.java to MessageType.LOBBY_ATTACK_RESPONSE,
             AttackErrorResponse::class.java to MessageType.LOBBY_ATTACK_ERROR_RESPONSE,
-            AttackResolvedEvent::class.java to MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST,
+            AttackResolvedBroadcastEvent::class.java to MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST,
             PlayerEliminatedEvent::class.java to MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST,
             ConfirmAttackDoneRequest::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST,
             ConfirmAttackDoneResponse::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_RESPONSE,
@@ -189,7 +190,8 @@ internal object NetworkPayloadRegistry {
             AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
             AttackResponse::class.java to encodeWith(AttackResponse.serializer()),
             AttackErrorResponse::class.java to encodeWith(AttackErrorResponse.serializer()),
-            AttackResolvedEvent::class.java to encodeWith(AttackResolvedEvent.serializer()),
+            AttackResolvedBroadcastEvent::class.java to
+                encodeWith(AttackResolvedBroadcastEvent.serializer()),
             PlayerEliminatedEvent::class.java to encodeWith(PlayerEliminatedEvent.serializer()),
             ConfirmAttackDoneRequest::class.java to
                 encodeWith(ConfirmAttackDoneRequest.serializer()),
@@ -296,7 +298,7 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_ATTACK_ERROR_RESPONSE to
                 decodeWith(AttackErrorResponse.serializer()),
             MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST to
-                decodeWith(AttackResolvedEvent.serializer()),
+                decodeWith(AttackResolvedBroadcastEvent.serializer()),
             MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST to
                 decodeWith(PlayerEliminatedEvent.serializer()),
             MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST to

@@ -85,7 +85,9 @@ class LobbyPersistenceHooksIntegrationTest {
 
     @AfterAll
     fun closeResources() {
-        gateway.close()
+        if (::gateway.isInitialized) {
+            gateway.close()
+        }
         managedContainer?.stop()
     }
 
@@ -325,6 +327,7 @@ class LobbyPersistenceHooksIntegrationTest {
     }
 
     private fun startManagedContainer(): TestDatabaseConfig {
+        assumeDockerAvailableForTestcontainers()
         val container = PostgreSQLContainer("postgres:17-alpine")
         container.start()
         managedContainer = container

@@ -1124,6 +1124,7 @@ class TurnAdvanceIntegrationTest {
                     ),
                 status = GameStatus.RUNNING,
             )
+            .withAttackableTerritories(players)
 
     private suspend fun disconnectPlayer(
         playerId: PlayerId,

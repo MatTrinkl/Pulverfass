@@ -4,12 +4,12 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
@@ -340,7 +340,7 @@ class NetworkPayloadRegistryTest {
     @Test
     fun `should resolve message type and serialization for attack resolved event`() {
         val payload =
-            AttackResolvedEvent(
+            AttackResolvedBroadcastEvent(
                 lobbyCode = LobbyCode("AT15"),
                 attackerPlayerId = PlayerId(3),
                 defenderPlayerId = PlayerId(4),
@@ -354,9 +354,6 @@ class NetworkPayloadRegistryTest {
                 defendDice = 2,
                 attackerRolls = listOf(5, 4, 3),
                 defenderRolls = listOf(2, 1),
-                rngTrace = listOf(5, 3, 4, 1, 2),
-                rngStateBefore = 2L,
-                rngStateAfter = 3L,
                 attackerLosses = 0,
                 defenderLosses = 2,
                 attackerRemaining = 5,
@@ -373,7 +370,7 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST, messageType)
         assertEquals(payload, deserialized)
         assertTrue(serialized.contains("attackTroops"))
-        assertTrue(serialized.contains("rngTrace"))
+        assertTrue(serialized.contains("attackerRolls"))
     }
 
     @Test

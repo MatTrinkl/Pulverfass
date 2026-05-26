@@ -12,12 +12,14 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,9 +28,13 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalSerializationApi::class)
 class PublicGameStateBuilderTest {
     private val builder = PublicGameStateBuilder()
-    private val json = Json
+    private val json =
+        Json {
+            explicitNulls = false
+        }
 
     @Test
     fun `snapshot builder exposes all required public fields consistently`() {
@@ -55,6 +61,7 @@ class PublicGameStateBuilderTest {
         assertEquals(9, snapshot.stateVersion)
         assertEquals(gameState.mapDefinition?.mapHash, snapshot.determinism.mapHash)
         assertEquals(gameState.mapDefinition?.schemaVersion, snapshot.determinism.schemaVersion)
+        assertEquals(null, snapshot.determinism.seed)
         assertNotNull(snapshot.turnState)
         assertEquals(4, snapshot.turnState.pendingReinforcements)
         assertEquals(gameState.allTerritoryStates().size, snapshot.territoryStates.size)
@@ -84,6 +91,7 @@ class PublicGameStateBuilderTest {
         assertFalse(serialized.contains("recipientPlayerId"))
         assertFalse(serialized.contains("handCards"))
         assertFalse(serialized.contains("secretObjectives"))
+        assertFalse(serialized.contains("\"seed\":"))
     }
 
     @Test
@@ -225,7 +233,7 @@ class PublicGameStateBuilderTest {
 
         assertEquals(
             listOf(
-                AttackResolvedEvent(
+                AttackResolvedBroadcastEvent(
                     lobbyCode = previousState.lobbyCode,
                     attackerPlayerId = PlayerId(1),
                     defenderPlayerId = PlayerId(2),
@@ -239,9 +247,6 @@ class PublicGameStateBuilderTest {
                     defendDice = 2,
                     attackerRolls = listOf(5, 4, 3),
                     defenderRolls = listOf(2, 1),
-                    rngTrace = listOf(5, 3, 4, 1, 2),
-                    rngStateBefore = 2L,
-                    rngStateAfter = 3L,
                     attackerLosses = 0,
                     defenderLosses = 2,
                     attackerRemaining = 5,

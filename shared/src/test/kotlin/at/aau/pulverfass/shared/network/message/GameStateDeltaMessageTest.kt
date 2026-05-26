@@ -3,10 +3,10 @@ package at.aau.pulverfass.shared.network.message
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -25,7 +25,7 @@ class GameStateDeltaMessageTest {
                 toVersion = 4,
                 events =
                     listOf(
-                        AttackResolvedEvent(
+                        AttackResolvedBroadcastEvent(
                             lobbyCode = LobbyCode("AB12"),
                             attackerPlayerId = PlayerId(7),
                             defenderPlayerId = PlayerId(8),
@@ -39,9 +39,6 @@ class GameStateDeltaMessageTest {
                             defendDice = 2,
                             attackerRolls = listOf(5, 4, 3),
                             defenderRolls = listOf(2, 1),
-                            rngTrace = listOf(5, 3, 4, 1, 2),
-                            rngStateBefore = 2L,
-                            rngStateAfter = 3L,
                             attackerLosses = 0,
                             defenderLosses = 2,
                             attackerRemaining = 5,

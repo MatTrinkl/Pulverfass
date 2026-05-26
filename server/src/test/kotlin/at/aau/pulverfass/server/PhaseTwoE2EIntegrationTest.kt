@@ -10,7 +10,6 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -27,6 +26,7 @@ import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
@@ -105,7 +105,7 @@ class PhaseTwoE2EIntegrationTest {
                             toVersion = 1,
                             events =
                                 listOf(
-                                    AttackResolvedEvent(
+                                    AttackResolvedBroadcastEvent(
                                         lobbyCode = lobbyCode,
                                         attackerPlayerId = attacker,
                                         defenderPlayerId = defender,
@@ -119,9 +119,6 @@ class PhaseTwoE2EIntegrationTest {
                                         defendDice = 2,
                                         attackerRolls = listOf(6, 5, 2),
                                         defenderRolls = listOf(5, 5),
-                                        rngTrace = listOf(6, 2, 5, 5, 5),
-                                        rngStateBefore = 16L,
-                                        rngStateAfter = 1663341875487337593L,
                                         attackerLosses = 1,
                                         defenderLosses = 1,
                                         attackerRemaining = 4,
@@ -218,7 +215,7 @@ class PhaseTwoE2EIntegrationTest {
                             toVersion = 1,
                             events =
                                 listOf(
-                                    AttackResolvedEvent(
+                                    AttackResolvedBroadcastEvent(
                                         lobbyCode = lobbyCode,
                                         attackerPlayerId = attacker,
                                         defenderPlayerId = defender,
@@ -232,9 +229,6 @@ class PhaseTwoE2EIntegrationTest {
                                         defendDice = 2,
                                         attackerRolls = listOf(5, 4, 3),
                                         defenderRolls = listOf(2, 1),
-                                        rngTrace = listOf(5, 3, 4, 1, 2),
-                                        rngStateBefore = 2L,
-                                        rngStateAfter = 1663341875487337579L,
                                         attackerLosses = 0,
                                         defenderLosses = 2,
                                         attackerRemaining = 5,
