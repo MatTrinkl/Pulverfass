@@ -460,6 +460,323 @@ class FortifyMoveIntegrationTest {
             assertEquals(false, snapshot.fortifyUsedThisTurn)
         }
 
+    @Test
+    fun `fortify rejects missing lobby`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+
+            val error =
+                exerciseMissingLobbyFortify(
+                    requesterPlayerId = playerOne,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FM05"),
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(
+                FortifyMoveErrorResponse(
+                    code = FortifyMoveErrorCode.GAME_NOT_FOUND,
+                    reason = "Lobby 'FM05' wurde nicht gefunden.",
+                ),
+                error,
+            )
+        }
+
+    @Test
+    fun `fortify rejects player who is not active`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val state =
+                fortifyReadyGame(
+                    lobbyCode = LobbyCode("FM06"),
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    territoryOwners =
+                        mapOf(
+                            TerritoryId("alpha") to playerTwo,
+                            TerritoryId("beta") to playerTwo,
+                            TerritoryId("gamma") to playerTwo,
+                        ),
+                    troopCounts =
+                        mapOf(
+                            TerritoryId("alpha") to 4,
+                            TerritoryId("beta") to 2,
+                            TerritoryId("gamma") to 1,
+                        ),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingFortify(
+                    lobbyCode = LobbyCode("FM06"),
+                    state = state,
+                    requesterPlayerId = playerTwo,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FM06"),
+                            playerId = playerTwo,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(FortifyMoveErrorCode.NOT_ACTIVE_PLAYER, error.code)
+            assertEquals(4, snapshot.troopCountOf(TerritoryId("alpha")))
+            assertEquals(1, snapshot.troopCountOf(TerritoryId("gamma")))
+            assertEquals(false, snapshot.fortifyUsedThisTurn)
+        }
+
+    @Test
+    fun `fortify rejects wrong phase`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val fortifyState =
+                fortifyReadyGame(
+                    lobbyCode = LobbyCode("FM07"),
+                    players = listOf(playerOne, PlayerId(2)),
+                    activePlayerId = playerOne,
+                    territoryOwners =
+                        mapOf(
+                            TerritoryId("alpha") to playerOne,
+                            TerritoryId("beta") to playerOne,
+                            TerritoryId("gamma") to playerOne,
+                        ),
+                    troopCounts =
+                        mapOf(
+                            TerritoryId("alpha") to 4,
+                            TerritoryId("beta") to 2,
+                            TerritoryId("gamma") to 1,
+                        ),
+                )
+            val attackState =
+                fortifyState.copy(
+                    turnState = fortifyState.turnState?.copy(turnPhase = TurnPhase.ATTACK),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingFortify(
+                    lobbyCode = LobbyCode("FM07"),
+                    state = attackState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FM07"),
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(FortifyMoveErrorCode.WRONG_PHASE, error.code)
+            assertEquals(TurnPhase.ATTACK, snapshot.activeTurnPhase)
+            assertEquals(false, snapshot.fortifyUsedThisTurn)
+        }
+
+    @Test
+    fun `fortify rejects unowned destination`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val state =
+                fortifyReadyGame(
+                    lobbyCode = LobbyCode("FM08"),
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    territoryOwners =
+                        mapOf(
+                            TerritoryId("alpha") to playerOne,
+                            TerritoryId("beta") to playerOne,
+                            TerritoryId("gamma") to playerTwo,
+                        ),
+                    troopCounts =
+                        mapOf(
+                            TerritoryId("alpha") to 4,
+                            TerritoryId("beta") to 2,
+                            TerritoryId("gamma") to 1,
+                        ),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingFortify(
+                    lobbyCode = LobbyCode("FM08"),
+                    state = state,
+                    requesterPlayerId = playerOne,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FM08"),
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(FortifyMoveErrorCode.TERRITORY_NOT_OWNED, error.code)
+            assertEquals(4, snapshot.troopCountOf(TerritoryId("alpha")))
+            assertEquals(1, snapshot.troopCountOf(TerritoryId("gamma")))
+            assertEquals(false, snapshot.fortifyUsedThisTurn)
+        }
+
+    @Test
+    fun `fortify rejects insufficient source troops`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val state =
+                fortifyReadyGame(
+                    lobbyCode = LobbyCode("FM09"),
+                    players = listOf(playerOne, PlayerId(2)),
+                    activePlayerId = playerOne,
+                    territoryOwners =
+                        mapOf(
+                            TerritoryId("alpha") to playerOne,
+                            TerritoryId("beta") to playerOne,
+                            TerritoryId("gamma") to playerOne,
+                        ),
+                    troopCounts =
+                        mapOf(
+                            TerritoryId("alpha") to 1,
+                            TerritoryId("beta") to 2,
+                            TerritoryId("gamma") to 1,
+                        ),
+                )
+
+            val (error, snapshot) =
+                exerciseFailingFortify(
+                    lobbyCode = LobbyCode("FM09"),
+                    state = state,
+                    requesterPlayerId = playerOne,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FM09"),
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(FortifyMoveErrorCode.INSUFFICIENT_TROOPS, error.code)
+            assertEquals(1, snapshot.troopCountOf(TerritoryId("alpha")))
+            assertEquals(1, snapshot.troopCountOf(TerritoryId("gamma")))
+            assertEquals(false, snapshot.fortifyUsedThisTurn)
+        }
+
+    @Test
+    fun `fortify rejects second move in same turn`() =
+        testApplication {
+            val playerOne = PlayerId(1)
+            val state =
+                fortifyReadyGame(
+                    lobbyCode = LobbyCode("FMA0"),
+                    players = listOf(playerOne, PlayerId(2)),
+                    activePlayerId = playerOne,
+                    territoryOwners =
+                        mapOf(
+                            TerritoryId("alpha") to playerOne,
+                            TerritoryId("beta") to playerOne,
+                            TerritoryId("gamma") to playerOne,
+                        ),
+                    troopCounts =
+                        mapOf(
+                            TerritoryId("alpha") to 4,
+                            TerritoryId("beta") to 2,
+                            TerritoryId("gamma") to 1,
+                        ),
+                    fortifyUsedThisTurn = true,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingFortify(
+                    lobbyCode = LobbyCode("FMA0"),
+                    state = state,
+                    requesterPlayerId = playerOne,
+                    request =
+                        FortifyMoveRequest(
+                            lobbyCode = LobbyCode("FMA0"),
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("gamma"),
+                            troopCount = 1,
+                        ),
+                )
+
+            assertEquals(FortifyMoveErrorCode.FORTIFY_ALREADY_USED, error.code)
+            assertEquals(4, snapshot.troopCountOf(TerritoryId("alpha")))
+            assertEquals(1, snapshot.troopCountOf(TerritoryId("gamma")))
+            assertEquals(true, snapshot.fortifyUsedThisTurn)
+        }
+
+    private suspend fun ApplicationTestBuilder.exerciseMissingLobbyFortify(
+        requesterPlayerId: PlayerId,
+        request: FortifyMoveRequest,
+    ): FortifyMoveErrorResponse {
+        val network = ServerNetwork()
+        val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = LobbyManager(serverScope)
+        val router =
+            MainServerRouter(
+                lobbyManager = lobbyManager,
+                mapper = DefaultNetworkToLobbyEventMapper(),
+            )
+        val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+        val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+        val routingService =
+            MainServerLobbyRoutingService(
+                network = network,
+                router = router,
+                lobbyManager = lobbyManager,
+                playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                hooks = MainServerLobbyRoutingServiceHooks(),
+            )
+
+        application {
+            module(network)
+        }
+        routingService.start(serverScope)
+
+        val client =
+            createClient {
+                install(WebSockets)
+            }
+
+        return try {
+            coroutineScope {
+                val requesterSession =
+                    connectSessionWithConnection(
+                        client = client,
+                        network = network,
+                        playerId = requesterPlayerId,
+                        playersByConnection = playersByConnection,
+                        connectionsByPlayer = connectionsByPlayer,
+                    )
+
+                requesterSession.first.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(request),
+                    ),
+                )
+
+                val error =
+                    assertIs<FortifyMoveErrorResponse>(receivePayload(requesterSession.first))
+                requesterSession.first.close()
+                error
+            }
+        } finally {
+            routingService.stop()
+            lobbyManager.shutdownAll()
+            serverScope.cancel()
+        }
+    }
+
     private suspend fun ApplicationTestBuilder.exerciseFailingFortify(
         lobbyCode: LobbyCode,
         state: GameState,
