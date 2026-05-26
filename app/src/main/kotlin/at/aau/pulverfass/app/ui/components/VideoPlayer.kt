@@ -81,11 +81,12 @@ private fun VideoViewInterop(
                         mediaPlayer.videoWidth,
                         mediaPlayer.videoHeight,
                     )
+                    // start playback once prepared to ensure settings (loop/volume) applied
+                    view.start()
                 }
                 setOnCompletionListener {
                     if (!loop) onCompleted()
                 }
-                start()
             }
         },
     )

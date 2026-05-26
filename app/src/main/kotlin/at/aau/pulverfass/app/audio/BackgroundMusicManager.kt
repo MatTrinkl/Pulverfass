@@ -36,6 +36,7 @@ class BackgroundMusicManager(context: Context) {
     val isSfxMuted: Boolean
         get() = prefs.getBoolean(KEY_SFX_MUTED, false)
 
+    @Synchronized
     fun play(
         @RawRes resId: Int,
         loop: Boolean = true,
@@ -44,13 +45,26 @@ class BackgroundMusicManager(context: Context) {
         stop()
         currentTrack = resId
         if (isMusicMuted) return
-        player =
-            MediaPlayer.create(appContext, resId)?.apply {
-                isLooping = loop
-                start()
-            }
+        // Prepare asynchronously to avoid blocking UI thread and to ensure proper start timing
+        val afd = appContext.resources.openRawResourceFd(resId)
+        afd?.use { fileDesc ->
+            player =
+                MediaPlayer().apply {
+                    setDataSource(fileDesc.fileDescriptor, fileDesc.startOffset, fileDesc.length)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = loop
+                        mp.start()
+                    }
+                    setOnErrorListener { mp, _, _ ->
+                        runCatching { mp.release() }
+                        true
+                    }
+                    prepareAsync()
+                }
+        }
     }
 
+    @Synchronized
     fun stop() {
         player?.let {
             runCatching {
@@ -62,10 +76,12 @@ class BackgroundMusicManager(context: Context) {
         currentTrack = null
     }
 
+    @Synchronized
     fun pause() {
         player?.takeIf { it.isPlaying }?.pause()
     }
 
+    @Synchronized
     fun resume() {
         if (isMusicMuted) return
         player?.takeIf { !it.isPlaying }?.start()
@@ -109,6 +125,7 @@ class BackgroundMusicManager(context: Context) {
         sfxPlayer.start()
     }
 
+    @Synchronized
     fun release() {
         stop()
         activeSfxPlayers.forEach { sfx ->
