@@ -197,22 +197,22 @@ API-Regel fuer Phase 2:
 
 ## Integrationsfolgen
 
-### Placeholder, der ersetzt werden soll
+### Angriffskommando
 
-Die aktuelle Form in [MapCommand.kt](/C:/Users/matth/Documents/GitHub/SE2Risiko/shared/src/main/kotlin/at/aau/pulverfass/shared/lobby/command/MapCommand.kt:61) modelliert einen bereits aufgeloesten Angriff ueber:
+Die aktuelle Form in
+[`MapCommand.kt`](../../shared/src/main/kotlin/at/aau/pulverfass/shared/lobby/command/MapCommand.kt)
+modelliert den Angriff nur noch als fachlichen Intent:
 
-- `attackerLosses`
-- `defenderLosses`
-- `occupyingTroopCount`
+- `fromTerritoryId`
+- `toTerritoryId`
+- `requestedAttackDice`
+- optional `committedTroopCount`
+- optional `occupyingTroopCount`
 
-Diese Werte duerfen kuenftig nicht mehr frei geraten oder clientseitig festgelegt werden. Sie sind Output eines autoritativen Battle-Resolvers nach obiger Regel.
-
-Konkret bedeutet das fuer die naechste Implementierung:
-
-- ein Client-Request darf keinen `attackerLosses`-Wert transportieren
-- ein Client-Request darf keinen `defenderLosses`-Wert transportieren
-- ein Client-Request darf keine Rohwuerfel oder Seed-Fortschritte transportieren
-- die Aufloesung entsteht serverseitig aus `gameRandomSeed`, `rngState` und den fachlichen Eingaben des Angriffs
+`attackerLosses`, `defenderLosses`, Rohwuerfel und RNG-Fortschritte sind kein
+Teil des Client-Requests mehr. Diese Werte entstehen ausschliesslich
+serverseitig im Battle-Resolver auf Basis von `gameRandomSeed`,
+`gameRandomState` und den fachlichen Eingaben des Angriffs.
 
 ### Minimale Resolver-Ausgabe
 

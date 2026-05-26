@@ -3,15 +3,14 @@ package at.aau.pulverfass.shared.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
-import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import kotlinx.serialization.Serializable
 
 /**
  * Serverautoritativ aufgeloeste Kampf-Runde inklusive RNG-Trace fuer Replay.
  *
- * Das Event ist die persistierbare Battle-Source-of-Truth und wird zusaetzlich
- * als oeffentliches Delta-Event an Clients broadcastet. Die abgeleiteten
- * Territory-Deltas bleiben fuer bestehende Consumer erhalten.
+ * Das Event ist die persistierbare Battle-Source-of-Truth. Oeffentliche
+ * Kampfdaten werden daraus serverseitig in ein sanitisiertes
+ * `AttackResolvedBroadcastEvent` projiziert.
  */
 @Serializable
 data class AttackResolvedEvent(
@@ -38,7 +37,7 @@ data class AttackResolvedEvent(
     val occupyingTroopCount: Int? = null,
     val minOccupyingTroops: Int? = null,
     val stateVersion: Long? = null,
-) : InternalLobbyEvent, PublicGameEvent {
+) : InternalLobbyEvent {
     init {
         require(attackTroops >= 2) {
             "AttackResolvedEvent.attackTroops muss mindestens 2 sein."
@@ -105,6 +104,9 @@ data class AttackResolvedEvent(
         }
         require(occupyingTroopCount == null || occupyingTroopCount <= attackTroops) {
             "AttackResolvedEvent.occupyingTroopCount darf attackTroops nicht ueberschreiten."
+        }
+        require((defenderRemaining == 0) == (occupyingTroopCount != null)) {
+            "AttackResolvedEvent.occupyingTroopCount muss genau bei Capture gesetzt sein."
         }
         require((defenderRemaining == 0) == (minOccupyingTroops != null)) {
             "AttackResolvedEvent.minOccupyingTroops darf nur bei Capture gesetzt sein."

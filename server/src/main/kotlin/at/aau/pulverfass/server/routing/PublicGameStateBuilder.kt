@@ -243,6 +243,10 @@ class PublicGameStateBuilder {
         stateVersion: Long,
     ): List<PublicGameEvent> =
         buildList {
+            fun requireOccupyingTroopCount(): Int =
+                requireNotNull(event.occupyingTroopCount) {
+                    "Capture-AttackResolvedEvent benötigt occupyingTroopCount."
+                }
             add(AttackResolvedBroadcastEvent.from(event, stateVersion))
             add(
                 TerritoryTroopsChangedEvent(
@@ -250,7 +254,7 @@ class PublicGameStateBuilder {
                     territoryId = event.fromTerritoryId,
                     troopCount =
                         if (event.capture) {
-                            event.attackerRemaining - (event.occupyingTroopCount ?: 0)
+                            event.attackerRemaining - requireOccupyingTroopCount()
                         } else {
                             event.attackerRemaining
                         },
@@ -270,7 +274,7 @@ class PublicGameStateBuilder {
                     TerritoryTroopsChangedEvent(
                         lobbyCode = event.lobbyCode,
                         territoryId = event.toTerritoryId,
-                        troopCount = event.occupyingTroopCount ?: 0,
+                        troopCount = requireOccupyingTroopCount(),
                         stateVersion = stateVersion,
                     ),
                 )

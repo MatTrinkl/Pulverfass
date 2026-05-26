@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -168,7 +169,15 @@ class LobbyPersistenceHooksIntegrationTest {
                         fixture.hostId,
                         TurnPhase.REINFORCEMENTS,
                     )
-                    advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.ATTACK)
+                    val attackAutoEnded =
+                        consumeOptionalAttackAutoEnd(
+                            session = hostSession,
+                            lobbyCode = fixture.lobbyCode,
+                            playerId = fixture.hostId,
+                        )
+                    if (!attackAutoEnded) {
+                        advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.ATTACK)
+                    }
                     advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.FORTIFY)
                     advanceTurn(hostSession, fixture.lobbyCode, fixture.hostId, TurnPhase.DRAW_CARD)
 
@@ -285,6 +294,27 @@ class LobbyPersistenceHooksIntegrationTest {
         )
         assertTrue(receiveRelevantTestPayload(session, skipGameSync = true) is PhaseBoundaryEvent)
         receiveRelevantTestPayload(session, skipGameSync = true)
+    }
+
+    private suspend fun consumeOptionalAttackAutoEnd(
+        session: DefaultClientWebSocketSession,
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ): Boolean {
+        val payload = receiveRelevantTestPayloadOrNull(session, skipGameSync = true) ?: return false
+        val boundary =
+            payload as? PhaseBoundaryEvent
+                ?: throw AssertionError(
+                    "Expected optional attack auto-end boundary, but received: $payload",
+                )
+        assertEquals(lobbyCode, boundary.lobbyCode)
+        assertEquals(TurnPhase.ATTACK, boundary.previousPhase)
+        assertEquals(TurnPhase.FORTIFY, boundary.nextPhase)
+        assertEquals(playerId, boundary.activePlayerId)
+        assertTrue(
+            receiveRelevantTestPayload(session, skipGameSync = true) is TurnStateUpdatedEvent,
+        )
+        return true
     }
 
     private suspend fun awaitSnapshots(
