@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.lobby.command
 
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.battle.BattleOutcome
 import at.aau.pulverfass.shared.lobby.battle.BattleResolver
 import at.aau.pulverfass.shared.lobby.battle.BattleRngFactory
 import at.aau.pulverfass.shared.lobby.battle.RiskLikeBattleResolverV1
@@ -90,12 +91,50 @@ class DefaultMapCommandRuleService(
         requireKnownTerritory(state, command.toTerritoryId)
         requireAdjacent(state, command.fromTerritoryId, command.toTerritoryId, "Attack")
 
-        val defenderId = state.ownerOf(command.toTerritoryId)
-        if (defenderId == null) {
-            throw InvalidMapCommandException(
-                "Attack-Ziel '${command.toTerritoryId.value}' muss einen Besitzer haben.",
+        val defenderId = requireDefenderId(state, command)
+        val sourceTroops = requireAttackReadySourceTroops(state, command)
+        val targetTroops = state.troopCountOf(command.toTerritoryId)
+        val committedTroopCount = requireCommittedTroopCount(command, sourceTroops)
+        val rngState = requireGameRandomState(state)
+
+        val rng = BattleRngFactory.fromState(rngState)
+        val outcome =
+            battleResolver.resolve(
+                attackTroops = sourceTroops,
+                defendTroops = targetTroops,
+                requestedAttackDice = command.requestedAttackDice,
+                rng = rng,
             )
-        }
+        val resolvedOccupyingTroopCount =
+            resolveOccupyingTroopCount(command, outcome, committedTroopCount)
+        val resolvedEvent =
+            buildAttackResolvedEvent(
+                command = command,
+                defenderId = defenderId,
+                sourceTroops = sourceTroops,
+                targetTroops = targetTroops,
+                committedTroopCount = committedTroopCount,
+                outcome = outcome,
+                rngState = rngState,
+                rngStateAfter = rng.snapshotState(),
+                occupyingTroopCount = resolvedOccupyingTroopCount,
+            )
+
+        return listOfNotNull(
+            resolvedEvent,
+            buildEliminationEvent(state, command, defenderId, resolvedEvent),
+        )
+    }
+
+    private fun requireDefenderId(
+        state: GameState,
+        command: AttackCommand,
+    ): PlayerId {
+        val defenderId =
+            state.ownerOf(command.toTerritoryId)
+                ?: throw InvalidMapCommandException(
+                    "Attack-Ziel '${command.toTerritoryId.value}' muss einen Besitzer haben.",
+                )
         if (defenderId == command.playerId) {
             throw InvalidMapCommandException(
                 "Attack von '${command.fromTerritoryId.value}' nach " +
@@ -104,15 +143,27 @@ class DefaultMapCommandRuleService(
                     "'${command.playerId.value}' gehören.",
             )
         }
+        return defenderId
+    }
 
+    private fun requireAttackReadySourceTroops(
+        state: GameState,
+        command: AttackCommand,
+    ): Int {
         val sourceTroops = state.troopCountOf(command.fromTerritoryId)
-        val targetTroops = state.troopCountOf(command.toTerritoryId)
         if (sourceTroops < 2) {
             throw InvalidMapCommandException(
                 "Attack von '${command.fromTerritoryId.value}' benötigt mindestens 2 Truppen, " +
                     "vorhanden sind $sourceTroops.",
             )
         }
+        return sourceTroops
+    }
+
+    private fun requireCommittedTroopCount(
+        command: AttackCommand,
+        sourceTroops: Int,
+    ): Int {
         val committedTroopCount =
             command.committedTroopCount
                 ?: throw InvalidMapCommandException(
@@ -137,102 +188,110 @@ class DefaultMapCommandRuleService(
                     "committed=$committedTroopCount.",
             )
         }
+        return committedTroopCount
+    }
+
+    private fun requireGameRandomState(state: GameState): Long {
         state.gameRandomSeed
             ?: throw InvalidMapCommandException(
                 "Attack benötigt einen initialisierten gameRandomSeed.",
             )
-        val rngState =
-            state.gameRandomState
-                ?: throw InvalidMapCommandException(
-                    "Attack benötigt einen initialisierten gameRandomState.",
-                )
-
-        val rng = BattleRngFactory.fromState(rngState)
-        val outcome =
-            battleResolver.resolve(
-                attackTroops = sourceTroops,
-                defendTroops = targetTroops,
-                requestedAttackDice = command.requestedAttackDice,
-                rng = rng,
+        return state.gameRandomState
+            ?: throw InvalidMapCommandException(
+                "Attack benötigt einen initialisierten gameRandomState.",
             )
-        val occupyingTroopCount = command.occupyingTroopCount
+    }
 
-        if (outcome.capture) {
-            val minOccupyingTroops =
-                outcome.minOccupyingTroops
-                    ?: throw InvalidMapCommandException(
-                        "Capture-Outcome benötigt minOccupyingTroops.",
-                    )
-            val resolvedOccupyingTroopCount = occupyingTroopCount ?: committedTroopCount
-            if (resolvedOccupyingTroopCount < minOccupyingTroops) {
-                throw InvalidMapCommandException(
-                    "occupyingTroopCount muss mindestens $minOccupyingTroops sein, war aber " +
-                        "$resolvedOccupyingTroopCount.",
-                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
-                )
-            }
-            if (resolvedOccupyingTroopCount > committedTroopCount) {
-                throw InvalidMapCommandException(
-                    "occupyingTroopCount darf committedTroopCount nicht überschreiten: " +
-                        "occupying=$resolvedOccupyingTroopCount, committed=$committedTroopCount.",
-                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
-                )
-            }
-            if (resolvedOccupyingTroopCount >= outcome.attackerRemaining) {
-                throw InvalidMapCommandException(
-                    "Attack-Eroberung von '${command.toTerritoryId.value}' muss mindestens " +
-                        "eine Truppe auf '${command.fromTerritoryId.value}' zurücklassen.",
-                    reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
-                )
-            }
+    private fun resolveOccupyingTroopCount(
+        command: AttackCommand,
+        outcome: BattleOutcome,
+        committedTroopCount: Int,
+    ): Int? {
+        if (!outcome.capture) {
+            return null
         }
 
-        val resolvedOccupyingTroopCount =
-            if (outcome.capture) {
-                occupyingTroopCount ?: committedTroopCount
-            } else {
-                null
-            }
-
-        val resolvedEvent =
-            AttackResolvedEvent(
-                lobbyCode = command.lobbyCode,
-                attackerPlayerId = command.playerId,
-                defenderPlayerId = defenderId,
-                fromTerritoryId = command.fromTerritoryId,
-                toTerritoryId = command.toTerritoryId,
-                attackTroops = committedTroopCount,
-                sourceTroopsBefore = sourceTroops,
-                targetTroopsBefore = targetTroops,
-                requestedAttackDice = command.requestedAttackDice,
-                attackDice = outcome.attackDice,
-                defendDice = outcome.defendDice,
-                attackerRolls = outcome.attackerRolls,
-                defenderRolls = outcome.defenderRolls,
-                rngTrace = outcome.rngTrace,
-                rngStateBefore = rngState,
-                rngStateAfter = rng.snapshotState(),
-                attackerLosses = outcome.attackerLosses,
-                defenderLosses = outcome.defenderLosses,
-                attackerRemaining = outcome.attackerRemaining,
-                defenderRemaining = outcome.defenderRemaining,
-                occupyingTroopCount = resolvedOccupyingTroopCount,
-                minOccupyingTroops = outcome.minOccupyingTroops,
-            )
-
-        val eliminationEvent =
-            if (resolvedEvent.capture && state.ownedTerritoryCount(defenderId) == 1) {
-                PlayerEliminatedEvent(
-                    lobbyCode = command.lobbyCode,
-                    playerId = defenderId,
-                    eliminatedByPlayerId = command.playerId,
+        val minOccupyingTroops =
+            outcome.minOccupyingTroops
+                ?: throw InvalidMapCommandException(
+                    "Capture-Outcome benötigt minOccupyingTroops.",
                 )
-            } else {
-                null
-            }
-
-        return listOfNotNull(resolvedEvent, eliminationEvent)
+        val resolvedOccupyingTroopCount = command.occupyingTroopCount ?: committedTroopCount
+        if (resolvedOccupyingTroopCount < minOccupyingTroops) {
+            throw InvalidMapCommandException(
+                "occupyingTroopCount muss mindestens $minOccupyingTroops sein, war aber " +
+                    "$resolvedOccupyingTroopCount.",
+                reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+            )
+        }
+        if (resolvedOccupyingTroopCount > committedTroopCount) {
+            throw InvalidMapCommandException(
+                "occupyingTroopCount darf committedTroopCount nicht überschreiten: " +
+                    "occupying=$resolvedOccupyingTroopCount, committed=$committedTroopCount.",
+                reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+            )
+        }
+        if (resolvedOccupyingTroopCount >= outcome.attackerRemaining) {
+            throw InvalidMapCommandException(
+                "Attack-Eroberung von '${command.toTerritoryId.value}' muss mindestens " +
+                    "eine Truppe auf '${command.fromTerritoryId.value}' zurücklassen.",
+                reasonCode = "INVALID_MOVE_AFTER_CAPTURE",
+            )
+        }
+        return resolvedOccupyingTroopCount
     }
+
+    private fun buildAttackResolvedEvent(
+        command: AttackCommand,
+        defenderId: PlayerId,
+        sourceTroops: Int,
+        targetTroops: Int,
+        committedTroopCount: Int,
+        outcome: BattleOutcome,
+        rngState: Long,
+        rngStateAfter: Long,
+        occupyingTroopCount: Int?,
+    ): AttackResolvedEvent =
+        AttackResolvedEvent(
+            lobbyCode = command.lobbyCode,
+            attackerPlayerId = command.playerId,
+            defenderPlayerId = defenderId,
+            fromTerritoryId = command.fromTerritoryId,
+            toTerritoryId = command.toTerritoryId,
+            attackTroops = committedTroopCount,
+            sourceTroopsBefore = sourceTroops,
+            targetTroopsBefore = targetTroops,
+            requestedAttackDice = command.requestedAttackDice,
+            attackDice = outcome.attackDice,
+            defendDice = outcome.defendDice,
+            attackerRolls = outcome.attackerRolls,
+            defenderRolls = outcome.defenderRolls,
+            rngTrace = outcome.rngTrace,
+            rngStateBefore = rngState,
+            rngStateAfter = rngStateAfter,
+            attackerLosses = outcome.attackerLosses,
+            defenderLosses = outcome.defenderLosses,
+            attackerRemaining = outcome.attackerRemaining,
+            defenderRemaining = outcome.defenderRemaining,
+            occupyingTroopCount = occupyingTroopCount,
+            minOccupyingTroops = outcome.minOccupyingTroops,
+        )
+
+    private fun buildEliminationEvent(
+        state: GameState,
+        command: AttackCommand,
+        defenderId: PlayerId,
+        resolvedEvent: AttackResolvedEvent,
+    ): PlayerEliminatedEvent? =
+        if (resolvedEvent.capture && state.ownedTerritoryCount(defenderId) == 1) {
+            PlayerEliminatedEvent(
+                lobbyCode = command.lobbyCode,
+                playerId = defenderId,
+                eliminatedByPlayerId = command.playerId,
+            )
+        } else {
+            null
+        }
 
     private fun requireSameLobby(
         state: GameState,

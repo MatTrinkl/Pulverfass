@@ -133,6 +133,11 @@ class MainServerLobbyRoutingService(
         LobbyPersistenceCallbacks.disabled(),
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
+    private companion object {
+        const val ELIMINATED_SPECTATOR_SUFFIX = "zuschauen."
+        const val NO_ACTIVE_PLAYER_SET_SUFFIX = "kein aktiver Spieler gesetzt."
+    }
+
     private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
@@ -1628,8 +1633,7 @@ class MainServerLobbyRoutingService(
                 TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         val contextPlayerId = request.context.playerId
@@ -1641,8 +1645,7 @@ class MainServerLobbyRoutingService(
                                 "Requester '${payload.playerId.value}' passt nicht " +
                                     "zur aktuellen Connection."
                             activePlayer == null ->
-                                "Für Lobby '${payload.lobbyCode.value}' ist " +
-                                    "aktuell kein aktiver Spieler gesetzt."
+                                noActivePlayerConfigured(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' " +
                                     "darf den Turn-State fortschalten."
@@ -1688,14 +1691,12 @@ class MainServerLobbyRoutingService(
                 PlaceReinforcementsErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Für Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver " +
-                                    "Spieler gesetzt."
+                                noActivePlayerConfigured(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' darf in der " +
                                     "Reinforcements-Phase Truppen platzieren."
@@ -1778,14 +1779,12 @@ class MainServerLobbyRoutingService(
                 AttackErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Für Lobby '${payload.lobbyCode.value}' ist aktuell kein aktiver " +
-                                    "Spieler gesetzt."
+                                noActivePlayerConfigured(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' darf angreifen."
                         }
@@ -1873,14 +1872,12 @@ class MainServerLobbyRoutingService(
                 TradeInCardsErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Fuer Lobby '${payload.lobbyCode.value}' ist aktuell " +
-                                    "kein aktiver Spieler gesetzt."
+                                noActivePlayerConfiguredAscii(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' darf " +
                                     "waehrend der Reinforcements-Phase Karten eintauschen."
@@ -1943,14 +1940,12 @@ class MainServerLobbyRoutingService(
                 ConfirmAttackDoneErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Für Lobby '${payload.lobbyCode.value}' ist aktuell " +
-                                    "kein aktiver Spieler gesetzt."
+                                noActivePlayerConfigured(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' darf " +
                                     "die Attack-Phase beenden."
@@ -2009,14 +2004,12 @@ class MainServerLobbyRoutingService(
                 ConfirmReinforcementsDoneErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
-                        "Spieler '${payload.playerId.value}' ist eliminiert und kann nur noch " +
-                            "zuschauen."
+                        spectatorOnlyReason(payload.playerId)
                     } else {
                         val activePlayer = currentState?.activePlayer
                         when {
                             activePlayer == null ->
-                                "Für Lobby '${payload.lobbyCode.value}' ist aktuell " +
-                                    "kein aktiver Spieler gesetzt."
+                                noActivePlayerConfigured(payload.lobbyCode)
                             else ->
                                 "Nur der aktive Spieler '${activePlayer.value}' darf " +
                                     "die Reinforcements-Phase beenden."
@@ -2439,6 +2432,15 @@ class MainServerLobbyRoutingService(
 
     private fun connectionNotAssignedToLobby(lobbyCode: LobbyCode): String =
         "Connection ist keinem Spieler für Lobby '${lobbyCode.value}' zugeordnet."
+
+    private fun spectatorOnlyReason(playerId: PlayerId): String =
+        "Spieler '${playerId.value}' ist eliminiert und kann nur noch $ELIMINATED_SPECTATOR_SUFFIX"
+
+    private fun noActivePlayerConfigured(lobbyCode: LobbyCode): String =
+        "Für Lobby '${lobbyCode.value}' ist aktuell $NO_ACTIVE_PLAYER_SET_SUFFIX"
+
+    private fun noActivePlayerConfiguredAscii(lobbyCode: LobbyCode): String =
+        "Fuer Lobby '${lobbyCode.value}' ist aktuell $NO_ACTIVE_PLAYER_SET_SUFFIX"
 
     private fun requirePlayerCanActInMatch(
         state: GameState,
