@@ -19,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -66,11 +65,15 @@ class MainActivity : AppCompatActivity() {
         // Background-Music-Manager als Field, damit onPause/onResume drauf zugreifen können
         musicManager = BackgroundMusicManager(applicationContext)
 
-        // Fullscreen Immersive: System-Bars verstecken
+        /*
+         * Vollbild ist eine Eigenschaft der gesamten Activity und nicht eines
+         * einzelnen Screens. So bleibt der Modus auch bei Navigation zwischen
+         * Studio-Intro, Loading-Screen und Spiel erhalten.
+         */
+        enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
-        enableEdgeToEdge()
         setContent {
             AndroidAppTheme {
                 val navController = rememberNavController()
@@ -85,16 +88,14 @@ class MainActivity : AppCompatActivity() {
                 val lobbyState by lobbyController.state.collectAsState()
                 val serverHealthStatus by rememberServerHealthStatus()
 
-                // Immersive Enforcement bei jeder Navigation
-                val view = LocalView.current
+                /*
+                 * Jede Navigation kann neue Window-Inset-Berechnungen auslösen.
+                 * Systembars werden daher nach Routenwechsel erneut verborgen;
+                 * einzelne Screens dürfen den globalen Modus nicht zurücksetzen.
+                 */
                 val currentBackStackEntry by navController.currentBackStackEntryAsState()
                 LaunchedEffect(currentBackStackEntry) {
-                    val window = (view.context as Activity).window
-                    WindowCompat.setDecorFitsSystemWindows(window, false)
-                    val controller = WindowInsetsControllerCompat(window, window.decorView)
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
-                    controller.systemBarsBehavior =
-                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    hideSystemBars()
                 }
 
                 // Audio: route-based playback
@@ -220,6 +221,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        hideSystemBars()
         musicManager.resume()
     }
 
@@ -233,7 +235,16 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus) hideSystemBars()
     }
 
+    /**
+     * Stellt den immersiven App-Modus für den Activity-Window wieder her.
+     *
+     * Android darf Bars temporär per Wischgeste oder bei Lifecycle-/Fokuswechsel
+     * anzeigen. Der Helper wird beim Start, nach Navigation, bei Resume und nach
+     * erneutem Window-Fokus aufgerufen, damit kein einzelner Screen die
+     * Vollbildgarantie besitzen oder zurücksetzen muss.
+     */
     private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior =

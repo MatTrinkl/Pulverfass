@@ -1,7 +1,13 @@
 package at.aau.pulverfass.shared.network.message
 
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.CardState
+import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.HandState
+import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -42,6 +48,10 @@ class GameStatePrivateGetMessageTest {
                 stateVersion = 9,
                 handCards = listOf("infantry", "cavalry"),
                 secretObjectives = listOf("hold_europe"),
+                privateHandCards =
+                    listOf(
+                        PrivateHandCardSnapshot(CardId("card-a"), CardType.A),
+                    ),
             )
 
         val serialized = json.encodeToString(GameStatePrivateGetResponse.serializer(), response)
@@ -54,6 +64,7 @@ class GameStatePrivateGetMessageTest {
         assertTrue(serialized.contains("recipientPlayerId"))
         assertTrue(serialized.contains("stateVersion"))
         assertTrue(serialized.contains("handCards"))
+        assertTrue(serialized.contains("privateHandCards"))
         assertEquals(response, deserialized)
     }
 
@@ -77,5 +88,28 @@ class GameStatePrivateGetMessageTest {
             )
 
         assertEquals(response, deserialized)
+    }
+
+    @Test
+    fun `response from game state exposes only recipient typed hand`() {
+        val recipient = PlayerId(2)
+        val card = CardState(CardId("card-private"), CardType.JOKER)
+        val gameState =
+            GameState(
+                lobbyCode = LobbyCode("GH56"),
+                players = listOf(recipient),
+                turnOrder = listOf(recipient),
+                stateVersion = 11,
+                handState = HandState(mapOf(recipient to listOf(card))),
+            )
+
+        val response = GameStatePrivateGetResponse.fromGameState(gameState, recipient)
+
+        assertEquals(recipient, response.recipientPlayerId)
+        assertEquals(11, response.stateVersion)
+        assertEquals(
+            listOf(PrivateHandCardSnapshot(card.cardId, card.type)),
+            response.privateHandCards,
+        )
     }
 }

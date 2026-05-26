@@ -1,10 +1,12 @@
 package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.app.game.ClientGameStateReducer
+import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.network.ClientNetwork
 import at.aau.pulverfass.app.storage.NoOpReconnectSessionStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
@@ -16,9 +18,11 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
@@ -26,23 +30,32 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
+import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
@@ -531,6 +544,178 @@ class LobbyController(
         }
     }
 
+    /**
+     * Ändert die lokal vorbereitete Anzahl der nächsten Verstärkungsplatzierung.
+     *
+     * Dabei wird noch kein Request gesendet. Erst der Klick auf "Platzieren"
+     * übernimmt die aktuell ausgewählte Anzahl in einen autoritativen
+     * Serverrequest.
+     */
+    fun adjustReinforcementPlacementAmount(delta: Int) {
+        _state.update {
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.adjustReinforcementPlacementAmount(
+                        current = it.gameState,
+                        delta = delta,
+                    ),
+            )
+        }
+    }
+
+    /**
+     * Sendet eine Verstärkungsplatzierung für das ausgewählte eigene Gebiet.
+     *
+     * Die Kartenoberfläche arbeitet mit den Android-Region-IDs der Hitmap,
+     * während das Protokoll die stabilen Territory-IDs aus `shared` benötigt.
+     * Die Übersetzung wird deshalb erst an dieser Request-Grenze durchgeführt.
+     * Der lokale Restpool wird nicht optimistisch reduziert; er folgt dem
+     * serverseitigen `PendingReinforcementsChangedEvent`.
+     */
+    fun placeReinforcements() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        val regionId = snapshot.gameState.selectedRegionId
+        if (regionId == null) {
+            _state.update { it.copy(errorText = config.errorReinforcementTargetMissing) }
+            return
+        }
+        if (!snapshot.gameState.canPlaceReinforcements(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.PLACE_REINFORCEMENTS,
+                        payload =
+                            PlaceReinforcementsRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                placements =
+                                    listOf(
+                                        TerritoryPlacement(
+                                            territoryId =
+                                                GameMapTerritoryMapper.toTerritoryId(
+                                                    regionId,
+                                                ),
+                                            amount =
+                                                snapshot.gameState.reinforcementPlacementAmount,
+                                        ),
+                                    ),
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorPlaceReinforcementsFailed)
+                }
+            }
+        }
+    }
+
+    /**
+     * Bestätigt die Verstärkungsphase, sobald der Restpool vollständig verbraucht ist.
+     *
+     * Die UI ruft diese Methode über den gewöhnlichen Button "Phase beenden"
+     * auf. Der separate Request verhindert, dass der Client eine
+     * Verstärkungsphase durch einen generischen Phasenwechsel überspringen
+     * könnte, solange der Server noch Truppen oder einen Pflicht-Trade erwartet.
+     */
+    fun confirmReinforcementsDone() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canConfirmReinforcementsDone(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE,
+                        payload =
+                            ConfirmReinforcementsDoneRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorConfirmReinforcementsFailed)
+                }
+            }
+        }
+    }
+
+    /**
+     * Wählt eine private Karte für den möglichen Eintausch aus oder ab.
+     *
+     * Die Auswahl bleibt rein lokal und enthält ausschließlich IDs aus dem
+     * privaten Snapshot. Nach einem Trade-in bereinigt das private Hand-Event
+     * nicht mehr vorhandene ausgewählte Karten automatisch.
+     */
+    fun toggleTradeInCard(cardId: CardId) {
+        _state.update {
+            it.copy(gameState = ClientGameStateReducer.toggleTradeInCard(it.gameState, cardId))
+        }
+    }
+
+    /**
+     * Sendet das lokal ausgewählte Kartenset für die Verstärkungsphase.
+     *
+     * Der Request trägt nur die ausgewählten Karten-IDs. Bonushöhe, Gültigkeit
+     * des Sets und ein möglicher Pflicht-Trade werden vollständig serverseitig
+     * berechnet und danach über Grant-/Hand-Events zurückgespiegelt.
+     */
+    fun tradeInCards() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canTradeInCards(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorTradeInNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.TRADE_IN_CARDS,
+                        payload =
+                            TradeInCardsRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                cardIds = snapshot.gameState.selectedTradeInCardIds.toList(),
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorTradeInFailed)
+                }
+            }
+        }
+    }
+
     fun selectGameRegion(regionId: String) {
         /*
          * Die Karte liefert nur eine Android-Region-ID. Die fachliche Validierung
@@ -937,6 +1122,9 @@ class LobbyController(
          * technische Connection-Payloads bleiben hier, Lobby-Events pflegen die
          * Playerliste und Game-Payloads werden an den GameStateReducer delegiert.
          */
+        if (handleReinforcementPayload(payload)) {
+            return
+        }
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)
@@ -1043,8 +1231,54 @@ class LobbyController(
                 clearPendingCommand(LobbyCommandKey.PRIVATE_STATE)
                 updateGameError(GameErrorTextMapper.map(payload))
             }
+            is PlayerHandUpdatedEvent ->
+                applyGameState { current, _ ->
+                    ClientGameStateReducer.applyPlayerHandUpdatedEvent(current, payload)
+                }
         }
     }
+
+    /**
+     * Verarbeitet die drei Requests der Verstärkungsphase außerhalb des allgemeinen
+     * Payload-Routers. Dadurch bleibt der zentrale Router auf fachliche Gruppen
+     * begrenzt, während Success- und Error-Antworten weiterhin identisch wirken.
+     *
+     * @return `true`, wenn [payload] vollständig verarbeitet wurde
+     */
+    private fun handleReinforcementPayload(payload: NetworkMessagePayload): Boolean =
+        when (payload) {
+            is PlaceReinforcementsResponse -> {
+                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is PlaceReinforcementsErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            is ConfirmReinforcementsDoneResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ConfirmReinforcementsDoneErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            is TradeInCardsResponse -> {
+                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is TradeInCardsErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            else -> false
+        }
 
     private fun handlePlayerJoined(payload: PlayerJoinedLobbyEvent) {
         val existingPlayer = playersById[payload.playerId.value]
