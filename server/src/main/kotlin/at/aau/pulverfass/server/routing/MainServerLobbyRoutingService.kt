@@ -746,14 +746,21 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         previousTurnState: TurnState?,
         context: EventContext,
+        grantForGameStart: Boolean = false,
     ) {
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
         val currentTurnState = currentState.resolvedTurnState ?: return
         if (currentTurnState.turnPhase != TurnPhase.REINFORCEMENTS) {
             return
         }
-        // Skip if already in REINFORCEMENTS for the same player (no phase entry occurred)
-        if (previousTurnState?.turnPhase == TurnPhase.REINFORCEMENTS &&
+        /*
+         * Eine wartende Lobby zeigt für den konfigurierten Startspieler bereits
+         * die Phase REINFORCEMENTS, besitzt aber bis zum tatsächlichen
+         * Spielstart noch keinen Verstärkungspool. Nur spätere doppelte
+         * Verarbeitung derselben laufenden Phase muss übersprungen werden.
+         */
+        if (!grantForGameStart &&
+            previousTurnState?.turnPhase == TurnPhase.REINFORCEMENTS &&
             previousTurnState.activePlayerId == currentTurnState.activePlayerId
         ) {
             return
@@ -848,6 +855,7 @@ class MainServerLobbyRoutingService(
                             lobbyCode = lobbyCode,
                             previousTurnState = previousTurnState,
                             context = request.context,
+                            grantForGameStart = true,
                         )
                     }
                     broadcastTurnStateIfChanged(

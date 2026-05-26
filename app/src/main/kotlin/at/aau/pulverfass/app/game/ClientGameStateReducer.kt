@@ -3,11 +3,13 @@ package at.aau.pulverfass.app.game
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -180,6 +182,15 @@ object ClientGameStateReducer {
                     ReinforcementUiState()
                 },
             reinforcementPlacementAmount = 1,
+            attackState =
+                if (
+                    current.attackState.latestResult != null &&
+                    event.nextPhase != TurnPhase.REINFORCEMENTS
+                ) {
+                    current.attackState
+                } else {
+                    AttackUiState()
+                },
             selectedTradeInCardIds =
                 if (event.nextPhase == TurnPhase.REINFORCEMENTS) {
                     current.selectedTradeInCardIds
@@ -207,6 +218,12 @@ object ClientGameStateReducer {
                     current.reinforcementState
                 } else {
                     ReinforcementUiState()
+                },
+            attackState =
+                if (response.turnPhase == TurnPhase.ATTACK) {
+                    current.attackState
+                } else {
+                    AttackUiState()
                 },
             selectedTradeInCardIds =
                 if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
@@ -323,6 +340,16 @@ object ClientGameStateReducer {
         val territoryId = GameMapTerritoryMapper.toTerritoryId(regionId)
         val territory = current.territoryStates[territoryId]
 
+        if (current.turnPhase == TurnPhase.ATTACK) {
+            return selectAttackRegion(
+                current = current,
+                regionId = regionId,
+                territoryId = territoryId,
+                territory = territory,
+                localPlayerId = localPlayerId,
+            )
+        }
+
         /*
          * Die Platzierungs-UI öffnet nur für eigene Gebiete. Ein Tap auf ein
          * fremdes Gebiet wird bewusst ignoriert, statt einen Fehlerbanner zu
@@ -398,6 +425,63 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Ändert die für genau einen Angriff gebundene Truppenanzahl.
+     *
+     * Auf dem Ausgangsgebiet muss mindestens eine Truppe zurückbleiben. Die
+     * Mindestbesetzung im Capture-Fall folgt der maximalen Würfelanzahl dieser
+     * Angriffsabsicht, damit der Standardwert serverseitig gültig bleibt.
+     */
+    fun adjustAttackTroops(
+        current: GameUiState,
+        delta: Int,
+    ): GameUiState {
+        val maxAttackTroops = current.maximumAttackTroops() ?: return current
+        val attackTroops =
+            (current.attackState.attackTroops + delta).coerceIn(
+                MIN_ATTACK_TROOPS,
+                maxAttackTroops,
+            )
+        val minimumMove = minimumOccupyingTroopsForAttack(attackTroops)
+        return current.copy(
+            attackState =
+                current.attackState.copy(
+                    attackTroops = attackTroops,
+                    moveAfterCapture =
+                        current.attackState.moveAfterCapture.coerceIn(
+                            minimumMove,
+                            attackTroops,
+                        ),
+                ),
+        )
+    }
+
+    /**
+     * Ändert die gewünschte Besetzung eines eroberten Zielgebiets.
+     *
+     * Ein hoher Wunschwert kann nach serverseitigen Würfelverlusten ungültig
+     * werden; in diesem Fall weist der Server den konkreten Angriff zurück.
+     */
+    fun adjustMoveAfterCapture(
+        current: GameUiState,
+        delta: Int,
+    ): GameUiState {
+        if (current.maximumAttackTroops() == null) {
+            return current
+        }
+        val minimumMove = minimumOccupyingTroopsForAttack(current.attackState.attackTroops)
+        return current.copy(
+            attackState =
+                current.attackState.copy(
+                    moveAfterCapture =
+                        (current.attackState.moveAfterCapture + delta).coerceIn(
+                            minimumMove,
+                            current.attackState.attackTroops,
+                        ),
+                ),
+        )
+    }
+
     /** Markiert maximal drei vorhandene private Karten für einen Trade-in. */
     fun toggleTradeInCard(
         current: GameUiState,
@@ -456,6 +540,7 @@ object ClientGameStateReducer {
                             ReinforcementUiState()
                         },
                     reinforcementPlacementAmount = 1,
+                    attackState = AttackUiState(),
                     selectedTradeInCardIds =
                         if (turnState.turnPhase == TurnPhase.REINFORCEMENTS) {
                             current.selectedTradeInCardIds
@@ -489,6 +574,10 @@ object ClientGameStateReducer {
             schemaVersion = determinism.schemaVersion,
             mapHash = determinism.mapHash,
             definitionTerritoryIds = definition.territories.map { it.territoryId },
+            adjacentTerritoryIds =
+                definition.territories.associate { territory ->
+                    territory.territoryId to territory.edges.map { it.targetId }.toSet()
+                },
             territoryStates = territories,
             regionStates = buildRegionStates(territoryStates = territories, players = players),
             isCatchingUp = false,
@@ -521,6 +610,18 @@ object ClientGameStateReducer {
                             ReinforcementUiState()
                         },
                     reinforcementPlacementAmount = 1,
+                    attackState =
+                        if (
+                            event.turnPhase == TurnPhase.ATTACK ||
+                            (
+                                current.attackState.latestResult != null &&
+                                    event.turnPhase != TurnPhase.REINFORCEMENTS
+                            )
+                        ) {
+                            current.attackState
+                        } else {
+                            AttackUiState()
+                        },
                     selectedTradeInCardIds =
                         if (event.turnPhase == TurnPhase.REINFORCEMENTS) {
                             current.selectedTradeInCardIds
@@ -537,10 +638,108 @@ object ClientGameStateReducer {
                 current.updateTerritory(players = players, event = event)
             is TerritoryTroopsChangedEvent ->
                 current.updateTerritory(players = players, event = event)
+            is AttackResolvedBroadcastEvent ->
+                current.copy(
+                    selectedRegionId = null,
+                    selectionFromRegionId = null,
+                    selectionToRegionId = null,
+                    selectionMessage = null,
+                    attackState =
+                        AttackUiState(
+                            latestResult =
+                                AttackResultUiState(
+                                    fromTerritoryId = event.fromTerritoryId,
+                                    toTerritoryId = event.toTerritoryId,
+                                    attackerRolls = event.attackerRolls,
+                                    defenderRolls = event.defenderRolls,
+                                    attackerLosses = event.attackerLosses,
+                                    defenderLosses = event.defenderLosses,
+                                    attackerRemaining = event.attackerRemaining,
+                                    defenderRemaining = event.defenderRemaining,
+                                    occupyingTroopCount = event.occupyingTroopCount,
+                                ),
+                        ),
+                )
             is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
             is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
             else -> current
         }
+
+    private fun selectAttackRegion(
+        current: GameUiState,
+        regionId: String,
+        territoryId: TerritoryId,
+        territory: GameTerritoryUiState?,
+        localPlayerId: PlayerId?,
+    ): GameUiState {
+        val isAvailableSource =
+            localPlayerId != null &&
+                territory?.ownerId == localPlayerId &&
+                territory.troopCount > MIN_ATTACK_TROOPS
+        val sourceRegionId = current.selectionFromRegionId
+
+        if (sourceRegionId == null) {
+            return if (isAvailableSource) {
+                current.withAttackSource(regionId)
+            } else {
+                current.copy(selectionMessage = null)
+            }
+        }
+        if (sourceRegionId == regionId) {
+            return current.clearAttackSelection()
+        }
+        if (isAvailableSource) {
+            return current.withAttackSource(regionId)
+        }
+
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
+        val isEnemyNeighbor =
+            territory != null &&
+                territory.ownerId != localPlayerId &&
+                territoryId in current.adjacentTerritoryIds[sourceTerritoryId].orEmpty()
+        return if (isEnemyNeighbor) {
+            current.copy(
+                selectedRegionId = regionId,
+                selectionToRegionId = regionId,
+                selectionMessage = null,
+            )
+        } else {
+            current.copy(selectionMessage = null)
+        }
+    }
+
+    private fun GameUiState.withAttackSource(regionId: String): GameUiState =
+        copy(
+            selectedRegionId = regionId,
+            selectionFromRegionId = regionId,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            attackState =
+                attackState.copy(
+                    attackTroops = MIN_ATTACK_TROOPS,
+                    moveAfterCapture = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
+                ),
+        )
+
+    private fun GameUiState.clearAttackSelection(): GameUiState =
+        copy(
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            attackState =
+                attackState.copy(
+                    attackTroops = MIN_ATTACK_TROOPS,
+                    moveAfterCapture = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
+                ),
+        )
+
+    private fun GameUiState.maximumAttackTroops(): Int? {
+        val sourceRegionId = selectionFromRegionId ?: return null
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
+        val maximum = territoryStates[sourceTerritoryId]?.troopCount?.minus(1) ?: return null
+        return maximum.takeIf { it >= MIN_ATTACK_TROOPS }
+    }
 
     private fun GameUiState.applyReinforcementsGranted(
         event: ReinforcementsGrantedEvent,

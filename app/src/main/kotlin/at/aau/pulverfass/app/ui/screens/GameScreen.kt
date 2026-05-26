@@ -58,11 +58,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.game.AttackResultUiState
+import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
+import at.aau.pulverfass.app.game.minimumOccupyingTroopsForAttack
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
@@ -118,6 +122,10 @@ fun GameScreen(controller: LobbyController) {
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
+                onAdjustAttackTroops = controller::adjustAttackTroops,
+                onAdjustMoveAfterCapture = controller::adjustMoveAfterCapture,
+                onAttack = controller::attack,
+                onConfirmAttackDone = controller::confirmAttackDone,
                 onRefreshGameState = controller::refreshGameState,
             ),
     )
@@ -141,6 +149,10 @@ internal data class GameScreenActions(
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
+    val onAdjustAttackTroops: (Int) -> Unit = {},
+    val onAdjustMoveAfterCapture: (Int) -> Unit = {},
+    val onAttack: () -> Unit = {},
+    val onConfirmAttackDone: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
 )
 
@@ -181,6 +193,22 @@ private data class ReinforcementPanelActions(
     val onPlace: () -> Unit,
 )
 
+private data class AttackPanelState(
+    val attackState: AttackUiState,
+    val fromRegionId: String,
+    val toRegionId: String,
+    val maximumAttackTroops: Int,
+    val canAdjust: Boolean,
+    val canAttack: Boolean,
+)
+
+private data class AttackPanelActions(
+    val onDismiss: () -> Unit,
+    val onAdjustAttackTroops: (Int) -> Unit,
+    val onAdjustMoveAfterCapture: (Int) -> Unit,
+    val onAttack: () -> Unit,
+)
+
 /**
  * Baut das aktive Spielfeld aus Karte, HUD, Seitenteilen und servergebundenen Aktionen.
  *
@@ -213,27 +241,40 @@ internal fun GameScreenContent(
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
+    val onAdjustAttackTroops = actions.onAdjustAttackTroops
+    val onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture
+    val onAttack = actions.onAttack
+    val onConfirmAttackDone = actions.onConfirmAttackDone
     val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
 
     val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
     val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
+    val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
+    val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
     val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
+    val attackPanelSelection = visibleAttackSelection(uiState, canManageAttacks)
     val canEndCurrentPhase =
         canEndCurrentPhase(
             uiState = uiState,
             localPlayerId = localPlayerId,
             isConnected = isConnected,
             isReinforcementCommandPending = isReinforcementCommandPending,
+            isAttackCommandPending = isAttackCommandPending,
             pendingCommandKeys = pendingCommandKeys,
         )
     val onEndCurrentPhase =
-        endCurrentPhaseAction(uiState, onConfirmReinforcementsDone, onAdvanceTurn)
+        endCurrentPhaseAction(
+            uiState,
+            onConfirmReinforcementsDone,
+            onConfirmAttackDone,
+            onAdvanceTurn,
+        )
     var showCatchUpFeedback by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.isCatchingUp) {
         showCatchUpFeedback = false
@@ -366,6 +407,46 @@ internal fun GameScreenContent(
             )
         }
 
+        if (attackPanelSelection != null) {
+            val (fromRegionId, toRegionId) = attackPanelSelection
+            val maximumAttackTroops =
+                uiState.territoryStates[
+                    GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+                ]?.troopCount?.minus(1) ?: uiState.attackState.attackTroops
+            AttackPanel(
+                state =
+                    AttackPanelState(
+                        attackState = uiState.attackState,
+                        fromRegionId = fromRegionId,
+                        toRegionId = toRegionId,
+                        maximumAttackTroops = maximumAttackTroops,
+                        canAdjust = canManageAttacks && !isAttackCommandPending,
+                        canAttack =
+                            uiState.canSubmitAttack(localPlayerId, isConnected) &&
+                                !isAttackCommandPending,
+                    ),
+                actions =
+                    AttackPanelActions(
+                        onDismiss = { onRegionSelected(fromRegionId) },
+                        onAdjustAttackTroops = onAdjustAttackTroops,
+                        onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
+                        onAttack = onAttack,
+                    ),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = BottomBarHeight + 8.dp),
+            )
+        } else if (uiState.attackState.latestResult != null) {
+            AttackResultPanel(
+                result = uiState.attackState.latestResult,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = BottomBarHeight + 8.dp),
+            )
+        }
+
         BottomActionClusters(
             currentPhase = uiState.turnPhase,
             canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
@@ -421,6 +502,12 @@ private fun Set<LobbyCommandKey>.hasReinforcementRequest(): Boolean =
             it == LobbyCommandKey.TRADE_IN_CARDS
     }
 
+private fun Set<LobbyCommandKey>.hasAttackRequest(): Boolean =
+    any {
+        it == LobbyCommandKey.ATTACK ||
+            it == LobbyCommandKey.CONFIRM_ATTACK_DONE
+    }
+
 /**
  * Das Platzierungs-Panel erscheint nur mit einem ausgewählten Ziel und Restpool.
  * Andernfalls bleibt die Karte frei; ein leerer Pool wird in der Aktionsleiste beendet.
@@ -440,30 +527,54 @@ private fun visibleReinforcementTarget(
         null
     }
 
+/**
+ * Ein Angriffs-Panel benötigt eine bereits fachlich validierte Quelle und ein Ziel.
+ *
+ * Bis dahin bleibt die Karte vollständig frei, damit die beiden Gebiete direkt
+ * über die Hitmap gewählt werden können.
+ */
+private fun visibleAttackSelection(
+    uiState: GameUiState,
+    canManageAttacks: Boolean,
+): Pair<String, String>? {
+    if (uiState.turnPhase != TurnPhase.ATTACK || !canManageAttacks) {
+        return null
+    }
+    val fromRegionId = uiState.selectionFromRegionId ?: return null
+    val toRegionId = uiState.selectionToRegionId ?: return null
+    return fromRegionId to toRegionId
+}
+
 private fun canEndCurrentPhase(
     uiState: GameUiState,
     localPlayerId: PlayerId?,
     isConnected: Boolean,
     isReinforcementCommandPending: Boolean,
+    isAttackCommandPending: Boolean,
     pendingCommandKeys: Set<LobbyCommandKey>,
 ): Boolean =
-    if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
-        uiState.canConfirmReinforcementsDone(localPlayerId, isConnected) &&
-            !isReinforcementCommandPending
-    } else {
-        uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
-            !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
+    when (uiState.turnPhase) {
+        TurnPhase.REINFORCEMENTS ->
+            uiState.canConfirmReinforcementsDone(localPlayerId, isConnected) &&
+                !isReinforcementCommandPending
+        TurnPhase.ATTACK ->
+            uiState.canConfirmAttackDone(localPlayerId, isConnected) &&
+                !isAttackCommandPending
+        else ->
+            uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
     }
 
 private fun endCurrentPhaseAction(
     uiState: GameUiState,
     onConfirmReinforcementsDone: () -> Unit,
+    onConfirmAttackDone: () -> Unit,
     onAdvanceTurn: () -> Unit,
 ): () -> Unit =
-    if (uiState.turnPhase == TurnPhase.REINFORCEMENTS) {
-        onConfirmReinforcementsDone
-    } else {
-        onAdvanceTurn
+    when (uiState.turnPhase) {
+        TurnPhase.REINFORCEMENTS -> onConfirmReinforcementsDone
+        TurnPhase.ATTACK -> onConfirmAttackDone
+        else -> onAdvanceTurn
     }
 
 /**
@@ -1139,11 +1250,217 @@ private fun ReinforcementPanel(
 }
 
 /**
+ * Steuerung einer einzelnen Angriffsabsicht zwischen zwei gültig gewählten Gebieten.
+ *
+ * Das Panel blockiert die Karte nicht: Quelle und Ziel können durch erneutes
+ * Tippen gewechselt werden. Der Server löst Würfel und Eroberung erst nach dem
+ * Request auf; im Panel stehen ausschließlich die erlaubten Eingaben.
+ */
+@Composable
+private fun AttackPanel(
+    state: AttackPanelState,
+    actions: AttackPanelActions,
+    modifier: Modifier = Modifier,
+) {
+    val minimumMoveAfterCapture =
+        minimumOccupyingTroopsForAttack(state.attackState.attackTroops)
+    Surface(
+        modifier =
+            modifier
+                .widthIn(max = 600.dp)
+                .testTag("attack_panel"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.game_attack_route,
+                            state.fromRegionId,
+                            state.toRegionId,
+                        ),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                val closePanelDescription = stringResource(id = R.string.game_attack_close)
+                BlockActionButton(
+                    label = "X",
+                    onClick = actions.onDismiss,
+                    selected = false,
+                    enabled = true,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .semantics { contentDescription = closePanelDescription }
+                            .testTag("close_attack_panel"),
+                )
+            }
+            AttackAmountRow(
+                label = stringResource(id = R.string.game_attack_troops),
+                amount = state.attackState.attackTroops,
+                canDecrease =
+                    state.canAdjust && state.attackState.attackTroops > 2,
+                canIncrease =
+                    state.canAdjust &&
+                        state.attackState.attackTroops < state.maximumAttackTroops,
+                onAdjust = actions.onAdjustAttackTroops,
+                tagPrefix = "attack_troops",
+            )
+            AttackAmountRow(
+                label = stringResource(id = R.string.game_attack_occupy),
+                amount = state.attackState.moveAfterCapture,
+                canDecrease =
+                    state.canAdjust &&
+                        state.attackState.moveAfterCapture > minimumMoveAfterCapture,
+                canIncrease =
+                    state.canAdjust &&
+                        state.attackState.moveAfterCapture < state.attackState.attackTroops,
+                onAdjust = actions.onAdjustMoveAfterCapture,
+                tagPrefix = "attack_move",
+            )
+            BlockActionButton(
+                label = stringResource(id = R.string.game_attack_submit),
+                onClick = actions.onAttack,
+                selected = true,
+                enabled = state.canAttack,
+                modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttackAmountRow(
+    label: String,
+    amount: Int,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
+    onAdjust: (Int) -> Unit,
+    tagPrefix: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(156.dp),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        BlockActionButton(
+            label = "-",
+            onClick = { onAdjust(-1) },
+            selected = false,
+            enabled = canDecrease,
+            modifier = Modifier.size(42.dp).testTag("${tagPrefix}_decrease"),
+        )
+        Text(
+            text = amount.toString(),
+            modifier = Modifier.width(32.dp).testTag("${tagPrefix}_amount"),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        BlockActionButton(
+            label = "+",
+            onClick = { onAdjust(1) },
+            selected = false,
+            enabled = canIncrease,
+            modifier = Modifier.size(42.dp).testTag("${tagPrefix}_increase"),
+        )
+    }
+}
+
+/** Zeigt das letzte vom Server aufgelöste Kampfergebnis ohne lokale Berechnung. */
+@Composable
+private fun AttackResultPanel(
+    result: AttackResultUiState,
+    modifier: Modifier = Modifier,
+) {
+    val fromRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(result.fromTerritoryId)
+            ?: result.fromTerritoryId.value
+    val toRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(result.toTerritoryId)
+            ?: result.toTerritoryId.value
+    Surface(
+        modifier =
+            modifier
+                .widthIn(max = 560.dp)
+                .testTag("attack_result_panel"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.game_attack_result_title,
+                        fromRegionId,
+                        toRegionId,
+                    ),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.game_attack_dice,
+                        result.attackerRolls.joinToString(", "),
+                        result.defenderRolls.joinToString(", "),
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.game_attack_losses,
+                        result.attackerLosses,
+                        result.defenderLosses,
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text =
+                    if (result.captured) {
+                        stringResource(
+                            id = R.string.game_attack_captured,
+                            result.occupyingTroopCount ?: 0,
+                        )
+                    } else {
+                        stringResource(id = R.string.game_attack_held, result.defenderRemaining)
+                    },
+                modifier = Modifier.testTag("attack_result_outcome"),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/**
  * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
  *
  * [onEndPhase] ist bereits vom aufrufenden Screen auf den fachlich korrekten
- * Request abgebildet: `TurnAdvance` außerhalb von Verstärkungen und
- * `ConfirmReinforcementsDone` nach vollständigem Verbrauch des Restpools.
+ * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
+ * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
+ * in den übrigen Phasen.
  */
 @Composable
 private fun BottomActionClusters(

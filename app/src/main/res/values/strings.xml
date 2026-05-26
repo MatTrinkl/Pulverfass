@@ -51,6 +51,16 @@
     <string name="game_reinforcements_target">Ziel: %1$s</string>
     <string name="game_reinforcements_place">Platzieren</string>
     <string name="game_reinforcements_close">Schließen</string>
+    <string name="game_attack_route">Angriff: %1$s → %2$s</string>
+    <string name="game_attack_troops">Angriffstruppen</string>
+    <string name="game_attack_occupy">Besetzung bei Eroberung</string>
+    <string name="game_attack_submit">Angreifen</string>
+    <string name="game_attack_close">Schließen</string>
+    <string name="game_attack_result_title">Kampfergebnis: %1$s → %2$s</string>
+    <string name="game_attack_dice">Würfel: %1$s gegen %2$s</string>
+    <string name="game_attack_losses">Verluste: Angriff %1$d · Verteidigung %2$d</string>
+    <string name="game_attack_captured">Erobert · Besetzung: %1$d</string>
+    <string name="game_attack_held">Verteidigung verbleibt: %1$d</string>
     <string name="server_url">Server URL</string>
     <string name="connection_status">Status</string>
     <string name="last_message_type">Letzte Message</string>

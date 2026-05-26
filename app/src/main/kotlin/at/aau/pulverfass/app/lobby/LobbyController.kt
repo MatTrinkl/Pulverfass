@@ -22,6 +22,8 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
@@ -36,6 +38,8 @@ import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
@@ -47,6 +51,8 @@ import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
@@ -661,6 +667,116 @@ class LobbyController(
         }
     }
 
+    /** Ändert lokal die Truppenanzahl für die nächste Angriffsaktion. */
+    fun adjustAttackTroops(delta: Int) {
+        _state.update {
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.adjustAttackTroops(
+                        current = it.gameState,
+                        delta = delta,
+                    ),
+            )
+        }
+    }
+
+    /** Ändert lokal die gewünschte Besetzung für ein möglicherweise erobertes Zielgebiet. */
+    fun adjustMoveAfterCapture(delta: Int) {
+        _state.update {
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.adjustMoveAfterCapture(
+                        current = it.gameState,
+                        delta = delta,
+                    ),
+            )
+        }
+    }
+
+    /**
+     * Sendet eine einzelne Angriffsabsicht für die ausgewählten Gebiete.
+     *
+     * Trefferwürfe, Verluste und Eroberungen werden nicht lokal berechnet. Die
+     * Anzeige folgt ausschließlich dem anschließend empfangenen Battle-Event.
+     */
+    fun attack() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        val fromRegionId = snapshot.gameState.selectionFromRegionId
+        val toRegionId = snapshot.gameState.selectionToRegionId
+        if (fromRegionId == null || toRegionId == null) {
+            _state.update { it.copy(errorText = config.errorAttackSelectionMissing) }
+            return
+        }
+        if (!snapshot.gameState.canSubmitAttack(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorAttackNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.ATTACK,
+                        payload =
+                            AttackRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                fromTerritoryId =
+                                    GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+                                toTerritoryId = GameMapTerritoryMapper.toTerritoryId(toRegionId),
+                                attackTroops = snapshot.gameState.attackState.attackTroops,
+                                moveAfterCapture = snapshot.gameState.attackState.moveAfterCapture,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorAttackFailed)
+                }
+            }
+        }
+    }
+
+    /** Beendet die Angriffsphase über den dafür vorgesehenen Serverrequest. */
+    fun confirmAttackDone() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canConfirmAttackDone(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorAttackNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CONFIRM_ATTACK_DONE,
+                        payload =
+                            ConfirmAttackDoneRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorConfirmAttackFailed)
+                }
+            }
+        }
+    }
+
     /**
      * Wählt eine private Karte für den möglichen Eintausch aus oder ab.
      *
@@ -1124,6 +1240,9 @@ class LobbyController(
         if (handleReinforcementPayload(payload)) {
             return
         }
+        if (handleAttackPayload(payload)) {
+            return
+        }
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)
@@ -1265,6 +1384,35 @@ class LobbyController(
             }
             is TradeInCardsErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.TRADE_IN_CARDS)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            else -> false
+        }
+
+    /**
+     * Verarbeitet Antworten der Angriffsphase; das eigentliche Kampfergebnis
+     * erreicht den Reducer separat als öffentliches Delta-Event.
+     */
+    private fun handleAttackPayload(payload: NetworkMessagePayload): Boolean =
+        when (payload) {
+            is AttackResponse -> {
+                clearPendingCommand(LobbyCommandKey.ATTACK)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is AttackErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.ATTACK)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            is ConfirmAttackDoneResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_ATTACK_DONE)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ConfirmAttackDoneErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CONFIRM_ATTACK_DONE)
                 updateGameError(GameErrorTextMapper.map(payload))
                 true
             }
