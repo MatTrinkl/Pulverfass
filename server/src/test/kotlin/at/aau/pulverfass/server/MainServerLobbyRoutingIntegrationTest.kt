@@ -821,6 +821,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     waitUntilProcessed(lobbyManager, lobbyA, expectedCount = 2)
                     waitUntilProcessed(lobbyManager, lobbyB, expectedCount = 1)
+                    waitUntilCounter(routedPackets, expectedCount = 3)
 
                     val stateA = lobbyManager.getLobby(lobbyA)?.currentState()
                     val stateB = lobbyManager.getLobby(lobbyB)?.currentState()
@@ -2318,6 +2319,17 @@ class MainServerLobbyRoutingIntegrationTest {
     private suspend fun receiveAnyPayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload = receiveRelevantTestPayload(session)
+
+    private suspend fun waitUntilCounter(
+        counter: AtomicInteger,
+        expectedCount: Int,
+    ) {
+        withTimeout(5_000) {
+            while (counter.get() < expectedCount) {
+                delay(5)
+            }
+        }
+    }
 
     private suspend fun waitUntilProcessed(
         manager: LobbyManager,
