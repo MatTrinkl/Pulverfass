@@ -24,6 +24,14 @@ class MapConfigLoaderTest {
         assertEquals(2, definition.continentsById.getValue(ContinentId("suedamerika")).bonusValue)
         assertEquals(2, definition.continentsById.getValue(ContinentId("afrika")).bonusValue)
         assertEquals(1, definition.continentsById.getValue(ContinentId("ozeanien")).bonusValue)
+        assertTrue(
+            TerritoryId("alaska") !in
+                definition.continentsById.getValue(ContinentId("nordamerika")).territoryIds,
+        )
+        assertTrue(
+            TerritoryId("alaska") in
+                definition.continentsById.getValue(ContinentId("asien")).territoryIds,
+        )
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
             definition.territoriesById

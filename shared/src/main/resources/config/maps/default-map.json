@@ -209,7 +209,6 @@
       "territoryIds": [
         "mittelamerika",
         "usa",
-        "alaska",
         "kanada",
         "groenland"
       ],
@@ -241,6 +240,7 @@
         "russland",
         "naher_osten",
         "sibirien",
+        "alaska",
         "china",
         "japan",
         "ferner_osten"
