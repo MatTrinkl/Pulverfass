@@ -655,6 +655,7 @@ class MainServerLobbyRoutingService(
                 lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     ?: throw IllegalStateException("GAME_NOT_FOUND")
             val attackResult = summarizeAttackResult(events)
+            val resolvedAttack = events.filterIsInstance<AttackResolvedEvent>().firstOrNull()
             network.send(
                 request.connectionId,
                 AttackResponse(
@@ -662,15 +663,7 @@ class MainServerLobbyRoutingService(
                     requestId = payload.requestId,
                 ),
             )
-            logger.info(
-                "Attack resolved: lobbyCode={} from={} to={} attackTroops={} result={} version={}",
-                payload.lobbyCode.value,
-                payload.fromTerritoryId.value,
-                payload.toTerritoryId.value,
-                payload.attackTroops,
-                attackResult,
-                updatedState.stateVersion,
-            )
+            logAttackResolved(resolvedAttack, attackResult, updatedState.stateVersion)
             sendUpdatedHandsAfterEliminationIfNeeded(
                 lobbyCode = payload.lobbyCode,
                 stateBeforeAttack = stateBeforeAttack,
@@ -2549,6 +2542,64 @@ class MainServerLobbyRoutingService(
             eliminated -> "elimination"
             resolved.capture -> "capture"
             else -> "battle"
+        }
+    }
+
+    private fun logAttackResolved(
+        resolvedAttack: AttackResolvedEvent?,
+        result: String,
+        updatedStateVersion: Long,
+    ) {
+        if (!logger.isInfoEnabled) {
+            return
+        }
+
+        logger.info(
+            "Attack resolved: {}",
+            attackResolvedLogMessage(
+                resolvedAttack = resolvedAttack,
+                result = result,
+                updatedStateVersion = updatedStateVersion,
+            ),
+        )
+    }
+
+    private fun attackResolvedLogMessage(
+        resolvedAttack: AttackResolvedEvent?,
+        result: String,
+        updatedStateVersion: Long,
+    ): String {
+        if (resolvedAttack == null) {
+            return "result=$result updatedStateVersion=$updatedStateVersion event=null"
+        }
+
+        return buildString {
+            append("result=").append(result)
+            append(" lobbyCode=").append(resolvedAttack.lobbyCode.value)
+            append(" attackerPlayerId=").append(resolvedAttack.attackerPlayerId.value)
+            append(" defenderPlayerId=").append(resolvedAttack.defenderPlayerId.value)
+            append(" fromTerritoryId=").append(resolvedAttack.fromTerritoryId.value)
+            append(" toTerritoryId=").append(resolvedAttack.toTerritoryId.value)
+            append(" attackTroops=").append(resolvedAttack.attackTroops)
+            append(" sourceTroopsBefore=").append(resolvedAttack.sourceTroopsBefore)
+            append(" targetTroopsBefore=").append(resolvedAttack.targetTroopsBefore)
+            append(" requestedAttackDice=").append(resolvedAttack.requestedAttackDice)
+            append(" attackDice=").append(resolvedAttack.attackDice)
+            append(" defendDice=").append(resolvedAttack.defendDice)
+            append(" attackerRolls=").append(resolvedAttack.attackerRolls)
+            append(" defenderRolls=").append(resolvedAttack.defenderRolls)
+            append(" rngTrace=").append(resolvedAttack.rngTrace)
+            append(" rngStateBefore=").append(resolvedAttack.rngStateBefore)
+            append(" rngStateAfter=").append(resolvedAttack.rngStateAfter)
+            append(" attackerLosses=").append(resolvedAttack.attackerLosses)
+            append(" defenderLosses=").append(resolvedAttack.defenderLosses)
+            append(" attackerRemaining=").append(resolvedAttack.attackerRemaining)
+            append(" defenderRemaining=").append(resolvedAttack.defenderRemaining)
+            append(" occupyingTroopCount=").append(resolvedAttack.occupyingTroopCount)
+            append(" minOccupyingTroops=").append(resolvedAttack.minOccupyingTroops)
+            append(" eventStateVersion=").append(resolvedAttack.stateVersion)
+            append(" capture=").append(resolvedAttack.capture)
+            append(" updatedStateVersion=").append(updatedStateVersion)
         }
     }
 }
