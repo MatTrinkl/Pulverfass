@@ -159,71 +159,102 @@ class PublicGameStateBuilder {
         previousState: GameState,
         currentState: GameState,
     ): List<PublicGameEvent> =
-        buildList {
-            if (event is at.aau.pulverfass.shared.lobby.event.GameStarted) {
-                add(GameStartedEvent(lobbyCode))
-                currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
-                return@buildList
-            }
+        buildLifecyclePayloads(lobbyCode, event, currentState)
+            ?: buildEventPayloads(lobbyCode, event, previousState, currentState)
+            ?: buildFallbackPayloads(lobbyCode, previousState, currentState)
 
-            if (event is StartPlayerConfigured) {
-                currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
-                return@buildList
-            }
-
-            when (event) {
-                is CardSetTradedInEvent ->
-                    add(
-                        ReinforcementsGrantedEvent(
-                            lobbyCode = lobbyCode,
-                            playerId = event.playerId,
-                            amount = event.value,
-                            territoryBonus = 0,
-                            continentBonus = 0,
-                            cardBonus = event.value,
-                        ),
-                    )
-                is PendingReinforcementsChangedEvent -> add(event)
-                is PendingReinforcementsSetEvent -> {
-                    val breakdown =
-                        BaseReinforcementRuleEngine.computeBaseReinforcements(
-                            playerId = event.playerId,
-                            state = currentState,
-                        )
-                    add(
-                        ReinforcementsGrantedEvent(
-                            lobbyCode = lobbyCode,
-                            playerId = event.playerId,
-                            amount = event.amount,
-                            territoryBonus = breakdown.territoryBonus,
-                            continentBonus = breakdown.continentBonus,
-                            cardBonus = event.amount - breakdown.total,
-                        ),
-                    )
+    private fun buildLifecyclePayloads(
+        lobbyCode: LobbyCode,
+        event: LobbyEvent,
+        currentState: GameState,
+    ): List<PublicGameEvent>? =
+        when (event) {
+            is at.aau.pulverfass.shared.lobby.event.GameStarted ->
+                buildList {
+                    add(GameStartedEvent(lobbyCode))
+                    addAll(turnStatePayloads(lobbyCode, currentState))
                 }
-                is PlayerEliminatedEvent -> {
+            is StartPlayerConfigured -> turnStatePayloads(lobbyCode, currentState)
+            else -> null
+        }
+
+    private fun buildEventPayloads(
+        lobbyCode: LobbyCode,
+        event: LobbyEvent,
+        previousState: GameState,
+        currentState: GameState,
+    ): List<PublicGameEvent>? =
+        when (event) {
+            is CardSetTradedInEvent ->
+                listOf(
+                    ReinforcementsGrantedEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = event.playerId,
+                        amount = event.value,
+                        territoryBonus = 0,
+                        continentBonus = 0,
+                        cardBonus = event.value,
+                    ),
+                )
+            is PendingReinforcementsChangedEvent -> listOf(event)
+            is PendingReinforcementsSetEvent ->
+                listOf(buildPendingReinforcementsPayload(lobbyCode, event, currentState))
+            is PlayerEliminatedEvent ->
+                buildList {
                     add(event.copy(stateVersion = currentState.stateVersion))
                     if (previousState.turnState != currentState.turnState) {
-                        currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
+                        addAll(turnStatePayloads(lobbyCode, currentState))
                     }
                 }
-                is AttackResolvedEvent ->
-                    addAll(buildAttackPayloads(event, currentState.stateVersion))
-                is TerritoryOwnerChangedEvent,
-                is TerritoryTroopsChangedEvent,
-                ->
-                    add(versionedTerritoryEvent(event, currentState.stateVersion))
-                is TurnStateUpdatedEvent -> add(event)
-                else -> {
-                    if (previousState.turnState != currentState.turnState) {
-                        currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
-                    }
-                    if (!previousState.gameStarted && currentState.gameStarted) {
-                        add(0, GameStartedEvent(lobbyCode))
-                    }
-                }
+            is AttackResolvedEvent -> buildAttackPayloads(event, currentState.stateVersion)
+            is TerritoryOwnerChangedEvent,
+            is TerritoryTroopsChangedEvent,
+            -> listOf(versionedTerritoryEvent(event, currentState.stateVersion))
+            is TurnStateUpdatedEvent -> listOf(event)
+            else -> null
+        }
+
+    private fun buildPendingReinforcementsPayload(
+        lobbyCode: LobbyCode,
+        event: PendingReinforcementsSetEvent,
+        currentState: GameState,
+    ): ReinforcementsGrantedEvent {
+        val breakdown =
+            BaseReinforcementRuleEngine.computeBaseReinforcements(
+                playerId = event.playerId,
+                state = currentState,
+            )
+        return ReinforcementsGrantedEvent(
+            lobbyCode = lobbyCode,
+            playerId = event.playerId,
+            amount = event.amount,
+            territoryBonus = breakdown.territoryBonus,
+            continentBonus = breakdown.continentBonus,
+            cardBonus = event.amount - breakdown.total,
+        )
+    }
+
+    private fun buildFallbackPayloads(
+        lobbyCode: LobbyCode,
+        previousState: GameState,
+        currentState: GameState,
+    ): List<PublicGameEvent> =
+        buildList {
+            if (previousState.turnState != currentState.turnState) {
+                addAll(turnStatePayloads(lobbyCode, currentState))
+            }
+            if (!previousState.gameStarted && currentState.gameStarted) {
+                add(0, GameStartedEvent(lobbyCode))
             }
         }
+
+    private fun turnStatePayloads(
+        lobbyCode: LobbyCode,
+        currentState: GameState,
+    ): List<PublicGameEvent> =
+        currentState.turnState
+            ?.let { listOf(it.toUpdatedEvent(lobbyCode)) }
+            .orEmpty()
 
     private fun versionedTerritoryEvent(
         event: LobbyEvent,
