@@ -115,7 +115,7 @@ Im angreifenden Gebiet müssen mindestens zwei Einheiten stehen.￼
 
 Der Angreifer kann entscheiden wie viele der im angreifenden Gebiet stationierten Truppen er für den Angriff verwendet.  
 Der Verteidiger nutzt immer alle im angegriffenen Gebiet stationierten Truppen zur Verteidigung.   
-Das Kampfergebnis wird über eine Wahrscheinlichkeitsberechnung bestimmt, die auf dem Verhältnis der angreifenden und verteidigenden Truppen basiert.   
+Das Kampfergebnis wird ueber eine deterministische, Risk-aehnliche Wuerfelregel bestimmt. Die technische Referenz dafuer ist `docs/architecture/battle-resolution.md`.   
 Das Ergebnis eines Kampfes ist der Verlust von Truppen auf beiden Seiten sowie gegebenenfalls die Eroberung des Gebiets.
 
 

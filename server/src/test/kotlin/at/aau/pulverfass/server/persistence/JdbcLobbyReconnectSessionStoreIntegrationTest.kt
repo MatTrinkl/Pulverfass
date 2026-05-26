@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.persistence
 
 import at.aau.pulverfass.server.DatabaseRuntimeConfig
+import at.aau.pulverfass.server.assumeDockerAvailableForTestcontainers
 import at.aau.pulverfass.server.migrateDatabaseSchema
 import at.aau.pulverfass.server.session.Session
 import at.aau.pulverfass.server.session.SessionReconnectContext
@@ -198,6 +199,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
     }
 
     private fun startManagedContainer(): TestDatabaseConfig {
+        assumeDockerAvailableForTestcontainers()
         val container = PostgreSQLContainer("postgres:17-alpine")
         container.start()
         managedContainer = container

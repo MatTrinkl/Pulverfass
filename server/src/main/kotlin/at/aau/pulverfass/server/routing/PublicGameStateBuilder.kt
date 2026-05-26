@@ -1,16 +1,19 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -198,6 +201,14 @@ class PublicGameStateBuilder {
                         ),
                     )
                 }
+                is PlayerEliminatedEvent -> {
+                    add(event.copy(stateVersion = currentState.stateVersion))
+                    if (previousState.turnState != currentState.turnState) {
+                        currentState.turnState?.let { add(it.toUpdatedEvent(lobbyCode)) }
+                    }
+                }
+                is AttackResolvedEvent ->
+                    addAll(buildAttackPayloads(event, currentState.stateVersion))
                 is TerritoryOwnerChangedEvent,
                 is TerritoryTroopsChangedEvent,
                 ->
@@ -227,6 +238,58 @@ class PublicGameStateBuilder {
                 )
         }
 
+    private fun buildAttackPayloads(
+        event: AttackResolvedEvent,
+        stateVersion: Long,
+    ): List<PublicGameEvent> =
+        buildList {
+            fun requireOccupyingTroopCount(): Int =
+                requireNotNull(event.occupyingTroopCount) {
+                    "Capture-AttackResolvedEvent benötigt occupyingTroopCount."
+                }
+            add(AttackResolvedBroadcastEvent.from(event, stateVersion))
+            add(
+                TerritoryTroopsChangedEvent(
+                    lobbyCode = event.lobbyCode,
+                    territoryId = event.fromTerritoryId,
+                    troopCount =
+                        if (event.capture) {
+                            event.attackerRemaining - requireOccupyingTroopCount()
+                        } else {
+                            event.attackerRemaining
+                        },
+                    stateVersion = stateVersion,
+                ),
+            )
+            if (event.capture) {
+                add(
+                    TerritoryOwnerChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        ownerId = event.attackerPlayerId,
+                        stateVersion = stateVersion,
+                    ),
+                )
+                add(
+                    TerritoryTroopsChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        troopCount = requireOccupyingTroopCount(),
+                        stateVersion = stateVersion,
+                    ),
+                )
+            } else {
+                add(
+                    TerritoryTroopsChangedEvent(
+                        lobbyCode = event.lobbyCode,
+                        territoryId = event.toTerritoryId,
+                        troopCount = event.defenderRemaining,
+                        stateVersion = stateVersion,
+                    ),
+                )
+            }
+        }
+
     private fun at.aau.pulverfass.shared.lobby.state.TurnState.toUpdatedEvent(
         lobbyCode: LobbyCode,
     ): TurnStateUpdatedEvent =
@@ -249,10 +312,7 @@ class PublicGameStateBuilder {
                 )
 
         return PublicMapProjection(
-            determinism =
-                PublicDeterminismMetadataSnapshot.from(definition).copy(
-                    seed = gameState.gameRandomSeed,
-                ),
+            determinism = PublicDeterminismMetadataSnapshot.from(definition),
             definition = MapDefinitionSnapshot.from(definition),
             territoryStates = gameState.allTerritoryStates().map(MapTerritoryStateSnapshot::from),
         )

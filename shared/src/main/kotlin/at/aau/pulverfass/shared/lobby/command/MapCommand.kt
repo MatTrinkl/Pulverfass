@@ -52,33 +52,32 @@ data class MoveTroopsCommand(
 }
 
 /**
- * Deterministisch aufgelöster Angriff.
+ * Serverautoritativ aufgeloester Angriffs-Intent.
  *
- * Die eigentliche Würfel-/Phasenlogik ist bewusst out of scope. Deshalb trägt
- * der Command bereits das autoritative Ergebnis der Kampfauflösung, das gegen
- * den aktuellen GameState validiert und dann in Events übersetzt wird.
+ * Die verbindliche Kampf-Formel steht in `docs/architecture/battle-resolution.md`.
+ * Der Command enthaelt nur den Angriffswunsch; Verluste, Rolls und RNG-Trace
+ * werden serverseitig in ein `AttackResolvedEvent` uebersetzt.
  */
 data class AttackCommand(
     override val lobbyCode: LobbyCode,
     override val playerId: PlayerId,
     val fromTerritoryId: TerritoryId,
     val toTerritoryId: TerritoryId,
-    val attackerLosses: Int,
-    val defenderLosses: Int,
+    val requestedAttackDice: Int = 3,
+    val committedTroopCount: Int? = null,
     val occupyingTroopCount: Int? = null,
 ) : MapCommand {
     init {
         require(fromTerritoryId != toTerritoryId) {
             "AttackCommand benötigt unterschiedliche Territorien."
         }
-        require(attackerLosses >= 0) {
-            "AttackCommand.attackerLosses darf nicht negativ sein, war aber $attackerLosses."
+        require(requestedAttackDice in 1..3) {
+            "AttackCommand.requestedAttackDice muss zwischen 1 und 3 liegen, " +
+                "war aber $requestedAttackDice."
         }
-        require(defenderLosses >= 0) {
-            "AttackCommand.defenderLosses darf nicht negativ sein, war aber $defenderLosses."
-        }
-        require(attackerLosses + defenderLosses > 0) {
-            "AttackCommand muss mindestens einen Verlust enthalten."
+        require(committedTroopCount == null || committedTroopCount > 0) {
+            "AttackCommand.committedTroopCount muss positiv sein, war aber " +
+                "$committedTroopCount."
         }
         require(occupyingTroopCount == null || occupyingTroopCount > 0) {
             "AttackCommand.occupyingTroopCount muss positiv sein, war aber $occupyingTroopCount."
