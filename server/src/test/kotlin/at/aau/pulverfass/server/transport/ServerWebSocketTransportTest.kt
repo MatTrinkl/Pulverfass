@@ -72,7 +72,7 @@ class ServerWebSocketTransportTest {
 
                 val thrown =
                     assertThrowsSuspend(Throwable::class.java) {
-                    transport.send(connectionId, byteArrayOf(4, 5, 6))
+                        transport.send(connectionId, byteArrayOf(4, 5, 6))
                     }
                 assertTrueIsClosedSend(thrown)
 
@@ -126,7 +126,8 @@ class ServerWebSocketTransportTest {
         assertTrue(
             generateSequence(cause) { current -> current.cause }
                 .any { current -> current is ClosedSendChannelException },
-            "Expected ClosedSendChannelException in cause chain, but got ${cause::class.qualifiedName}",
+            "Expected ClosedSendChannelException in cause chain, " +
+                "but got: ${cause::class.qualifiedName}",
         )
     }
 
