@@ -118,6 +118,14 @@ class FortifyMoveIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
+                    val playerTwoSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
 
                     playerOneSession.first.send(
                         Frame.Binary(
@@ -136,8 +144,54 @@ class FortifyMoveIntegrationTest {
                     )
 
                     assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 7,
+                            toVersion = 7,
+                            events =
+                                listOf(
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("alpha"),
+                                        troopCount = 2,
+                                        stateVersion = 7,
+                                    ),
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("gamma"),
+                                        troopCount = 3,
+                                        stateVersion = 7,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
                         FortifyMoveResponse(lobbyCode),
-                        receivePayload(playerOneSession.first),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 7,
+                            toVersion = 7,
+                            events =
+                                listOf(
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("alpha"),
+                                        troopCount = 2,
+                                        stateVersion = 7,
+                                    ),
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("gamma"),
+                                        troopCount = 3,
+                                        stateVersion = 7,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
                     )
 
                     val fortifiedState =
@@ -147,8 +201,8 @@ class FortifyMoveIntegrationTest {
                     assertEquals(2, fortifiedState.troopCountOf(TerritoryId("alpha")))
                     assertEquals(3, fortifiedState.troopCountOf(TerritoryId("gamma")))
                     assertTrue(fortifiedState.fortifyUsedThisTurn)
-
-                    drainQueuedPayloads(playerOneSession.first)
+                    assertEquals(null, receivePayloadOrNull(playerOneSession.first))
+                    assertEquals(null, receivePayloadOrNull(playerTwoSession.first))
 
                     playerOneSession.first.send(
                         Frame.Binary(
@@ -207,6 +261,45 @@ class FortifyMoveIntegrationTest {
                         ),
                         receiveAnyPayload(playerOneSession.first),
                     )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 9,
+                            toVersion = 9,
+                            events =
+                                listOf(
+                                    TurnStateUpdatedEvent(
+                                        lobbyCode = lobbyCode,
+                                        activePlayerId = playerOne,
+                                        turnPhase = TurnPhase.DRAW_CARD,
+                                        turnCount = 1,
+                                        startPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 9,
+                            previousPhase = TurnPhase.FORTIFY,
+                            nextPhase = TurnPhase.DRAW_CARD,
+                            activePlayerId = playerOne,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.DRAW_CARD,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
 
                     val advancedState =
                         lobbyManager.getLobby(lobbyCode)?.currentState()
@@ -214,6 +307,7 @@ class FortifyMoveIntegrationTest {
                     assertEquals(TurnPhase.DRAW_CARD, advancedState.activeTurnPhase)
 
                     playerOneSession.first.close()
+                    playerTwoSession.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -544,12 +638,6 @@ class FortifyMoveIntegrationTest {
         playersByConnection[connectionId] = playerId
         connectionsByPlayer[playerId] = connectionId
         session to connectionId
-    }
-
-    private suspend fun drainQueuedPayloads(session: DefaultClientWebSocketSession) {
-        while (receivePayloadOrNull(session) != null) {
-            // Zusätzliche Nachrichten aus bereits abgearbeiteten Events werden hier bewusst entfernt.
-        }
     }
 
     private suspend fun receivePayload(session: DefaultClientWebSocketSession): Any =
