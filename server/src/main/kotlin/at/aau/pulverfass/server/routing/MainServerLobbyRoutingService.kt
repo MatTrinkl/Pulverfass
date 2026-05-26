@@ -1203,7 +1203,7 @@ class MainServerLobbyRoutingService(
         require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
             "REQUESTER_MISMATCH"
         }
-        check(!(state.resolvedTurnState?.isPaused == true)) { "GAME_PAUSED" }
+        check(state.resolvedTurnState?.isPaused != true) { "GAME_PAUSED" }
 
         val validationError =
             fortifyMoveValidator.validateFortifyMove(
@@ -1213,9 +1213,7 @@ class MainServerLobbyRoutingService(
                 toTerritoryId = payload.toTerritoryId,
                 troopCount = payload.troopCount,
             )
-        if (validationError != null) {
-            throw IllegalArgumentException(validationError.name)
-        }
+        require(validationError == null) { validationError?.name.orEmpty() }
 
         return mapCommandRuleService.createEvents(
             state = state,

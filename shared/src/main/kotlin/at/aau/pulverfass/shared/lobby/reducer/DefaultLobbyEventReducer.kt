@@ -623,7 +623,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             configuredStartPlayerId = updatedTurnState.startPlayerId,
             turnNumber = updatedTurnState.turnCount,
             turnState = updatedTurnState,
-            fortifyUsedThisTurn = if (shouldResetFortifyUsed) false else state.fortifyUsedThisTurn,
+            fortifyUsedThisTurn = state.fortifyUsedThisTurn && !shouldResetFortifyUsed,
         )
     }
 
