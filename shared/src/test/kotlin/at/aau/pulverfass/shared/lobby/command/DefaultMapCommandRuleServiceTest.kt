@@ -410,6 +410,77 @@ class DefaultMapCommandRuleServiceTest {
                 ),
             expectedMessagePart = "darf committedTroopCount nicht überschreiten",
         )
+        assertMapCommandFailure(
+            state = captureState,
+            command =
+                attackCommand(
+                    attacker = attacker,
+                    requestedAttackDice = 3,
+                    occupyingTroopCount = 5,
+                ),
+            expectedMessagePart = "darf committedTroopCount nicht überschreiten",
+        )
+    }
+
+    @Test
+    fun `attack rejects committed troop and rng guard edge cases`() {
+        val attacker = PlayerId(1)
+
+        assertMapCommandFailure(
+            state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2),
+            command = attackCommand(attacker = attacker, committedTroopCount = 1),
+            expectedMessagePart = "committedTroopCount muss mindestens 2",
+        )
+        assertMapCommandFailure(
+            state = attackState(rngState = 2L, sourceTroops = 4, targetTroops = 2),
+            command = attackCommand(attacker = attacker, committedTroopCount = 4),
+            expectedMessagePart = "muss mindestens eine Truppe zurücklassen",
+        )
+        assertMapCommandFailure(
+            state =
+                attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2).copy(
+                    gameRandomState = null,
+                ),
+            command = attackCommand(attacker = attacker),
+            expectedMessagePart = "initialisierten gameRandomState",
+        )
+    }
+
+    @Test
+    fun `spectator cannot execute map commands`() {
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val spectatorState =
+            sampleState().copy(
+                gameStarted = true,
+                turnOrder = listOf(attacker),
+                territoryStates =
+                    sampleState().territoryStates +
+                        mapOf(
+                            TerritoryId("alpha") to
+                                TerritoryState(TerritoryId("alpha"), attacker, 3),
+                            TerritoryId("beta") to
+                                TerritoryState(TerritoryId("beta"), attacker, 2),
+                            TerritoryId("gamma") to
+                                TerritoryState(TerritoryId("gamma"), attacker, 1),
+                        ),
+            )
+
+        val exception =
+            assertThrows(InvalidMapCommandException::class.java) {
+                ruleService.createEvents(
+                    state = spectatorState,
+                    command =
+                        PlaceTroopsCommand(
+                            lobbyCode = spectatorState.lobbyCode,
+                            playerId = defender,
+                            territoryId = TerritoryId("alpha"),
+                            troopCount = 1,
+                        ),
+                )
+            }
+
+        assertEquals("PLAYER_ELIMINATED", exception.reasonCode)
     }
 
     private fun GameState.withTerritories(

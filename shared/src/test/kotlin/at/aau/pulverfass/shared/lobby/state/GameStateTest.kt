@@ -835,6 +835,114 @@ class GameStateTest {
         assertFalse(state.isSpectator(attacker))
     }
 
+    @Test
+    fun `should reject additional new invariants and helper misuse`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("TG11"),
+                gameRandomState = 5L,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("TG12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                tradeRequiredOnNextReinforcementPhaseByPlayer = emptyMap(),
+            )
+        }
+
+        val helperState =
+            GameState(
+                lobbyCode = LobbyCode("TG13"),
+                players = listOf(playerOne, playerTwo),
+                playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
+                activePlayer = playerOne,
+                turnOrder = listOf(playerOne, playerTwo),
+                setupTroopsToPlaceByPlayer = mapOf(playerOne to 0, playerTwo to 0),
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    mapOf(playerOne to false, playerTwo to false),
+            )
+
+        val withoutActive = helperState.withoutPlayerFromTurnOrder(playerOne)
+        assertEquals(listOf(playerTwo), withoutActive.turnOrder)
+        assertEquals(null, withoutActive.activePlayer)
+
+        val transferred =
+            GameState.initial(
+                lobbyCode = LobbyCode("TG14"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+                .withCardAddedToHand(playerOne, CardState(CardId("c1"), CardType.A))
+                .withCardAddedToHand(playerOne, CardState(CardId("c2"), CardType.B))
+                .withAllCardsTransferred(playerOne, playerTwo)
+        assertTrue(transferred.handOf(playerOne).isEmpty())
+        assertEquals(2, transferred.handSizeOf(playerTwo))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withTradeRequiredOnNextReinforcementPhase(PlayerId(99), true)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(PlayerId(99), playerTwo)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(playerOne, PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(playerOne, playerOne)
+        }
+    }
+
+    @Test
+    fun `attack queries reject unknown player and tolerate missing map or territory`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val unknownTerritory = TerritoryId("missing")
+        val stateWithoutMap =
+            GameState(
+                lobbyCode = LobbyCode("TG21"),
+                players = listOf(playerOne, playerTwo),
+                playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
+                turnOrder = listOf(playerOne, playerTwo),
+                setupTroopsToPlaceByPlayer = mapOf(playerOne to 0, playerTwo to 0),
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    mapOf(playerOne to false, playerTwo to false),
+            )
+
+        assertFalse(stateWithoutMap.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            stateWithoutMap.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertFalse(stateWithoutMap.hasAnyValidAttack(playerOne))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.canAttackFrom(TerritoryId("alpha"), PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.validAttackTargets(TerritoryId("alpha"), PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.hasAnyValidAttack(PlayerId(99))
+        }
+
+        val mappedState =
+            GameState.initial(
+                lobbyCode = LobbyCode("TG22"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+        assertFalse(mappedState.canAttackFrom(unknownTerritory, playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            mappedState.validAttackTargets(unknownTerritory, playerOne),
+        )
+    }
+
     private fun sampleMapDefinition(): MapDefinition =
         MapDefinition(
             schemaVersion = 1,
