@@ -20,11 +20,13 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlin.coroutines.CoroutineContext
 
@@ -56,16 +58,23 @@ class ServerWebSocketTransportTest {
             transport.onConnected(connectionId, session)
 
             coroutineScope {
+                val collectorReady = CompletableDeferred<Unit>()
                 val errorEventDeferred =
                     async(start = CoroutineStart.UNDISPATCHED) {
                         withTimeout(5_000) {
-                            transport.events.filterIsInstance<TransportError>().first()
+                            transport.events
+                                .filterIsInstance<TransportError>()
+                                .onStart { collectorReady.complete(Unit) }
+                                .first()
                         }
                     }
+                collectorReady.await()
 
-                assertThrowsSuspend(ClosedSendChannelException::class.java) {
+                val thrown =
+                    assertThrowsSuspend(Throwable::class.java) {
                     transport.send(connectionId, byteArrayOf(4, 5, 6))
-                }
+                    }
+                assertTrueIsClosedSend(thrown)
 
                 val errorEvent = errorEventDeferred.await()
                 assertEquals(connectionId, errorEvent.connectionId)
@@ -114,7 +123,11 @@ class ServerWebSocketTransportTest {
         }
 
     private fun assertTrueIsClosedSend(cause: Throwable) {
-        assertEquals(ClosedSendChannelException::class, cause::class)
+        assertTrue(
+            generateSequence(cause) { current -> current.cause }
+                .any { current -> current is ClosedSendChannelException },
+            "Expected ClosedSendChannelException in cause chain, but got ${cause::class.qualifiedName}",
+        )
     }
 
     private suspend fun <T : Throwable> assertThrowsSuspend(
