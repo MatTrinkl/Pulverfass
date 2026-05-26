@@ -37,15 +37,6 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf eine PlayerCount-Anfrage. */
     LOBBY_PLAYER_COUNT_ERROR_RESPONSE(55),
 
-    /** Anfrage, in Phase 3 Truppen zwischen verbundenen eigenen Gebieten zu verschieben. */
-    LOBBY_FORTIFY_MOVE_REQUEST(56),
-
-    /** Erfolgreiche Antwort auf eine Fortify-Anfrage. */
-    LOBBY_FORTIFY_MOVE_RESPONSE(57),
-
-    /** Fehlantwort auf eine Fortify-Anfrage. */
-    LOBBY_FORTIFY_MOVE_ERROR_RESPONSE(58),
-
     /** Öffentlicher Broadcast für neu gewährte Verstärkungen eines Spielers. */
     LOBBY_REINFORCEMENTS_GRANTED_BROADCAST(56),
 
@@ -81,6 +72,15 @@ enum class MessageType(val id: Int) {
 
     /** Private S2C-Aktualisierung der autoritativen Kartenhand eines Spielers. */
     LOBBY_PLAYER_HAND_UPDATED_EVENT(67),
+
+    /** Anfrage, in Phase 3 Truppen zwischen verbundenen eigenen Gebieten zu verschieben. */
+    LOBBY_FORTIFY_MOVE_REQUEST(68),
+
+    /** Erfolgreiche Antwort auf eine Fortify-Anfrage. */
+    LOBBY_FORTIFY_MOVE_RESPONSE(69),
+
+    /** Fehlantwort auf eine Fortify-Anfrage. */
+    LOBBY_FORTIFY_MOVE_ERROR_RESPONSE(70),
 
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),

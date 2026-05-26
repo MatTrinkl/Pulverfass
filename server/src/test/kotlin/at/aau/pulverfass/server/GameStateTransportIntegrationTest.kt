@@ -418,6 +418,15 @@ class GameStateTransportIntegrationTest {
                                 startPlayerId = playerOne,
                             ),
                         expectSnapshot = true,
+                        expectedGrantedEvent =
+                            ReinforcementsGrantedEvent(
+                                lobbyCode = lobbyCode,
+                                playerId = playerTwo,
+                                amount = 3,
+                                territoryBonus = 3,
+                                continentBonus = 0,
+                                cardBonus = 0,
+                            ),
                     )
 
                     playerTwoSocket.send(
@@ -438,9 +447,10 @@ class GameStateTransportIntegrationTest {
                         assertIs<GameStateCatchUpResponse>(
                             receiveAnyPayload(playerTwoSocket),
                         )
-                    assertEquals(11, catchUp.stateVersion)
+                    assertEquals(12, catchUp.stateVersion)
                     assertEquals(playerTwo, catchUp.turnState.activePlayerId)
                     assertEquals(TurnPhase.REINFORCEMENTS, catchUp.turnState.turnPhase)
+                    assertEquals(3, catchUp.turnState.pendingReinforcements)
                     assertEquals(
                         2,
                         catchUp.territoryStates.first {

@@ -60,7 +60,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(16, events.size)
+        assertEquals(18, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
