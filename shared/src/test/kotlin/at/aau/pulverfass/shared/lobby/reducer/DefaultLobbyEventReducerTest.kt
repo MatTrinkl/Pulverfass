@@ -10,6 +10,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -839,6 +841,100 @@ class DefaultLobbyEventReducerTest {
         assertEquals(true, updated.turnState?.isPaused)
         assertEquals(TurnPauseReasons.WAITING_FOR_PLAYER, updated.turnState?.pauseReason)
         assertEquals(playerTwo, updated.turnState?.pausedPlayerId)
+        assertEquals(false, updated.fortifyUsedThisTurn)
+    }
+
+    @Test
+    fun `fortify events update troops and turn flag through reducer only`() {
+        val lobbyCode = LobbyCode("FT10")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, PlayerId(2)),
+            ).copy(
+                activePlayer = playerOne,
+                turnOrder = listOf(playerOne, PlayerId(2)),
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                status = GameStatus.RUNNING,
+                territoryStates =
+                    mapOf(
+                        TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), playerOne, 5),
+                        TerritoryId("beta") to TerritoryState(TerritoryId("beta"), playerOne, 1),
+                        TerritoryId("gamma") to TerritoryState(TerritoryId("gamma"), playerOne, 2),
+                    ),
+            )
+
+        val moved =
+            reducer.apply(
+                initialState,
+                FortifyMoveAppliedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("gamma"),
+                    troopCount = 3,
+                ),
+            )
+        val marked =
+            reducer.apply(
+                moved,
+                FortifyUsedSetEvent(
+                    lobbyCode = lobbyCode,
+                    used = true,
+                ),
+            )
+
+        assertEquals(2, moved.troopCountOf(TerritoryId("alpha")))
+        assertEquals(5, moved.troopCountOf(TerritoryId("gamma")))
+        assertEquals(false, moved.fortifyUsedThisTurn)
+        assertEquals(true, marked.fortifyUsedThisTurn)
+    }
+
+    @Test
+    fun `turn change resets fortify used flag for next player turn`() {
+        val lobbyCode = LobbyCode("FT12")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne, playerTwo),
+                turnOrder = listOf(playerOne, playerTwo),
+                activePlayer = playerOne,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                fortifyUsedThisTurn = true,
+                status = GameStatus.RUNNING,
+            )
+
+        val updated =
+            reducer.apply(
+                state,
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerTwo,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    turnCount = 1,
+                    startPlayerId = playerOne,
+                ),
+            )
+
+        assertEquals(playerTwo, updated.activePlayer)
+        assertEquals(false, updated.fortifyUsedThisTurn)
     }
 
     @Test

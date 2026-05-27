@@ -14,6 +14,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
@@ -22,6 +23,7 @@ import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
@@ -36,6 +38,8 @@ import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
@@ -201,6 +205,28 @@ class MessageCodecTest {
         val result = MessageCodec.decodePayload(bytes)
 
         assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should encode and decode fortify move payloads directly`() {
+        val request =
+            FortifyMoveRequest(
+                lobbyCode = LobbyCode("FM12"),
+                playerId = PlayerId(6),
+                fromTerritoryId = TerritoryId("alpha"),
+                toTerritoryId = TerritoryId("beta"),
+                troopCount = 2,
+            )
+        val response = FortifyMoveResponse(lobbyCode = LobbyCode("FM34"))
+        val error =
+            FortifyMoveErrorResponse(
+                code = FortifyMoveErrorCode.FORTIFY_ALREADY_USED,
+                reason = "Fortify wurde in diesem Zug bereits verwendet.",
+            )
+
+        assertEquals(request, MessageCodec.decodePayload(MessageCodec.encode(request)))
+        assertEquals(response, MessageCodec.decodePayload(MessageCodec.encode(response)))
+        assertEquals(error, MessageCodec.decodePayload(MessageCodec.encode(error)))
     }
 
     @Test

@@ -6,6 +6,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
@@ -13,11 +15,13 @@ import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
@@ -28,6 +32,7 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
@@ -514,6 +519,92 @@ class PublicGameStateBuilderTest {
         assertEquals(
             "GameState enthält keine MapDefinition für einen Snapshot.",
             exception.message,
+        )
+    }
+
+    @Test
+    fun `fortify move event projects two troop updates into a public delta`() {
+        val reducer = DefaultLobbyEventReducer()
+        val playerOne = PlayerId(1)
+        val lobbyCode = LobbyCode("PGB2")
+        val baseState =
+            sampleGameState().copy(
+                lobbyCode = lobbyCode,
+                activePlayer = playerOne,
+            )
+        val ownedState =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            baseState,
+                            TerritoryOwnerChangedEvent(
+                                lobbyCode,
+                                TerritoryId("alaska"),
+                                playerOne,
+                            ),
+                        ),
+                        TerritoryOwnerChangedEvent(
+                            lobbyCode,
+                            TerritoryId("kanada"),
+                            playerOne,
+                        ),
+                    ),
+                    TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alaska"), 4),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("kanada"), 1),
+            )
+        val fortifyEvent =
+            FortifyMoveAppliedEvent(
+                lobbyCode = lobbyCode,
+                playerId = playerOne,
+                fromTerritoryId = TerritoryId("alaska"),
+                toTerritoryId = TerritoryId("kanada"),
+                troopCount = 2,
+            )
+        val currentState = reducer.apply(ownedState, fortifyEvent)
+
+        assertEquals(
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = currentState.stateVersion,
+                toVersion = currentState.stateVersion,
+                events =
+                    listOf(
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyCode,
+                            territoryId = TerritoryId("alaska"),
+                            troopCount = 2,
+                            stateVersion = currentState.stateVersion,
+                        ),
+                        TerritoryTroopsChangedEvent(
+                            lobbyCode = lobbyCode,
+                            territoryId = TerritoryId("kanada"),
+                            troopCount = 3,
+                            stateVersion = currentState.stateVersion,
+                        ),
+                    ),
+            ),
+            builder.buildDelta(
+                lobbyCode = lobbyCode,
+                event = fortifyEvent,
+                previousState = ownedState,
+                currentState = currentState,
+            ),
+        )
+    }
+
+    @Test
+    fun `fortify used flag does not create a public delta`() {
+        val state = sampleGameState()
+
+        assertNull(
+            builder.buildDelta(
+                lobbyCode = state.lobbyCode,
+                event = FortifyUsedSetEvent(state.lobbyCode, used = true),
+                previousState = state,
+                currentState = state.copy(fortifyUsedThisTurn = true, stateVersion = 1),
+            ),
         )
     }
 

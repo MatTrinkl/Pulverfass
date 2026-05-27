@@ -12,10 +12,16 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.command.AttackCommand
+import at.aau.pulverfass.shared.lobby.command.DefaultFortifyMoveValidator
 import at.aau.pulverfass.shared.lobby.command.DefaultMapCommandRuleService
+import at.aau.pulverfass.shared.lobby.command.FortifyMoveCommand
+import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidationError
+import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidator
 import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
+import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -46,6 +52,7 @@ import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -63,6 +70,7 @@ import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -83,6 +91,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneEr
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -132,6 +142,9 @@ class MainServerLobbyRoutingService(
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
     private val persistenceCallbacks: LobbyPersistenceCallbacks =
         LobbyPersistenceCallbacks.disabled(),
+    private val fortifyMoveValidator: FortifyMoveValidator = DefaultFortifyMoveValidator(),
+    private val mapCommandRuleService: MapCommandRuleService =
+        DefaultMapCommandRuleService(fortifyMoveValidator = fortifyMoveValidator),
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
     private companion object {
@@ -152,7 +165,6 @@ class MainServerLobbyRoutingService(
             connectionIdResolver = connectionIdResolver,
         )
     private val publicGameStateBuilder = PublicGameStateBuilder()
-    private val mapCommandRuleService = DefaultMapCommandRuleService()
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
 
     init {
@@ -198,6 +210,7 @@ class MainServerLobbyRoutingService(
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
+            is FortifyMoveRequest -> routeFortifyMoveRequest(request)
             is PlaceReinforcementsRequest -> routePlaceReinforcementsRequest(request)
             is StartPlayerSetRequest -> routeStartPlayerSetRequest(request)
             is TradeInCardsRequest -> routeTradeInCardsRequest(request)
@@ -569,6 +582,33 @@ class MainServerLobbyRoutingService(
                 payload.playerId.value,
                 error.code.name,
             )
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeFortifyMoveRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as FortifyMoveRequest
+
+        runCatching {
+            val events = buildFortifyMoveEvents(request, payload)
+            events.forEach { event -> lobbyManager.submit(event, request.context) }
+            network.send(request.connectionId, FortifyMoveResponse(payload.lobbyCode))
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = fortifyMoveErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -1320,6 +1360,43 @@ class MainServerLobbyRoutingService(
         return pausedOrAdvancedTurnState.toUpdatedEvent(payload.lobbyCode)
     }
 
+    private fun buildFortifyMoveEvents(
+        request: DecodedNetworkRequest,
+        payload: FortifyMoveRequest,
+    ): List<LobbyEvent> {
+        val state =
+            lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val contextPlayerId = request.context.playerId
+
+        require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
+            "REQUESTER_MISMATCH"
+        }
+        check(state.resolvedTurnState?.isPaused != true) { "GAME_PAUSED" }
+
+        val validationError =
+            fortifyMoveValidator.validateFortifyMove(
+                state = state,
+                playerId = payload.playerId,
+                fromTerritoryId = payload.fromTerritoryId,
+                toTerritoryId = payload.toTerritoryId,
+                troopCount = payload.troopCount,
+            )
+        require(validationError == null) { validationError?.name.orEmpty() }
+
+        return mapCommandRuleService.createEvents(
+            state = state,
+            command =
+                FortifyMoveCommand(
+                    lobbyCode = payload.lobbyCode,
+                    playerId = payload.playerId,
+                    fromTerritoryId = payload.fromTerritoryId,
+                    toTerritoryId = payload.toTerritoryId,
+                    troopCount = payload.troopCount,
+                ),
+        )
+    }
+
     private fun buildPlaceReinforcementsEvents(
         request: DecodedNetworkRequest,
         payload: PlaceReinforcementsRequest,
@@ -1642,6 +1719,82 @@ class MainServerLobbyRoutingService(
             .forEach { connectionId ->
                 network.send(connectionId, PlayerCountUpdateEvent(lobbyCode, count))
             }
+    }
+
+
+    private fun fortifyMoveErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: FortifyMoveRequest,
+        cause: Throwable,
+    ): FortifyMoveErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> FortifyMoveErrorCode.GAME_NOT_FOUND
+                "REQUESTER_MISMATCH" -> FortifyMoveErrorCode.REQUESTER_MISMATCH
+                "GAME_PAUSED" -> FortifyMoveErrorCode.GAME_PAUSED
+                FortifyMoveValidationError.NOT_ACTIVE_PLAYER.name ->
+                    FortifyMoveErrorCode.NOT_ACTIVE_PLAYER
+                FortifyMoveValidationError.WRONG_PHASE.name -> FortifyMoveErrorCode.WRONG_PHASE
+                FortifyMoveValidationError.TERRITORY_NOT_OWNED.name ->
+                    FortifyMoveErrorCode.TERRITORY_NOT_OWNED
+                FortifyMoveValidationError.NO_PATH.name -> FortifyMoveErrorCode.NO_PATH
+                FortifyMoveValidationError.INSUFFICIENT_TROOPS.name ->
+                    FortifyMoveErrorCode.INSUFFICIENT_TROOPS
+                FortifyMoveValidationError.FORTIFY_ALREADY_USED.name ->
+                    FortifyMoveErrorCode.FORTIFY_ALREADY_USED
+                else -> FortifyMoveErrorCode.NOT_ACTIVE_PLAYER
+            }
+
+        val reason =
+            when (code) {
+                FortifyMoveErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                FortifyMoveErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        "Connection ist keinem Spieler für Lobby " +
+                            "'${payload.lobbyCode.value}' zugeordnet."
+                    } else {
+                        "Requester '${payload.playerId.value}' passt nicht " +
+                            "zur aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                FortifyMoveErrorCode.GAME_PAUSED ->
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
+                        "Fortify ist aktuell nicht erlaubt."
+                FortifyMoveErrorCode.NOT_ACTIVE_PLAYER -> {
+                    val activePlayer =
+                        lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.activePlayer
+                    "Nur der aktive Spieler '${activePlayer?.value}' darf Fortify ausführen."
+                }
+                FortifyMoveErrorCode.WRONG_PHASE -> {
+                    val currentPhase =
+                        lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.activeTurnPhase
+                    "Fortify ist nur in Phase 'FORTIFY' erlaubt, aktuell ist " +
+                        "'${currentPhase?.name}'."
+                }
+                FortifyMoveErrorCode.TERRITORY_NOT_OWNED ->
+                    "Fortify von '${payload.fromTerritoryId.value}' nach " +
+                        "'${payload.toTerritoryId.value}' erfordert zwei eigene Territorien."
+                FortifyMoveErrorCode.NO_PATH ->
+                    "Fortify von '${payload.fromTerritoryId.value}' nach " +
+                        "'${payload.toTerritoryId.value}' benötigt einen zusammenhängenden " +
+                        "Pfad über eigene Gebiete."
+                FortifyMoveErrorCode.INSUFFICIENT_TROOPS -> {
+                    val sourceTroops =
+                        lobbyManager.getLobby(payload.lobbyCode)
+                            ?.currentState()
+                            ?.territoryStateOf(payload.fromTerritoryId)
+                            ?.troopCount
+                    "Fortify von '${payload.fromTerritoryId.value}' nach " +
+                        "'${payload.toTerritoryId.value}' muss mindestens eine Truppe " +
+                        "zurücklassen: vorhanden=$sourceTroops, bewegt=${payload.troopCount}."
+                }
+                FortifyMoveErrorCode.FORTIFY_ALREADY_USED ->
+                    "Fortify wurde in diesem Zug bereits verwendet."
+            }
+
+        return FortifyMoveErrorResponse(code = code, reason = reason)
     }
 
     private fun turnAdvanceErrorResponse(
@@ -2228,6 +2381,7 @@ class MainServerLobbyRoutingService(
     private fun lobbyCodeOf(payload: NetworkMessagePayload): LobbyCode? =
         when (payload) {
             is AttackRequest -> payload.lobbyCode
+            is FortifyMoveRequest -> payload.lobbyCode
             is JoinLobbyRequest -> payload.lobbyCode
             is LeaveLobbyRequest -> payload.lobbyCode
             is KickPlayerRequest -> payload.lobbyCode

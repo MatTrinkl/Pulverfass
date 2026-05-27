@@ -5,10 +5,14 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
@@ -189,6 +193,103 @@ class DefaultMapCommandRuleServiceTest {
             "Move von 'beta' nach 'gamma' ist nur für direkt benachbarte Territorien erlaubt.",
             exception.message,
         )
+    }
+
+    @Test
+    fun `fortify move valid creates applied event and used flag update`() {
+        val playerOne = PlayerId(1)
+        val state =
+            sampleState().copy(
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                territoryStates =
+                    sampleState().territoryStates +
+                        mapOf(
+                            TerritoryId("alpha") to
+                                TerritoryState(TerritoryId("alpha"), playerOne, 5),
+                            TerritoryId("beta") to
+                                TerritoryState(TerritoryId("beta"), playerOne, 2),
+                            TerritoryId("gamma") to
+                                TerritoryState(TerritoryId("gamma"), playerOne, 1),
+                        ),
+            )
+
+        val events =
+            ruleService.createEvents(
+                state = state,
+                command =
+                    FortifyMoveCommand(
+                        lobbyCode = state.lobbyCode,
+                        playerId = playerOne,
+                        fromTerritoryId = TerritoryId("alpha"),
+                        toTerritoryId = TerritoryId("gamma"),
+                        troopCount = 3,
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                FortifyMoveAppliedEvent(
+                    lobbyCode = state.lobbyCode,
+                    playerId = playerOne,
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("gamma"),
+                    troopCount = 3,
+                ),
+                FortifyUsedSetEvent(
+                    lobbyCode = state.lobbyCode,
+                    used = true,
+                ),
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `fortify move maps validator failures to clear command errors`() {
+        val playerOne = PlayerId(1)
+        val state =
+            sampleState().copy(
+                activePlayer = playerOne,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                territoryStates =
+                    sampleState().territoryStates +
+                        mapOf(
+                            TerritoryId("alpha") to
+                                TerritoryState(TerritoryId("alpha"), playerOne, 1),
+                            TerritoryId("beta") to
+                                TerritoryState(TerritoryId("beta"), playerOne, 2),
+                        ),
+            )
+
+        val exception =
+            assertThrows(InvalidMapCommandException::class.java) {
+                ruleService.createEvents(
+                    state = state,
+                    command =
+                        FortifyMoveCommand(
+                            lobbyCode = state.lobbyCode,
+                            playerId = playerOne,
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("beta"),
+                            troopCount = 1,
+                        ),
+                )
+            }
+
+        assertTrue(exception.message.orEmpty().contains("mindestens eine Truppe"))
     }
 
     @Test
