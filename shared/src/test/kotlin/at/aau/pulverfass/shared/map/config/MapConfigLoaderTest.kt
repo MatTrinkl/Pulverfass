@@ -46,6 +46,18 @@ class MapConfigLoaderTest {
         )
         assertTrue(
             definition.territoriesById
+                .getValue(TerritoryId("alaska"))
+                .edges
+                .any { it.targetId == TerritoryId("china") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("china"))
+                .edges
+                .any { it.targetId == TerritoryId("alaska") },
+        )
+        assertTrue(
+            definition.territoriesById
                 .getValue(TerritoryId("sibirien"))
                 .edges
                 .none { it.targetId == TerritoryId("japan") },

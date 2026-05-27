@@ -43,6 +43,7 @@
       "edges": [
         { "targetId": "kanada" },
         { "targetId": "sibirien" },
+        { "targetId": "china" },
         { "targetId": "japan" }
       ]
     },
@@ -128,6 +129,7 @@
       "edges": [
         { "targetId": "russland" },
         { "targetId": "sibirien" },
+        { "targetId": "alaska" },
         { "targetId": "japan" },
         { "targetId": "ferner_osten" },
         { "targetId": "naher_osten" }
