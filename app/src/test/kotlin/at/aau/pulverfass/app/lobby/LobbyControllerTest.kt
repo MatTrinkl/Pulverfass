@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -21,6 +22,8 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
@@ -31,6 +34,8 @@ import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
@@ -38,12 +43,17 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
@@ -774,8 +784,249 @@ class LobbyControllerTest {
 
             controller.tradeInCards()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.attack()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.confirmAttackDone()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
         } finally {
             controller.close()
+        }
+    }
+
+    @Test
+    fun `attack actions send backend requests and display server battle result`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AT12")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val config = LobbyControllerConfig()
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            var attackAttempts = 0
+            var confirmAttempts = 0
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = lobbyCode,
+                                            playerId = playerId,
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateCatchUpResponse(
+                                            lobbyCode = lobbyCode,
+                                            stateVersion = 1,
+                                            determinism =
+                                                PublicDeterminismMetadataSnapshot(
+                                                    mapHash = "hash",
+                                                    schemaVersion = 1,
+                                                ),
+                                            turnState =
+                                                PublicTurnStateSnapshot(
+                                                    activePlayerId = playerId,
+                                                    turnPhase = TurnPhase.ATTACK,
+                                                    turnCount = 1,
+                                                    startPlayerId = playerId,
+                                                ),
+                                            definition =
+                                                MapDefinitionSnapshot(
+                                                    territories =
+                                                        listOf(
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId(
+                                                                        "brasilien",
+                                                                    ),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "argentinien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId(
+                                                                        "argentinien",
+                                                                    ),
+                                                                edges = emptyList(),
+                                                            ),
+                                                        ),
+                                                    continents = emptyList(),
+                                                ),
+                                            territoryStates =
+                                                listOf(
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 5,
+                                                    ),
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        ownerId = opponentId,
+                                                        troopCount = 1,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is AttackRequest -> {
+                            attackAttempts += 1
+                            if (attackAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            AttackErrorResponse(
+                                                AttackErrorCode.NOT_ADJACENT,
+                                                "not adjacent",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            GameStateDeltaEvent(
+                                                lobbyCode = lobbyCode,
+                                                fromVersion = 1,
+                                                toVersion = 2,
+                                                events =
+                                                    listOf(
+                                                        AttackResolvedBroadcastEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            attackerPlayerId = playerId,
+                                                            defenderPlayerId = opponentId,
+                                                            fromTerritoryId =
+                                                                TerritoryId("brasilien"),
+                                                            toTerritoryId =
+                                                                TerritoryId("argentinien"),
+                                                            attackTroops = 3,
+                                                            sourceTroopsBefore = 5,
+                                                            targetTroopsBefore = 1,
+                                                            requestedAttackDice = 3,
+                                                            attackDice = 2,
+                                                            defendDice = 1,
+                                                            attackerRolls = listOf(6, 4),
+                                                            defenderRolls = listOf(2),
+                                                            attackerLosses = 0,
+                                                            defenderLosses = 1,
+                                                            attackerRemaining = 3,
+                                                            defenderRemaining = 0,
+                                                            occupyingTroopCount = 2,
+                                                        ),
+                                                    ),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(AttackResponse(lobbyCode)),
+                                    ),
+                                )
+                            }
+                        }
+                        is ConfirmAttackDoneRequest -> {
+                            confirmAttempts += 1
+                            if (confirmAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ConfirmAttackDoneErrorResponse(
+                                                ConfirmAttackDoneErrorCode.PHASE_MISMATCH,
+                                                "phase",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(ConfirmAttackDoneResponse(lobbyCode)),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController(config = config)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.attack()
+                assertEquals(config.errorAttackSelectionMissing, controller.state.value.errorText)
+
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                controller.adjustAttackTroops(1)
+                controller.adjustMoveAfterCapture(1)
+                controller.adjustMoveAfterCapture(-1)
+                controller.attack()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Das Zielgebiet grenzt nicht an das Ausgangsgebiet."
+                }
+                controller.attack()
+                waitUntil { controller.state.value.gameState.attackState.latestResult != null }
+
+                val request = seenPayloads.filterIsInstance<AttackRequest>().last()
+                assertEquals(TerritoryId("brasilien"), request.fromTerritoryId)
+                assertEquals(TerritoryId("argentinien"), request.toTerritoryId)
+                assertEquals(3, request.attackTroops)
+                assertEquals(3, request.moveAfterCapture)
+                assertTrue(
+                    controller.state.value.gameState.attackState.latestResult?.captured == true,
+                )
+
+                controller.confirmAttackDone()
+                waitUntil {
+                    controller.state.value.errorText == "Die Angriffsphase ist bereits beendet."
+                }
+                controller.confirmAttackDone()
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().size == 2
+                }
+                waitUntil {
+                    LobbyCommandKey.CONFIRM_ATTACK_DONE !in
+                        controller.state.value.pendingCommandKeys
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
         }
     }
 

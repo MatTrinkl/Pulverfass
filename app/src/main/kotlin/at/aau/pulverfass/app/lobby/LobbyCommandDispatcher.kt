@@ -22,6 +22,8 @@ enum class LobbyCommandKey {
     PLACE_REINFORCEMENTS,
     CONFIRM_REINFORCEMENTS_DONE,
     TRADE_IN_CARDS,
+    ATTACK,
+    CONFIRM_ATTACK_DONE,
 }
 
 /**
