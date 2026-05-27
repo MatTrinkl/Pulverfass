@@ -33,6 +33,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
+import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TradeInProgression
@@ -1422,7 +1423,7 @@ class MainServerLobbyRoutingService(
     private fun buildPlaceReinforcementsEvents(
         request: DecodedNetworkRequest,
         payload: PlaceReinforcementsRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1497,7 +1498,7 @@ class MainServerLobbyRoutingService(
     private fun buildAttackEvents(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1555,7 +1556,7 @@ class MainServerLobbyRoutingService(
     private fun buildTradeInCardsEvents(
         request: DecodedNetworkRequest,
         payload: TradeInCardsRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -2333,7 +2334,7 @@ class MainServerLobbyRoutingService(
 
     private suspend fun broadcastAcceptedLobbyEvent(
         lobbyCode: LobbyCode,
-        event: at.aau.pulverfass.shared.lobby.event.LobbyEvent,
+        event: LobbyEvent,
         previousState: GameState,
         currentState: GameState,
     ) {
@@ -2662,7 +2663,7 @@ class MainServerLobbyRoutingService(
     private fun requiresForcedTradeInOnReinforcementPhase(
         state: GameState,
         playerId: PlayerId,
-        hand: List<at.aau.pulverfass.shared.lobby.state.CardState> = state.handOf(playerId),
+        hand: List<CardState> = state.handOf(playerId),
     ): Boolean =
         state.tradeRequiredOnNextReinforcementPhaseFor(playerId) ||
             (hand.size >= 5 && CardSetValidator.canMakeAnySet(hand))
@@ -2670,7 +2671,7 @@ class MainServerLobbyRoutingService(
     private suspend fun sendUpdatedHandsAfterEliminationIfNeeded(
         lobbyCode: LobbyCode,
         stateBeforeAttack: GameState,
-        events: List<at.aau.pulverfass.shared.lobby.event.LobbyEvent>,
+        events: List<LobbyEvent>,
     ) {
         val eliminationEvents =
             events.filterIsInstance<PlayerEliminatedEvent>()
@@ -2738,9 +2739,7 @@ class MainServerLobbyRoutingService(
         broadcastTurnStateIfChanged(lobbyCode, previousTurnState)
     }
 
-    private fun summarizeAttackResult(
-        events: List<at.aau.pulverfass.shared.lobby.event.LobbyEvent>,
-    ): String {
+    private fun summarizeAttackResult(events: List<LobbyEvent>): String {
         val resolved = events.filterIsInstance<AttackResolvedEvent>().firstOrNull()
         val eliminated = events.any { it is PlayerEliminatedEvent }
         if (resolved == null) {
