@@ -1721,7 +1721,6 @@ class MainServerLobbyRoutingService(
             }
     }
 
-
     private fun fortifyMoveErrorResponse(
         request: DecodedNetworkRequest,
         payload: FortifyMoveRequest,

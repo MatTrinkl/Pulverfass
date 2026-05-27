@@ -336,7 +336,11 @@ class KickPlayerIntegrationTest {
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload? = receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 200)
+    ): NetworkMessagePayload? =
+        receiveRelevantTestPayloadOrNull(
+            session = session,
+            timeoutMillis = 200,
+        )
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
