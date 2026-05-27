@@ -23,6 +23,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import at.aau.pulverfass.app.game.AttackResultUiState
+import at.aau.pulverfass.app.game.AttackUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.PrivateHandCardUi
@@ -33,6 +35,7 @@ import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import kotlinx.coroutines.delay
@@ -380,7 +383,11 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithTag("reinforcement_panel").assertIsDisplayed()
         composeTestRule.onNodeWithTag("reinforcement_remaining").assertTextEquals("Verfügbar: 2")
         composeTestRule.onNodeWithText("Gebiet 2 · Kontinent 0 · Karten 0").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("reinforcement_increase").performClick()
+        composeTestRule.onNodeWithTag("reinforcement_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(2f)
+        }
         composeTestRule
             .onNodeWithTag("place_reinforcements_button")
             .assertIsEnabled()
@@ -479,6 +486,133 @@ class ScreenComposableTest {
             }
         }
 
+        composeTestRule.onNodeWithTag("reinforcement_slider").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("place_reinforcements_button").assertIsNotEnabled()
+    }
+
+    @Test
+    fun attack_panel_submits_intent_and_phase_button_confirms_attack_done() {
+        val playerId = PlayerId(1)
+        var attackAdjustment = 0
+        var moveAdjustment = 0
+        var attacked = false
+        var finished = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.ATTACK,
+                                    selectionFromRegionId = "brazil",
+                                    selectionToRegionId = "argentina",
+                                    attackState =
+                                        AttackUiState(
+                                            attackTroops = 4,
+                                            moveAfterCapture = 3,
+                                        ),
+                                    territoryStates =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                at.aau.pulverfass.app.game.GameTerritoryUiState(
+                                                    TerritoryId("brasilien"),
+                                                    playerId,
+                                                    6,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onAdjustAttackTroops = { attackAdjustment = it },
+                            onAdjustMoveAfterCapture = { moveAdjustment = it },
+                            onAttack = { attacked = true },
+                            onConfirmAttackDone = { finished = true },
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("attack_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Angriff: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("attack_troops_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(5f)
+        }
+        composeTestRule.onNodeWithTag("attack_move_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(4f)
+        }
+        composeTestRule.onNodeWithTag("attack_submit_button").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
+
+        assertEquals(1, attackAdjustment)
+        assertEquals(1, moveAdjustment)
+        assertTrue(attacked)
+        assertTrue(finished)
+    }
+
+    @Test
+    fun attack_result_panel_shows_server_resolved_capture() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = PlayerId(2),
+                            uiState =
+                                GameUiState(
+                                    turnPhase = TurnPhase.ATTACK,
+                                    attackState =
+                                        AttackUiState(
+                                            latestResult =
+                                                AttackResultUiState(
+                                                    fromTerritoryId = TerritoryId("brasilien"),
+                                                    toTerritoryId = TerritoryId("argentinien"),
+                                                    attackerRolls = listOf(6, 4),
+                                                    defenderRolls = listOf(2),
+                                                    attackerLosses = 0,
+                                                    defenderLosses = 1,
+                                                    attackerRemaining = 2,
+                                                    defenderRemaining = 0,
+                                                    occupyingTroopCount = 2,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("attack_result_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kampfergebnis: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(
+            "attack_result_outcome",
+        ).assertTextEquals("Erobert · Besetzung: 2")
     }
 }
