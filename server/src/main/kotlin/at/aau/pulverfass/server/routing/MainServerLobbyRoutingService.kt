@@ -19,6 +19,7 @@ import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidationError
 import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidator
 import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
+import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
@@ -1457,7 +1458,7 @@ class MainServerLobbyRoutingService(
         require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
         check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
         require(currentTurnState.turnPhase == TurnPhase.ATTACK) { "PHASE_MISMATCH" }
-        require(payload.attackTroops >= 2) { "INVALID_REQUEST" }
+        require(payload.attackTroops >= MIN_ATTACK_COMMITTED_TROOPS) { "INVALID_REQUEST" }
         require(payload.moveAfterCapture > 0) { "INVALID_MOVE_AFTER_CAPTURE" }
         require(state.territoryStateOf(payload.fromTerritoryId) != null) { "INVALID_REQUEST" }
         require(state.territoryStateOf(payload.toTerritoryId) != null) { "INVALID_REQUEST" }

@@ -271,7 +271,7 @@ class GameStateTest {
         val blockedState =
             reducer.apply(
                 ownedState,
-                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 1),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 2),
             )
 
         assertFalse(blockedState.canAttackFrom(TerritoryId("alpha"), playerOne))
@@ -366,7 +366,7 @@ class GameStateTest {
                             ),
                             TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("harbor"), attacker),
                         ),
-                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("harbor"), 2),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("harbor"), 3),
                     ),
                     TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("island"), defender),
                 ),
