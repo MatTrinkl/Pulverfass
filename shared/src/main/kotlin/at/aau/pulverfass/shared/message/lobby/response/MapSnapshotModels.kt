@@ -109,9 +109,13 @@ data class PublicTurnStateSnapshot(
     val isPaused: Boolean = false,
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
+    val pendingReinforcements: Int = 0,
 ) {
     companion object {
-        fun from(turnState: TurnState): PublicTurnStateSnapshot =
+        fun from(
+            turnState: TurnState,
+            pendingReinforcements: Int = 0,
+        ): PublicTurnStateSnapshot =
             PublicTurnStateSnapshot(
                 activePlayerId = turnState.activePlayerId,
                 turnPhase = turnState.turnPhase,
@@ -120,6 +124,7 @@ data class PublicTurnStateSnapshot(
                 isPaused = turnState.isPaused,
                 pauseReason = turnState.pauseReason,
                 pausedPlayerId = turnState.pausedPlayerId,
+                pendingReinforcements = pendingReinforcements,
             )
     }
 }

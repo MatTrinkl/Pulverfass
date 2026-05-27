@@ -552,6 +552,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     }
 
     private fun startManagedContainer(): TestDatabaseConfig {
+        assumeDockerAvailableForTestcontainers()
         val container = PostgreSQLContainer("postgres:17-alpine")
         container.start()
         managedContainer = container

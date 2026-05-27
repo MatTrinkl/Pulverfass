@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.lobby.state
 
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -36,6 +37,8 @@ class GameStateTest {
         assertEquals(0, state.processedEventCount)
         assertEquals(0, state.stateVersion)
         assertEquals(0, state.playerCount)
+        assertFalse(state.hasPendingReinforcements())
+        assertEquals(0, state.tradedInSetCount)
     }
 
     @Test
@@ -220,11 +223,162 @@ class GameStateTest {
         assertEquals(playerOne, state.continentOwner(ContinentId("north")))
         assertNull(state.continentOwner(ContinentId("south")))
         assertTrue(state.playerOwnsContinent(playerOne, ContinentId("north")))
+        assertTrue(state.ownsContinent(playerOne, ContinentId("north")))
         assertFalse(state.playerOwnsContinent(playerTwo, ContinentId("north")))
         assertEquals(listOf(ContinentId("north")), state.continentsOwnedBy(playerOne))
         assertTrue(state.continentsOwnedBy(playerTwo).isEmpty())
+        assertEquals(2, state.ownedTerritoryCount(playerOne))
+        assertEquals(3, state.continentBonus(ContinentId("north")))
+        assertEquals(1, state.continentBonus(ContinentId("south")))
         assertEquals(3, state.bonusFor(playerOne))
         assertEquals(0, state.bonusFor(playerTwo))
+    }
+
+    @Test
+    fun `should detect whether a player has any valid attack`() {
+        val playerOne = PlayerId(31)
+        val playerTwo = PlayerId(32)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ1")
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+        val ownedState =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            baseState,
+                            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+                        ),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 3),
+                    ),
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerTwo),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
+            )
+
+        assertTrue(ownedState.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            listOf(TerritoryId("beta")),
+            ownedState.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertTrue(ownedState.hasAnyValidAttack(playerOne))
+
+        val blockedState =
+            reducer.apply(
+                ownedState,
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 1),
+            )
+
+        assertFalse(blockedState.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertTrue(blockedState.validAttackTargets(TerritoryId("alpha"), playerOne).isEmpty())
+        assertFalse(blockedState.hasAnyValidAttack(playerOne))
+    }
+
+    @Test
+    fun `should return no valid attack targets when only own or unowned neighbors exist`() {
+        val playerOne = PlayerId(41)
+        val playerTwo = PlayerId(42)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ2")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        GameState.initial(
+                            lobbyCode = lobbyCode,
+                            mapDefinition = sampleMapDefinition(),
+                            players = listOf(playerOne, playerTwo),
+                        ),
+                        TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+                    ),
+                    TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 3),
+                ),
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+            )
+
+        assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertFalse(state.hasAnyValidAttack(playerOne))
+    }
+
+    @Test
+    fun `should preserve adjacency order for valid attack targets`() {
+        val playerOne = PlayerId(51)
+        val playerTwo = PlayerId(52)
+        val playerThree = PlayerId(53)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ3")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            reducer.apply(
+                                GameState.initial(
+                                    lobbyCode = lobbyCode,
+                                    mapDefinition = sampleMapDefinition(),
+                                    players = listOf(playerOne, playerTwo, playerThree),
+                                ),
+                                TerritoryOwnerChangedEvent(
+                                    lobbyCode,
+                                    TerritoryId("alpha"),
+                                    playerOne,
+                                ),
+                            ),
+                            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
+                        ),
+                        TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerTwo),
+                    ),
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("gamma"), playerThree),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
+            )
+
+        assertEquals(
+            listOf(TerritoryId("beta"), TerritoryId("gamma")),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+    }
+
+    @Test
+    fun `should treat sea style adjacency like any other valid attack edge`() {
+        val attacker = PlayerId(61)
+        val defender = PlayerId(62)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("SEA1")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            GameState.initial(
+                                lobbyCode = lobbyCode,
+                                mapDefinition = seaAdjacencyMapDefinition(),
+                                players = listOf(attacker, defender),
+                            ),
+                            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("harbor"), attacker),
+                        ),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("harbor"), 2),
+                    ),
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("island"), defender),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("island"), 1),
+            )
+
+        assertTrue(state.canAttackFrom(TerritoryId("harbor"), attacker))
+        assertEquals(
+            listOf(TerritoryId("island")),
+            state.validAttackTargets(TerritoryId("harbor"), attacker),
+        )
+        assertTrue(state.hasAnyValidAttack(attacker))
     }
 
     @Test
@@ -298,6 +452,30 @@ class GameStateTest {
 
         assertEquals("timeout", state.closedReason)
         assertEquals("invalid move", state.lastInvalidActionReason)
+    }
+
+    @Test
+    fun `should add and remove hand cards through game state helpers`() {
+        val playerOne = PlayerId(1)
+        val alphaCard = CardState(cardId = CardId("card-alpha"), type = CardType.A)
+        val jokerCard = CardState(cardId = CardId("card-joker"), type = CardType.JOKER)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("HC12"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+        val withCards =
+            baseState
+                .withCardAddedToHand(playerOne, alphaCard)
+                .withCardAddedToHand(playerOne, jokerCard)
+        val withoutAlpha = withCards.withoutCardFromHand(playerOne, alphaCard.cardId)
+
+        assertEquals(listOf(alphaCard, jokerCard), withCards.handOf(playerOne))
+        assertEquals(2, withCards.handSizeOf(playerOne))
+        assertTrue(withCards.playerHasCard(playerOne, jokerCard.cardId))
+        assertEquals(listOf(jokerCard), withoutAlpha.handOf(playerOne))
+        assertFalse(withoutAlpha.playerHasCard(playerOne, alphaCard.cardId))
     }
 
     @Test
@@ -452,6 +630,9 @@ class GameStateTest {
             GameState(lobbyCode = LobbyCode("PQ56"), processedEventCount = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
+            GameState(lobbyCode = LobbyCode("PQ57"), tradedInSetCount = -1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             GameState(
                 lobbyCode = LobbyCode("RS78"),
                 players = listOf(playerOne, playerOne),
@@ -470,13 +651,6 @@ class GameStateTest {
                 lobbyCode = LobbyCode("VW12"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerTwo),
-            )
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            GameState(
-                lobbyCode = LobbyCode("ZA56"),
-                players = listOf(playerOne, playerTwo),
-                turnOrder = listOf(playerOne),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
@@ -505,8 +679,66 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
+                lobbyCode = LobbyCode("XZ12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                pendingReinforcements = PendingReinforcements(playerOne, -1),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
                 lobbyCode = LobbyCode("XZ56"),
                 mapDefinition = sampleMapDefinition(),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("XZ78"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                playerTwo to
+                                    listOf(
+                                        CardState(
+                                            cardId = CardId("card-foreign"),
+                                            type = CardType.C,
+                                        ),
+                                    ),
+                            ),
+                    ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("YZ12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                playerOne to
+                                    listOf(
+                                        CardState(
+                                            cardId = CardId("shared-card"),
+                                            type = CardType.A,
+                                        ),
+                                    ),
+                            ),
+                    ),
+                deckState =
+                    DeckState(
+                        cards =
+                            listOf(
+                                CardState(
+                                    cardId = CardId("shared-card"),
+                                    type = CardType.B,
+                                ),
+                            ),
+                    ),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
@@ -569,6 +801,148 @@ class GameStateTest {
         assertEquals(2, afterTroopsChanged.processedEventCount)
     }
 
+    @Test
+    fun `should treat player without territories outside turn order as spectator`() {
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val state =
+            GameState.initial(
+                lobbyCode = LobbyCode("SP90"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(attacker, defender),
+            ).copy(
+                activePlayer = attacker,
+                turnOrder = listOf(attacker),
+                turnState =
+                    TurnState(
+                        activePlayerId = attacker,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = attacker,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                territoryStates =
+                    mapOf(
+                        TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 3),
+                        TerritoryId("beta") to TerritoryState(TerritoryId("beta"), attacker, 2),
+                        TerritoryId("gamma") to TerritoryState(TerritoryId("gamma"), attacker, 1),
+                    ),
+            )
+
+        assertTrue(state.isEliminated(defender))
+        assertTrue(state.isSpectator(defender))
+        assertFalse(state.isSpectator(attacker))
+    }
+
+    @Test
+    fun `should reject additional new invariants and helper misuse`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("TG11"),
+                gameRandomState = 5L,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            GameState(
+                lobbyCode = LobbyCode("TG12"),
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                tradeRequiredOnNextReinforcementPhaseByPlayer = emptyMap(),
+            )
+        }
+
+        val helperState =
+            GameState(
+                lobbyCode = LobbyCode("TG13"),
+                players = listOf(playerOne, playerTwo),
+                playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
+                activePlayer = playerOne,
+                turnOrder = listOf(playerOne, playerTwo),
+                setupTroopsToPlaceByPlayer = mapOf(playerOne to 0, playerTwo to 0),
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    mapOf(playerOne to false, playerTwo to false),
+            )
+
+        val withoutActive = helperState.withoutPlayerFromTurnOrder(playerOne)
+        assertEquals(listOf(playerTwo), withoutActive.turnOrder)
+        assertEquals(null, withoutActive.activePlayer)
+
+        val transferred =
+            GameState.initial(
+                lobbyCode = LobbyCode("TG14"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+                .withCardAddedToHand(playerOne, CardState(CardId("c1"), CardType.A))
+                .withCardAddedToHand(playerOne, CardState(CardId("c2"), CardType.B))
+                .withAllCardsTransferred(playerOne, playerTwo)
+        assertTrue(transferred.handOf(playerOne).isEmpty())
+        assertEquals(2, transferred.handSizeOf(playerTwo))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withTradeRequiredOnNextReinforcementPhase(PlayerId(99), true)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(PlayerId(99), playerTwo)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(playerOne, PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            helperState.withAllCardsTransferred(playerOne, playerOne)
+        }
+    }
+
+    @Test
+    fun `attack queries reject unknown player and tolerate missing map or territory`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val unknownTerritory = TerritoryId("missing")
+        val stateWithoutMap =
+            GameState(
+                lobbyCode = LobbyCode("TG21"),
+                players = listOf(playerOne, playerTwo),
+                playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
+                turnOrder = listOf(playerOne, playerTwo),
+                setupTroopsToPlaceByPlayer = mapOf(playerOne to 0, playerTwo to 0),
+                tradeRequiredOnNextReinforcementPhaseByPlayer =
+                    mapOf(playerOne to false, playerTwo to false),
+            )
+
+        assertFalse(stateWithoutMap.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            stateWithoutMap.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertFalse(stateWithoutMap.hasAnyValidAttack(playerOne))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.canAttackFrom(TerritoryId("alpha"), PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.validAttackTargets(TerritoryId("alpha"), PlayerId(99))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            stateWithoutMap.hasAnyValidAttack(PlayerId(99))
+        }
+
+        val mappedState =
+            GameState.initial(
+                lobbyCode = LobbyCode("TG22"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+        assertFalse(mappedState.canAttackFrom(unknownTerritory, playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            mappedState.validAttackTargets(unknownTerritory, playerOne),
+        )
+    }
+
     private fun sampleMapDefinition(): MapDefinition =
         MapDefinition(
             schemaVersion = 1,
@@ -607,6 +981,36 @@ class GameStateTest {
                     ContinentDefinition(
                         continentId = ContinentId("south"),
                         territoryIds = listOf(TerritoryId("gamma")),
+                        bonusValue = 1,
+                    ),
+                ),
+        )
+
+    private fun seaAdjacencyMapDefinition(): MapDefinition =
+        MapDefinition(
+            schemaVersion = 1,
+            territories =
+                listOf(
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("harbor"),
+                        edges =
+                            listOf(
+                                TerritoryEdgeDefinition(targetId = TerritoryId("island")),
+                            ),
+                    ),
+                    TerritoryDefinition(
+                        territoryId = TerritoryId("island"),
+                        edges =
+                            listOf(
+                                TerritoryEdgeDefinition(targetId = TerritoryId("harbor")),
+                            ),
+                    ),
+                ),
+            continents =
+                listOf(
+                    ContinentDefinition(
+                        continentId = ContinentId("sea"),
+                        territoryIds = listOf(TerritoryId("harbor"), TerritoryId("island")),
                         bonusValue = 1,
                     ),
                 ),

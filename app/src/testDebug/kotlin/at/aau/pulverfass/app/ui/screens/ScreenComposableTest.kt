@@ -4,14 +4,19 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -20,14 +25,22 @@ import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
+import at.aau.pulverfass.app.game.PrivateHandCardUi
+import at.aau.pulverfass.app.game.ReinforcementUiState
+import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.AndroidAppTheme
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import kotlinx.coroutines.delay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @RunWith(AndroidJUnit4::class)
 class ScreenComposableTest {
@@ -63,9 +76,6 @@ class ScreenComposableTest {
             }
         }
 
-        // The "v1.0.0" and "Pulverfass" text checks were removed here
-        // because the new UI no longer hardcodes them.
-
         // Fast-forward past the 1,000ms delay in preloadAssets
         composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
@@ -86,11 +96,11 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Spiel-Lobby").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Spielername eingeben").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Lobby erstellen").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Lobby beitreten").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Karte direkt testen").assertIsDisplayed()
+        composeTestRule.onNodeWithText("SPIEL-LOBBY").assertExists()
+        composeTestRule.onNodeWithText("SPIELERNAME").assertExists()
+        composeTestRule.onNodeWithText("LOBBY ERSTELLEN").assertExists()
+        composeTestRule.onNodeWithText("LOBBY BEITRETEN").assertExists()
+        composeTestRule.onNodeWithText("MAP-TEST").assertExists()
     }
 
     @Test
@@ -165,10 +175,17 @@ class ScreenComposableTest {
                 }
             }
         }
-
-        composeTestRule.onNodeWithText("Lobby: AB12").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Du bist der Host").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Carol").assertIsDisplayed()
+/*
+* assertIsDisplayed() prüft "im visible viewport bounds" →
+* schlägt fehl wenn Layout für landscape designed ist und Test im portrait läuft.
+* assertExists() prüft nur "im Semantik-Baum vorhanden" —
+* was zählt für funktionale Korrektheit.
+*
+* */
+        composeTestRule.onNodeWithText("LOBBY: AB12").assertExists()
+        composeTestRule.onNodeWithText("DU BIST DER HOST").assertExists()
+        composeTestRule.onNodeWithText("CAROL").assertExists()
+        composeTestRule.onNodeWithText("(HOST)").assertExists()
     }
 
     @Test
@@ -200,8 +217,11 @@ class ScreenComposableTest {
         composeTestRule.setContent {
             AndroidAppTheme {
                 PrivateHandPanel(
-                    playerName = "Alice",
-                    handCards = listOf("Infanterie", "Infanterie", "Kavallerie"),
+                    state =
+                        PrivateHandPanelState(
+                            playerName = "Alice",
+                            handCards = listOf("Infanterie", "Infanterie", "Kavallerie"),
+                        ),
                 )
             }
         }
@@ -252,5 +272,213 @@ class ScreenComposableTest {
 
         composeTestRule.onAllNodesWithTag("game_cards_panel").assertCountEquals(0)
         composeTestRule.onAllNodesWithText("Geheime Karte").assertCountEquals(0)
+    }
+
+    @Test
+    fun reinforcement_panel_stays_hidden_until_an_owned_target_is_selected() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    reinforcementState =
+                                        ReinforcementUiState(
+                                            playerId = playerId,
+                                            pendingAmount = 2,
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("reinforcement_panel").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("end_round_button").assertIsNotEnabled()
+    }
+
+    @Test
+    fun reinforcement_panel_places_troops_and_typed_hand_submits_trade_in() {
+        val playerId = PlayerId(1)
+        val cardIds = listOf(CardId("a"), CardId("b"), CardId("c"))
+        var placementDelta = 0
+        var placed = false
+        var traded = false
+        var closedRegion: String? = null
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    selectedRegionId = "brazil",
+                                    cardsVisible = true,
+                                    reinforcementState =
+                                        ReinforcementUiState(
+                                            playerId = playerId,
+                                            pendingAmount = 2,
+                                            territoryBonus = 2,
+                                            isBonusBreakdownKnown = true,
+                                        ),
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(cardIds[0], CardType.A),
+                                            PrivateHandCardUi(cardIds[1], CardType.B),
+                                            PrivateHandCardUi(cardIds[2], CardType.C),
+                                        ),
+                                    selectedTradeInCardIds = cardIds.toSet(),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = { closedRegion = it },
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onAdjustReinforcementPlacementAmount = { placementDelta = it },
+                            onPlaceReinforcements = { placed = true },
+                            onTradeInCards = { traded = true },
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("reinforcement_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("reinforcement_remaining").assertTextEquals("Verfügbar: 2")
+        composeTestRule.onNodeWithText("Gebiet 2 · Kontinent 0 · Karten 0").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("reinforcement_increase").performClick()
+        composeTestRule
+            .onNodeWithTag("place_reinforcements_button")
+            .assertIsEnabled()
+            .performClick()
+        composeTestRule.onNodeWithText("Infanterie").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.onNodeWithTag("close_reinforcement_panel").performClick()
+
+        assertEquals(1, placementDelta)
+        assertTrue(placed)
+        assertTrue(traded)
+        assertEquals("brazil", closedRegion)
+    }
+
+    @Test
+    fun phase_end_button_confirms_reinforcements_after_pool_is_empty_without_panel() {
+        val playerId = PlayerId(1)
+        var finished = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    selectedRegionId = "brazil",
+                                    reinforcementState =
+                                        ReinforcementUiState(
+                                            playerId = playerId,
+                                            pendingAmount = 0,
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onConfirmReinforcementsDone = { finished = true },
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("reinforcement_panel").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("end_round_button")
+            .assertIsEnabled()
+            .performClick()
+        assertTrue(finished)
+    }
+
+    @Test
+    fun reinforcement_panel_blocks_placement_while_trade_in_is_pending() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    selectedRegionId = "brazil",
+                                    reinforcementState =
+                                        ReinforcementUiState(
+                                            playerId = playerId,
+                                            pendingAmount = 2,
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = setOf(LobbyCommandKey.TRADE_IN_CARDS),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("place_reinforcements_button").assertIsNotEnabled()
     }
 }

@@ -1,5 +1,6 @@
 package at.aau.pulverfass.shared.lobby.event
 
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
@@ -23,6 +24,49 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode, "finished"),
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardIds = listOf(CardId("card-1"), CardId("card-2"), CardId("card-3")),
+                    value = 2,
+                    tradeIndex = 1,
+                ),
+                AttackResolvedEvent(
+                    lobbyCode = lobbyCode,
+                    attackerPlayerId = playerId,
+                    defenderPlayerId = PlayerId(8),
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(6, 5, 4),
+                    defenderRolls = listOf(2, 1),
+                    rngTrace = listOf(6, 4, 5, 1, 2),
+                    rngStateBefore = 1,
+                    rngStateAfter = 2,
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                ),
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = PlayerId(8),
+                    eliminatedByPlayerId = playerId,
+                ),
+                PendingReinforcementsSetEvent(lobbyCode, playerId, 5),
+                PendingReinforcementsChangedEvent(lobbyCode, playerId, 2),
+                PlayerCardsRemovedEvent(
+                    lobbyCode,
+                    playerId,
+                    listOf(CardId("card-7"), CardId("card-8")),
+                ),
                 SystemTick(lobbyCode, tick = 5),
                 TurnStateUpdatedEvent(
                     lobbyCode = lobbyCode,
@@ -37,7 +81,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(12, events.size)
+        assertEquals(18, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[5] as LobbyClosed).reason)
     }
@@ -64,9 +108,15 @@ class LobbyEventTest {
 
         val internalResult =
             when (val event: InternalLobbyEvent = LobbyClosed(lobbyCode, "done")) {
+                is AttackResolvedEvent -> event.rngTrace.size.toString()
+                is CardSetTradedInEvent -> event.value.toString()
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
+                is PendingReinforcementsChangedEvent -> event.delta.toString()
+                is PendingReinforcementsSetEvent -> event.amount.toString()
+                is PlayerEliminatedEvent -> event.eliminatedByPlayerId.value.toString()
+                is PlayerCardsRemovedEvent -> event.cardIds.size.toString()
                 is SystemTick -> event.tick.toString()
                 is TerritoryOwnerChangedEvent -> event.territoryId.value
                 is TerritoryTroopsChangedEvent -> event.troopCount.toString()
@@ -92,6 +142,49 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode),
+                CardSetTradedInEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
+                    value = 2,
+                    tradeIndex = 1,
+                ),
+                AttackResolvedEvent(
+                    lobbyCode = lobbyCode,
+                    attackerPlayerId = playerId,
+                    defenderPlayerId = PlayerId(5),
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    attackTroops = 3,
+                    sourceTroopsBefore = 5,
+                    targetTroopsBefore = 2,
+                    requestedAttackDice = 3,
+                    attackDice = 3,
+                    defendDice = 2,
+                    attackerRolls = listOf(6, 5, 4),
+                    defenderRolls = listOf(2, 1),
+                    rngTrace = listOf(6, 4, 5, 1, 2),
+                    rngStateBefore = 1,
+                    rngStateAfter = 2,
+                    attackerLosses = 0,
+                    defenderLosses = 2,
+                    attackerRemaining = 5,
+                    defenderRemaining = 0,
+                    occupyingTroopCount = 3,
+                    minOccupyingTroops = 3,
+                ),
+                PlayerEliminatedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = PlayerId(5),
+                    eliminatedByPlayerId = playerId,
+                ),
+                PendingReinforcementsSetEvent(lobbyCode, playerId, 4),
+                PendingReinforcementsChangedEvent(lobbyCode, playerId, -1),
+                PlayerCardsRemovedEvent(
+                    lobbyCode,
+                    playerId,
+                    listOf(CardId("card-x"), CardId("card-y")),
+                ),
                 SystemTick(lobbyCode, 0),
                 TurnStateUpdatedEvent(
                     lobbyCode = lobbyCode,
@@ -133,6 +226,38 @@ class LobbyEventTest {
 
     @Test
     fun `should validate technical event arguments`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            CardSetTradedInEvent(
+                lobbyCode = LobbyCode("CC44"),
+                playerId = PlayerId(1),
+                cardIds = listOf(CardId("card-a"), CardId("card-b")),
+                value = 2,
+                tradeIndex = 1,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CardSetTradedInEvent(
+                lobbyCode = LobbyCode("CC55"),
+                playerId = PlayerId(1),
+                cardIds = listOf(CardId("card-a"), CardId("card-a"), CardId("card-b")),
+                value = 2,
+                tradeIndex = 1,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            PlayerCardsRemovedEvent(
+                lobbyCode = LobbyCode("CC56"),
+                playerId = PlayerId(1),
+                cardIds = emptyList(),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            PlayerCardsRemovedEvent(
+                lobbyCode = LobbyCode("CC57"),
+                playerId = PlayerId(1),
+                cardIds = listOf(CardId("card-a"), CardId("card-a")),
+            )
+        }
         assertThrows(IllegalArgumentException::class.java) {
             InvalidActionDetected(LobbyCode("DD44"), reason = " ")
         }

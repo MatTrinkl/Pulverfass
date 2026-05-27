@@ -1,27 +1,55 @@
 package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
+import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
+import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
+import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -429,6 +457,325 @@ class LobbyControllerTest {
                 controller.close()
                 server.close()
             }
+        }
+    }
+
+    @Test
+    fun `reinforcement actions send backend requests and consume private card updates`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("RF12")
+            val playerId = PlayerId(1)
+            val cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c"))
+            val config = LobbyControllerConfig()
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            var placeAttempts = 0
+            var tradeInAttempts = 0
+            var confirmAttempts = 0
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = lobbyCode,
+                                            playerId = playerId,
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateCatchUpResponse(
+                                            lobbyCode = lobbyCode,
+                                            stateVersion = 1,
+                                            determinism =
+                                                PublicDeterminismMetadataSnapshot(
+                                                    mapHash = "hash",
+                                                    schemaVersion = 1,
+                                                ),
+                                            turnState =
+                                                PublicTurnStateSnapshot(
+                                                    activePlayerId = playerId,
+                                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                                    turnCount = 1,
+                                                    startPlayerId = playerId,
+                                                ),
+                                            definition =
+                                                MapDefinitionSnapshot(
+                                                    territories =
+                                                        listOf(
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId(
+                                                                        "brasilien",
+                                                                    ),
+                                                                edges = emptyList(),
+                                                            ),
+                                                        ),
+                                                    continents = emptyList(),
+                                                ),
+                                            territoryStates =
+                                                listOf(
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 1,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateDeltaEvent(
+                                            lobbyCode = lobbyCode,
+                                            fromVersion = 1,
+                                            toVersion = 2,
+                                            events =
+                                                listOf(
+                                                    ReinforcementsGrantedEvent(
+                                                        lobbyCode = lobbyCode,
+                                                        playerId = playerId,
+                                                        amount = 2,
+                                                        territoryBonus = 2,
+                                                        continentBonus = 0,
+                                                        cardBonus = 0,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is GameStatePrivateGetRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStatePrivateGetResponse(
+                                            lobbyCode = lobbyCode,
+                                            recipientPlayerId = playerId,
+                                            stateVersion = 2,
+                                            privateHandCards =
+                                                listOf(
+                                                    PrivateHandCardSnapshot(cardIds[0], CardType.A),
+                                                    PrivateHandCardSnapshot(cardIds[1], CardType.B),
+                                                    PrivateHandCardSnapshot(cardIds[2], CardType.C),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        is PlaceReinforcementsRequest -> {
+                            placeAttempts += 1
+                            if (placeAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            PlaceReinforcementsErrorResponse(
+                                                PlaceReinforcementsErrorCode.TERRITORY_NOT_OWNED,
+                                                "not owned",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            GameStateDeltaEvent(
+                                                lobbyCode = lobbyCode,
+                                                fromVersion = 2,
+                                                toVersion = 3,
+                                                events =
+                                                    listOf(
+                                                        PendingReinforcementsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            playerId = playerId,
+                                                            delta = -2,
+                                                        ),
+                                                    ),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(PlaceReinforcementsResponse(lobbyCode)),
+                                    ),
+                                )
+                            }
+                        }
+                        is TradeInCardsRequest -> {
+                            tradeInAttempts += 1
+                            if (tradeInAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            TradeInCardsErrorResponse(
+                                                TradeInCardsErrorCode.INVALID_SET,
+                                                "invalid set",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
+                                    ),
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            PlayerHandUpdatedEvent(
+                                                lobbyCode = lobbyCode,
+                                                recipientPlayerId = playerId,
+                                                stateVersion = 3,
+                                                handCards = emptyList(),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+                        is ConfirmReinforcementsDoneRequest -> {
+                            confirmAttempts += 1
+                            if (confirmAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ConfirmReinforcementsDoneErrorResponse(
+                                                ConfirmReinforcementsDoneErrorCode
+                                                    .PENDING_REINFORCEMENTS_REMAINING,
+                                                "pending",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            ConfirmReinforcementsDoneResponse(lobbyCode),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 2 }
+                waitUntil { controller.state.value.gameState.privateHandCards.size == 3 }
+
+                controller.placeReinforcements()
+                assertEquals(
+                    config.errorReinforcementTargetMissing,
+                    controller.state.value.errorText,
+                )
+                controller.confirmReinforcementsDone()
+                assertEquals(config.errorReinforcementsNotAllowed, controller.state.value.errorText)
+
+                controller.selectGameRegion("brazil")
+                controller.adjustReinforcementPlacementAmount(1)
+                controller.placeReinforcements()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Verstärkungen können nur auf eigene Gebiete gesetzt werden."
+                }
+                controller.placeReinforcements()
+                waitUntil { seenPayloads.filterIsInstance<PlaceReinforcementsRequest>().size == 2 }
+                val placement = seenPayloads.filterIsInstance<PlaceReinforcementsRequest>().last()
+                assertEquals(TerritoryId("brasilien"), placement.placements.single().territoryId)
+                assertEquals(2, placement.placements.single().amount)
+                waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 0 }
+
+                controller.placeReinforcements()
+                assertEquals(config.errorReinforcementsNotAllowed, controller.state.value.errorText)
+                controller.tradeInCards()
+                assertEquals(config.errorTradeInNotAllowed, controller.state.value.errorText)
+
+                cardIds.forEach(controller::toggleTradeInCard)
+                controller.tradeInCards()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Die gewählten Karten bilden kein gültiges Set."
+                }
+                controller.tradeInCards()
+                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 2 }
+                assertEquals(
+                    cardIds.toSet(),
+                    seenPayloads.filterIsInstance<TradeInCardsRequest>().last().cardIds.toSet(),
+                )
+                waitUntil { controller.state.value.gameState.privateHandCards.isEmpty() }
+
+                controller.confirmReinforcementsDone()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Verbleibende Verstärkungen müssen zuerst platziert werden."
+                }
+                controller.confirmReinforcementsDone()
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().size == 2
+                }
+                waitUntil {
+                    !controller.state.value.pendingCommandKeys.contains(
+                        LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE,
+                    )
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `reinforcement actions require a local player context`() {
+        val config = LobbyControllerConfig()
+        val controller = createController(config = config)
+        try {
+            controller.placeReinforcements()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.confirmReinforcementsDone()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.tradeInCards()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+        } finally {
+            controller.close()
         }
     }
 

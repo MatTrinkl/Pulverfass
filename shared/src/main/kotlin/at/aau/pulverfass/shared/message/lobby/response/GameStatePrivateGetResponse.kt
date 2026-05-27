@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
+import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
@@ -27,6 +28,7 @@ import kotlinx.serialization.encoding.Encoder
  * @property stateVersion öffentliche State-Version, zu der dieser private Snapshot passt
  * @property handCards private Handkarten des Spielers
  * @property secretObjectives private Missions- oder Zielinformationen des Spielers
+ * @property privateHandCards typisierte Handkarten inklusive der für Trade-ins nötigen IDs
  */
 @Serializable(with = GameStatePrivateGetResponseSerializer::class)
 data class GameStatePrivateGetResponse(
@@ -35,6 +37,7 @@ data class GameStatePrivateGetResponse(
     val stateVersion: Long,
     val handCards: List<String> = emptyList(),
     val secretObjectives: List<String> = emptyList(),
+    val privateHandCards: List<PrivateHandCardSnapshot> = emptyList(),
 ) : PrivateGameStatePayload {
     companion object {
         fun fromGameState(
@@ -49,6 +52,7 @@ data class GameStatePrivateGetResponse(
  */
 object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetResponse> {
     private val stringListSerializer = ListSerializer(String.serializer())
+    private val privateHandCardsSerializer = ListSerializer(PrivateHandCardSnapshot.serializer())
 
     override val descriptor =
         buildClassSerialDescriptor(
@@ -59,6 +63,7 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
             element<Long>("stateVersion")
             element("handCards", stringListSerializer.descriptor)
             element("secretObjectives", stringListSerializer.descriptor)
+            element("privateHandCards", privateHandCardsSerializer.descriptor, isOptional = true)
         }
 
     override fun serialize(
@@ -81,6 +86,12 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
             stringListSerializer,
             value.secretObjectives,
         )
+        composite.encodeSerializableElement(
+            descriptor,
+            5,
+            privateHandCardsSerializer,
+            value.privateHandCards,
+        )
         composite.endStructure(descriptor)
     }
 
@@ -91,6 +102,7 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
         var stateVersion: Long? = null
         var handCards: List<String>? = null
         var secretObjectives: List<String>? = null
+        var privateHandCards: List<PrivateHandCardSnapshot> = emptyList()
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
@@ -115,6 +127,13 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
                 4 ->
                     secretObjectives =
                         composite.decodeSerializableElement(descriptor, 4, stringListSerializer)
+                5 ->
+                    privateHandCards =
+                        composite.decodeSerializableElement(
+                            descriptor,
+                            5,
+                            privateHandCardsSerializer,
+                        )
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -137,6 +156,7 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
             secretObjectives =
                 secretObjectives
                     ?: throw MissingFieldException("secretObjectives", descriptor.serialName),
+            privateHandCards = privateHandCards,
         )
     }
 }
@@ -154,5 +174,6 @@ internal fun GameState.toGameStatePrivateGetResponse(
         stateVersion = stateVersion,
         handCards = emptyList(),
         secretObjectives = emptyList(),
+        privateHandCards = handOf(recipientPlayerId).map(PrivateHandCardSnapshot::from),
     )
 }

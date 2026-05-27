@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
@@ -19,6 +20,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -478,9 +480,28 @@ class TurnAdvanceIntegrationTest {
                         receiveAnyPayload(playerTwoSession.first),
                     )
                     assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events =
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerTwo,
+                                        amount = 3,
+                                        territoryBonus = 3,
+                                        continentBonus = 0,
+                                        cardBonus = 0,
+                                    ),
+                                ),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 1,
+                            stateVersion = 2,
                             previousPhase = TurnPhase.DRAW_CARD,
                             nextPhase = TurnPhase.REINFORCEMENTS,
                             activePlayerId = playerTwo,
@@ -504,7 +525,7 @@ class TurnAdvanceIntegrationTest {
                             receiveAnyPayload(playerTwoSession.first),
                         )
                     assertEquals(lobbyCode, snapshot.lobbyCode)
-                    assertEquals(1, snapshot.stateVersion)
+                    assertEquals(2, snapshot.stateVersion)
                     assertEquals(defaultMapDefinition().mapHash, snapshot.determinism.mapHash)
                     assertEquals(
                         defaultMapDefinition().schemaVersion,
@@ -606,6 +627,51 @@ class TurnAdvanceIntegrationTest {
 
             assertEquals(TurnAdvanceErrorCode.PHASE_MISMATCH, result.first.code)
             assertEquals(TurnPhase.DRAW_CARD, result.second.activeTurnPhase)
+        }
+
+    @Test
+    fun `eliminated spectator gets not active player error and no state change`() =
+        testApplication {
+            val lobbyCode = LobbyCode("TA10")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                runningTurnStateGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.ATTACK,
+                )
+            val spectatorState =
+                baseState.copy(
+                    turnOrder = listOf(playerOne),
+                    territoryStates =
+                        baseState.allTerritoryStates().associate { territoryState ->
+                            territoryState.territoryId to
+                                TerritoryState(
+                                    territoryId = territoryState.territoryId,
+                                    ownerId = playerOne,
+                                    troopCount = 1,
+                                )
+                        },
+                )
+
+            val result =
+                exerciseFailingAdvance(
+                    lobbyCode = lobbyCode,
+                    state = spectatorState,
+                    requesterPlayerId = playerTwo,
+                    request =
+                        TurnAdvanceRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            expectedPhase = TurnPhase.ATTACK,
+                        ),
+                )
+
+            assertEquals(TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER, result.first.code)
+            assertEquals(listOf(playerOne), result.second.turnOrder)
+            assertTrue(result.second.isSpectator(playerTwo))
         }
 
     @Test
@@ -810,7 +876,7 @@ class TurnAdvanceIntegrationTest {
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 1,
+                            stateVersion = 2,
                             previousPhase = TurnPhase.DRAW_CARD,
                             nextPhase = TurnPhase.REINFORCEMENTS,
                             activePlayerId = playerTwo,
@@ -841,6 +907,7 @@ class TurnAdvanceIntegrationTest {
                         snapshot.turnState?.pauseReason,
                     )
                     assertEquals(playerTwo, snapshot.turnState?.pausedPlayerId)
+                    assertEquals(3, snapshot.pendingReinforcementsFor(playerTwo))
 
                     playerOneSession.first.close()
                 }
@@ -1057,6 +1124,7 @@ class TurnAdvanceIntegrationTest {
                     ),
                 status = GameStatus.RUNNING,
             )
+            .withAttackableTerritories(players)
 
     private suspend fun disconnectPlayer(
         playerId: PlayerId,

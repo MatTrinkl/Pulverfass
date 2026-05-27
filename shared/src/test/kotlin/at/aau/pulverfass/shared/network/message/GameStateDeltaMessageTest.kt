@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -24,6 +25,28 @@ class GameStateDeltaMessageTest {
                 toVersion = 4,
                 events =
                     listOf(
+                        AttackResolvedBroadcastEvent(
+                            lobbyCode = LobbyCode("AB12"),
+                            attackerPlayerId = PlayerId(7),
+                            defenderPlayerId = PlayerId(8),
+                            fromTerritoryId = TerritoryId("alpha"),
+                            toTerritoryId = TerritoryId("beta"),
+                            attackTroops = 3,
+                            sourceTroopsBefore = 5,
+                            targetTroopsBefore = 2,
+                            requestedAttackDice = 3,
+                            attackDice = 3,
+                            defendDice = 2,
+                            attackerRolls = listOf(5, 4, 3),
+                            defenderRolls = listOf(2, 1),
+                            attackerLosses = 0,
+                            defenderLosses = 2,
+                            attackerRemaining = 5,
+                            defenderRemaining = 0,
+                            occupyingTroopCount = 3,
+                            minOccupyingTroops = 3,
+                            stateVersion = 4,
+                        ),
                         TerritoryOwnerChangedEvent(
                             lobbyCode = LobbyCode("AB12"),
                             territoryId = TerritoryId("alpha"),

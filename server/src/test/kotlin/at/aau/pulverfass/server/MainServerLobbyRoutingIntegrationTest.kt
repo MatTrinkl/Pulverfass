@@ -134,7 +134,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val response = assertIs<MapGetResponse>(payload)
 
                     assertEquals(lobbyCode, response.lobbyCode)
-                    assertEquals(1, response.schemaVersion)
+                    assertEquals(2, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(3, response.stateVersion)
                     assertEquals(24, response.definition.territories.size)
@@ -237,7 +237,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val response = assertIs<MapGetResponse>(receivePayload(session))
 
                     assertEquals(createResponse.lobbyCode, response.lobbyCode)
-                    assertEquals(1, response.schemaVersion)
+                    assertEquals(2, response.schemaVersion)
                     assertEquals(defaultMapDefinition().mapHash, response.mapHash)
                     assertEquals(2, response.stateVersion)
                     assertEquals(24, response.definition.territories.size)
@@ -821,6 +821,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     waitUntilProcessed(lobbyManager, lobbyA, expectedCount = 2)
                     waitUntilProcessed(lobbyManager, lobbyB, expectedCount = 1)
+                    waitUntilAtLeast(routedPackets, expectedCount = 3)
 
                     val stateA = lobbyManager.getLobby(lobbyA)?.currentState()
                     val stateB = lobbyManager.getLobby(lobbyB)?.currentState()
@@ -2336,6 +2337,17 @@ class MainServerLobbyRoutingIntegrationTest {
                 (manager.getLobby(lobbyCode)?.currentState()?.processedEventCount ?: 0L) <
                 expectedCount
             ) {
+                delay(5)
+            }
+        }
+    }
+
+    private suspend fun waitUntilAtLeast(
+        counter: AtomicInteger,
+        expectedCount: Int,
+    ) {
+        withTimeout(5_000) {
+            while (counter.get() < expectedCount) {
                 delay(5)
             }
         }

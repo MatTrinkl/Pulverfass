@@ -1,19 +1,27 @@
 package at.aau.pulverfass.shared.message.codec
 
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
+import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
@@ -22,10 +30,15 @@ import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
+import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
+import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
+import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
+import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
@@ -34,10 +47,15 @@ import at.aau.pulverfass.shared.message.lobby.response.KickPlayerResponse
 import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
+import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
@@ -45,8 +63,10 @@ import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorRespo
 import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnStateGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.MessageType
@@ -66,6 +86,21 @@ internal object NetworkPayloadRegistry {
             ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
             ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
             ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
+            AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
+            AttackResponse::class.java to MessageType.LOBBY_ATTACK_RESPONSE,
+            AttackErrorResponse::class.java to MessageType.LOBBY_ATTACK_ERROR_RESPONSE,
+            AttackResolvedBroadcastEvent::class.java to MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST,
+            PlayerEliminatedEvent::class.java to MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST,
+            ConfirmAttackDoneRequest::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST,
+            ConfirmAttackDoneResponse::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_RESPONSE,
+            ConfirmAttackDoneErrorResponse::class.java to
+                MessageType.LOBBY_CONFIRM_ATTACK_DONE_ERROR_RESPONSE,
+            ConfirmReinforcementsDoneRequest::class.java to
+                MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_REQUEST,
+            ConfirmReinforcementsDoneResponse::class.java to
+                MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_RESPONSE,
+            ConfirmReinforcementsDoneErrorResponse::class.java to
+                MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE,
             CreateLobbyRequest::class.java to MessageType.LOBBY_CREATE_REQUEST,
             CreateLobbyErrorResponse::class.java to MessageType.LOBBY_CREATE_ERROR_RESPONSE,
             CreateLobbyResponse::class.java to MessageType.LOBBY_CREATE_RESPONSE,
@@ -79,6 +114,10 @@ internal object NetworkPayloadRegistry {
             LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
             LobbyPlayerCountErrorResponse::class.java to
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
+            PendingReinforcementsChangedEvent::class.java to
+                MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
+            ReinforcementsGrantedEvent::class.java to
+                MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST,
             LeaveLobbyRequest::class.java to MessageType.LOBBY_LEAVE_REQUEST,
             LeaveLobbyResponse::class.java to MessageType.LOBBY_LEAVE_RESPONSE,
             PlayerLeftLobbyEvent::class.java to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
@@ -90,6 +129,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            PlayerHandUpdatedEvent::class.java to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
             GameStateDeltaEvent::class.java to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
             PhaseBoundaryEvent::class.java to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
             GameStateSnapshotBroadcast::class.java to
@@ -109,6 +149,16 @@ internal object NetworkPayloadRegistry {
             MapGetRequest::class.java to MessageType.LOBBY_MAP_GET_REQUEST,
             MapGetResponse::class.java to MessageType.LOBBY_MAP_GET_RESPONSE,
             MapGetErrorResponse::class.java to MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
+            PlaceReinforcementsRequest::class.java to
+                MessageType.LOBBY_PLACE_REINFORCEMENTS_REQUEST,
+            PlaceReinforcementsResponse::class.java to
+                MessageType.LOBBY_PLACE_REINFORCEMENTS_RESPONSE,
+            PlaceReinforcementsErrorResponse::class.java to
+                MessageType.LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE,
+            TradeInCardsRequest::class.java to MessageType.LOBBY_TRADE_IN_CARDS_REQUEST,
+            TradeInCardsResponse::class.java to MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE,
+            TradeInCardsErrorResponse::class.java to
+                MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE,
             StartPlayerSetRequest::class.java to
                 MessageType.LOBBY_START_PLAYER_SET_REQUEST,
             StartPlayerSetResponse::class.java to
@@ -136,6 +186,24 @@ internal object NetworkPayloadRegistry {
             ConnectionResponse::class.java to encodeWith(ConnectionResponse.serializer()),
             ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
             ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
+            AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
+            AttackResponse::class.java to encodeWith(AttackResponse.serializer()),
+            AttackErrorResponse::class.java to encodeWith(AttackErrorResponse.serializer()),
+            AttackResolvedBroadcastEvent::class.java to
+                encodeWith(AttackResolvedBroadcastEvent.serializer()),
+            PlayerEliminatedEvent::class.java to encodeWith(PlayerEliminatedEvent.serializer()),
+            ConfirmAttackDoneRequest::class.java to
+                encodeWith(ConfirmAttackDoneRequest.serializer()),
+            ConfirmAttackDoneResponse::class.java to
+                encodeWith(ConfirmAttackDoneResponse.serializer()),
+            ConfirmAttackDoneErrorResponse::class.java to
+                encodeWith(ConfirmAttackDoneErrorResponse.serializer()),
+            ConfirmReinforcementsDoneRequest::class.java to
+                encodeWith(ConfirmReinforcementsDoneRequest.serializer()),
+            ConfirmReinforcementsDoneResponse::class.java to
+                encodeWith(ConfirmReinforcementsDoneResponse.serializer()),
+            ConfirmReinforcementsDoneErrorResponse::class.java to
+                encodeWith(ConfirmReinforcementsDoneErrorResponse.serializer()),
             CreateLobbyRequest::class.java to encodeWith(CreateLobbyRequest.serializer()),
             CreateLobbyErrorResponse::class.java to
                 encodeWith(CreateLobbyErrorResponse.serializer()),
@@ -153,6 +221,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(LobbyPlayerCountResponse.serializer()),
             LobbyPlayerCountErrorResponse::class.java to
                 encodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            PendingReinforcementsChangedEvent::class.java to
+                encodeWith(PendingReinforcementsChangedEvent.serializer()),
+            ReinforcementsGrantedEvent::class.java to
+                encodeWith(ReinforcementsGrantedEvent.serializer()),
             LeaveLobbyRequest::class.java to encodeWith(LeaveLobbyRequest.serializer()),
             LeaveLobbyResponse::class.java to encodeWith(LeaveLobbyResponse.serializer()),
             PlayerLeftLobbyEvent::class.java to encodeWith(PlayerLeftLobbyEvent.serializer()),
@@ -165,6 +237,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to encodeWith(StartGameResponse.serializer()),
             StartGameErrorResponse::class.java to encodeWith(StartGameErrorResponse.serializer()),
             GameStartedEvent::class.java to encodeWith(GameStartedEvent.serializer()),
+            PlayerHandUpdatedEvent::class.java to encodeWith(PlayerHandUpdatedEvent.serializer()),
             GameStateDeltaEvent::class.java to encodeWith(GameStateDeltaEvent.serializer()),
             PhaseBoundaryEvent::class.java to encodeWith(PhaseBoundaryEvent.serializer()),
             GameStateSnapshotBroadcast::class.java to
@@ -183,6 +256,16 @@ internal object NetworkPayloadRegistry {
             MapGetRequest::class.java to encodeWith(MapGetRequest.serializer()),
             MapGetResponse::class.java to encodeWith(MapGetResponse.serializer()),
             MapGetErrorResponse::class.java to encodeWith(MapGetErrorResponse.serializer()),
+            PlaceReinforcementsRequest::class.java to
+                encodeWith(PlaceReinforcementsRequest.serializer()),
+            PlaceReinforcementsResponse::class.java to
+                encodeWith(PlaceReinforcementsResponse.serializer()),
+            PlaceReinforcementsErrorResponse::class.java to
+                encodeWith(PlaceReinforcementsErrorResponse.serializer()),
+            TradeInCardsRequest::class.java to encodeWith(TradeInCardsRequest.serializer()),
+            TradeInCardsResponse::class.java to encodeWith(TradeInCardsResponse.serializer()),
+            TradeInCardsErrorResponse::class.java to
+                encodeWith(TradeInCardsErrorResponse.serializer()),
             StartPlayerSetRequest::class.java to encodeWith(StartPlayerSetRequest.serializer()),
             StartPlayerSetResponse::class.java to encodeWith(StartPlayerSetResponse.serializer()),
             StartPlayerSetErrorResponse::class.java to
@@ -209,6 +292,26 @@ internal object NetworkPayloadRegistry {
                 decodeWith(ReconnectRequest.serializer()),
             MessageType.CONNECTION_RECONNECT_RESPONSE to
                 decodeWith(ReconnectResponse.serializer()),
+            MessageType.LOBBY_ATTACK_REQUEST to decodeWith(AttackRequest.serializer()),
+            MessageType.LOBBY_ATTACK_RESPONSE to decodeWith(AttackResponse.serializer()),
+            MessageType.LOBBY_ATTACK_ERROR_RESPONSE to
+                decodeWith(AttackErrorResponse.serializer()),
+            MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST to
+                decodeWith(AttackResolvedBroadcastEvent.serializer()),
+            MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST to
+                decodeWith(PlayerEliminatedEvent.serializer()),
+            MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST to
+                decodeWith(ConfirmAttackDoneRequest.serializer()),
+            MessageType.LOBBY_CONFIRM_ATTACK_DONE_RESPONSE to
+                decodeWith(ConfirmAttackDoneResponse.serializer()),
+            MessageType.LOBBY_CONFIRM_ATTACK_DONE_ERROR_RESPONSE to
+                decodeWith(ConfirmAttackDoneErrorResponse.serializer()),
+            MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_REQUEST to
+                decodeWith(ConfirmReinforcementsDoneRequest.serializer()),
+            MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_RESPONSE to
+                decodeWith(ConfirmReinforcementsDoneResponse.serializer()),
+            MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE to
+                decodeWith(ConfirmReinforcementsDoneErrorResponse.serializer()),
             MessageType.LOBBY_CREATE_REQUEST to decodeWith(CreateLobbyRequest.serializer()),
             MessageType.LOBBY_CREATE_ERROR_RESPONSE to
                 decodeWith(CreateLobbyErrorResponse.serializer()),
@@ -227,6 +330,10 @@ internal object NetworkPayloadRegistry {
                 decodeWith(LobbyPlayerCountResponse.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE to
                 decodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST to
+                decodeWith(PendingReinforcementsChangedEvent.serializer()),
+            MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST to
+                decodeWith(ReinforcementsGrantedEvent.serializer()),
             MessageType.LOBBY_LEAVE_REQUEST to decodeWith(LeaveLobbyRequest.serializer()),
             MessageType.LOBBY_LEAVE_RESPONSE to decodeWith(LeaveLobbyResponse.serializer()),
             MessageType.LOBBY_PLAYER_LEFT_BROADCAST to
@@ -242,6 +349,8 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_START_ERROR_RESPONSE to
                 decodeWith(StartGameErrorResponse.serializer()),
             MessageType.LOBBY_GAME_STARTED_BROADCAST to decodeWith(GameStartedEvent.serializer()),
+            MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT to
+                decodeWith(PlayerHandUpdatedEvent.serializer()),
             MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST to
                 decodeWith(GameStateDeltaEvent.serializer()),
             MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST to
@@ -264,6 +373,18 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_MAP_GET_RESPONSE to decodeWith(MapGetResponse.serializer()),
             MessageType.LOBBY_MAP_GET_ERROR_RESPONSE to
                 decodeWith(MapGetErrorResponse.serializer()),
+            MessageType.LOBBY_PLACE_REINFORCEMENTS_REQUEST to
+                decodeWith(PlaceReinforcementsRequest.serializer()),
+            MessageType.LOBBY_PLACE_REINFORCEMENTS_RESPONSE to
+                decodeWith(PlaceReinforcementsResponse.serializer()),
+            MessageType.LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE to
+                decodeWith(PlaceReinforcementsErrorResponse.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_REQUEST to
+                decodeWith(TradeInCardsRequest.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE to
+                decodeWith(TradeInCardsResponse.serializer()),
+            MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE to
+                decodeWith(TradeInCardsErrorResponse.serializer()),
             MessageType.LOBBY_START_PLAYER_SET_REQUEST to
                 decodeWith(StartPlayerSetRequest.serializer()),
             MessageType.LOBBY_START_PLAYER_SET_RESPONSE to

@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.lobby.state
 
 import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -30,12 +31,18 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property stateVersion server-authoritative, monotone Zustandsversion für Clients
  * @property processedEventCount Anzahl bereits auf den State angewendeter Events
  * @property gameRandomSeed optionaler, serverseitig gewählter Seed des aktuellen Spiels
+ * @property gameRandomState optionaler, persistierter RNG-Cursor des aktuellen Spiels
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
+ * @property pendingReinforcements verbleibender Verstärkungspool eines Spielers für Phase 1
+ * @property handState autoritative Kartenhände aller Spieler
+ * @property deckState Platzhalter für den serverseitigen Kartenstapel
+ * @property discardPileState Platzhalter für den serverseitigen Ablagestapel
+ * @property tradedInSetCount globaler Zähler aller bereits eingetauschten Kartensets dieser Lobby
  */
 data class GameState(
     val lobbyCode: LobbyCode,
@@ -52,12 +59,20 @@ data class GameState(
     val stateVersion: Long = 0,
     val processedEventCount: Long = 0,
     val gameRandomSeed: Long? = null,
+    val gameRandomState: Long? = null,
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
+    val pendingReinforcements: PendingReinforcements? = null,
+    val handState: HandState = HandState(),
+    val tradeRequiredOnNextReinforcementPhaseByPlayer: Map<PlayerId, Boolean> =
+        players.associateWith { false },
+    val deckState: DeckState = DeckState(),
+    val discardPileState: DiscardPileState = DiscardPileState(),
+    val tradedInSetCount: Int = 0,
 ) {
     init {
         require(turnNumber >= 0) {
@@ -68,6 +83,12 @@ data class GameState(
         }
         require(processedEventCount >= 0) {
             "GameState.processedEventCount darf nicht negativ sein, war aber $processedEventCount."
+        }
+        require(gameRandomSeed != null || gameRandomState == null) {
+            "GameState.gameRandomState darf nur gesetzt sein, wenn auch gameRandomSeed gesetzt ist."
+        }
+        require(tradedInSetCount >= 0) {
+            "GameState.tradedInSetCount darf nicht negativ sein, war aber $tradedInSetCount."
         }
         require(players == players.distinct()) {
             "GameState.players darf keine Duplikate enthalten."
@@ -81,11 +102,21 @@ data class GameState(
         require(setupTroopsToPlaceByPlayer.values.all { it >= 0 }) {
             "GameState.setupTroopsToPlaceByPlayer darf keine negativen Werte enthalten."
         }
+        require(pendingReinforcements == null || players.contains(pendingReinforcements.playerId)) {
+            "GameState.pendingReinforcements.playerId muss Teil der Spielerliste sein."
+        }
+        require(handState.cardsByPlayer.keys.all(players::contains)) {
+            "GameState.handState darf nur Karten für bekannte Spieler enthalten."
+        }
+        require(tradeRequiredOnNextReinforcementPhaseByPlayer.keys == players.toSet()) {
+            "GameState.tradeRequiredOnNextReinforcementPhaseByPlayer muss genau für alle " +
+                "Spieler Einträge enthalten."
+        }
         require(turnOrder == turnOrder.distinct()) {
             "GameState.turnOrder darf keine Duplikate enthalten."
         }
-        require(players.containsAll(turnOrder) && turnOrder.containsAll(players)) {
-            "GameState.players und GameState.turnOrder müssen dieselben Spieler enthalten."
+        require(turnOrder.all(players::contains)) {
+            "GameState.turnOrder darf nur Spieler enthalten, die Teil der Lobby sind."
         }
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
@@ -124,6 +155,10 @@ data class GameState(
         require((mapDefinition == null) == territoryStates.isEmpty()) {
             "GameState.mapDefinition und GameState.territoryStates müssen " +
                 "gemeinsam gesetzt oder leer sein."
+        }
+        require(allCardIds().distinct().size == allCardIds().size) {
+            "GameState.handState, deckState und discardPileState dürfen " +
+                "keine CardIds mehrfach enthalten."
         }
 
         if (mapDefinition != null) {
@@ -170,6 +205,23 @@ data class GameState(
     fun hasPlayer(playerId: PlayerId): Boolean = players.contains(playerId)
 
     /**
+     * Prüft, ob ein Spieler im laufenden Match eliminiert wurde.
+     *
+     * Eliminierte Spieler bleiben Teil der Lobby, besitzen aber keine Territorien
+     * mehr und sind aus der aktiven TurnOrder entfernt.
+     */
+    fun isEliminated(playerId: PlayerId): Boolean =
+        hasPlayer(playerId) &&
+            hasStartedMatch() &&
+            ownedTerritoryCount(playerId) == 0 &&
+            !turnOrder.contains(playerId)
+
+    /**
+     * Prüft, ob ein Spieler nur noch als Zuschauer im Match verbleibt.
+     */
+    fun isSpectator(playerId: PlayerId): Boolean = isEliminated(playerId)
+
+    /**
      * Liefert den Anzeigenamen eines bekannten Spielers, falls vorhanden.
      */
     fun displayNameOf(playerId: PlayerId): String? = playerDisplayNames[playerId]
@@ -192,6 +244,48 @@ data class GameState(
      * Prüft, ob im Start-Setup noch Truppen platziert werden müssen.
      */
     fun hasPendingSetupTroops(): Boolean = setupTroopsToPlaceByPlayer.values.any { it > 0 }
+
+    /**
+     * Liefert den verbleibenden Verstärkungspool eines Spielers.
+     */
+    fun pendingReinforcementsFor(playerId: PlayerId): Int =
+        pendingReinforcements
+            ?.takeIf { it.playerId == playerId }
+            ?.amount
+            ?: 0
+
+    /**
+     * Prüft, ob aktuell noch ausstehende Verstärkungen vorhanden sind.
+     */
+    fun hasPendingReinforcements(): Boolean = (pendingReinforcements?.amount ?: 0) > 0
+
+    /**
+     * Prüft, ob ein Spieler in seiner nächsten Reinforcements-Phase zuerst Karten
+     * traden muss.
+     */
+    fun tradeRequiredOnNextReinforcementPhaseFor(playerId: PlayerId): Boolean =
+        tradeRequiredOnNextReinforcementPhaseByPlayer[playerId]
+            ?: throw IllegalArgumentException(
+                "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'.",
+            )
+
+    /**
+     * Liefert die Kartenhand eines Spielers in stabiler Einfügereihenfolge.
+     */
+    fun handOf(playerId: PlayerId): List<CardState> = handState.cardsOf(playerId)
+
+    /**
+     * Liefert die aktuelle Handgröße eines Spielers.
+     */
+    fun handSizeOf(playerId: PlayerId): Int = handState.handSizeOf(playerId)
+
+    /**
+     * Prüft, ob ein Spieler eine konkrete Karte besitzt.
+     */
+    fun playerHasCard(
+        playerId: PlayerId,
+        cardId: CardId,
+    ): Boolean = handState.contains(playerId, cardId)
 
     /**
      * Liefert alle Laufzeit-Territorien in stabiler Map-Reihenfolge.
@@ -275,6 +369,74 @@ data class GameState(
         allTerritoryStates().filter { it.ownerId == playerId }
 
     /**
+     * Liefert die Anzahl aller aktuell vom Spieler kontrollierten Territorien.
+     */
+    fun ownedTerritoryCount(playerId: PlayerId): Int = territoriesOwnedBy(playerId).size
+
+    /**
+     * Prüft, ob ein Spieler von einem Territorium aus legal angreifen kann.
+     */
+    fun canAttackFrom(
+        territoryId: TerritoryId,
+        playerId: PlayerId,
+    ): Boolean {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        if (!hasMap() || territoryStateOf(territoryId) == null) {
+            return false
+        }
+
+        val source = requireTerritoryState(territoryId)
+        if (source.ownerId != playerId || source.troopCount < 2) {
+            return false
+        }
+
+        return validAttackTargets(territoryId, playerId).isNotEmpty()
+    }
+
+    /**
+     * Liefert alle legalen Angriffsziele eines Territoriums in stabiler Map-Reihenfolge.
+     */
+    fun validAttackTargets(
+        fromTerritoryId: TerritoryId,
+        playerId: PlayerId,
+    ): List<TerritoryId> {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        if (!hasMap() || territoryStateOf(fromTerritoryId) == null) {
+            return emptyList()
+        }
+
+        val source = requireTerritoryState(fromTerritoryId)
+        if (source.ownerId != playerId || source.troopCount < 2) {
+            return emptyList()
+        }
+
+        return adjacentTerritories(fromTerritoryId)
+            .filter { adjacent ->
+                adjacent.ownerId != null && adjacent.ownerId != playerId
+            }.map(TerritoryState::territoryId)
+    }
+
+    /**
+     * Prüft, ob der Spieler aktuell mindestens einen legalen Angriff ausführen kann.
+     */
+    fun hasAnyValidAttack(playerId: PlayerId): Boolean {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        if (!hasMap()) {
+            return false
+        }
+
+        return territoriesOwnedBy(playerId).any { territoryState ->
+            canAttackFrom(territoryState.territoryId, playerId)
+        }
+    }
+
+    /**
      * Liefert den Spieler, der einen Kontinent vollständig kontrolliert, sonst null.
      */
     fun continentOwner(continentId: ContinentId): PlayerId? {
@@ -300,6 +462,25 @@ data class GameState(
         playerId: PlayerId,
         continentId: ContinentId,
     ): Boolean = continentOwner(continentId) == playerId
+
+    /**
+     * Alias für die Abfrage, ob ein Spieler einen Kontinent vollständig kontrolliert.
+     */
+    fun ownsContinent(
+        playerId: PlayerId,
+        continentId: ContinentId,
+    ): Boolean = playerOwnsContinent(playerId, continentId)
+
+    /**
+     * Liefert den konfigurierten Bonuswert eines Kontinents.
+     */
+    fun continentBonus(continentId: ContinentId): Int =
+        requireMapDefinition()
+            .continentsById[continentId]
+            ?.bonusValue
+            ?: throw IllegalArgumentException(
+                "Continent '$continentId' ist in der MapDefinition nicht vorhanden.",
+            )
 
     /**
      * Liefert alle vollständig kontrollierten Kontinente eines Spielers.
@@ -361,8 +542,8 @@ data class GameState(
     fun bonusFor(playerId: PlayerId): Int =
         mapDefinition
             ?.continents
-            ?.filter { continent -> continentOwner(continent.continentId) == playerId }
-            ?.sumOf { continent -> continent.bonusValue }
+            ?.filter { continent -> ownsContinent(playerId, continent.continentId) }
+            ?.sumOf { continent -> continentBonus(continent.continentId) }
             ?: 0
 
     /**
@@ -423,6 +604,133 @@ data class GameState(
     }
 
     /**
+     * Setzt den ausstehenden Verstärkungspool auf einen absoluten Wert.
+     */
+    internal fun withPendingReinforcements(
+        playerId: PlayerId,
+        amount: Int,
+    ): GameState =
+        copy(
+            pendingReinforcements = PendingReinforcements(playerId = playerId, amount = amount),
+        )
+
+    /**
+     * Entfernt den ausstehenden Verstärkungspool vollständig.
+     */
+    internal fun withoutPendingReinforcements(): GameState = copy(pendingReinforcements = null)
+
+    /**
+     * Setzt Seed und Cursor des serverseitigen Gameplay-RNGs.
+     */
+    internal fun withGameRandom(
+        seed: Long,
+        state: Long,
+    ): GameState = copy(gameRandomSeed = seed, gameRandomState = state)
+
+    /**
+     * Aktualisiert nur den persistierten RNG-Cursor.
+     */
+    internal fun withGameRandomState(state: Long): GameState = copy(gameRandomState = state)
+
+    /**
+     * Entfernt einen Spieler aus der aktiven TurnOrder, ohne ihn aus der Lobby zu entfernen.
+     */
+    internal fun withoutPlayerFromTurnOrder(playerId: PlayerId): GameState =
+        copy(
+            turnOrder = turnOrder.filterNot { it == playerId },
+            activePlayer = activePlayer?.takeIf { it != playerId },
+        )
+
+    /**
+     * Setzt das Flag für Pflicht-Trade-In in der nächsten Reinforcements-Phase.
+     */
+    internal fun withTradeRequiredOnNextReinforcementPhase(
+        playerId: PlayerId,
+        required: Boolean,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+
+        return copy(
+            tradeRequiredOnNextReinforcementPhaseByPlayer =
+                tradeRequiredOnNextReinforcementPhaseByPlayer + (playerId to required),
+        )
+    }
+
+    /**
+     * Überträgt alle Karten eines eliminierten Spielers sofort an den Sieger.
+     */
+    internal fun withAllCardsTransferred(
+        fromPlayerId: PlayerId,
+        toPlayerId: PlayerId,
+    ): GameState {
+        require(hasPlayer(fromPlayerId)) {
+            "Spieler '${fromPlayerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        require(hasPlayer(toPlayerId)) {
+            "Spieler '${toPlayerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        require(fromPlayerId != toPlayerId) {
+            "Karten können nicht auf denselben Spieler übertragen werden."
+        }
+
+        val transferredCards = handOf(fromPlayerId)
+        val updatedCardsByPlayer = handState.cardsByPlayer.toMutableMap()
+        updatedCardsByPlayer.remove(fromPlayerId)
+        if (transferredCards.isNotEmpty()) {
+            updatedCardsByPlayer[toPlayerId] = handOf(toPlayerId) + transferredCards
+        }
+
+        return copy(
+            handState = handState.copy(cardsByPlayer = updatedCardsByPlayer),
+        )
+    }
+
+    /**
+     * Fügt der Hand eines Spielers eine Karte hinzu.
+     */
+    internal fun withCardAddedToHand(
+        playerId: PlayerId,
+        card: CardState,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        require(card.cardId !in deckState.cards.map(CardState::cardId)) {
+            "Card '${card.cardId.value}' ist noch im Deck vorhanden."
+        }
+        require(card.cardId !in discardPileState.cards.map(CardState::cardId)) {
+            "Card '${card.cardId.value}' ist bereits im DiscardPile vorhanden."
+        }
+
+        return copy(
+            handState = handState.withCardAdded(playerId, card),
+        )
+    }
+
+    /**
+     * Entfernt genau eine Karte aus der Hand eines Spielers.
+     */
+    internal fun withoutCardFromHand(
+        playerId: PlayerId,
+        cardId: CardId,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+
+        return copy(
+            handState = handState.withoutCard(playerId, cardId),
+        )
+    }
+
+    /**
+     * Setzt den globalen Trade-In-Zähler auf einen absoluten Wert.
+     */
+    internal fun withTradedInSetCount(count: Int): GameState = copy(tradedInSetCount = count)
+
+    /**
      * Liefert einen initialen State für eine einzelne Lobby.
      */
     companion object {
@@ -472,6 +780,13 @@ data class GameState(
             processedEventCount = processedEventCount + 1,
             lastEventContext = context,
         )
+
+    private fun allCardIds(): List<CardId> =
+        handState.cardsByPlayer.values.flatten().map(CardState::cardId) +
+            deckState.cards.map(CardState::cardId) +
+            discardPileState.cards.map(CardState::cardId)
+
+    private fun hasStartedMatch(): Boolean = gameStarted || status == GameStatus.RUNNING
 
     private fun requireMapDefinition(): MapDefinition =
         mapDefinition
