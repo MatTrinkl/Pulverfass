@@ -2,11 +2,14 @@ package at.aau.pulverfass.server
 
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggerNames
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
 import at.aau.pulverfass.server.session.PersistedReconnectSession
+import at.aau.pulverfass.server.session.SessionContextPersistenceHooks
 import at.aau.pulverfass.server.session.SessionContextRegistry
+import at.aau.pulverfass.server.session.SessionReconnectContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -48,11 +51,15 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
@@ -69,6 +76,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -255,6 +263,75 @@ class MainServerLobbyRoutingIntegrationTest {
                 } finally {
                     session.close()
                 }
+            }
+        }
+
+    @Test
+    fun `create lobby failure sends error response and reports routing error`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager =
+                LobbyManager(
+                    scope = serverScope,
+                    initialStateFactory = {
+                        throw IllegalStateException("Lobby creation disabled for test.")
+                    },
+                )
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val routingErrors = AtomicInteger(0)
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { null },
+                    hooks =
+                        MainServerLobbyRoutingServiceHooks(
+                            onRoutingError = { _, _ -> routingErrors.incrementAndGet() },
+                        ),
+                )
+
+            application {
+                module(network)
+            }
+
+            routingService.start(serverScope)
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val session = client.webSocketSession("/ws")
+                    try {
+                        discardConnectionHandshake(session)
+                        session.send(
+                            Frame.Binary(
+                                fin = true,
+                                data = MessageCodec.encode(CreateLobbyRequest),
+                            ),
+                        )
+
+                        val error = assertIs<CreateLobbyErrorResponse>(receivePayload(session))
+                        assertEquals(
+                            "Konnte keinen eindeutigen Lobby-Code erzeugen.",
+                            error.reason,
+                        )
+                        waitUntilAtLeast(routingErrors, expectedCount = 1)
+                    } finally {
+                        session.close()
+                    }
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
             }
         }
 
@@ -2108,6 +2185,79 @@ class MainServerLobbyRoutingIntegrationTest {
         }
 
     @Test
+    fun `reconnect snapshot is skipped when session context is missing`() =
+        routeReconnectAndAssertSkipLogged(
+            sessionContextRegistry = SessionContextRegistry(),
+            expectedReason = "reason=context-missing",
+        )
+
+    @Test
+    fun `reconnect snapshot is skipped when player is missing from session context`() =
+        routeReconnectAndAssertSkipLogged(
+            sessionContextRegistry =
+                SessionContextRegistry(
+                    SessionContextPersistenceHooks(
+                        loadContext = {
+                            SessionReconnectContext(
+                                lobbyCode = LobbyCode("PM12"),
+                                playerDisplayName = "Missing Player",
+                            )
+                        },
+                    ),
+                ),
+            expectedReason = "reason=player-missing-in-context",
+        )
+
+    @Test
+    fun `reconnect snapshot is skipped when lobby does not exist`() =
+        routeReconnectAndAssertSkipLogged(
+            sessionContextRegistry =
+                SessionContextRegistry(
+                    SessionContextPersistenceHooks(
+                        loadContext = {
+                            SessionReconnectContext(
+                                playerId = PlayerId(1),
+                                lobbyCode = LobbyCode("NF12"),
+                                playerDisplayName = "Alice",
+                            )
+                        },
+                    ),
+                ),
+            expectedReason = "reason=lobby-not-found",
+        )
+
+    @Test
+    fun `reconnect snapshot is skipped when player is not part of lobby`() =
+        routeReconnectAndAssertSkipLogged(
+            sessionContextRegistry =
+                SessionContextRegistry(
+                    SessionContextPersistenceHooks(
+                        loadContext = {
+                            SessionReconnectContext(
+                                playerId = PlayerId(1),
+                                lobbyCode = LobbyCode("NL12"),
+                                playerDisplayName = "Alice",
+                            )
+                        },
+                    ),
+                ),
+            configureLobby = { lobbyManager ->
+                val lobbyCode = LobbyCode("NL12")
+                lobbyManager.createLobby(
+                    lobbyCode = lobbyCode,
+                    initialState =
+                        GameState.initial(
+                            lobbyCode = lobbyCode,
+                            mapDefinition = defaultMapDefinition(),
+                            players = listOf(PlayerId(2)),
+                            playerDisplayNames = mapOf(PlayerId(2) to "Bob"),
+                        ),
+                )
+            },
+            expectedReason = "reason=player-not-in-lobby",
+        )
+
+    @Test
     fun `active player reconnect resumes paused turn`() =
         testApplication {
             val network = ServerNetwork()
@@ -2330,6 +2480,84 @@ class MainServerLobbyRoutingIntegrationTest {
         playersByConnection[connectionId] = playerId
         connectionsByPlayer[playerId] = connectionId
         session to connectionId
+    }
+
+    private fun routeReconnectAndAssertSkipLogged(
+        sessionContextRegistry: SessionContextRegistry,
+        expectedReason: String,
+        configureLobby: (LobbyManager) -> Unit = {},
+    ) {
+        val context = LoggerFactory.getILoggerFactory() as LoggerContext
+        val logger =
+            context.getLogger("${ServerLoggerNames.TECHNICAL}.MainServerLobbyRoutingService")
+        val appender = ListAppender<ILoggingEvent>()
+        appender.context = context
+        appender.start()
+        logger.addAppender(appender)
+
+        val network = ServerNetwork()
+        val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = LobbyManager(serverScope)
+        val router =
+            MainServerRouter(
+                lobbyManager = lobbyManager,
+                mapper = DefaultNetworkToLobbyEventMapper(),
+            )
+        val routingService =
+            MainServerLobbyRoutingService(
+                network = network,
+                router = router,
+                lobbyManager = lobbyManager,
+                sessionContextRegistry = sessionContextRegistry,
+                playerIdResolver = { null },
+            )
+
+        try {
+            configureLobby(lobbyManager)
+            routingService.start(serverScope)
+
+            val connectionId = ConnectionId(91)
+            val sessionToken = network.sessionManager.createSession(connectionId).sessionToken
+
+            kotlinx.coroutines.runBlocking {
+                publishReconnectUntilLogContains(
+                    network = network,
+                    connectionId = connectionId,
+                    sessionToken = sessionToken,
+                    appender = appender,
+                    expectedText = expectedReason,
+                )
+            }
+
+            assertTrue(
+                appender.list.any { event -> event.formattedMessage.contains(expectedReason) },
+            )
+        } finally {
+            kotlinx.coroutines.runBlocking {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+            logger.detachAppender(appender)
+        }
+    }
+
+    private suspend fun publishReconnectUntilLogContains(
+        network: ServerNetwork,
+        connectionId: ConnectionId,
+        sessionToken: SessionToken,
+        appender: ListAppender<ILoggingEvent>,
+        expectedText: String,
+    ) {
+        withTimeout(5_000) {
+            while (appender.list.none { event -> event.formattedMessage.contains(expectedText) }) {
+                network.packetReceiver.decode(
+                    connectionId = connectionId,
+                    bytes = MessageCodec.encode(ReconnectRequest(sessionToken)),
+                )
+                delay(5)
+            }
+        }
     }
 
     private suspend fun receivePayload(
