@@ -151,6 +151,8 @@ class MainServerLobbyRoutingService(
     private companion object {
         const val ELIMINATED_SPECTATOR_SUFFIX = "zuschauen."
         const val NO_ACTIVE_PLAYER_SET_SUFFIX = "kein aktiver Spieler gesetzt."
+        const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
+            "Reconnect snapshot skipped connectionId={} lobbyCode={} "
     }
 
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
@@ -959,7 +961,7 @@ class MainServerLobbyRoutingService(
             reconnectContext.playerId
                 ?: run {
                     logger.warn(
-                        "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                        RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
                             "reason=player-missing-in-context",
                         connectionId.value,
                         lobbyCode.value,
@@ -970,7 +972,7 @@ class MainServerLobbyRoutingService(
             lobbyManager.getLobby(lobbyCode)?.currentState()
                 ?: run {
                     logger.warn(
-                        "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                        RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
                             "playerId={} reason=lobby-not-found",
                         connectionId.value,
                         lobbyCode.value,
@@ -981,7 +983,7 @@ class MainServerLobbyRoutingService(
 
         if (!lobbyState.players.contains(reconnectingPlayerId)) {
             logger.warn(
-                "Reconnect snapshot skipped connectionId={} lobbyCode={} " +
+                RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
                     "playerId={} reason=player-not-in-lobby",
                 connectionId.value,
                 lobbyCode.value,
