@@ -4,8 +4,15 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyRuntimeHooks
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
+import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
@@ -96,7 +103,14 @@ object LobbyDomainEventLogger {
 
     private fun playerIdFromEvent(event: LobbyEvent): PlayerId? =
         when (event) {
+            is AttackResolvedEvent -> event.attackerPlayerId
+            is CardSetTradedInEvent -> event.playerId
+            is FortifyMoveAppliedEvent -> event.playerId
             is InvalidActionDetected -> event.playerId
+            is PendingReinforcementsChangedEvent -> event.playerId
+            is PendingReinforcementsSetEvent -> event.playerId
+            is PlayerCardsRemovedEvent -> event.playerId
+            is PlayerEliminatedEvent -> event.playerId
             is PlayerJoined -> event.playerId
             is PlayerKicked -> event.requesterPlayerId
             is PlayerLeft -> event.playerId

@@ -121,7 +121,15 @@ class LobbyRuntime private constructor(
             try {
                 eventLoop.submitBatch(events, context)
             } catch (cause: Throwable) {
-                hooks.onEventRejected(lobbyCode, events.first(), cause)
+                events.firstOrNull()?.let { failedEvent ->
+                    hooks.onEventRejected(
+                        lobbyCode,
+                        failedEvent,
+                        context,
+                        runCatching { currentState() }.getOrNull(),
+                        cause,
+                    )
+                }
                 throw cause
             }
         processedList.forEach { processed ->

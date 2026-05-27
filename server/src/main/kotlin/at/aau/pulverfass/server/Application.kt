@@ -147,6 +147,21 @@ fun createServer(
         module(network, runtimeConfig, databaseReadinessProbe)
     }
 
+fun createServer(
+    host: String = DEFAULT_HOST,
+    port: Int = DEFAULT_PORT,
+    transport: ServerWebSocketTransport,
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+): ApplicationEngine =
+    createServer(
+        host = host,
+        port = port,
+        network = ServerNetwork(transport = transport),
+        runtimeConfig = runtimeConfig,
+        databaseReadinessProbe = databaseReadinessProbe,
+    )
+
 /**
  * Erzeugt eine startbare Serverinstanz mit aktivem Lobby-Routing zur
  * Verarbeitung von Create/Join/Leave/Kick/Start-Requests.
