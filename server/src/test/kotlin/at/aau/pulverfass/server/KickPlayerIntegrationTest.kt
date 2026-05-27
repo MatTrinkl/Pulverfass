@@ -26,7 +26,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,7 +33,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -334,21 +332,11 @@ class KickPlayerIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload {
-        val frame = assertIs<Frame.Binary>(withTimeout(5_000) { session.incoming.receive() })
-        return MessageCodec.decodePayload(frame.readBytes())
-    }
+    ): NetworkMessagePayload = receiveRelevantTestPayload(session)
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload? {
-        val frame =
-            withTimeoutOrNull(200) {
-                session.incoming.receive()
-            } ?: return null
-        val binary = assertIs<Frame.Binary>(frame)
-        return MessageCodec.decodePayload(binary.readBytes())
-    }
+    ): NetworkMessagePayload? = receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 200)
 
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
@@ -358,7 +346,7 @@ class KickPlayerIntegrationTest {
     private suspend fun discardConnectionHandshake(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): SessionToken {
-        val payload = receivePayload(session)
+        val payload = receiveRawTestPayload(session)
         val response = assertIs<ConnectionResponse>(payload)
         return response.sessionToken
     }
