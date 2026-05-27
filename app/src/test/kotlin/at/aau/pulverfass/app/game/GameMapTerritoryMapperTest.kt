@@ -1,11 +1,19 @@
 package at.aau.pulverfass.app.game
 
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class GameMapTerritoryMapperTest {
+    @Test
+    fun `siberia map regions keep their backend territory identity`() {
+        assertEquals(TerritoryId("alaska"), GameMapTerritoryMapper.toTerritoryId("east_siberia"))
+        assertEquals(TerritoryId("sibirien"), GameMapTerritoryMapper.toTerritoryId("siberia"))
+    }
+
     @Test
     fun `default map territories are mapped to Android regions`() {
         val androidRegionIds = PulverfassMapDefaults.regions.map { region -> region.id }.toSet()

@@ -32,6 +32,24 @@ class MapConfigLoaderTest {
             TerritoryId("alaska") in
                 definition.continentsById.getValue(ContinentId("asien")).territoryIds,
         )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("alaska"))
+                .edges
+                .any { it.targetId == TerritoryId("japan") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("japan"))
+                .edges
+                .any { it.targetId == TerritoryId("alaska") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("sibirien"))
+                .edges
+                .none { it.targetId == TerritoryId("japan") },
+        )
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
             definition.territoriesById
