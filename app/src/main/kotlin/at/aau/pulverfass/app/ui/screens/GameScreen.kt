@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -278,15 +279,7 @@ internal fun GameScreenContent(
             onConfirmAttackDone,
             onAdvanceTurn,
         )
-    var showCatchUpFeedback by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.isCatchingUp) {
-        showCatchUpFeedback = false
-        if (uiState.isCatchingUp) {
-            delay(SYNC_FEEDBACK_DELAY_MILLIS)
-            showCatchUpFeedback = true
-        }
-    }
-
+    val showCatchUpFeedback = rememberDelayedCatchUpFeedback(uiState.isCatchingUp)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
 
@@ -337,27 +330,21 @@ internal fun GameScreenContent(
                     .fillMaxWidth(),
         )
 
-        if (uiState.isCatchingUp && showCatchUpFeedback) {
-            SyncProgressOverlay(
-                modifier = Modifier.align(Alignment.Center),
-            )
-        }
+        CatchUpProgressOverlay(
+            isCatchingUp = uiState.isCatchingUp,
+            showFeedback = showCatchUpFeedback,
+            modifier = Modifier.align(Alignment.Center),
+        )
 
         CardsSidebar(
             state =
-                PrivateHandPanelState(
-                    playerName = personalPlayer.name,
-                    handCards = uiState.handCards,
-                    privateHandCards = uiState.privateHandCards,
-                    selectedTradeInCardIds = uiState.selectedTradeInCardIds,
-                    showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
-                    canSelectTradeCards =
-                        uiState.canUseGameActions(localPlayerId, isConnected) &&
-                            !isReinforcementCommandPending,
-                    canTradeInCards =
-                        uiState.canTradeInCards(localPlayerId, isConnected) &&
-                            !isReinforcementCommandPending,
-                    isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
+                privateHandPanelState(
+                    player = personalPlayer,
+                    uiState = uiState,
+                    localPlayerId = localPlayerId,
+                    isConnected = isConnected,
+                    isReinforcementCommandPending = isReinforcementCommandPending,
+                    pendingCommandKeys = pendingCommandKeys,
                 ),
             actions =
                 PrivateHandPanelActions(
@@ -384,71 +371,31 @@ internal fun GameScreenContent(
                     .fillMaxHeight(),
         )
 
-        reinforcementPanelRegionId?.let { selectedRegionId ->
-            ReinforcementPanel(
-                state =
-                    ReinforcementPanelState(
-                        reinforcementState = uiState.reinforcementState,
-                        remainingAmount = remainingReinforcementAmount,
-                        placementAmount = uiState.reinforcementPlacementAmount,
-                        selectedRegionId = selectedRegionId,
-                        canAdjust = canManageReinforcements && !isReinforcementCommandPending,
-                        canPlace =
-                            uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
-                                !isReinforcementCommandPending,
-                    ),
-                actions =
-                    ReinforcementPanelActions(
-                        onDismiss = { onRegionSelected(selectedRegionId) },
-                        onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
-                        onPlace = onPlaceReinforcements,
-                    ),
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = BottomBarHeight + 8.dp),
-            )
-        }
+        ReinforcementPanelHost(
+            selectedRegionId = reinforcementPanelRegionId,
+            uiState = uiState,
+            remainingAmount = remainingReinforcementAmount,
+            canManageReinforcements = canManageReinforcements,
+            isReinforcementCommandPending = isReinforcementCommandPending,
+            localPlayerId = localPlayerId,
+            isConnected = isConnected,
+            onRegionSelected = onRegionSelected,
+            onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+            onPlace = onPlaceReinforcements,
+        )
 
-        if (attackPanelSelection != null) {
-            val (fromRegionId, toRegionId) = attackPanelSelection
-            val maximumAttackTroops =
-                uiState.territoryStates[
-                    GameMapTerritoryMapper.toTerritoryId(fromRegionId),
-                ]?.troopCount?.minus(1) ?: uiState.attackState.attackTroops
-            AttackPanel(
-                state =
-                    AttackPanelState(
-                        attackState = uiState.attackState,
-                        fromRegionId = fromRegionId,
-                        toRegionId = toRegionId,
-                        maximumAttackTroops = maximumAttackTroops,
-                        canAdjust = canManageAttacks && !isAttackCommandPending,
-                        canAttack =
-                            uiState.canSubmitAttack(localPlayerId, isConnected) &&
-                                !isAttackCommandPending,
-                    ),
-                actions =
-                    AttackPanelActions(
-                        onDismiss = { onRegionSelected(fromRegionId) },
-                        onAdjustAttackTroops = onAdjustAttackTroops,
-                        onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
-                        onAttack = onAttack,
-                    ),
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = BottomBarHeight + 8.dp),
-            )
-        } else if (uiState.attackState.latestResult != null) {
-            AttackResultPanel(
-                result = uiState.attackState.latestResult,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = BottomBarHeight + 8.dp),
-            )
-        }
+        AttackPanelHost(
+            selection = attackPanelSelection,
+            uiState = uiState,
+            canManageAttacks = canManageAttacks,
+            isAttackCommandPending = isAttackCommandPending,
+            localPlayerId = localPlayerId,
+            isConnected = isConnected,
+            onRegionSelected = onRegionSelected,
+            onAdjustAttackTroops = onAdjustAttackTroops,
+            onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
+            onAttack = onAttack,
+        )
 
         BottomActionClusters(
             currentPhase = uiState.turnPhase,
@@ -465,6 +412,159 @@ internal fun GameScreenContent(
         )
     }
 }
+
+@Composable
+private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
+    var showCatchUpFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(isCatchingUp) {
+        showCatchUpFeedback = false
+        if (isCatchingUp) {
+            delay(SYNC_FEEDBACK_DELAY_MILLIS)
+            showCatchUpFeedback = true
+        }
+    }
+    return showCatchUpFeedback
+}
+
+@Composable
+private fun CatchUpProgressOverlay(
+    isCatchingUp: Boolean,
+    showFeedback: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (isCatchingUp && showFeedback) {
+        SyncProgressOverlay(modifier = modifier)
+    }
+}
+
+private fun privateHandPanelState(
+    player: GamePlayerUi,
+    uiState: GameUiState,
+    localPlayerId: PlayerId?,
+    isConnected: Boolean,
+    isReinforcementCommandPending: Boolean,
+    pendingCommandKeys: Set<LobbyCommandKey>,
+): PrivateHandPanelState =
+    PrivateHandPanelState(
+        playerName = player.name,
+        handCards = uiState.handCards,
+        privateHandCards = uiState.privateHandCards,
+        selectedTradeInCardIds = uiState.selectedTradeInCardIds,
+        showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
+        canSelectTradeCards =
+            uiState.canUseGameActions(localPlayerId, isConnected) &&
+                !isReinforcementCommandPending,
+        canTradeInCards =
+            uiState.canTradeInCards(localPlayerId, isConnected) &&
+                !isReinforcementCommandPending,
+        isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
+    )
+
+@Composable
+private fun BoxScope.ReinforcementPanelHost(
+    selectedRegionId: String?,
+    uiState: GameUiState,
+    remainingAmount: Int,
+    canManageReinforcements: Boolean,
+    isReinforcementCommandPending: Boolean,
+    localPlayerId: PlayerId?,
+    isConnected: Boolean,
+    onRegionSelected: (String) -> Unit,
+    onAdjustPlacementAmount: (Int) -> Unit,
+    onPlace: () -> Unit,
+) {
+    val regionId = selectedRegionId ?: return
+    ReinforcementPanel(
+        state =
+            ReinforcementPanelState(
+                reinforcementState = uiState.reinforcementState,
+                remainingAmount = remainingAmount,
+                placementAmount = uiState.reinforcementPlacementAmount,
+                selectedRegionId = regionId,
+                canAdjust = canManageReinforcements && !isReinforcementCommandPending,
+                canPlace =
+                    uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
+                        !isReinforcementCommandPending,
+            ),
+        actions =
+            ReinforcementPanelActions(
+                onDismiss = { onRegionSelected(regionId) },
+                onAdjustPlacementAmount = onAdjustPlacementAmount,
+                onPlace = onPlace,
+            ),
+        modifier =
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = BottomBarHeight + 8.dp),
+    )
+}
+
+@Composable
+private fun BoxScope.AttackPanelHost(
+    selection: Pair<String, String>?,
+    uiState: GameUiState,
+    canManageAttacks: Boolean,
+    isAttackCommandPending: Boolean,
+    localPlayerId: PlayerId?,
+    isConnected: Boolean,
+    onRegionSelected: (String) -> Unit,
+    onAdjustAttackTroops: (Int) -> Unit,
+    onAdjustMoveAfterCapture: (Int) -> Unit,
+    onAttack: () -> Unit,
+) {
+    if (selection == null) {
+        AttackResultHost(result = uiState.attackState.latestResult)
+        return
+    }
+
+    val (fromRegionId, toRegionId) = selection
+    AttackPanel(
+        state =
+            AttackPanelState(
+                attackState = uiState.attackState,
+                fromRegionId = fromRegionId,
+                toRegionId = toRegionId,
+                maximumAttackTroops = maximumAttackTroops(uiState, fromRegionId),
+                canAdjust = canManageAttacks && !isAttackCommandPending,
+                canAttack =
+                    uiState.canSubmitAttack(localPlayerId, isConnected) &&
+                        !isAttackCommandPending,
+            ),
+        actions =
+            AttackPanelActions(
+                onDismiss = { onRegionSelected(fromRegionId) },
+                onAdjustAttackTroops = onAdjustAttackTroops,
+                onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
+                onAttack = onAttack,
+            ),
+        modifier =
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = BottomBarHeight + 8.dp),
+    )
+}
+
+@Composable
+private fun BoxScope.AttackResultHost(result: AttackResultUiState?) {
+    if (result == null) {
+        return
+    }
+    AttackResultPanel(
+        result = result,
+        modifier =
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = BottomBarHeight + 8.dp),
+    )
+}
+
+private fun maximumAttackTroops(
+    uiState: GameUiState,
+    fromRegionId: String,
+): Int =
+    uiState.territoryStates[
+        GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+    ]?.troopCount?.minus(1) ?: uiState.attackState.attackTroops
 
 /**
  * Rendert den Statusbereich nur dann, wenn eine synchronisationsrelevante Meldung vorliegt.
