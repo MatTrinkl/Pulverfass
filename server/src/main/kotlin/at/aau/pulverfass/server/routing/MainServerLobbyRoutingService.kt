@@ -38,6 +38,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -318,6 +319,7 @@ class MainServerLobbyRoutingService(
 
         // broadcast updated player count to lobby members (disconnect may affect displayed online count)
         broadcastPlayerCount(lobbyCode)
+        broadcastGlobalPlayerCount()
 
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
@@ -358,6 +360,7 @@ class MainServerLobbyRoutingService(
         if (lobbyCode != null) {
             broadcastPlayerCount(lobbyCode)
         }
+        broadcastGlobalPlayerCount()
     }
 
     private suspend fun resumeWaitingTurnForPlayer(playerId: PlayerId) {
@@ -1719,6 +1722,12 @@ class MainServerLobbyRoutingService(
             .forEach { connectionId ->
                 network.send(connectionId, PlayerCountUpdateEvent(lobbyCode, count))
             }
+    }
+
+    private suspend fun broadcastGlobalPlayerCount() {
+        val count = network.connectionManager.all().size
+        val event = GlobalPlayerCountEvent(playerCount = count)
+        network.connectionManager.broadcast(MessageCodec.encode(event))
     }
 
     private fun fortifyMoveErrorResponse(

@@ -109,6 +109,9 @@ enum class MessageType(val id: Int) {
     /** Broadcast, pushed when server-side player count changes in a lobby. */
     LOBBY_PLAYER_COUNT_UPDATE_BROADCAST(79),
 
+    /** Broadcast, pushed to all connections when the global connected-client count changes. */
+    GLOBAL_PLAYER_COUNT_BROADCAST(80),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 
