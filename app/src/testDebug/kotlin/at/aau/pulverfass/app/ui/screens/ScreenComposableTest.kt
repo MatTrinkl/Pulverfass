@@ -383,7 +383,11 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithTag("reinforcement_panel").assertIsDisplayed()
         composeTestRule.onNodeWithTag("reinforcement_remaining").assertTextEquals("Verfügbar: 2")
         composeTestRule.onNodeWithText("Gebiet 2 · Kontinent 0 · Karten 0").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("reinforcement_increase").performClick()
+        composeTestRule.onNodeWithTag("reinforcement_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(2f)
+        }
         composeTestRule
             .onNodeWithTag("place_reinforcements_button")
             .assertIsEnabled()
@@ -482,6 +486,7 @@ class ScreenComposableTest {
             }
         }
 
+        composeTestRule.onNodeWithTag("reinforcement_slider").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("place_reinforcements_button").assertIsNotEnabled()
     }
 
@@ -542,8 +547,16 @@ class ScreenComposableTest {
 
         composeTestRule.onNodeWithTag("attack_panel").assertIsDisplayed()
         composeTestRule.onNodeWithText("Angriff: brazil → argentina").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("attack_troops_increase").performClick()
-        composeTestRule.onNodeWithTag("attack_move_increase").performClick()
+        composeTestRule.onNodeWithTag("attack_troops_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(5f)
+        }
+        composeTestRule.onNodeWithTag("attack_move_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(4f)
+        }
         composeTestRule.onNodeWithTag("attack_submit_button").assertIsEnabled().performClick()
         composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
 

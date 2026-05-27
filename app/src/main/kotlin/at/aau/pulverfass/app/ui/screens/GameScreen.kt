@@ -35,6 +35,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +64,7 @@ import at.aau.pulverfass.app.game.AttackUiState
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
+import at.aau.pulverfass.app.game.MIN_ATTACK_TROOPS
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
@@ -77,6 +79,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private val HudSurfaceColor = Color.White
 private val HudSurfaceMutedColor = Color(0xFFF1F1F1)
@@ -1211,38 +1214,24 @@ private fun ReinforcementPanel(
                     ),
                 style = MaterialTheme.typography.bodySmall,
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                BlockActionButton(
-                    label = "-",
-                    onClick = { actions.onAdjustPlacementAmount(-1) },
-                    selected = false,
-                    enabled = state.canAdjust && state.placementAmount > 1,
-                    modifier = Modifier.size(42.dp).testTag("reinforcement_decrease"),
-                )
-                Text(
-                    text = state.placementAmount.toString(),
-                    modifier = Modifier.width(32.dp).testTag("reinforcement_amount"),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                BlockActionButton(
-                    label = "+",
-                    onClick = { actions.onAdjustPlacementAmount(1) },
-                    selected = false,
-                    enabled =
-                        state.canAdjust &&
-                            state.placementAmount < state.remainingAmount,
-                    modifier = Modifier.size(42.dp).testTag("reinforcement_increase"),
+                TroopAmountSliderRow(
+                    label = stringResource(id = R.string.game_reinforcements_amount),
+                    amount = state.placementAmount,
+                    minAmount = 1,
+                    maxAmount = state.remainingAmount,
+                    canAdjust = state.canAdjust,
+                    onAdjust = actions.onAdjustPlacementAmount,
+                    tagPrefix = "reinforcement",
                 )
                 BlockActionButton(
                     label = stringResource(id = R.string.game_reinforcements_place),
                     onClick = actions.onPlace,
                     selected = true,
                     enabled = state.canPlace,
-                    modifier = Modifier.testTag("place_reinforcements_button"),
+                    modifier = Modifier.fillMaxWidth().testTag("place_reinforcements_button"),
                 )
             }
         }
@@ -1307,26 +1296,21 @@ private fun AttackPanel(
                             .testTag("close_attack_panel"),
                 )
             }
-            AttackAmountRow(
+            TroopAmountSliderRow(
                 label = stringResource(id = R.string.game_attack_troops),
                 amount = state.attackState.attackTroops,
-                canDecrease =
-                    state.canAdjust && state.attackState.attackTroops > 2,
-                canIncrease =
-                    state.canAdjust &&
-                        state.attackState.attackTroops < state.maximumAttackTroops,
+                minAmount = MIN_ATTACK_TROOPS,
+                maxAmount = state.maximumAttackTroops,
+                canAdjust = state.canAdjust,
                 onAdjust = actions.onAdjustAttackTroops,
                 tagPrefix = "attack_troops",
             )
-            AttackAmountRow(
+            TroopAmountSliderRow(
                 label = stringResource(id = R.string.game_attack_occupy),
                 amount = state.attackState.moveAfterCapture,
-                canDecrease =
-                    state.canAdjust &&
-                        state.attackState.moveAfterCapture > minimumMoveAfterCapture,
-                canIncrease =
-                    state.canAdjust &&
-                        state.attackState.moveAfterCapture < state.attackState.attackTroops,
+                minAmount = minimumMoveAfterCapture,
+                maxAmount = state.attackState.attackTroops,
+                canAdjust = state.canAdjust,
                 onAdjust = actions.onAdjustMoveAfterCapture,
                 tagPrefix = "attack_move",
             )
@@ -1342,42 +1326,61 @@ private fun AttackPanel(
 }
 
 @Composable
-private fun AttackAmountRow(
+private fun TroopAmountSliderRow(
     label: String,
     amount: Int,
-    canDecrease: Boolean,
-    canIncrease: Boolean,
+    minAmount: Int,
+    maxAmount: Int,
+    canAdjust: Boolean,
     onAdjust: (Int) -> Unit,
     tagPrefix: String,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val safeMinAmount = minAmount.coerceAtMost(maxAmount)
+    val safeMaxAmount = maxAmount.coerceAtLeast(safeMinAmount)
+    val sliderMaxAmount =
+        if (safeMaxAmount > safeMinAmount) {
+            safeMaxAmount
+        } else {
+            safeMinAmount + 1
+        }
+    val sliderValue = amount.coerceIn(safeMinAmount, safeMaxAmount).toFloat()
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.width(156.dp),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        BlockActionButton(
-            label = "-",
-            onClick = { onAdjust(-1) },
-            selected = false,
-            enabled = canDecrease,
-            modifier = Modifier.size(42.dp).testTag("${tagPrefix}_decrease"),
-        )
-        Text(
-            text = amount.toString(),
-            modifier = Modifier.width(32.dp).testTag("${tagPrefix}_amount"),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        BlockActionButton(
-            label = "+",
-            onClick = { onAdjust(1) },
-            selected = false,
-            enabled = canIncrease,
-            modifier = Modifier.size(42.dp).testTag("${tagPrefix}_increase"),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = amount.toString(),
+                modifier = Modifier.width(32.dp).testTag("${tagPrefix}_amount"),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = { value ->
+                val targetAmount = value.roundToInt().coerceIn(safeMinAmount, safeMaxAmount)
+                val delta = targetAmount - amount
+                if (delta != 0) {
+                    onAdjust(delta)
+                }
+            },
+            valueRange = safeMinAmount.toFloat()..sliderMaxAmount.toFloat(),
+            steps = (safeMaxAmount - safeMinAmount - 1).coerceAtLeast(0),
+            enabled = canAdjust && safeMaxAmount > safeMinAmount,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("${tagPrefix}_slider"),
         )
     }
 }

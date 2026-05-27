@@ -49,6 +49,7 @@
     <string name="game_reinforcements_remaining">Verfügbar: %1$s</string>
     <string name="game_reinforcements_bonus">Gebiet %1$d · Kontinent %2$d · Karten %3$d</string>
     <string name="game_reinforcements_target">Ziel: %1$s</string>
+    <string name="game_reinforcements_amount">Truppen platzieren</string>
     <string name="game_reinforcements_place">Platzieren</string>
     <string name="game_reinforcements_close">Schließen</string>
     <string name="game_attack_route">Angriff: %1$s → %2$s</string>
