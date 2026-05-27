@@ -24,11 +24,18 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import java.util.UUID
 
 /**
- * Server-side domain event logging around lobby event application.
+ * Fachlicher Event-Logger für Lobby-Events rund um die Reducer-Anwendung.
+ *
+ * Die Klasse hängt über [LobbyRuntimeHooks] an der Runtime und hält den Reducer
+ * frei von Logging-Seiteneffekten. Geloggt werden Eingang, erfolgreiche
+ * Anwendung und Ablehnung eines Events.
  */
 object LobbyDomainEventLogger {
     private val logger = ServerLoggers.domainEvent("LobbyDomainEventLogger")
 
+    /**
+     * Markiert den Beginn einer Server-Session im kumulativen Event-Log.
+     */
     fun logServerSessionStarted(sessionId: UUID = UUID.randomUUID()) {
         logger.info(
             "session-start | id={}",
@@ -36,6 +43,9 @@ object LobbyDomainEventLogger {
         )
     }
 
+    /**
+     * Erstellt Runtime-Hooks, die Lobby-Events in die fachliche Log-Spur schreiben.
+     */
     fun hooks(): LobbyRuntimeHooks =
         LobbyRuntimeHooks(
             onEventEnqueued = ::logEventReceived,
@@ -43,6 +53,9 @@ object LobbyDomainEventLogger {
             onEventRejected = ::logEventRejected,
         )
 
+    /**
+     * Loggt den Eingang eines Events vor der Verarbeitung durch die Runtime.
+     */
     internal fun logEventReceived(
         lobbyCode: LobbyCode,
         event: LobbyEvent,

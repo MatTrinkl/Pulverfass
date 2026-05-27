@@ -6,9 +6,17 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * Resolves server log files to the repository-level logs directory.
+ * Ermittelt den gemeinsamen Log-Ordner des Repositorys.
+ *
+ * Der Server kann aus unterschiedlichen Working Directories gestartet werden,
+ * zum Beispiel aus IntelliJ im Root oder über Gradle im Servermodul. Die
+ * Auflösung läuft deshalb vom aktuellen Arbeitsverzeichnis nach oben bis zum
+ * Repository-Root.
  */
 object RepositoryLogDirectory {
+    /**
+     * Liefert den Pfad zum repository-weiten `logs`-Verzeichnis.
+     */
     fun resolve(): Path = resolveRepositoryRoot().resolve("logs")
 
     private fun resolveRepositoryRoot(): Path {
@@ -29,6 +37,12 @@ object RepositoryLogDirectory {
             Files.isDirectory(path.resolve("shared"))
 }
 
+/**
+ * Logback-PropertyDefiner für den dynamisch ermittelten Log-Ordner.
+ *
+ * Die Logback-Konfiguration verwendet diese Klasse, damit File-Appender
+ * unabhängig vom aktuellen Working Directory auf denselben Ordner zeigen.
+ */
 class RepositoryLogDirectoryPropertyDefiner : PropertyDefinerBase() {
     override fun getPropertyValue(): String = RepositoryLogDirectory.resolve().toString()
 }
