@@ -821,6 +821,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     waitUntilProcessed(lobbyManager, lobbyA, expectedCount = 2)
                     waitUntilProcessed(lobbyManager, lobbyB, expectedCount = 1)
+                    waitUntilAtLeast(routedPackets, expectedCount = 3)
 
                     val stateA = lobbyManager.getLobby(lobbyA)?.currentState()
                     val stateB = lobbyManager.getLobby(lobbyB)?.currentState()
@@ -2329,6 +2330,17 @@ class MainServerLobbyRoutingIntegrationTest {
                 (manager.getLobby(lobbyCode)?.currentState()?.processedEventCount ?: 0L) <
                 expectedCount
             ) {
+                delay(5)
+            }
+        }
+    }
+
+    private suspend fun waitUntilAtLeast(
+        counter: AtomicInteger,
+        expectedCount: Int,
+    ) {
+        withTimeout(5_000) {
+            while (counter.get() < expectedCount) {
                 delay(5)
             }
         }
