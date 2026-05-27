@@ -1,6 +1,7 @@
 package at.aau.pulverfass.app.ui.components
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.net.Uri
 import android.view.View
 import android.widget.VideoView
@@ -69,83 +70,75 @@ private fun VideoViewInterop(
     modifier: Modifier = Modifier,
 ) {
     val videoRef = remember { AtomicReference<VideoView?>(null) }
-
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             val view: VideoView = if (centerCrop) CenterCropVideoView(ctx) else VideoView(ctx)
             videoRef.set(view)
-
-            // Prepared: configure looping/volume and start playback
             view.setOnPreparedListener { mediaPlayer ->
-                try {
-                    mediaPlayer.isLooping = loop
-                    if (muted) mediaPlayer.setVolume(0f, 0f)
-                    (view as? CenterCropVideoView)?.setVideoSize(
-                        mediaPlayer.videoWidth,
-                        mediaPlayer.videoHeight,
-                    )
-                } catch (t: Throwable) {
-                    // swallow; keep prepared flow
-                }
-                // ensure view visible and start playback
+                runCatching { configureMediaPlayer(mediaPlayer, view, loop, muted, centerCrop) }
                 view.visibility = View.VISIBLE
                 view.start()
             }
-
-            view.setOnCompletionListener {
-                if (!loop) onCompleted()
-            }
-
-            // ensure view visible by default
+            view.setOnCompletionListener { if (!loop) onCompleted() }
             view.visibility = View.VISIBLE
-
-            val uri = Uri.parse("android.resource://${ctx.packageName}/$videoResId")
-            // register listeners before setting URI to avoid missing callbacks on some devices
-            view.setVideoURI(uri)
-
+            view.setVideoURI(Uri.parse("android.resource://${ctx.packageName}/$videoResId"))
             view
         },
-        update = { view ->
-            // If resource changed, reset playback cleanly
-            val expected = "android.resource://${view.context.packageName}/$videoResId"
-            if (view.tag != expected) {
-                view.tag = expected
-                try {
-                    view.stopPlayback()
-                } catch (_: Throwable) {
-                }
-                view.setVideoURI(Uri.parse(expected))
-            }
-        },
+        update = { view -> resetVideoUri(view, videoResId) },
     )
-
     DisposableEffect(videoResId, loop, muted) {
-        onDispose {
-            videoRef.get()?.let { v ->
-                try {
-                    v.setOnPreparedListener(null)
-                    v.setOnCompletionListener(null)
-                    v.stopPlayback()
-                } catch (_: Throwable) {
-                }
-            }
-            videoRef.set(null)
-        }
+        onDispose { releaseVideoView(videoRef) }
     }
 }
 
+private fun configureMediaPlayer(
+    mediaPlayer: MediaPlayer,
+    view: VideoView,
+    loop: Boolean,
+    muted: Boolean,
+    centerCrop: Boolean,
+) {
+    mediaPlayer.isLooping = loop
+    if (muted) mediaPlayer.setVolume(0f, 0f)
+    (view as? CenterCropVideoView)?.setVideoSize(
+        mediaPlayer.videoWidth,
+        mediaPlayer.videoHeight,
+    )
+}
+
+private fun resetVideoUri(
+    view: VideoView,
+    @RawRes videoResId: Int,
+) {
+    val expected = "android.resource://${view.context.packageName}/$videoResId"
+    if (view.tag == expected) return
+    view.tag = expected
+    runCatching { view.stopPlayback() }
+    view.setVideoURI(Uri.parse(expected))
+}
+
+private fun releaseVideoView(videoRef: AtomicReference<VideoView?>) {
+    videoRef.get()?.let { v ->
+        runCatching {
+            v.setOnPreparedListener(null)
+            v.setOnCompletionListener(null)
+            v.stopPlayback()
+        }
+    }
+    videoRef.set(null)
+}
+
 private class CenterCropVideoView(context: Context) : VideoView(context) {
-    private var sourceWidth = 0
-    private var sourceHeight = 0
+    private var videoWidth = 0
+    private var videoHeight = 0
 
     fun setVideoSize(
         width: Int,
         height: Int,
     ) {
-        if (sourceWidth == width && sourceHeight == height) return
-        sourceWidth = width
-        sourceHeight = height
+        videoWidth = width
+        videoHeight = height
         requestLayout()
     }
 
@@ -153,18 +146,18 @@ private class CenterCropVideoView(context: Context) : VideoView(context) {
         widthMeasureSpec: Int,
         heightMeasureSpec: Int,
     ) {
-        val parentWidth = MeasureSpec.getSize(widthMeasureSpec)
-        val parentHeight = MeasureSpec.getSize(heightMeasureSpec)
-        if (sourceWidth == 0 || sourceHeight == 0) {
-            setMeasuredDimension(parentWidth, parentHeight)
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val height = MeasureSpec.getSize(heightMeasureSpec)
+        if (videoWidth == 0 || videoHeight == 0) {
+            setMeasuredDimension(width, height)
             return
         }
-        val videoRatio = sourceWidth.toFloat() / sourceHeight.toFloat()
-        val parentRatio = parentWidth.toFloat() / parentHeight.toFloat()
-        if (videoRatio > parentRatio) {
-            setMeasuredDimension((parentHeight * videoRatio).toInt(), parentHeight)
+        val videoAspect = videoWidth.toFloat() / videoHeight
+        val viewAspect = width.toFloat() / height
+        if (videoAspect > viewAspect) {
+            setMeasuredDimension((height * videoAspect).toInt(), height)
         } else {
-            setMeasuredDimension(parentWidth, (parentWidth / videoRatio).toInt())
+            setMeasuredDimension(width, (width / videoAspect).toInt())
         }
     }
 }
