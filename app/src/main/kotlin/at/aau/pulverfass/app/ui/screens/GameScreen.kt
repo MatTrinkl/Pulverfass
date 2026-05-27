@@ -197,6 +197,22 @@ private data class ReinforcementPanelActions(
     val onPlace: () -> Unit,
 )
 
+private data class ReinforcementPanelHostState(
+    val selectedRegionId: String?,
+    val uiState: GameUiState,
+    val remainingAmount: Int,
+    val canManageReinforcements: Boolean,
+    val isCommandPending: Boolean,
+    val localPlayerId: PlayerId?,
+    val isConnected: Boolean,
+)
+
+private data class ReinforcementPanelHostActions(
+    val onRegionSelected: (String) -> Unit,
+    val onAdjustPlacementAmount: (Int) -> Unit,
+    val onPlace: () -> Unit,
+)
+
 private data class AttackPanelState(
     val attackState: AttackUiState,
     val fromRegionId: String,
@@ -208,6 +224,22 @@ private data class AttackPanelState(
 
 private data class AttackPanelActions(
     val onDismiss: () -> Unit,
+    val onAdjustAttackTroops: (Int) -> Unit,
+    val onAdjustMoveAfterCapture: (Int) -> Unit,
+    val onAttack: () -> Unit,
+)
+
+private data class AttackPanelHostState(
+    val selection: Pair<String, String>?,
+    val uiState: GameUiState,
+    val canManageAttacks: Boolean,
+    val isCommandPending: Boolean,
+    val localPlayerId: PlayerId?,
+    val isConnected: Boolean,
+)
+
+private data class AttackPanelHostActions(
+    val onRegionSelected: (String) -> Unit,
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
     val onAttack: () -> Unit,
@@ -372,29 +404,41 @@ internal fun GameScreenContent(
         )
 
         ReinforcementPanelHost(
-            selectedRegionId = reinforcementPanelRegionId,
-            uiState = uiState,
-            remainingAmount = remainingReinforcementAmount,
-            canManageReinforcements = canManageReinforcements,
-            isReinforcementCommandPending = isReinforcementCommandPending,
-            localPlayerId = localPlayerId,
-            isConnected = isConnected,
-            onRegionSelected = onRegionSelected,
-            onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
-            onPlace = onPlaceReinforcements,
+            state =
+                ReinforcementPanelHostState(
+                    selectedRegionId = reinforcementPanelRegionId,
+                    uiState = uiState,
+                    remainingAmount = remainingReinforcementAmount,
+                    canManageReinforcements = canManageReinforcements,
+                    isCommandPending = isReinforcementCommandPending,
+                    localPlayerId = localPlayerId,
+                    isConnected = isConnected,
+                ),
+            actions =
+                ReinforcementPanelHostActions(
+                    onRegionSelected = onRegionSelected,
+                    onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+                    onPlace = onPlaceReinforcements,
+                ),
         )
 
         AttackPanelHost(
-            selection = attackPanelSelection,
-            uiState = uiState,
-            canManageAttacks = canManageAttacks,
-            isAttackCommandPending = isAttackCommandPending,
-            localPlayerId = localPlayerId,
-            isConnected = isConnected,
-            onRegionSelected = onRegionSelected,
-            onAdjustAttackTroops = onAdjustAttackTroops,
-            onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
-            onAttack = onAttack,
+            state =
+                AttackPanelHostState(
+                    selection = attackPanelSelection,
+                    uiState = uiState,
+                    canManageAttacks = canManageAttacks,
+                    isCommandPending = isAttackCommandPending,
+                    localPlayerId = localPlayerId,
+                    isConnected = isConnected,
+                ),
+            actions =
+                AttackPanelHostActions(
+                    onRegionSelected = onRegionSelected,
+                    onAdjustAttackTroops = onAdjustAttackTroops,
+                    onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
+                    onAttack = onAttack,
+                ),
         )
 
         BottomActionClusters(
@@ -462,35 +506,29 @@ private fun privateHandPanelState(
 
 @Composable
 private fun BoxScope.ReinforcementPanelHost(
-    selectedRegionId: String?,
-    uiState: GameUiState,
-    remainingAmount: Int,
-    canManageReinforcements: Boolean,
-    isReinforcementCommandPending: Boolean,
-    localPlayerId: PlayerId?,
-    isConnected: Boolean,
-    onRegionSelected: (String) -> Unit,
-    onAdjustPlacementAmount: (Int) -> Unit,
-    onPlace: () -> Unit,
+    state: ReinforcementPanelHostState,
+    actions: ReinforcementPanelHostActions,
 ) {
-    val regionId = selectedRegionId ?: return
+    val regionId = state.selectedRegionId ?: return
     ReinforcementPanel(
         state =
             ReinforcementPanelState(
-                reinforcementState = uiState.reinforcementState,
-                remainingAmount = remainingAmount,
-                placementAmount = uiState.reinforcementPlacementAmount,
+                reinforcementState = state.uiState.reinforcementState,
+                remainingAmount = state.remainingAmount,
+                placementAmount = state.uiState.reinforcementPlacementAmount,
                 selectedRegionId = regionId,
-                canAdjust = canManageReinforcements && !isReinforcementCommandPending,
+                canAdjust = state.canManageReinforcements && !state.isCommandPending,
                 canPlace =
-                    uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
-                        !isReinforcementCommandPending,
+                    state.uiState.canPlaceReinforcements(
+                        state.localPlayerId,
+                        state.isConnected,
+                    ) && !state.isCommandPending,
             ),
         actions =
             ReinforcementPanelActions(
-                onDismiss = { onRegionSelected(regionId) },
-                onAdjustPlacementAmount = onAdjustPlacementAmount,
-                onPlace = onPlace,
+                onDismiss = { actions.onRegionSelected(regionId) },
+                onAdjustPlacementAmount = actions.onAdjustPlacementAmount,
+                onPlace = actions.onPlace,
             ),
         modifier =
             Modifier
@@ -501,41 +539,33 @@ private fun BoxScope.ReinforcementPanelHost(
 
 @Composable
 private fun BoxScope.AttackPanelHost(
-    selection: Pair<String, String>?,
-    uiState: GameUiState,
-    canManageAttacks: Boolean,
-    isAttackCommandPending: Boolean,
-    localPlayerId: PlayerId?,
-    isConnected: Boolean,
-    onRegionSelected: (String) -> Unit,
-    onAdjustAttackTroops: (Int) -> Unit,
-    onAdjustMoveAfterCapture: (Int) -> Unit,
-    onAttack: () -> Unit,
+    state: AttackPanelHostState,
+    actions: AttackPanelHostActions,
 ) {
-    if (selection == null) {
-        AttackResultHost(result = uiState.attackState.latestResult)
+    if (state.selection == null) {
+        AttackResultHost(result = state.uiState.attackState.latestResult)
         return
     }
 
-    val (fromRegionId, toRegionId) = selection
+    val (fromRegionId, toRegionId) = state.selection
     AttackPanel(
         state =
             AttackPanelState(
-                attackState = uiState.attackState,
+                attackState = state.uiState.attackState,
                 fromRegionId = fromRegionId,
                 toRegionId = toRegionId,
-                maximumAttackTroops = maximumAttackTroops(uiState, fromRegionId),
-                canAdjust = canManageAttacks && !isAttackCommandPending,
+                maximumAttackTroops = maximumAttackTroops(state.uiState, fromRegionId),
+                canAdjust = state.canManageAttacks && !state.isCommandPending,
                 canAttack =
-                    uiState.canSubmitAttack(localPlayerId, isConnected) &&
-                        !isAttackCommandPending,
+                    state.uiState.canSubmitAttack(state.localPlayerId, state.isConnected) &&
+                        !state.isCommandPending,
             ),
         actions =
             AttackPanelActions(
-                onDismiss = { onRegionSelected(fromRegionId) },
-                onAdjustAttackTroops = onAdjustAttackTroops,
-                onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
-                onAttack = onAttack,
+                onDismiss = { actions.onRegionSelected(fromRegionId) },
+                onAdjustAttackTroops = actions.onAdjustAttackTroops,
+                onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture,
+                onAttack = actions.onAttack,
             ),
         modifier =
             Modifier
