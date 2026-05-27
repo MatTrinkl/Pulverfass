@@ -6,6 +6,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneEr
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -149,5 +151,24 @@ object GameErrorTextMapper {
             ConfirmAttackDoneErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
             ConfirmAttackDoneErrorCode.PHASE_MISMATCH -> "Die Angriffsphase ist bereits beendet."
             ConfirmAttackDoneErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+        }
+
+    fun map(error: FortifyMoveErrorResponse): String =
+        when (error.code) {
+            FortifyMoveErrorCode.REQUESTER_MISMATCH -> REQUESTER_MISMATCH_TEXT
+            FortifyMoveErrorCode.NOT_ACTIVE_PLAYER ->
+                "Truppen können nur im eigenen Zug verschoben werden."
+            FortifyMoveErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            FortifyMoveErrorCode.WRONG_PHASE ->
+                "Truppen können nur in der Verschiebephase bewegt werden."
+            FortifyMoveErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            FortifyMoveErrorCode.TERRITORY_NOT_OWNED ->
+                "Truppen können nur zwischen eigenen Gebieten verschoben werden."
+            FortifyMoveErrorCode.NO_PATH ->
+                "Zwischen diesen eigenen Gebieten besteht keine Verbindung."
+            FortifyMoveErrorCode.INSUFFICIENT_TROOPS ->
+                "Im Ausgangsgebiet sind nicht genügend Truppen verfügbar."
+            FortifyMoveErrorCode.FORTIFY_ALREADY_USED ->
+                "In diesem Zug wurde bereits eine Truppenverschiebung genutzt."
         }
 }

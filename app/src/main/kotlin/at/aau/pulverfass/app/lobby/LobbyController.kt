@@ -26,6 +26,7 @@ import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
@@ -42,6 +43,7 @@ import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -55,6 +57,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
@@ -779,6 +782,74 @@ class LobbyController(
     }
 
     /**
+     * Ändert lokal die Truppenanzahl für die einmalige Fortify-Bewegung.
+     *
+     * @param delta relative Änderung aus dem Fortify-Slider
+     */
+    fun adjustFortifyTroops(delta: Int) {
+        _state.update {
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.adjustFortifyTroops(
+                        current = it.gameState,
+                        delta = delta,
+                    ),
+            )
+        }
+    }
+
+    /**
+     * Sendet eine Fortify-Bewegung zwischen zwei verbundenen eigenen Gebieten.
+     *
+     * Die lokale Auswahl prüft bereits Eigentum und Verbindungspfad über die
+     * Map-Definition. Der Server bleibt dennoch die autoritative Quelle und
+     * liefert die tatsächlichen Truppenänderungen anschließend als öffentliche
+     * Deltas zurück.
+     */
+    fun fortifyMove() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        val fromRegionId = snapshot.gameState.selectionFromRegionId
+        val toRegionId = snapshot.gameState.selectionToRegionId
+        if (fromRegionId == null || toRegionId == null) {
+            _state.update { it.copy(errorText = config.errorFortifySelectionMissing) }
+            return
+        }
+        if (!snapshot.gameState.canSubmitFortifyMove(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorFortifyNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.FORTIFY_MOVE,
+                        payload =
+                            FortifyMoveRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                fromTerritoryId =
+                                    GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+                                toTerritoryId = GameMapTerritoryMapper.toTerritoryId(toRegionId),
+                                troopCount = snapshot.gameState.fortifyState.troopCount,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorFortifyFailed)
+                }
+            }
+        }
+    }
+
+    /**
      * Wählt eine private Karte für den möglichen Eintausch aus oder ab.
      *
      * Die Auswahl bleibt rein lokal und enthält ausschließlich IDs aus dem
@@ -1244,6 +1315,9 @@ class LobbyController(
         if (handleAttackPayload(payload)) {
             return
         }
+        if (handleFortifyPayload(payload)) {
+            return
+        }
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)
@@ -1422,6 +1496,30 @@ class LobbyController(
             }
             is ConfirmAttackDoneErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.CONFIRM_ATTACK_DONE)
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            else -> false
+        }
+
+    /**
+     * Verarbeitet Antworten der Fortify-Phase.
+     *
+     * Der Success-Payload bestätigt nur die Annahme des Moves. Die Truppenstände
+     * werden über nachfolgende öffentliche Territory-Deltas aktualisiert.
+     */
+    private fun handleFortifyPayload(payload: NetworkMessagePayload): Boolean =
+        when (payload) {
+            is FortifyMoveResponse -> {
+                clearPendingCommand(LobbyCommandKey.FORTIFY_MOVE)
+                applyGameState { current, _ ->
+                    ClientGameStateReducer.applyFortifyMoveAccepted(current)
+                }
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is FortifyMoveErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.FORTIFY_MOVE)
                 updateGameError(GameErrorTextMapper.map(payload))
                 true
             }

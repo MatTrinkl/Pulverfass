@@ -6,6 +6,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneEr
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -301,6 +303,36 @@ class GameErrorTextMapperTest {
         assertEquals(
             GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             messages.getValue(ConfirmAttackDoneErrorCode.GAME_NOT_FOUND),
+        )
+    }
+
+    @Test
+    fun `fortify move errors are translated for UI`() {
+        val messages =
+            FortifyMoveErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(FortifyMoveErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(FortifyMoveErrorCode.REQUESTER_MISMATCH)
+                .contains("Spielerzuordnung"),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.NOT_ACTIVE_PLAYER).contains("eigenen"))
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(FortifyMoveErrorCode.GAME_PAUSED),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.WRONG_PHASE).contains("Verschiebephase"))
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(FortifyMoveErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.TERRITORY_NOT_OWNED).contains("eigenen"))
+        assertTrue(messages.getValue(FortifyMoveErrorCode.NO_PATH).contains("Verbindung"))
+        assertTrue(messages.getValue(FortifyMoveErrorCode.INSUFFICIENT_TROOPS).contains("genügend"))
+        assertTrue(
+            messages.getValue(FortifyMoveErrorCode.FORTIFY_ALREADY_USED)
+                .contains("bereits"),
         )
     }
 }

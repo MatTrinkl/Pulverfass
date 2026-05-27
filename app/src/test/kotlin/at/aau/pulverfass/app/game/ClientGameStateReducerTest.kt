@@ -429,6 +429,95 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `fortify selection accepts only owned connected targets and marks move as consumed`() {
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                adjacentTerritoryIds =
+                    mapOf(
+                        TerritoryId("brasilien") to setOf(TerritoryId("kanada")),
+                        TerritoryId("kanada") to
+                            setOf(
+                                TerritoryId("brasilien"),
+                                TerritoryId("groenland"),
+                            ),
+                        TerritoryId("groenland") to setOf(TerritoryId("kanada")),
+                    ),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 5),
+                        TerritoryId("kanada") to
+                            GameTerritoryUiState(TerritoryId("kanada"), aliceId, 2),
+                        TerritoryId("groenland") to
+                            GameTerritoryUiState(TerritoryId("groenland"), aliceId, 1),
+                        TerritoryId("mittelamerika") to
+                            GameTerritoryUiState(TerritoryId("mittelamerika"), aliceId, 2),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(TerritoryId("argentinien"), bobId, 2),
+                        TerritoryId("usa") to
+                            GameTerritoryUiState(TerritoryId("usa"), aliceId, 1),
+                    ),
+            )
+
+        val weakSource =
+            ClientGameStateReducer.selectRegion(base, "america", aliceId)
+        val selectedSource =
+            ClientGameStateReducer.selectRegion(base, "brazil", aliceId)
+        val ignoredEnemyTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "argentina", aliceId)
+        val ignoredDisconnectedTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "mexico", aliceId)
+        val selectedTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "greenland", aliceId)
+        val increasedMove =
+            ClientGameStateReducer.adjustFortifyTroops(selectedTarget, 20)
+        val acceptedMove =
+            ClientGameStateReducer.applyFortifyMoveAccepted(increasedMove)
+        val retainedFortifyState =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = acceptedMove,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                    ),
+            )
+        val resetFortifyState =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = acceptedMove,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                    ),
+            )
+        val ignoredAfterMove =
+            ClientGameStateReducer.selectRegion(retainedFortifyState, "brazil", aliceId)
+
+        assertEquals(null, weakSource.selectionFromRegionId)
+        assertEquals("brazil", selectedSource.selectionFromRegionId)
+        assertEquals(null, ignoredEnemyTarget.selectionToRegionId)
+        assertEquals(null, ignoredDisconnectedTarget.selectionToRegionId)
+        assertEquals("greenland", selectedTarget.selectionToRegionId)
+        assertTrue(selectedTarget.canSubmitFortifyMove(aliceId))
+        assertTrue(selectedTarget.canRequestTurnAdvance(aliceId))
+        assertEquals(4, increasedMove.fortifyState.troopCount)
+        assertEquals(null, acceptedMove.selectionFromRegionId)
+        assertTrue(acceptedMove.fortifyState.hasMoved)
+        assertTrue(retainedFortifyState.fortifyState.hasMoved)
+        assertFalse(resetFortifyState.fortifyState.hasMoved)
+        assertEquals(null, ignoredAfterMove.selectionFromRegionId)
+    }
+
+    @Test
     fun `attack result is taken from public event and clears the prepared selection`() {
         val result =
             ClientGameStateReducer.applyDelta(

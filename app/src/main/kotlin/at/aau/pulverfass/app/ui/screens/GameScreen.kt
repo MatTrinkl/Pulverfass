@@ -62,10 +62,12 @@ import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.MIN_ATTACK_TROOPS
+import at.aau.pulverfass.app.game.MIN_FORTIFY_TROOPS
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
@@ -130,6 +132,8 @@ fun GameScreen(controller: LobbyController) {
                 onAdjustMoveAfterCapture = controller::adjustMoveAfterCapture,
                 onAttack = controller::attack,
                 onConfirmAttackDone = controller::confirmAttackDone,
+                onAdjustFortifyTroops = controller::adjustFortifyTroops,
+                onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
             ),
     )
@@ -157,6 +161,8 @@ internal data class GameScreenActions(
     val onAdjustMoveAfterCapture: (Int) -> Unit = {},
     val onAttack: () -> Unit = {},
     val onConfirmAttackDone: () -> Unit = {},
+    val onAdjustFortifyTroops: (Int) -> Unit = {},
+    val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
 )
 
@@ -236,6 +242,7 @@ private data class AttackPanelHostState(
     val isCommandPending: Boolean,
     val localPlayerId: PlayerId?,
     val isConnected: Boolean,
+    val showResult: Boolean = true,
 )
 
 private data class AttackPanelHostActions(
@@ -243,6 +250,36 @@ private data class AttackPanelHostActions(
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
     val onAttack: () -> Unit,
+)
+
+private data class FortifyPanelState(
+    val fortifyState: FortifyUiState,
+    val fromRegionId: String,
+    val toRegionId: String,
+    val maximumFortifyTroops: Int,
+    val canAdjust: Boolean,
+    val canMove: Boolean,
+)
+
+private data class FortifyPanelActions(
+    val onDismiss: () -> Unit,
+    val onAdjustFortifyTroops: (Int) -> Unit,
+    val onMove: () -> Unit,
+)
+
+private data class FortifyPanelHostState(
+    val selection: Pair<String, String>?,
+    val uiState: GameUiState,
+    val canManageFortify: Boolean,
+    val isCommandPending: Boolean,
+    val localPlayerId: PlayerId?,
+    val isConnected: Boolean,
+)
+
+private data class FortifyPanelHostActions(
+    val onRegionSelected: (String) -> Unit,
+    val onAdjustFortifyTroops: (Int) -> Unit,
+    val onMove: () -> Unit,
 )
 
 /**
@@ -281,6 +318,8 @@ internal fun GameScreenContent(
     val onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture
     val onAttack = actions.onAttack
     val onConfirmAttackDone = actions.onConfirmAttackDone
+    val onAdjustFortifyTroops = actions.onAdjustFortifyTroops
+    val onFortifyMove = actions.onFortifyMove
     val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
@@ -288,13 +327,16 @@ internal fun GameScreenContent(
     val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
     val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
+    val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
+    val canManageFortify = uiState.canManageFortify(localPlayerId, isConnected)
     val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
     val attackPanelSelection = visibleAttackSelection(uiState, canManageAttacks)
+    val fortifyPanelSelection = visibleFortifySelection(uiState, canManageFortify)
     val canEndCurrentPhase =
         canEndCurrentPhase(
             uiState = uiState,
@@ -302,6 +344,7 @@ internal fun GameScreenContent(
             isConnected = isConnected,
             isReinforcementCommandPending = isReinforcementCommandPending,
             isAttackCommandPending = isAttackCommandPending,
+            isFortifyCommandPending = isFortifyCommandPending,
             pendingCommandKeys = pendingCommandKeys,
         )
     val onEndCurrentPhase =
@@ -431,6 +474,7 @@ internal fun GameScreenContent(
                     isCommandPending = isAttackCommandPending,
                     localPlayerId = localPlayerId,
                     isConnected = isConnected,
+                    showResult = fortifyPanelSelection == null,
                 ),
             actions =
                 AttackPanelHostActions(
@@ -438,6 +482,24 @@ internal fun GameScreenContent(
                     onAdjustAttackTroops = onAdjustAttackTroops,
                     onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
                     onAttack = onAttack,
+                ),
+        )
+
+        FortifyPanelHost(
+            state =
+                FortifyPanelHostState(
+                    selection = fortifyPanelSelection,
+                    uiState = uiState,
+                    canManageFortify = canManageFortify,
+                    isCommandPending = isFortifyCommandPending,
+                    localPlayerId = localPlayerId,
+                    isConnected = isConnected,
+                ),
+            actions =
+                FortifyPanelHostActions(
+                    onRegionSelected = onRegionSelected,
+                    onAdjustFortifyTroops = onAdjustFortifyTroops,
+                    onMove = onFortifyMove,
                 ),
         )
 
@@ -543,7 +605,9 @@ private fun BoxScope.AttackPanelHost(
     actions: AttackPanelHostActions,
 ) {
     if (state.selection == null) {
-        AttackResultHost(result = state.uiState.attackState.latestResult)
+        if (state.showResult) {
+            AttackResultHost(result = state.uiState.attackState.latestResult)
+        }
         return
     }
 
@@ -575,6 +639,40 @@ private fun BoxScope.AttackPanelHost(
 }
 
 @Composable
+private fun BoxScope.FortifyPanelHost(
+    state: FortifyPanelHostState,
+    actions: FortifyPanelHostActions,
+) {
+    val selection = state.selection ?: return
+    val (fromRegionId, toRegionId) = selection
+    FortifyPanel(
+        state =
+            FortifyPanelState(
+                fortifyState = state.uiState.fortifyState,
+                fromRegionId = fromRegionId,
+                toRegionId = toRegionId,
+                maximumFortifyTroops = maximumFortifyTroops(state.uiState, fromRegionId),
+                canAdjust = state.canManageFortify && !state.isCommandPending,
+                canMove =
+                    state.uiState.canSubmitFortifyMove(
+                        state.localPlayerId,
+                        state.isConnected,
+                    ) && !state.isCommandPending,
+            ),
+        actions =
+            FortifyPanelActions(
+                onDismiss = { actions.onRegionSelected(fromRegionId) },
+                onAdjustFortifyTroops = actions.onAdjustFortifyTroops,
+                onMove = actions.onMove,
+            ),
+        modifier =
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = BottomBarHeight + 8.dp),
+    )
+}
+
+@Composable
 private fun BoxScope.AttackResultHost(result: AttackResultUiState?) {
     if (result == null) {
         return
@@ -595,6 +693,14 @@ private fun maximumAttackTroops(
     uiState.territoryStates[
         GameMapTerritoryMapper.toTerritoryId(fromRegionId),
     ]?.troopCount?.minus(1) ?: uiState.attackState.attackTroops
+
+private fun maximumFortifyTroops(
+    uiState: GameUiState,
+    fromRegionId: String,
+): Int =
+    uiState.territoryStates[
+        GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+    ]?.troopCount?.minus(1) ?: uiState.fortifyState.troopCount
 
 /**
  * Rendert den Statusbereich nur dann, wenn eine synchronisationsrelevante Meldung vorliegt.
@@ -641,6 +747,9 @@ private fun Set<LobbyCommandKey>.hasAttackRequest(): Boolean =
             it == LobbyCommandKey.CONFIRM_ATTACK_DONE
     }
 
+private fun Set<LobbyCommandKey>.hasFortifyRequest(): Boolean =
+    any { it == LobbyCommandKey.FORTIFY_MOVE }
+
 /**
  * Das Platzierungs-Panel erscheint nur mit einem ausgewählten Ziel und Restpool.
  * Andernfalls bleibt die Karte frei; ein leerer Pool wird in der Aktionsleiste beendet.
@@ -678,12 +787,31 @@ private fun visibleAttackSelection(
     return fromRegionId to toRegionId
 }
 
+/**
+ * Ein Fortify-Panel benötigt zwei bereits validierte eigene verbundene Gebiete.
+ *
+ * Bis zur vollständigen Auswahl bleibt die Karte bedienbar, damit Quelle und
+ * Ziel direkt über die Hitmap gewählt oder gewechselt werden können.
+ */
+private fun visibleFortifySelection(
+    uiState: GameUiState,
+    canManageFortify: Boolean,
+): Pair<String, String>? {
+    if (uiState.turnPhase != TurnPhase.FORTIFY || !canManageFortify) {
+        return null
+    }
+    val fromRegionId = uiState.selectionFromRegionId ?: return null
+    val toRegionId = uiState.selectionToRegionId ?: return null
+    return fromRegionId to toRegionId
+}
+
 private fun canEndCurrentPhase(
     uiState: GameUiState,
     localPlayerId: PlayerId?,
     isConnected: Boolean,
     isReinforcementCommandPending: Boolean,
     isAttackCommandPending: Boolean,
+    isFortifyCommandPending: Boolean,
     pendingCommandKeys: Set<LobbyCommandKey>,
 ): Boolean =
     when (uiState.turnPhase) {
@@ -693,6 +821,10 @@ private fun canEndCurrentPhase(
         TurnPhase.ATTACK ->
             uiState.canConfirmAttackDone(localPlayerId, isConnected) &&
                 !isAttackCommandPending
+        TurnPhase.FORTIFY ->
+            uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                !isFortifyCommandPending &&
+                !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
         else ->
             uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
                 !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
@@ -1450,6 +1582,82 @@ private fun AttackPanel(
                 selected = true,
                 enabled = state.canAttack,
                 modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
+            )
+        }
+    }
+}
+
+/**
+ * Steuerung der einmaligen Truppenverschiebung in der Fortify-Phase.
+ *
+ * Das Panel verwendet denselben Slider wie Angriff und Verstärkung. Die Karte
+ * bleibt darunter frei, damit Quelle und Ziel durch erneute Gebietsauswahl
+ * schnell korrigiert werden können.
+ */
+@Composable
+private fun FortifyPanel(
+    state: FortifyPanelState,
+    actions: FortifyPanelActions,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .widthIn(max = 560.dp)
+                .testTag("fortify_panel"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.game_fortify_route,
+                            state.fromRegionId,
+                            state.toRegionId,
+                        ),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                val closePanelDescription = stringResource(id = R.string.game_fortify_close)
+                BlockActionButton(
+                    label = "X",
+                    onClick = actions.onDismiss,
+                    selected = false,
+                    enabled = true,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .semantics { contentDescription = closePanelDescription }
+                            .testTag("close_fortify_panel"),
+                )
+            }
+            TroopAmountSliderRow(
+                label = stringResource(id = R.string.game_fortify_troops),
+                amount = state.fortifyState.troopCount,
+                minAmount = MIN_FORTIFY_TROOPS,
+                maxAmount = state.maximumFortifyTroops,
+                canAdjust = state.canAdjust,
+                onAdjust = actions.onAdjustFortifyTroops,
+                tagPrefix = "fortify_troops",
+            )
+            BlockActionButton(
+                label = stringResource(id = R.string.game_fortify_submit),
+                onClick = actions.onMove,
+                selected = true,
+                enabled = state.canMove,
+                modifier = Modifier.fillMaxWidth().testTag("fortify_submit_button"),
             )
         }
     }

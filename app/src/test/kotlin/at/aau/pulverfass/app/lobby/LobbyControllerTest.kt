@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
@@ -26,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -38,6 +40,7 @@ import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -56,6 +59,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneEr
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
@@ -790,6 +795,9 @@ class LobbyControllerTest {
 
             controller.confirmAttackDone()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.fortifyMove()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
         } finally {
             controller.close()
         }
@@ -1023,6 +1031,209 @@ class LobbyControllerTest {
                     LobbyCommandKey.CONFIRM_ATTACK_DONE !in
                         controller.state.value.pendingCommandKeys
                 }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `fortify action sends backend request and marks move as consumed`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("FT12")
+            val playerId = PlayerId(1)
+            val config = LobbyControllerConfig()
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            var fortifyAttempts = 0
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = lobbyCode,
+                                            playerId = playerId,
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateCatchUpResponse(
+                                            lobbyCode = lobbyCode,
+                                            stateVersion = 1,
+                                            determinism =
+                                                PublicDeterminismMetadataSnapshot(
+                                                    mapHash = "hash",
+                                                    schemaVersion = 1,
+                                                ),
+                                            turnState =
+                                                PublicTurnStateSnapshot(
+                                                    activePlayerId = playerId,
+                                                    turnPhase = TurnPhase.FORTIFY,
+                                                    turnCount = 1,
+                                                    startPlayerId = playerId,
+                                                ),
+                                            definition =
+                                                MapDefinitionSnapshot(
+                                                    territories =
+                                                        listOf(
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("brasilien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "argentinien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("argentinien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "brasilien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                        ),
+                                                    continents = emptyList(),
+                                                ),
+                                            territoryStates =
+                                                listOf(
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 4,
+                                                    ),
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 2,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is FortifyMoveRequest -> {
+                            fortifyAttempts += 1
+                            if (fortifyAttempts == 1) {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            FortifyMoveErrorResponse(
+                                                FortifyMoveErrorCode.NO_PATH,
+                                                "no path",
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            } else {
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(
+                                            GameStateDeltaEvent(
+                                                lobbyCode = lobbyCode,
+                                                fromVersion = 1,
+                                                toVersion = 2,
+                                                events =
+                                                    listOf(
+                                                        TerritoryTroopsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            territoryId = TerritoryId("brasilien"),
+                                                            troopCount = 2,
+                                                            stateVersion = 2,
+                                                        ),
+                                                        TerritoryTroopsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            territoryId =
+                                                                TerritoryId("argentinien"),
+                                                            troopCount = 4,
+                                                            stateVersion = 2,
+                                                        ),
+                                                    ),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                                outgoing.send(
+                                    Frame.Binary(
+                                        true,
+                                        MessageCodec.encode(FortifyMoveResponse(lobbyCode)),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController(config = config)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY }
+                controller.fortifyMove()
+                assertEquals(config.errorFortifySelectionMissing, controller.state.value.errorText)
+
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                controller.adjustFortifyTroops(1)
+                controller.fortifyMove()
+                waitUntil {
+                    controller.state.value.errorText ==
+                        "Zwischen diesen eigenen Gebieten besteht keine Verbindung."
+                }
+                controller.fortifyMove()
+                waitUntil { controller.state.value.gameState.fortifyState.hasMoved }
+
+                val request = seenPayloads.filterIsInstance<FortifyMoveRequest>().last()
+                assertEquals(TerritoryId("brasilien"), request.fromTerritoryId)
+                assertEquals(TerritoryId("argentinien"), request.toTerritoryId)
+                assertEquals(2, request.troopCount)
+                assertEquals(
+                    2,
+                    controller.state.value.gameState.territoryStates
+                        .getValue(TerritoryId("brasilien"))
+                        .troopCount,
+                )
+                assertEquals(
+                    4,
+                    controller.state.value.gameState.territoryStates
+                        .getValue(TerritoryId("argentinien"))
+                        .troopCount,
+                )
+                assertTrue(
+                    LobbyCommandKey.FORTIFY_MOVE !in controller.state.value.pendingCommandKeys,
+                )
+
+                controller.fortifyMove()
+                assertEquals(config.errorFortifySelectionMissing, controller.state.value.errorText)
             } finally {
                 controller.close()
                 server.close()

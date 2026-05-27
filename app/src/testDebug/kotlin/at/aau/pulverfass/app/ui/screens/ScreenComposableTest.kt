@@ -25,7 +25,9 @@ import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
+import at.aau.pulverfass.app.game.GameTerritoryUiState
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
@@ -564,6 +566,72 @@ class ScreenComposableTest {
         assertEquals(1, moveAdjustment)
         assertTrue(attacked)
         assertTrue(finished)
+    }
+
+    @Test
+    fun fortify_panel_submits_move_and_phase_button_advances() {
+        val playerId = PlayerId(1)
+        var fortifyAdjustment = 0
+        var moved = false
+        var advanced = false
+        var closedRegion: String? = null
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.FORTIFY,
+                                    selectionFromRegionId = "brazil",
+                                    selectionToRegionId = "argentina",
+                                    fortifyState = FortifyUiState(troopCount = 2),
+                                    territoryStates =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                GameTerritoryUiState(
+                                                    TerritoryId("brasilien"),
+                                                    playerId,
+                                                    5,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = { closedRegion = it },
+                            onToggleCards = {},
+                            onAdvanceTurn = { advanced = true },
+                            onAdjustFortifyTroops = { fortifyAdjustment = it },
+                            onFortifyMove = { moved = true },
+                            onRefreshGameState = {},
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("fortify_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verschieben: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("fortify_troops_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(3f)
+        }
+        composeTestRule.onNodeWithTag("fortify_submit_button").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("close_fortify_panel").performClick()
+
+        assertEquals(1, fortifyAdjustment)
+        assertTrue(moved)
+        assertTrue(advanced)
+        assertEquals("brazil", closedRegion)
     }
 
     @Test

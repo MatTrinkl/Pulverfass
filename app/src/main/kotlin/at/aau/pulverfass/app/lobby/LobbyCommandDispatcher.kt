@@ -24,6 +24,7 @@ enum class LobbyCommandKey {
     TRADE_IN_CARDS,
     ATTACK,
     CONFIRM_ATTACK_DONE,
+    FORTIFY_MOVE,
 }
 
 /**

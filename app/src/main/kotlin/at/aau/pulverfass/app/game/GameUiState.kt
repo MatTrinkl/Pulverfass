@@ -43,6 +43,7 @@ data class GameUiState(
     val reinforcementState: ReinforcementUiState = ReinforcementUiState(),
     val reinforcementPlacementAmount: Int = 1,
     val attackState: AttackUiState = AttackUiState(),
+    val fortifyState: FortifyUiState = FortifyUiState(),
     val lastSyncError: String? = null,
 ) {
     /**
@@ -177,6 +178,46 @@ data class GameUiState(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
     ): Boolean = canManageAttacks(localPlayerId, isConnected)
+
+    /**
+     * Prüft, ob eine Truppenverschiebung in der Fortify-Phase vorbereitet werden kann.
+     *
+     * Fortify darf nur einmal pro Zug ausgeführt werden. Da der öffentliche
+     * Snapshot diesen internen Serverstatus aktuell nicht enthält, blockiert der
+     * Client nach einer erfolgreichen Fortify-Antwort lokal weitere Eingaben,
+     * bis die nächste Phase oder ein neuer Snapshot den lokalen Zustand resetet.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn Quelle und Ziel für Fortify gewählt werden dürfen
+     */
+    fun canManageFortify(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
+            turnPhase == TurnPhase.FORTIFY &&
+            !fortifyState.hasMoved
+
+    /**
+     * Prüft eine vollständig ausgewählte Fortify-Absicht vor dem Request.
+     *
+     * Quelle, Ziel, Eigentum und eigener Verbindungspfad werden beim Auswählen
+     * im Reducer geprüft. Der Server validiert denselben Move dennoch
+     * abschließend, insbesondere nach parallelen Deltas oder Reconnects.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn der Fortify-Request lokal sendbar ist
+     */
+    fun canSubmitFortifyMove(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canManageFortify(localPlayerId, isConnected) &&
+            selectionFromRegionId != null &&
+            selectionToRegionId != null &&
+            fortifyState.troopCount >= MIN_FORTIFY_TROOPS
 }
 
 /**
@@ -219,6 +260,21 @@ data class AttackUiState(
 )
 
 /**
+ * Lokale Eingabe der einmaligen Truppenverschiebung in der Fortify-Phase.
+ *
+ * Truppen werden nicht optimistisch bewegt; sichtbare Änderungen kommen über
+ * die nachgelagerten serverseitigen Territory-Troop-Deltas. `hasMoved` schützt
+ * nur die Bedienoberfläche vor einem zweiten Request im gleichen Zug.
+ *
+ * @property troopCount lokal ausgewählte Anzahl der zu verschiebenden Truppen
+ * @property hasMoved lokaler Marker, ob der einmalige Fortify-Move verbraucht ist
+ */
+data class FortifyUiState(
+    val troopCount: Int = MIN_FORTIFY_TROOPS,
+    val hasMoved: Boolean = false,
+)
+
+/**
  * Präsentationsmodell eines einzelnen serverseitig ausgewürfelten Kampfes.
  */
 data class AttackResultUiState(
@@ -246,6 +302,7 @@ data class PrivateHandCardUi(
 
 internal const val MIN_ATTACK_TROOPS = 2
 internal const val MAX_ATTACK_DICE = 3
+internal const val MIN_FORTIFY_TROOPS = 1
 
 /**
  * Liefert die serverseitig verlangte Mindestbesetzung nach einer Eroberung.
