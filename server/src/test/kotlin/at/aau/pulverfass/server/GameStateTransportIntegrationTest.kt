@@ -9,7 +9,11 @@ import at.aau.pulverfass.server.routing.RoundSnapshotTrigger
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -19,10 +23,12 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
@@ -94,7 +100,7 @@ class GameStateTransportIntegrationTest {
 
             try {
                 coroutineScope {
-                    val playerOneSession =
+                    val (playerOneSocket, _) =
                         connectSessionWithConnection(
                             client = client,
                             network = network,
@@ -102,7 +108,7 @@ class GameStateTransportIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
-                    val playerTwoSession =
+                    val (playerTwoSocket, _) =
                         connectSessionWithConnection(
                             client = client,
                             network = network,
@@ -111,7 +117,7 @@ class GameStateTransportIntegrationTest {
                             connectionsByPlayer = connectionsByPlayer,
                         )
 
-                    playerOneSession.first.send(
+                    playerOneSocket.send(
                         Frame.Binary(
                             fin = true,
                             data =
@@ -129,13 +135,13 @@ class GameStateTransportIntegrationTest {
                             handCards = emptyList(),
                             secretObjectives = emptyList(),
                         ),
-                        receiveAnyPayload(playerOneSession.first),
+                        receiveAnyPayload(playerOneSocket),
                     )
-                    assertNull(receivePayloadOrNull(playerTwoSession.first))
+                    assertNull(receivePayloadOrNull(playerTwoSocket))
 
                     assertAdvanceSequence(
-                        actor = playerOneSession.first,
-                        watcher = playerTwoSession.first,
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
                         request =
                             TurnAdvanceRequest(
                                 lobbyCode = lobbyCode,
@@ -153,8 +159,8 @@ class GameStateTransportIntegrationTest {
                             ),
                     )
                     assertAdvanceSequence(
-                        actor = playerOneSession.first,
-                        watcher = playerTwoSession.first,
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
                         request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.ATTACK),
                         expectedVersion = 2,
                         expectedUpdate =
@@ -167,8 +173,8 @@ class GameStateTransportIntegrationTest {
                             ),
                     )
                     assertAdvanceSequence(
-                        actor = playerOneSession.first,
-                        watcher = playerTwoSession.first,
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
                         request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.FORTIFY),
                         expectedVersion = 3,
                         expectedUpdate =
@@ -181,8 +187,8 @@ class GameStateTransportIntegrationTest {
                             ),
                     )
                     assertAdvanceSequence(
-                        actor = playerOneSession.first,
-                        watcher = playerTwoSession.first,
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
                         request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.DRAW_CARD),
                         expectedVersion = 4,
                         expectedUpdate =
@@ -205,7 +211,7 @@ class GameStateTransportIntegrationTest {
                             ),
                     )
 
-                    playerTwoSession.first.send(
+                    playerTwoSocket.send(
                         Frame.Binary(
                             fin = true,
                             data =
@@ -221,7 +227,7 @@ class GameStateTransportIntegrationTest {
 
                     val catchUp =
                         assertIs<GameStateCatchUpResponse>(
-                            receiveAnyPayload(playerTwoSession.first),
+                            receiveAnyPayload(playerTwoSocket),
                         )
                     assertEquals(lobbyCode, catchUp.lobbyCode)
                     assertEquals(5, catchUp.stateVersion)
@@ -229,7 +235,7 @@ class GameStateTransportIntegrationTest {
                     assertEquals(TurnPhase.REINFORCEMENTS, catchUp.turnState.turnPhase)
                     assertEquals(3, catchUp.turnState.pendingReinforcements)
                     assertEquals(defaultMapDefinition().mapHash, catchUp.determinism.mapHash)
-                    assertNull(receivePayloadOrNull(playerOneSession.first))
+                    assertNull(receivePayloadOrNull(playerOneSocket))
 
                     val history = routingService.roundHistory(lobbyCode)
                     assertEquals(1, history.size)
@@ -249,8 +255,222 @@ class GameStateTransportIntegrationTest {
                         },
                     )
 
-                    playerOneSession.first.close()
-                    playerTwoSession.first.close()
+                    playerOneSocket.close()
+                    playerTwoSocket.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `transport flow keeps fortify delta and catch up consistent`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("GTI2")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGameWithFortifySetup(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val (playerOneSocket, _) =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val (playerTwoSocket, _) =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    assertAdvanceSequence(
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
+                        request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.ATTACK),
+                        expectedVersion = 7,
+                        expectedUpdate =
+                            TurnStateUpdatedEvent(
+                                lobbyCode = lobbyCode,
+                                activePlayerId = playerOne,
+                                turnPhase = TurnPhase.FORTIFY,
+                                turnCount = 1,
+                                startPlayerId = playerOne,
+                            ),
+                    )
+
+                    playerOneSocket.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    FortifyMoveRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        fromTerritoryId = TerritoryId("alaska"),
+                                        toTerritoryId = TerritoryId("kanada"),
+                                        troopCount = 2,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val expectedFortifyDelta =
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 8,
+                            toVersion = 8,
+                            events =
+                                listOf(
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("alaska"),
+                                        troopCount = 2,
+                                        stateVersion = 8,
+                                    ),
+                                    TerritoryTroopsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        territoryId = TerritoryId("kanada"),
+                                        troopCount = 3,
+                                        stateVersion = 8,
+                                    ),
+                                ),
+                        )
+                    assertEquals(expectedFortifyDelta, receiveAnyPayload(playerOneSocket))
+                    assertEquals(
+                        FortifyMoveResponse(lobbyCode),
+                        receiveAnyPayload(playerOneSocket),
+                    )
+                    assertEquals(expectedFortifyDelta, receiveAnyPayload(playerTwoSocket))
+
+                    assertAdvanceSequence(
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
+                        request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.FORTIFY),
+                        expectedVersion = 10,
+                        expectedUpdate =
+                            TurnStateUpdatedEvent(
+                                lobbyCode = lobbyCode,
+                                activePlayerId = playerOne,
+                                turnPhase = TurnPhase.DRAW_CARD,
+                                turnCount = 1,
+                                startPlayerId = playerOne,
+                            ),
+                    )
+                    assertAdvanceSequence(
+                        actor = playerOneSocket,
+                        watcher = playerTwoSocket,
+                        request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.DRAW_CARD),
+                        expectedVersion = 11,
+                        expectedUpdate =
+                            TurnStateUpdatedEvent(
+                                lobbyCode = lobbyCode,
+                                activePlayerId = playerTwo,
+                                turnPhase = TurnPhase.REINFORCEMENTS,
+                                turnCount = 1,
+                                startPlayerId = playerOne,
+                            ),
+                        expectSnapshot = true,
+                        expectedGrantedEvent =
+                            ReinforcementsGrantedEvent(
+                                lobbyCode = lobbyCode,
+                                playerId = playerTwo,
+                                amount = 3,
+                                territoryBonus = 3,
+                                continentBonus = 0,
+                                cardBonus = 0,
+                            ),
+                    )
+
+                    playerTwoSocket.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    GameStateCatchUpRequest(
+                                        lobbyCode = lobbyCode,
+                                        clientStateVersion = 0,
+                                        reason = GameStateCatchUpReason.MISSING_DELTA,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val catchUp =
+                        assertIs<GameStateCatchUpResponse>(
+                            receiveAnyPayload(playerTwoSocket),
+                        )
+                    assertEquals(12, catchUp.stateVersion)
+                    assertEquals(playerTwo, catchUp.turnState.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, catchUp.turnState.turnPhase)
+                    assertEquals(3, catchUp.turnState.pendingReinforcements)
+                    assertEquals(
+                        2,
+                        catchUp.territoryStates.first {
+                            it.territoryId == TerritoryId("alaska")
+                        }.troopCount,
+                    )
+                    assertEquals(
+                        3,
+                        catchUp.territoryStates.first {
+                            it.territoryId == TerritoryId("kanada")
+                        }.troopCount,
+                    )
+
+                    val state =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
+                    assertEquals(false, state.fortifyUsedThisTurn)
+
+                    playerOneSocket.close()
+                    playerTwoSocket.close()
                 }
             } finally {
                 routingService.stop()
@@ -391,20 +611,49 @@ class GameStateTransportIntegrationTest {
             )
             .withAttackableTerritories(players)
 
+    private fun runningTurnStateGameWithFortifySetup(
+        lobbyCode: LobbyCode,
+        players: List<PlayerId>,
+        activePlayerId: PlayerId,
+        turnPhase: TurnPhase,
+    ): GameState {
+        val reducer = DefaultLobbyEventReducer()
+        val baseState =
+            runningTurnStateGame(
+                lobbyCode = lobbyCode,
+                players = players,
+                activePlayerId = activePlayerId,
+                turnPhase = turnPhase,
+            )
+        val playerOne = players.first()
+
+        return listOf(
+            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alaska"), playerOne),
+            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("kanada"), playerOne),
+            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("usa"), playerOne),
+            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alaska"), 4),
+            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("kanada"), 1),
+            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("usa"), 2),
+        ).fold(baseState) { state, event ->
+            reducer.apply(state, event)
+        }
+    }
+
     private suspend fun connectSessionWithConnection(
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,
         playerId: PlayerId,
         playersByConnection: ConcurrentHashMap<ConnectionId, PlayerId>,
         connectionsByPlayer: ConcurrentHashMap<PlayerId, ConnectionId>,
-    ) = coroutineScope {
-        val session = client.webSocketSession("/ws")
-        val sessionToken = receiveTestConnectionToken(session)
-        val connectionId = awaitTestConnectionId(network, sessionToken)
-        playersByConnection[connectionId] = playerId
-        connectionsByPlayer[playerId] = connectionId
-        session to connectionId
-    }
+    ): Pair<DefaultClientWebSocketSession, ConnectionId> =
+        coroutineScope {
+            val session = client.webSocketSession("/ws")
+            val sessionToken = receiveTestConnectionToken(session)
+            val connectionId = awaitTestConnectionId(network, sessionToken)
+            playersByConnection[connectionId] = playerId
+            connectionsByPlayer[playerId] = connectionId
+            session to connectionId
+        }
 
     private suspend fun receiveAnyPayload(session: DefaultClientWebSocketSession): Any =
         receiveRelevantTestPayload(session)

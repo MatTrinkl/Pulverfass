@@ -23,6 +23,7 @@ import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -40,6 +41,7 @@ import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -57,6 +59,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
@@ -114,6 +117,10 @@ internal object NetworkPayloadRegistry {
             LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
             LobbyPlayerCountErrorResponse::class.java to
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
+            FortifyMoveRequest::class.java to MessageType.LOBBY_FORTIFY_MOVE_REQUEST,
+            FortifyMoveResponse::class.java to MessageType.LOBBY_FORTIFY_MOVE_RESPONSE,
+            FortifyMoveErrorResponse::class.java to
+                MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE,
             PendingReinforcementsChangedEvent::class.java to
                 MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
             ReinforcementsGrantedEvent::class.java to
@@ -221,6 +228,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(LobbyPlayerCountResponse.serializer()),
             LobbyPlayerCountErrorResponse::class.java to
                 encodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            FortifyMoveRequest::class.java to encodeWith(FortifyMoveRequest.serializer()),
+            FortifyMoveResponse::class.java to encodeWith(FortifyMoveResponse.serializer()),
+            FortifyMoveErrorResponse::class.java to
+                encodeWith(FortifyMoveErrorResponse.serializer()),
             PendingReinforcementsChangedEvent::class.java to
                 encodeWith(PendingReinforcementsChangedEvent.serializer()),
             ReinforcementsGrantedEvent::class.java to
@@ -330,6 +341,12 @@ internal object NetworkPayloadRegistry {
                 decodeWith(LobbyPlayerCountResponse.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE to
                 decodeWith(LobbyPlayerCountErrorResponse.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_REQUEST to
+                decodeWith(FortifyMoveRequest.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_RESPONSE to
+                decodeWith(FortifyMoveResponse.serializer()),
+            MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE to
+                decodeWith(FortifyMoveErrorResponse.serializer()),
             MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST to
                 decodeWith(PendingReinforcementsChangedEvent.serializer()),
             MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST to

@@ -63,6 +63,7 @@ data class GameState(
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
+    val fortifyUsedThisTurn: Boolean = false,
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
@@ -534,6 +535,44 @@ data class GameState(
         }
 
         return false
+    }
+
+    fun canFortifyMove(
+        playerId: PlayerId,
+        from: TerritoryId,
+        to: TerritoryId,
+    ): Boolean = isConnectedByOwnedPath(playerId, from, to)
+
+    /**
+     * Liefert alle gültigen Fortify-Ziele für ein Ursprungsterritorium.
+     *
+     * Die Query ist rein lesend und eignet sich für UI-Hilfen oder
+     * serverseitige Vorvalidierung. Sie respektiert denselben Turn-Kontext wie
+     * ein echter Fortify-Move.
+     */
+    fun validFortifyTargets(
+        playerId: PlayerId,
+        fromTerritoryId: TerritoryId,
+    ): List<TerritoryId> {
+        if (
+            activePlayer != playerId ||
+            activeTurnPhase != TurnPhase.FORTIFY ||
+            fortifyUsedThisTurn
+        ) {
+            return emptyList()
+        }
+
+        val sourceState = territoryStateOf(fromTerritoryId) ?: return emptyList()
+        if (sourceState.ownerId != playerId || sourceState.troopCount <= 1) {
+            return emptyList()
+        }
+
+        return territoriesOwnedBy(playerId)
+            .asSequence()
+            .map(TerritoryState::territoryId)
+            .filterNot { territoryId -> territoryId == fromTerritoryId }
+            .filter { territoryId -> canFortifyMove(playerId, fromTerritoryId, territoryId) }
+            .toList()
     }
 
     /**

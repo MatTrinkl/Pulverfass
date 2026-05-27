@@ -345,6 +345,7 @@ class LobbyController(
             )
         }
         reconnectSessionStore.clearSession()
+        clearPendingLobbyAction()
         playersById.clear()
     }
 
@@ -1137,13 +1138,21 @@ class LobbyController(
                 _state.update { it.copy(errorText = payload.reason) }
             }
             is JoinLobbyResponse -> {
+                val isPendingJoin =
+                    state.value.pendingCommandKeys.contains(LobbyCommandKey.JOIN_LOBBY)
                 clearPendingCommand(LobbyCommandKey.JOIN_LOBBY)
-                handleJoinLobbyResponse(payload)
+                if (isPendingJoin) {
+                    handleJoinLobbyResponse(payload)
+                }
             }
             is JoinLobbyErrorResponse -> {
+                val isPendingJoin =
+                    state.value.pendingCommandKeys.contains(LobbyCommandKey.JOIN_LOBBY)
                 clearPendingCommand(LobbyCommandKey.JOIN_LOBBY)
                 pendingJoinCallback = null
-                _state.update { it.copy(errorText = payload.reason) }
+                if (isPendingJoin) {
+                    _state.update { it.copy(errorText = payload.reason) }
+                }
             }
             is PlayerJoinedLobbyEvent -> handlePlayerJoined(payload)
             is PlayerConnectionLostEvent -> handlePlayerConnectionLost(payload)

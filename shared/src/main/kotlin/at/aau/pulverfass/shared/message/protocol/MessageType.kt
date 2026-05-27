@@ -97,6 +97,15 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf das Beenden der Attack-Phase. */
     LOBBY_CONFIRM_ATTACK_DONE_ERROR_RESPONSE(75),
 
+    /** Anfrage, in Phase 3 Truppen zwischen verbundenen eigenen Gebieten zu verschieben. */
+    LOBBY_FORTIFY_MOVE_REQUEST(76),
+
+    /** Erfolgreiche Antwort auf eine Fortify-Anfrage. */
+    LOBBY_FORTIFY_MOVE_RESPONSE(77),
+
+    /** Fehlantwort auf eine Fortify-Anfrage. */
+    LOBBY_FORTIFY_MOVE_ERROR_RESPONSE(78),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

@@ -51,6 +51,23 @@ data class MoveTroopsCommand(
     }
 }
 
+data class FortifyMoveCommand(
+    override val lobbyCode: LobbyCode,
+    override val playerId: PlayerId,
+    val fromTerritoryId: TerritoryId,
+    val toTerritoryId: TerritoryId,
+    val troopCount: Int,
+) : MapCommand {
+    init {
+        require(troopCount > 0) {
+            "FortifyMoveCommand.troopCount muss positiv sein, war aber $troopCount."
+        }
+        require(fromTerritoryId != toTerritoryId) {
+            "FortifyMoveCommand benötigt unterschiedliche Territorien."
+        }
+    }
+}
+
 /**
  * Serverautoritativ aufgeloester Angriffs-Intent.
  *

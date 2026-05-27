@@ -3,6 +3,8 @@ package at.aau.pulverfass.server.routing
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -210,6 +212,8 @@ class PublicGameStateBuilder {
             is TerritoryOwnerChangedEvent,
             is TerritoryTroopsChangedEvent,
             -> listOf(versionedTerritoryEvent(event, currentState.stateVersion))
+            is FortifyMoveAppliedEvent -> buildFortifyMovePayloads(currentState, event)
+            is FortifyUsedSetEvent -> emptyList()
             is TurnStateUpdatedEvent -> listOf(event)
             else -> null
         }
@@ -247,6 +251,25 @@ class PublicGameStateBuilder {
                 add(0, GameStartedEvent(lobbyCode))
             }
         }
+
+    private fun buildFortifyMovePayloads(
+        currentState: GameState,
+        event: FortifyMoveAppliedEvent,
+    ): List<PublicGameEvent> =
+        listOf(
+            TerritoryTroopsChangedEvent(
+                lobbyCode = event.lobbyCode,
+                territoryId = event.fromTerritoryId,
+                troopCount = currentState.troopCountOf(event.fromTerritoryId),
+                stateVersion = currentState.stateVersion,
+            ),
+            TerritoryTroopsChangedEvent(
+                lobbyCode = event.lobbyCode,
+                territoryId = event.toTerritoryId,
+                troopCount = currentState.troopCountOf(event.toTerritoryId),
+                stateVersion = currentState.stateVersion,
+            ),
+        )
 
     private fun turnStatePayloads(
         lobbyCode: LobbyCode,
