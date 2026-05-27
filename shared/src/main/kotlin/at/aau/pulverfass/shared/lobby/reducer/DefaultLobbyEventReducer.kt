@@ -3,6 +3,7 @@ package at.aau.pulverfass.shared.lobby.reducer
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
@@ -25,13 +26,16 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.CardDeckFactory
 import at.aau.pulverfass.shared.lobby.state.CardSetValidator
+import at.aau.pulverfass.shared.lobby.state.DiscardPileState
 import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TradeInProgression
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 
@@ -79,6 +83,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     )
 
                 is AttackResolvedEvent -> onAttackResolved(state, event)
+                is CardDrawnEvent -> onCardDrawn(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
@@ -432,11 +437,21 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val runningState =
             state.copy(
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
+                deckState =
+                    CardDeckFactory.createShuffledDeck(
+                        mapDefinition = state.mapDefinition
+                            ?: throw InvalidLobbyEventException(
+                                "Spielstart benoetigt eine MapDefinition.",
+                            ),
+                        randomSeed = event.randomSeed,
+                    ),
+                discardPileState = DiscardPileState(),
                 gameStarted = true,
                 gameRandomSeed = event.randomSeed,
                 gameRandomState = event.randomSeed,
                 pendingReinforcements = null,
                 status = GameStatus.RUNNING,
+                territoryCapturedThisTurn = false,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,
                 setupTroopsToPlaceByPlayer = preparedStart.setupTroopsToPlaceByPlayer,
@@ -550,7 +565,14 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             }
 
         check(currentRngSeed == state.gameRandomSeed)
-        return updatedState.withGameRandomState(event.rngStateAfter)
+        val stateWithCaptureFlag =
+            if (event.capture) {
+                updatedState.withTerritoryCapturedThisTurn(true)
+            } else {
+                updatedState
+            }
+
+        return stateWithCaptureFlag.withGameRandomState(event.rngStateAfter)
     }
 
     private fun onPendingReinforcementsSet(
@@ -683,15 +705,45 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             .withTradeRequiredOnNextReinforcementPhase(event.playerId, false)
     }
 
+    private fun onCardDrawn(
+        state: GameState,
+        event: CardDrawnEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+
+        val currentTurnState =
+            state.resolvedTurnState
+                ?: throw InvalidLobbyEventException(
+                    "CardDrawnEvent benoetigt einen initialisierten TurnState.",
+                )
+        if (currentTurnState.activePlayerId != event.playerId) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent.playerId '${event.playerId.value}' ist nicht aktiver Spieler.",
+            )
+        }
+        if (currentTurnState.turnPhase != TurnPhase.DRAW_CARD) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent ist nur in Phase DRAW_CARD erlaubt.",
+            )
+        }
+        if (!state.territoryCapturedThisTurn) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent benoetigt mindestens eine Eroberung im aktuellen Zug.",
+            )
+        }
+
+        return state
+            .withCardDrawnFromDeck(event.playerId, event.cardId)
+            .withTerritoryCapturedThisTurn(false)
+    }
+
     private fun onPlayerCardsRemoved(
         state: GameState,
         event: PlayerCardsRemovedEvent,
     ): GameState {
         requireKnownPlayer(state, event.playerId)
 
-        return event.cardIds.fold(state) { currentState, cardId ->
-            currentState.withoutCardFromHand(event.playerId, cardId)
-        }
+        return state.withCardsMovedFromHandToDiscard(event.playerId, event.cardIds)
     }
 
     private fun onFortifyMoveApplied(
@@ -798,7 +850,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 pauseReason = event.pauseReason,
                 pausedPlayerId = event.pausedPlayerId,
             )
-        val shouldResetFortifyUsed =
+        val shouldResetTurnScopedFlags =
             state.activePlayer != updatedTurnState.activePlayerId ||
                 state.turnNumber != updatedTurnState.turnCount
 
@@ -807,7 +859,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             configuredStartPlayerId = updatedTurnState.startPlayerId,
             turnNumber = updatedTurnState.turnCount,
             turnState = updatedTurnState,
-            fortifyUsedThisTurn = state.fortifyUsedThisTurn && !shouldResetFortifyUsed,
+            fortifyUsedThisTurn = state.fortifyUsedThisTurn && !shouldResetTurnScopedFlags,
+            territoryCapturedThisTurn =
+                state.territoryCapturedThisTurn && !shouldResetTurnScopedFlags,
         )
     }
 

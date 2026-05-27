@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
@@ -72,6 +73,7 @@ class LobbyPersistenceGatewayUnitTest {
                     value = 8,
                     tradeIndex = 2,
                 ) to "card_set_traded_in",
+                CardDrawnEvent(lobbyCode, hostId, CardId("drawn-card")) to "card_drawn",
                 PendingReinforcementsSetEvent(lobbyCode, hostId, amount = 7) to
                     "pending_reinforcements_set",
                 PendingReinforcementsChangedEvent(lobbyCode, hostId, delta = -2) to
@@ -135,6 +137,10 @@ class LobbyPersistenceGatewayUnitTest {
         assertEquals("alpha", attackPayload.getValue("fromTerritoryId").jsonPrimitive.content)
         assertEquals("12", attackPayload.getValue("rngStateAfter").jsonPrimitive.content)
         assertEquals("3", attackPayload.getValue("occupyingTroopCount").jsonPrimitive.content)
+
+        val drawPayload =
+            persistedPayloadOf(CardDrawnEvent(lobbyCode, hostId, CardId("drawn-card"))).payload
+        assertEquals("drawn-card", drawPayload.getValue("cardId").jsonPrimitive.content)
 
         val invalidPayload =
             persistedPayloadOf(InvalidActionDetected(lobbyCode, null, "invalid")).payload

@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
@@ -259,6 +260,13 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                             ),
                         )
                     },
+            )
+        is CardDrawnEvent ->
+            persistedPayload(
+                type = "card_drawn",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "cardId" to cardId.value,
             )
         is PendingReinforcementsSetEvent ->
             persistedPayload(

@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
@@ -62,6 +63,7 @@ class LobbyRecoveryLoaderTest {
                 gameRandomSeed = 99L,
                 gameRandomState = 1234L,
                 fortifyUsedThisTurn = true,
+                territoryCapturedThisTurn = true,
                 stateVersion = 7,
                 processedEventCount = 7,
                 tradedInSetCount = 2,
@@ -296,6 +298,18 @@ class LobbyRecoveryLoaderTest {
                 """
                 {"lobbyCode":"LR11","playerId":5,"cardIds":["card-a","card-b","card-c"],"value":6,"tradeIndex":3}
                 """.trimIndent(),
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            CardDrawnEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(5),
+                cardId = CardId("drawn-card"),
+            ),
+            record(
+                "card_drawn",
+                """{"lobbyCode":"LR11","playerId":5,"cardId":"drawn-card"}""",
                 createdAt,
             ).toLobbyEvent(),
         )

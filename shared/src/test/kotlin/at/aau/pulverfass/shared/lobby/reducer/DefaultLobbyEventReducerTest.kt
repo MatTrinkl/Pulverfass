@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
@@ -32,6 +33,7 @@ import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.DeckState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
@@ -651,6 +653,101 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
+    fun `capture marks turn eligible for one drawn card`() {
+        val lobbyCode = LobbyCode("AR23")
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+        val captureEvent =
+            validAttackResolvedEvent(
+                lobbyCode = lobbyCode,
+                attacker = attacker,
+                defender = defender,
+                attackerLosses = 0,
+                defenderLosses = 2,
+                attackerRemaining = 5,
+                defenderRemaining = 0,
+                occupyingTroopCount = 3,
+                minOccupyingTroops = 3,
+            )
+
+        val afterCapture =
+            reducer.apply(runningAttackState(lobbyCode, attacker, defender), captureEvent)
+
+        assertEquals(true, afterCapture.territoryCapturedThisTurn)
+        assertEquals(attacker, afterCapture.ownerOf(TerritoryId("beta")))
+    }
+
+    @Test
+    fun `card drawn event moves exactly one deck card to player hand`() {
+        val lobbyCode = LobbyCode("CD23")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val firstCard = CardState(CardId("deck-1"), CardType.A)
+        val secondCard = CardState(CardId("deck-2"), CardType.B)
+        val drawReadyState =
+            runningAttackState(lobbyCode, playerOne, playerTwo).copy(
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                deckState = DeckState(listOf(firstCard, secondCard)),
+                territoryCapturedThisTurn = true,
+            )
+
+        val updatedState =
+            reducer.apply(
+                drawReadyState,
+                CardDrawnEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerOne,
+                    cardId = firstCard.cardId,
+                ),
+            )
+
+        assertEquals(listOf(firstCard), updatedState.handOf(playerOne))
+        assertEquals(listOf(secondCard), updatedState.deckState.cards)
+        assertEquals(false, updatedState.territoryCapturedThisTurn)
+    }
+
+    @Test
+    fun `card drawn event rejects missing capture or wrong phase`() {
+        val lobbyCode = LobbyCode("CD24")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val firstCard = CardState(CardId("deck-1"), CardType.A)
+        val drawReadyState =
+            runningAttackState(lobbyCode, playerOne, playerTwo).copy(
+                deckState = DeckState(listOf(firstCard)),
+                territoryCapturedThisTurn = true,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                drawReadyState,
+                CardDrawnEvent(lobbyCode, playerOne, firstCard.cardId),
+            )
+        }
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                drawReadyState.copy(
+                    turnState =
+                        TurnState(
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.DRAW_CARD,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        ),
+                    territoryCapturedThisTurn = false,
+                ),
+                CardDrawnEvent(lobbyCode, playerOne, firstCard.cardId),
+            )
+        }
+    }
+
+    @Test
     fun `player eliminated transfers defender cards and sets next reinforcement trade flag`() {
         val lobbyCode = LobbyCode("EL11")
         val attacker = PlayerId(1)
@@ -1239,6 +1336,12 @@ class DefaultLobbyEventReducerTest {
         assertEquals(34, started.setupTroopsToPlaceFor(owner))
         assertEquals(34, started.setupTroopsToPlaceFor(player2))
         assertEquals(34, started.setupTroopsToPlaceFor(player3))
+        assertEquals(sampleMapDefinition().territories.size + 2, started.deckState.cards.size)
+        assertEquals(2, started.deckState.cards.count { card -> card.type == CardType.JOKER })
+        assertEquals(
+            started.deckState.cards.size,
+            started.deckState.cards.map { card -> card.cardId }.distinct().size,
+        )
         started.allTerritoryStates().forEach { territoryState ->
             assertEquals(
                 expectedTerritoryOwners[territoryState.territoryId],
@@ -1652,6 +1755,7 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(listOf(cardTwo), updatedState.handOf(playerOne))
+        assertEquals(listOf(cardOne, cardThree), updatedState.discardPileState.cards)
     }
 
     @Test

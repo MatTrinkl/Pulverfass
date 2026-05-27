@@ -12,4 +12,12 @@ data class DiscardPileState(
     init {
         validateDistinctCardIds(cards, "DiscardPileState")
     }
+
+    internal fun withCardsAdded(addedCards: List<CardState>): DiscardPileState {
+        require(addedCards.isNotEmpty()) {
+            "DiscardPileState.withCardsAdded benoetigt mindestens eine Karte."
+        }
+
+        return copy(cards = cards + addedCards)
+    }
 }

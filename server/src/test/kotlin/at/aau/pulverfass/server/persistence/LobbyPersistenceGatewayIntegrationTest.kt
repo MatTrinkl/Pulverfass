@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
@@ -142,6 +143,7 @@ class LobbyPersistenceGatewayIntegrationTest {
                         value = 8,
                         tradeIndex = 2,
                     ),
+                    CardDrawnEvent(lobbyCode, hostId, CardId("drawn-card")),
                     PendingReinforcementsSetEvent(
                         lobbyCode = lobbyCode,
                         playerId = hostId,
@@ -208,6 +210,7 @@ class LobbyPersistenceGatewayIntegrationTest {
                     "attack_resolved",
                     "player_eliminated",
                     "card_set_traded_in",
+                    "card_drawn",
                     "pending_reinforcements_set",
                     "pending_reinforcements_changed",
                     "player_cards_removed",
@@ -243,6 +246,12 @@ class LobbyPersistenceGatewayIntegrationTest {
                 """["ca","cb","cc"]""",
                 tradeJson.getValue("cardIds").toString(),
             )
+
+            val drawJson =
+                Json.parseToJsonElement(
+                    persisted.first { it.eventType == "card_drawn" }.eventJson,
+                ).jsonObject
+            assertEquals("drawn-card", drawJson.getValue("cardId").jsonPrimitive.content)
 
             val invalidJson =
                 Json.parseToJsonElement(

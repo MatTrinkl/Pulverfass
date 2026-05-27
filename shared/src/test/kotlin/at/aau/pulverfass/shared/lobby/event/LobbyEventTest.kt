@@ -39,6 +39,11 @@ class LobbyEventTest {
                     value = 2,
                     tradeIndex = 1,
                 ),
+                CardDrawnEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardId = CardId("drawn-card"),
+                ),
                 AttackResolvedEvent(
                     lobbyCode = lobbyCode,
                     attackerPlayerId = playerId,
@@ -89,7 +94,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(20, events.size)
+        assertEquals(21, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
@@ -127,6 +132,7 @@ class LobbyEventTest {
         val internalResult =
             when (val event: InternalLobbyEvent = LobbyClosed(lobbyCode, "done")) {
                 is AttackResolvedEvent -> event.rngTrace.size.toString()
+                is CardDrawnEvent -> event.cardId.value
                 is CardSetTradedInEvent -> event.value.toString()
                 is FortifyUsedSetEvent -> event.used.toString()
                 is InvalidActionDetected -> event.reason
@@ -175,6 +181,11 @@ class LobbyEventTest {
                     cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
                     value = 2,
                     tradeIndex = 1,
+                ),
+                CardDrawnEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardId = CardId("drawn-card"),
                 ),
                 AttackResolvedEvent(
                     lobbyCode = lobbyCode,

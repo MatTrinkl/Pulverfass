@@ -20,6 +20,7 @@ import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidator
 import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
@@ -511,7 +512,21 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val turnStateUpdate = buildTurnAdvanceEvent(request, payload)
-            lobbyManager.submit(turnStateUpdate, request.context)
+            val cardDrawnEvent = buildCardDrawnEventIfNeeded(payload.lobbyCode, payload.playerId)
+            lobbyManager.submitAll(
+                payload.lobbyCode,
+                listOfNotNull(cardDrawnEvent, turnStateUpdate),
+                request.context,
+            )
+            if (cardDrawnEvent != null) {
+                val updatedState =
+                    lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                        ?: throw IllegalStateException("GAME_NOT_FOUND")
+                gameStateDelivery.sendPrivateState(
+                    payload.lobbyCode,
+                    PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+                )
+            }
             grantBaseReinforcementsOnPhaseStart(
                 lobbyCode = payload.lobbyCode,
                 previousTurnState = previousTurnState,
@@ -1323,6 +1338,32 @@ class MainServerLobbyRoutingService(
             }
 
         return pausedOrAdvancedTurnState.toUpdatedEvent(payload.lobbyCode)
+    }
+
+    private fun buildCardDrawnEventIfNeeded(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ): CardDrawnEvent? {
+        val state =
+            lobbyManager.getLobby(lobbyCode)?.currentState()
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val currentTurnState = state.resolvedTurnState ?: return null
+        if (
+            currentTurnState.activePlayerId != playerId ||
+            currentTurnState.turnPhase != TurnPhase.DRAW_CARD ||
+            !state.territoryCapturedThisTurn
+        ) {
+            return null
+        }
+
+        val drawnCard =
+            state.deckState.topCard()
+                ?: throw IllegalStateException("CARD_DECK_EMPTY")
+        return CardDrawnEvent(
+            lobbyCode = lobbyCode,
+            playerId = playerId,
+            cardId = drawnCard.cardId,
+        )
     }
 
     private fun buildFortifyMoveEvents(
