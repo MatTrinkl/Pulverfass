@@ -310,6 +310,39 @@ class GameStateTest {
     }
 
     @Test
+    fun `should reject attack source owned by another player even with enough troops`() {
+        val playerOne = PlayerId(43)
+        val playerTwo = PlayerId(44)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ2")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            GameState.initial(
+                                lobbyCode = lobbyCode,
+                                mapDefinition = sampleMapDefinition(),
+                                players = listOf(playerOne, playerTwo),
+                            ),
+                            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerTwo),
+                        ),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
+                    ),
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
+            )
+
+        assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertFalse(state.hasAnyValidAttack(playerOne))
+    }
+
+    @Test
     fun `should preserve adjacency order for valid attack targets`() {
         val playerOne = PlayerId(51)
         val playerTwo = PlayerId(52)
