@@ -1,5 +1,7 @@
 package at.aau.pulverfass.server.lobby.runtime
 
+import at.aau.pulverfass.shared.event.EventContext
+import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
@@ -198,6 +200,56 @@ class LobbyRuntimeTest {
                 assertEquals(1, accepted)
                 assertEquals(0, rejected)
                 assertEquals(1, runtime.currentState().players.size)
+            } finally {
+                runtime.shutdown()
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `batch ablehnung meldet event context und aktuellen state an hook`(): Unit =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyCode = LobbyCode("KL12")
+            val context =
+                EventContext(
+                    connectionId = ConnectionId(99),
+                    playerId = PlayerId(1),
+                    occurredAtEpochMillis = 123L,
+                )
+            var rejectedContext: EventContext? = null
+            var rejectedBeforeState: GameState? = null
+            var rejectedEventPlayerId: PlayerId? = null
+            val runtime =
+                LobbyRuntime(
+                    lobbyCode = lobbyCode,
+                    scope = scope,
+                    hooks =
+                        LobbyRuntimeHooks(
+                            onEventRejected = { _, event, eventContext, beforeState, _ ->
+                                rejectedContext = eventContext
+                                rejectedBeforeState = beforeState
+                                rejectedEventPlayerId = (event as PlayerJoined).playerId
+                            },
+                        ),
+                )
+
+            try {
+                runtime.start()
+
+                assertThrowsSuspend(InvalidLobbyEventException::class.java) {
+                    runtime.submitAll(
+                        listOf(
+                            PlayerJoined(lobbyCode, PlayerId(1), "Alice"),
+                            PlayerJoined(lobbyCode, PlayerId(1), "Alice again"),
+                        ),
+                        context,
+                    )
+                }
+
+                assertEquals(context, rejectedContext)
+                assertEquals(PlayerId(1), rejectedEventPlayerId)
+                assertEquals(1, rejectedBeforeState?.players?.size)
             } finally {
                 runtime.shutdown()
                 scope.cancel()

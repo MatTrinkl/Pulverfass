@@ -2070,6 +2070,44 @@ class MainServerLobbyRoutingIntegrationTest {
         }
 
     @Test
+    fun `reconnect without lobby context does not dispatch lobby snapshot`() =
+        testApplication {
+            val network = ServerNetwork()
+
+            application {
+                moduleWithLobbyRuntime(network)
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            coroutineScope {
+                val session = client.webSocketSession("/ws")
+                val sessionToken = discardConnectionHandshake(session)
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(ReconnectRequest(sessionToken)),
+                    ),
+                )
+
+                assertEquals(
+                    ReconnectResponse(
+                        success = true,
+                        playerId = PlayerId(1),
+                    ),
+                    receivePayload(session),
+                )
+                assertNull(receivePayloadOrNull(session))
+
+                session.close()
+            }
+        }
+
+    @Test
     fun `active player reconnect resumes paused turn`() =
         testApplication {
             val network = ServerNetwork()
