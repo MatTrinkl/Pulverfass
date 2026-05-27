@@ -7,6 +7,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
+import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -59,6 +61,7 @@ class LobbyRecoveryLoaderTest {
                 gameStarted = true,
                 gameRandomSeed = 99L,
                 gameRandomState = 1234L,
+                fortifyUsedThisTurn = true,
                 stateVersion = 7,
                 processedEventCount = 7,
                 tradedInSetCount = 2,
@@ -393,6 +396,34 @@ class LobbyRecoveryLoaderTest {
                 """
                 {"lobbyCode":"LR11","territoryId":"territory-2","troopCount":9,"stateVersion":6}
                 """.trimIndent(),
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            FortifyMoveAppliedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(7),
+                fromTerritoryId = TerritoryId("territory-3"),
+                toTerritoryId = TerritoryId("territory-4"),
+                troopCount = 3,
+            ),
+            record(
+                "fortify_move_applied",
+                """
+                {"lobbyCode":"LR11","playerId":7,"fromTerritoryId":"territory-3",
+                "toTerritoryId":"territory-4","troopCount":3}
+                """.trimIndent().replace("\n", ""),
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            FortifyUsedSetEvent(
+                lobbyCode = lobbyCode,
+                used = true,
+            ),
+            record(
+                "fortify_used_set",
+                """{"lobbyCode":"LR11","used":true}""",
                 createdAt,
             ).toLobbyEvent(),
         )

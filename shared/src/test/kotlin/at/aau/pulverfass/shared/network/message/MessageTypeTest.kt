@@ -65,6 +65,9 @@ class MessageTypeTest {
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE))
         assertTrue(
             MessageType.entries.contains(MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST),
         )

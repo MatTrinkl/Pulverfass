@@ -410,6 +410,11 @@ class GameStateTest {
                 connectedState,
                 TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerTwo),
             )
+        val fortifyReadyState =
+            reducer.apply(
+                connectedState,
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 3),
+            )
 
         assertTrue(
             connectedState.isConnectedByOwnedPath(
@@ -438,6 +443,37 @@ class GameStateTest {
                 from = TerritoryId("beta"),
                 to = TerritoryId("beta"),
             ),
+        )
+        assertTrue(
+            connectedState.canFortifyMove(
+                playerId = playerOne,
+                from = TerritoryId("beta"),
+                to = TerritoryId("gamma"),
+            ),
+        )
+        val fortifyState =
+            fortifyReadyState.copy(
+                activePlayer = playerOne,
+                turnState =
+                    fortifyReadyState.turnState?.copy(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.FORTIFY,
+                    ),
+            )
+
+        assertEquals(
+            listOf(TerritoryId("alpha"), TerritoryId("gamma")),
+            fortifyState.validFortifyTargets(
+                playerId = playerOne,
+                fromTerritoryId = TerritoryId("beta"),
+            ),
+        )
+        assertTrue(
+            fortifyState.copy(fortifyUsedThisTurn = true)
+                .validFortifyTargets(
+                    playerId = playerOne,
+                    fromTerritoryId = TerritoryId("beta"),
+                ).isEmpty(),
         )
     }
 
