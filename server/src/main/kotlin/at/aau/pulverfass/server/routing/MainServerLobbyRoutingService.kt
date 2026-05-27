@@ -18,8 +18,8 @@ import at.aau.pulverfass.shared.lobby.command.FortifyMoveCommand
 import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidationError
 import at.aau.pulverfass.shared.lobby.command.FortifyMoveValidator
 import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
-import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
+import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
