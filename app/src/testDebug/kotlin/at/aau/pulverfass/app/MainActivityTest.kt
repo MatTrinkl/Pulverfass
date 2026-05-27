@@ -20,10 +20,14 @@ class MainActivityTest {
         // 2. Warte bis LoadScreen-Preload und min-display-time durch sind
         //    und MainMenu mit "START" Button erscheint (15s).
         composeTestRule.waitUntil(timeoutMillis = 15_000) {
-            composeTestRule
-                .onAllNodesWithText("START")
-                .fetchSemanticsNodes()
-                .isNotEmpty()
+            try {
+                composeTestRule
+                    .onAllNodesWithText("START")
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            } catch (e: IllegalArgumentException) {
+                false
+            }
         }
         composeTestRule.onNodeWithText("START").assertExists()
         composeTestRule.onNodeWithText("OPTIONS").assertExists()
@@ -34,10 +38,14 @@ class MainActivityTest {
 
 // 4. Warte bis Lobby mit "SPIEL-LOBBY" erscheint (10s).
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
-            composeTestRule
-                .onAllNodesWithText("SPIEL-LOBBY", ignoreCase = true)
-                .fetchSemanticsNodes()
-                .isNotEmpty()
+            try {
+                composeTestRule
+                    .onAllNodesWithText("SPIEL-LOBBY", ignoreCase = true)
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            } catch (e: IllegalArgumentException) {
+                false
+            }
         }
         composeTestRule.onNodeWithText("SPIEL-LOBBY", ignoreCase = true).assertExists()
         composeTestRule.onNodeWithText("LOBBY ERSTELLEN", ignoreCase = true).assertExists()
