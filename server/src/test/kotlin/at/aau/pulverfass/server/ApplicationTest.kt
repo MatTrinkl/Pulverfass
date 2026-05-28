@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -575,7 +576,8 @@ class ApplicationTest {
                 payload !is GameStateDeltaEvent &&
                 payload !is GameStateSnapshotBroadcast &&
                 payload !is TurnStateUpdatedEvent &&
-                payload !is PlayerCountUpdateEvent
+                payload !is PlayerCountUpdateEvent &&
+                payload !is GlobalPlayerCountEvent
             ) {
                 return payload
             }
