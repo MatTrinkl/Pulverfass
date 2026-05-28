@@ -313,7 +313,11 @@ class StartGameIntegrationTest {
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload? = receiveRelevantTestPayloadOrNull(session = session, timeoutMillis = 200)
+    ): NetworkMessagePayload? =
+        receiveRelevantTestPayloadOrNull(
+            session = session,
+            timeoutMillis = 200,
+        )
 
     private suspend fun discardConnectionHandshake(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,

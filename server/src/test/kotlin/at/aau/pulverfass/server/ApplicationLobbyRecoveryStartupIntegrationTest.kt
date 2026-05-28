@@ -514,7 +514,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                 payload !is GameStateSnapshotBroadcast &&
                 payload !is TurnStateUpdatedEvent &&
                 payload !is PlayerCountUpdateEvent &&
-            payload !is GlobalPlayerCountEvent
+                payload !is GlobalPlayerCountEvent
             ) {
                 return payload
             }
