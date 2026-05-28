@@ -35,6 +35,8 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
+ * @property usedCheatReinforcementBonusByPlayer Spieler, die ihren einmaligen
+ * Schummel-Verstärkungsbonus bereits verwendet haben
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
@@ -64,6 +66,7 @@ data class GameState(
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
+    val usedCheatReinforcementBonusByPlayer: Set<PlayerId> = emptySet(),
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
@@ -121,6 +124,9 @@ data class GameState(
         }
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
+        }
+        require(usedCheatReinforcementBonusByPlayer.all(players::contains)) {
+            "GameState.usedCheatReinforcementBonusByPlayer darf nur bekannte Spieler enthalten."
         }
         require(configuredStartPlayerId == null || players.contains(configuredStartPlayerId)) {
             "GameState.configuredStartPlayerId muss Teil der Spielerliste sein oder null."
