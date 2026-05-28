@@ -9,10 +9,10 @@ import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
-import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
