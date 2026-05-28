@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server
 
 import at.aau.pulverfass.server.connection.ConnectionManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.receive.PacketReceiver
 import at.aau.pulverfass.server.send.PacketSender
 import at.aau.pulverfass.server.session.PersistedReconnectSession
@@ -20,7 +21,6 @@ import io.ktor.server.websocket.DefaultWebSocketServerSession
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.slf4j.LoggerFactory
 
 /**
  * Serverseitige Komposition der technischen Netzwerkschichten.
@@ -42,7 +42,7 @@ class ServerNetwork(
         }
     }
 
-    private val logger = LoggerFactory.getLogger(ServerNetwork::class.java)
+    private val logger = ServerLoggers.technical("ServerNetwork")
     private val sender: PacketSender = PacketSender(connectionManager)
     private val _events = MutableSharedFlow<Network.Event<ConnectionId>>(extraBufferCapacity = 64)
     private var reconnectSessionProvider: (SessionToken) -> PersistedReconnectSession? = { null }
@@ -87,6 +87,10 @@ class ServerNetwork(
             connectionId = connectionId,
             bytes = MessageCodec.encode(ConnectionResponse(createdSession.sessionToken)),
         )
+        logger.info(
+            "Connection session created connectionId={}",
+            connectionId.value,
+        )
         _events.emit(Network.Event.Connected(connectionId))
     }
 
@@ -120,6 +124,12 @@ class ServerNetwork(
 
         try {
             val payload = MessageCodec.decodePayload(receivedPacket)
+            logger.info(
+                "Decoded payload connectionId={} messageType={} payloadType={}",
+                connectionId.value,
+                receivedPacket.header.type,
+                payload::class.simpleName,
+            )
             if (payload is ReconnectRequest) {
                 handleReconnect(connectionId, payload)
                 packetReceiver.publish(receivedPacket)
@@ -155,6 +165,11 @@ class ServerNetwork(
                 sessionToken = detachedSession?.sessionToken,
             ),
         )
+        logger.info(
+            "Connection detached connectionId={} reason={}",
+            connectionId.value,
+            reason,
+        )
     }
 
     /**
@@ -166,6 +181,11 @@ class ServerNetwork(
         cause: Throwable,
     ) {
         transport.onError(connectionId, cause)
+        logger.warn(
+            "Network error connectionId={}",
+            connectionId?.value,
+            cause,
+        )
         _events.emit(Network.Event.Error(connectionId, cause))
     }
 
@@ -186,10 +206,17 @@ class ServerNetwork(
         connectionId: ConnectionId,
         payload: ReconnectRequest,
     ) {
+        logger.info("Reconnect requested connectionId={}", connectionId.value)
         var reconnectError = sessionManager.reconnectErrorFor(payload.sessionToken)
         if (reconnectError == ReconnectErrorCode.TOKEN_INVALID) {
             val persistedSession = reconnectSessionProvider(payload.sessionToken)
             if (persistedSession != null) {
+                logger.info(
+                    "Reconnect session restored connectionId={} playerId={} lobbyCode={}",
+                    connectionId.value,
+                    persistedSession.context.playerId?.value,
+                    persistedSession.context.lobbyCode?.value,
+                )
                 sessionManager.restoreDetachedSession(
                     sessionToken = payload.sessionToken,
                     expiresAtEpochMillis = persistedSession.expiresAtEpochMillis,
@@ -199,6 +226,11 @@ class ServerNetwork(
             }
         }
         if (reconnectError != null) {
+            logger.warn(
+                "Reconnect rejected connectionId={} errorCode={}",
+                connectionId.value,
+                reconnectError,
+            )
             sendReconnectResponse(
                 connectionId = connectionId,
                 payload =
@@ -215,9 +247,16 @@ class ServerNetwork(
 
         if (currentSession.sessionToken == payload.sessionToken) {
             onReconnectSucceeded(payload.sessionToken)
+            val response = createReconnectSuccessResponse(payload.sessionToken)
+            logger.info(
+                "Reconnect confirmed existing session connectionId={} playerId={} lobbyCode={}",
+                connectionId.value,
+                response.playerId?.value,
+                response.lobbyCode?.value,
+            )
             sendReconnectResponse(
                 connectionId = connectionId,
-                payload = createReconnectSuccessResponse(payload.sessionToken),
+                payload = response,
             )
             return
         }
@@ -231,9 +270,18 @@ class ServerNetwork(
             closeConnectionForReconnect(previousConnectionId)
         }
 
+        val response = createReconnectSuccessResponse(payload.sessionToken)
+        logger.info(
+            "Reconnect rebound session connectionId={} previousConnectionId={} " +
+                "playerId={} lobbyCode={}",
+            connectionId.value,
+            previousConnectionId?.value,
+            response.playerId?.value,
+            response.lobbyCode?.value,
+        )
         sendReconnectResponse(
             connectionId = connectionId,
-            payload = createReconnectSuccessResponse(payload.sessionToken),
+            payload = response,
         )
     }
 

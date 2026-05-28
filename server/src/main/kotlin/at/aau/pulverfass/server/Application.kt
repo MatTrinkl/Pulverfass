@@ -3,6 +3,8 @@ package at.aau.pulverfass.server
 import at.aau.pulverfass.server.ids.IdFactory
 import at.aau.pulverfass.server.lobby.mapping.DefaultNetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.LobbyDomainEventLogger
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.map.ClasspathMapDefinitionRepository
 import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
 import at.aau.pulverfass.server.persistence.JdbcLobbyPersistenceStore
@@ -43,21 +45,26 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicLong
 
 internal const val DEFAULT_HOST = "0.0.0.0"
 internal const val DEFAULT_PORT = 8080
-private val logger = LoggerFactory.getLogger("at.aau.pulverfass.server.WebSocketEndpoint")
-private val runtimeLogger = LoggerFactory.getLogger("at.aau.pulverfass.server.Runtime")
+private val runtimeLogger = ServerLoggers.technical("Runtime")
 private const val SERVER_MODE_ENV = "SERVER_MODE"
 private const val SERVER_MODE_MIGRATE = "migrate"
+private val applicationLogger = ServerLoggers.technical("Application")
+private val webSocketLogger = ServerLoggers.technical("WebSocketEndpoint")
 
 /**
  * Startet den eingebetteten Ktor-Server mit der Standardkonfiguration.
  */
 fun main() {
     val runtimeConfig = ServerRuntimeConfig.fromEnvironment()
+    applicationLogger.info(
+        "Starting Pulverfass server host={} port={}",
+        runtimeConfig.host,
+        runtimeConfig.port,
+    )
     prepareServerEngine(runtimeConfig)?.start(wait = true)
 }
 
@@ -140,6 +147,21 @@ fun createServer(
         module(network, runtimeConfig, databaseReadinessProbe)
     }
 
+fun createServer(
+    host: String = DEFAULT_HOST,
+    port: Int = DEFAULT_PORT,
+    transport: ServerWebSocketTransport,
+    runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
+    databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
+): ApplicationEngine =
+    createServer(
+        host = host,
+        port = port,
+        network = ServerNetwork(transport = transport),
+        runtimeConfig = runtimeConfig,
+        databaseReadinessProbe = databaseReadinessProbe,
+    )
+
 /**
  * Erzeugt eine startbare Serverinstanz mit aktivem Lobby-Routing zur
  * Verarbeitung von Create/Join/Leave/Kick/Start-Requests.
@@ -164,18 +186,6 @@ fun createServerWithLobbyRuntime(
             persistenceCallbacks = persistenceCallbacks,
         )
     }
-
-/**
- * Test-Hilfsmethode für Low-Level-Transporttests.
- *
- * Die Transportvariante bleibt bewusst intern, damit Produktionscode nicht am
- * High-Level-Network vorbei integriert wird.
- */
-internal fun createServer(
-    host: String,
-    port: Int,
-    transport: ServerWebSocketTransport,
-): ApplicationEngine = createServer(host, port, ServerNetwork(transport = transport))
 
 /**
  * Konfiguriert die Ktor-Anwendung mit WebSocket-Unterstützung auf `/ws`.
@@ -427,6 +437,7 @@ private fun Application.installLobbyRuntime(
                     mapDefinition = defaultMapDefinition,
                 )
             },
+            hooksFactory = { LobbyDomainEventLogger.hooks() },
         )
     recoverableStates.forEach { state ->
         lobbyManager.createLobby(lobbyCode = state.lobbyCode, initialState = state)
@@ -576,6 +587,7 @@ private fun Application.installLobbyRuntime(
     routingService.start(serverScope)
 
     environment.monitor.subscribe(ApplicationStopped) {
+        applicationLogger.info("Stopping lobby runtime")
         runBlocking {
             routingService.stop()
             lobbyManager.shutdownAll()
@@ -583,6 +595,7 @@ private fun Application.installLobbyRuntime(
         persistenceCallbacks.close()
         recoveryDataSource?.close()
         serverScope.cancel()
+        applicationLogger.info("Lobby runtime stopped")
     }
 }
 
@@ -599,12 +612,16 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
     val connectionId = IdFactory.nextConnectionId()
 
     try {
+        webSocketLogger.info(
+            "WebSocket connection opened connectionId={}",
+            connectionId.value,
+        )
         network.onConnected(connectionId, this)
         for (frame in incoming) {
             when (frame) {
                 is Frame.Binary -> network.onBinaryMessage(connectionId, frame.data.copyOf())
                 is Frame.Text -> {
-                    logger.warn(
+                    webSocketLogger.warn(
                         "Rejecting text websocket frame on connection {} " +
                             "because only binary frames are supported",
                         connectionId.value,
@@ -622,10 +639,20 @@ private suspend fun DefaultWebSocketServerSession.handleWebSocketConnection(
             }
         }
     } catch (cause: Throwable) {
+        webSocketLogger.warn(
+            "WebSocket connection failed connectionId={}",
+            connectionId.value,
+            cause,
+        )
         network.onError(connectionId, cause)
         throw cause
     } finally {
         val reason = runCatching { closeReason.await()?.message }.getOrNull()
         network.onDisconnected(connectionId, reason)
+        webSocketLogger.info(
+            "WebSocket connection closed connectionId={} reason={}",
+            connectionId.value,
+            reason,
+        )
     }
 }

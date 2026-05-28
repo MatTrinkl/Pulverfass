@@ -4,6 +4,7 @@ import at.aau.pulverfass.server.ServerNetwork
 import at.aau.pulverfass.server.lobby.CardSetValidator
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.shared.event.EventContext
@@ -22,6 +23,7 @@ import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -32,6 +34,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
+import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TradeInProgression
@@ -121,7 +124,6 @@ import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
@@ -150,9 +152,11 @@ class MainServerLobbyRoutingService(
     private companion object {
         const val ELIMINATED_SPECTATOR_SUFFIX = "zuschauen."
         const val NO_ACTIVE_PLAYER_SET_SUFFIX = "kein aktiver Spieler gesetzt."
+        const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
+            "Reconnect snapshot skipped connectionId={} lobbyCode={} "
     }
 
-    private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
+    private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
     private val gameStateDelivery =
@@ -205,7 +209,7 @@ class MainServerLobbyRoutingService(
             is AttackRequest -> routeAttackRequest(request)
             is ConfirmAttackDoneRequest -> routeConfirmAttackDoneRequest(request)
             is ConfirmReinforcementsDoneRequest -> routeConfirmReinforcementsDoneRequest(request)
-            is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
+            is CreateLobbyRequest -> routeCreateLobbyRequest(request)
             is LobbyPlayerCountRequest -> routeLobbyPlayerCountRequest(request)
             is MapGetRequest -> routeMapGetRequest(request)
             is GameStateCatchUpRequest -> routeGameStateCatchUpRequest(request)
@@ -257,23 +261,23 @@ class MainServerLobbyRoutingService(
         )
     }
 
-    private suspend fun routeCreateLobbyRequest(packet: ReceivedPacket) {
+    private suspend fun routeCreateLobbyRequest(request: DecodedNetworkRequest) {
         runCatching {
-            handleCreateLobbyRequest(packet.connectionId)
-            hooks.onRouted(packet.connectionId)
+            handleCreateLobbyRequest(request)
+            hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             dispatchCreateErrorResponse(
-                connectionId = packet.connectionId,
+                connectionId = request.connectionId,
                 reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
             )
             hooks.onRoutingError(
-                packet.connectionId,
+                request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
                     reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
                     context =
                         LobbyRoutingContext(
-                            connectionId = packet.connectionId,
-                            messageType = packet.header.type,
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
                         ),
                     cause = cause,
                 ),
@@ -918,9 +922,10 @@ class MainServerLobbyRoutingService(
         }
     }
 
-    private suspend fun handleCreateLobbyRequest(connectionId: ConnectionId) {
+    private suspend fun handleCreateLobbyRequest(request: DecodedNetworkRequest) {
         val lobbyCode = createLobbyWithUniqueCode()
-        network.send(connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
+        lobbyManager.submit(LobbyCreated(lobbyCode), request.context)
+        network.send(request.connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
     }
 
     private suspend fun dispatchReconnectLobbySnapshot(
@@ -928,19 +933,75 @@ class MainServerLobbyRoutingService(
         payload: ReconnectRequest,
     ) {
         if (resolveSessionToken(connectionId) != payload.sessionToken) {
+            logger.warn(
+                "Reconnect snapshot skipped connectionId={} reason=session-token-mismatch",
+                connectionId.value,
+            )
             return
         }
 
         val reconnectContext =
             sessionContextRegistry?.contextFor(payload.sessionToken)
-                ?: return
-        val lobbyCode = reconnectContext.lobbyCode ?: return
-        val reconnectingPlayerId = reconnectContext.playerId ?: return
-        val lobbyState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} reason=context-missing",
+                        connectionId.value,
+                    )
+                    return
+                }
+        val lobbyCode =
+            reconnectContext.lobbyCode
+                ?: run {
+                    logger.warn(
+                        "Reconnect snapshot skipped connectionId={} " +
+                            "reason=lobby-missing-in-context",
+                        connectionId.value,
+                    )
+                    return
+                }
+        val reconnectingPlayerId =
+            reconnectContext.playerId
+                ?: run {
+                    logger.warn(
+                        RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
+                            "reason=player-missing-in-context",
+                        connectionId.value,
+                        lobbyCode.value,
+                    )
+                    return
+                }
+        val lobbyState =
+            lobbyManager.getLobby(lobbyCode)?.currentState()
+                ?: run {
+                    logger.warn(
+                        RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
+                            "playerId={} reason=lobby-not-found",
+                        connectionId.value,
+                        lobbyCode.value,
+                        reconnectingPlayerId.value,
+                    )
+                    return
+                }
 
         if (!lobbyState.players.contains(reconnectingPlayerId)) {
+            logger.warn(
+                RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX +
+                    "playerId={} reason=player-not-in-lobby",
+                connectionId.value,
+                lobbyCode.value,
+                reconnectingPlayerId.value,
+            )
             return
         }
+
+        logger.info(
+            "Reconnect lobby snapshot dispatch connectionId={} lobbyCode={} " +
+                "playerId={} memberCount={}",
+            connectionId.value,
+            lobbyCode.value,
+            reconnectingPlayerId.value,
+            lobbyState.players.size,
+        )
 
         /*
          * Ein echter Reconnect durchläuft keinen JoinRequest mehr. Deshalb muss
@@ -1296,7 +1357,6 @@ class MainServerLobbyRoutingService(
         require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
             "NOT_ACTIVE_PLAYER"
         }
-        requirePlayerCanActInMatch(state, payload.playerId)
         require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
         check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
         require(
@@ -1367,7 +1427,7 @@ class MainServerLobbyRoutingService(
     private fun buildPlaceReinforcementsEvents(
         request: DecodedNetworkRequest,
         payload: PlaceReinforcementsRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1442,7 +1502,7 @@ class MainServerLobbyRoutingService(
     private fun buildAttackEvents(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1500,7 +1560,7 @@ class MainServerLobbyRoutingService(
     private fun buildTradeInCardsEvents(
         request: DecodedNetworkRequest,
         payload: TradeInCardsRequest,
-    ): List<at.aau.pulverfass.shared.lobby.event.LobbyEvent> {
+    ): List<LobbyEvent> {
         val lobby =
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1622,7 +1682,7 @@ class MainServerLobbyRoutingService(
         check(
             !(
                 state.gameStarted ||
-                    state.status == at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING
+                    state.status == GameStatus.RUNNING
             ),
         ) { "GAME_ALREADY_STARTED" }
         require(state.lobbyOwner == payload.requesterPlayerId) { "NOT_HOST" }
@@ -2278,7 +2338,7 @@ class MainServerLobbyRoutingService(
 
     private suspend fun broadcastAcceptedLobbyEvent(
         lobbyCode: LobbyCode,
-        event: at.aau.pulverfass.shared.lobby.event.LobbyEvent,
+        event: LobbyEvent,
         previousState: GameState,
         currentState: GameState,
     ) {
@@ -2607,7 +2667,7 @@ class MainServerLobbyRoutingService(
     private fun requiresForcedTradeInOnReinforcementPhase(
         state: GameState,
         playerId: PlayerId,
-        hand: List<at.aau.pulverfass.shared.lobby.state.CardState> = state.handOf(playerId),
+        hand: List<CardState> = state.handOf(playerId),
     ): Boolean =
         state.tradeRequiredOnNextReinforcementPhaseFor(playerId) ||
             (hand.size >= 5 && CardSetValidator.canMakeAnySet(hand))
@@ -2615,7 +2675,7 @@ class MainServerLobbyRoutingService(
     private suspend fun sendUpdatedHandsAfterEliminationIfNeeded(
         lobbyCode: LobbyCode,
         stateBeforeAttack: GameState,
-        events: List<at.aau.pulverfass.shared.lobby.event.LobbyEvent>,
+        events: List<LobbyEvent>,
     ) {
         val eliminationEvents =
             events.filterIsInstance<PlayerEliminatedEvent>()
@@ -2683,9 +2743,7 @@ class MainServerLobbyRoutingService(
         broadcastTurnStateIfChanged(lobbyCode, previousTurnState)
     }
 
-    private fun summarizeAttackResult(
-        events: List<at.aau.pulverfass.shared.lobby.event.LobbyEvent>,
-    ): String {
+    private fun summarizeAttackResult(events: List<LobbyEvent>): String {
         val resolved = events.filterIsInstance<AttackResolvedEvent>().firstOrNull()
         val eliminated = events.any { it is PlayerEliminatedEvent }
         if (resolved == null) {
