@@ -271,7 +271,7 @@ class GameStateTest {
         val blockedState =
             reducer.apply(
                 ownedState,
-                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 1),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 2),
             )
 
         assertFalse(blockedState.canAttackFrom(TerritoryId("alpha"), playerOne))
@@ -299,6 +299,39 @@ class GameStateTest {
                     TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 3),
                 ),
                 TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+            )
+
+        assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+        assertFalse(state.hasAnyValidAttack(playerOne))
+    }
+
+    @Test
+    fun `should reject attack source owned by another player even with enough troops`() {
+        val playerOne = PlayerId(43)
+        val playerTwo = PlayerId(44)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ2")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        reducer.apply(
+                            GameState.initial(
+                                lobbyCode = lobbyCode,
+                                mapDefinition = sampleMapDefinition(),
+                                players = listOf(playerOne, playerTwo),
+                            ),
+                            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerTwo),
+                        ),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
+                    ),
+                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerOne),
+                ),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
             )
 
         assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
@@ -366,7 +399,7 @@ class GameStateTest {
                             ),
                             TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("harbor"), attacker),
                         ),
-                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("harbor"), 2),
+                        TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("harbor"), 3),
                     ),
                     TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("island"), defender),
                 ),
