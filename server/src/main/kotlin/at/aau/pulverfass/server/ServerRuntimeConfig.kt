@@ -4,6 +4,7 @@ data class ServerRuntimeConfig(
     val host: String = DEFAULT_HOST,
     val port: Int = DEFAULT_PORT,
     val database: DatabaseRuntimeConfig = DatabaseRuntimeConfig(),
+    val webSocketMaxFrameSizeBytes: Long = WebSocketPolicy.MAX_FRAME_SIZE_BYTES,
     val appVersion: String = BuildVersion.DEFAULT_VALUE,
 ) {
     companion object {
@@ -45,6 +46,13 @@ data class ServerRuntimeConfig(
                                 defaultValue = DEFAULT_DB_VALIDATION_TIMEOUT_MILLIS,
                                 variableName = "DB_VALIDATION_TIMEOUT_MS",
                             ),
+                    ),
+                webSocketMaxFrameSizeBytes =
+                    parsePositiveLong(
+                        environment.optionalValue("WS_MAX_FRAME_SIZE_BYTES"),
+                        defaultValue = WebSocketPolicy.MAX_FRAME_SIZE_BYTES,
+                        variableName = "WS_MAX_FRAME_SIZE_BYTES",
+                        maxValue = Int.MAX_VALUE.toLong(),
                     ),
                 appVersion =
                     resolveAppVersion(
@@ -92,6 +100,7 @@ data class ServerRuntimeConfig(
             rawValue: String?,
             defaultValue: Long,
             variableName: String,
+            maxValue: Long? = null,
         ): Long {
             if (rawValue == null) {
                 return defaultValue
@@ -100,6 +109,9 @@ data class ServerRuntimeConfig(
             val parsedValue = rawValue.toLongOrNull()
             require(parsedValue != null && parsedValue > 0) {
                 "$variableName must be a positive integer."
+            }
+            require(maxValue == null || parsedValue <= maxValue) {
+                "$variableName must be less than or equal to $maxValue."
             }
             return parsedValue
         }

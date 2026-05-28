@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.routing
 
 import at.aau.pulverfass.server.ServerNetwork
+import at.aau.pulverfass.server.WebSocketPolicy
 import at.aau.pulverfass.server.lobby.CardSetValidator
 import at.aau.pulverfass.server.lobby.mapping.DecodedNetworkRequest
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
@@ -48,6 +49,8 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
+import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
@@ -142,6 +145,8 @@ class MainServerLobbyRoutingService(
     private val nowEpochMillis: () -> Long = { System.currentTimeMillis() },
     private val persistenceCallbacks: LobbyPersistenceCallbacks =
         LobbyPersistenceCallbacks.disabled(),
+    private val publicStatePayloadMaxBytes: Int = WebSocketPolicy.MAX_FRAME_SIZE_BYTES.toInt(),
+    private val privateStatePayloadMaxBytes: Int = WebSocketPolicy.MAX_FRAME_SIZE_BYTES.toInt(),
     private val fortifyMoveValidator: FortifyMoveValidator = DefaultFortifyMoveValidator(),
     private val mapCommandRuleService: MapCommandRuleService =
         DefaultMapCommandRuleService(fortifyMoveValidator = fortifyMoveValidator),
@@ -388,6 +393,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val response = buildMapGetResponse(request, payload)
+            requirePublicStatePayloadWithinLimit(response)
             gameStateDelivery.sendPublicState(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
@@ -454,6 +460,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val response = buildGameStateCatchUpResponse(request, payload)
+            requirePublicStatePayloadWithinLimit(response)
             gameStateDelivery.sendPublicState(request.connectionId, response)
             roundHistoryBuffer(payload.lobbyCode).recordSnapshot(
                 roundIndex = response.turnState.turnCount,
@@ -485,6 +492,7 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val response = buildGameStatePrivateGetResponse(request, payload)
+            requirePrivateStatePayloadWithinLimit(response)
             gameStateDelivery.sendPrivateState(request.connectionId, response)
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
@@ -752,9 +760,10 @@ class MainServerLobbyRoutingService(
             val updatedState =
                 lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     ?: throw IllegalStateException("GAME_NOT_FOUND")
-            gameStateDelivery.sendPrivateState(
-                payload.lobbyCode,
-                PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+            sendPrivateStateUpdateBestEffort(
+                lobbyCode = payload.lobbyCode,
+                payload = PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+                context = "trade-in private hand update",
             )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
@@ -951,14 +960,16 @@ class MainServerLobbyRoutingService(
          */
         lobbyState.players.forEach { playerId ->
             val playerDisplayName = lobbyState.playerDisplayNames[playerId] ?: return@forEach
-            network.send(
-                connectionId,
-                PlayerJoinedLobbyEvent(
-                    lobbyCode = lobbyCode,
-                    playerId = playerId,
-                    playerDisplayName = playerDisplayName,
-                    isHost = lobbyState.lobbyOwner == playerId,
-                ),
+            sendBestEffortPayload(
+                connectionId = connectionId,
+                payload =
+                    PlayerJoinedLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = playerId,
+                        playerDisplayName = playerDisplayName,
+                        isHost = lobbyState.lobbyOwner == playerId,
+                    ),
+                context = "reconnect lobby roster replay",
             )
         }
 
@@ -993,14 +1004,16 @@ class MainServerLobbyRoutingService(
             .filter { existingPlayerId -> existingPlayerId != playerId }
             .forEach { existingPlayerId ->
                 val existingName = lobbyState.playerDisplayNames[existingPlayerId] ?: return@forEach
-                network.send(
-                    request.connectionId,
-                    PlayerJoinedLobbyEvent(
-                        lobbyCode = payload.lobbyCode,
-                        playerId = existingPlayerId,
-                        playerDisplayName = existingName,
-                        isHost = lobbyState.lobbyOwner == existingPlayerId,
-                    ),
+                sendBestEffortPayload(
+                    connectionId = request.connectionId,
+                    payload =
+                        PlayerJoinedLobbyEvent(
+                            lobbyCode = payload.lobbyCode,
+                            playerId = existingPlayerId,
+                            playerDisplayName = existingName,
+                            isHost = lobbyState.lobbyOwner == existingPlayerId,
+                        ),
+                    context = "join existing roster replay",
                 )
             }
 
@@ -1016,7 +1029,11 @@ class MainServerLobbyRoutingService(
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
-                network.send(connectionId, event)
+                sendBestEffortPayload(
+                    connectionId = connectionId,
+                    payload = event,
+                    context = "join lobby broadcast",
+                )
             }
     }
 
@@ -1044,7 +1061,11 @@ class MainServerLobbyRoutingService(
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
-                network.send(connectionId, event)
+                sendBestEffortPayload(
+                    connectionId = connectionId,
+                    payload = event,
+                    context = "leave lobby broadcast",
+                )
             }
     }
 
@@ -1069,7 +1090,11 @@ class MainServerLobbyRoutingService(
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
-                network.send(connectionId, event)
+                sendBestEffortPayload(
+                    connectionId = connectionId,
+                    payload = event,
+                    context = "kick lobby broadcast",
+                )
             }
     }
 
@@ -1180,10 +1205,11 @@ class MainServerLobbyRoutingService(
         cause: Throwable,
     ): MapGetErrorResponse {
         val code =
-            when (cause.message) {
-                "GAME_NOT_FOUND" -> MapGetErrorCode.GAME_NOT_FOUND
-                "NOT_IN_GAME" -> MapGetErrorCode.NOT_IN_GAME
-                "MAP_NOT_READY" -> MapGetErrorCode.MAP_NOT_READY
+            when {
+                cause is PublicStatePayloadTooLargeException -> MapGetErrorCode.PAYLOAD_TOO_LARGE
+                cause.message == "GAME_NOT_FOUND" -> MapGetErrorCode.GAME_NOT_FOUND
+                cause.message == "NOT_IN_GAME" -> MapGetErrorCode.NOT_IN_GAME
+                cause.message == "MAP_NOT_READY" -> MapGetErrorCode.MAP_NOT_READY
                 else -> MapGetErrorCode.MAP_NOT_READY
             }
 
@@ -1203,6 +1229,18 @@ class MainServerLobbyRoutingService(
                 }
                 MapGetErrorCode.MAP_NOT_READY ->
                     "Map-State für Lobby '${payload.lobbyCode.value}' ist noch nicht verfügbar."
+                MapGetErrorCode.PAYLOAD_TOO_LARGE -> {
+                    val payloadTooLarge = cause as? PublicStatePayloadTooLargeException
+                    if (payloadTooLarge == null) {
+                        "Map-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ueberschreitet die konfigurierte Transportgrenze."
+                    } else {
+                        "Map-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
+                            "als die konfigurierte Grenze von " +
+                            "${payloadTooLarge.maxAllowedBytes} Bytes."
+                    }
+                }
             }
 
         return MapGetErrorResponse(
@@ -1217,10 +1255,13 @@ class MainServerLobbyRoutingService(
         cause: Throwable,
     ): GameStateCatchUpErrorResponse {
         val code =
-            when (cause.message) {
-                "GAME_NOT_FOUND" -> GameStateCatchUpErrorCode.GAME_NOT_FOUND
-                "NOT_IN_GAME" -> GameStateCatchUpErrorCode.NOT_IN_GAME
-                "SNAPSHOT_NOT_READY" -> GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY
+            when {
+                cause is PublicStatePayloadTooLargeException ->
+                    GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE
+                cause.message == "GAME_NOT_FOUND" -> GameStateCatchUpErrorCode.GAME_NOT_FOUND
+                cause.message == "NOT_IN_GAME" -> GameStateCatchUpErrorCode.NOT_IN_GAME
+                cause.message == "SNAPSHOT_NOT_READY" ->
+                    GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY
                 else -> GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY
             }
 
@@ -1241,6 +1282,18 @@ class MainServerLobbyRoutingService(
                 GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
                     "Catch-up-Snapshot für Lobby '${payload.lobbyCode.value}' " +
                         "ist noch nicht verfügbar."
+                GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE -> {
+                    val payloadTooLarge = cause as? PublicStatePayloadTooLargeException
+                    if (payloadTooLarge == null) {
+                        "Catch-up-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ueberschreitet die konfigurierte Transportgrenze."
+                    } else {
+                        "Catch-up-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
+                            "als die konfigurierte Grenze von " +
+                            "${payloadTooLarge.maxAllowedBytes} Bytes."
+                    }
+                }
             }
 
         return GameStateCatchUpErrorResponse(code = code, reason = reason)
@@ -1252,9 +1305,11 @@ class MainServerLobbyRoutingService(
         cause: Throwable,
     ): GameStatePrivateGetErrorResponse {
         val code =
-            when (cause.message) {
-                "GAME_NOT_FOUND" -> GameStatePrivateGetErrorCode.GAME_NOT_FOUND
-                "NOT_IN_GAME" -> GameStatePrivateGetErrorCode.NOT_IN_GAME
+            when {
+                cause is PrivateStatePayloadTooLargeException ->
+                    GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE
+                cause.message == "GAME_NOT_FOUND" -> GameStatePrivateGetErrorCode.GAME_NOT_FOUND
+                cause.message == "NOT_IN_GAME" -> GameStatePrivateGetErrorCode.NOT_IN_GAME
                 else -> GameStatePrivateGetErrorCode.REQUESTER_MISMATCH
             }
 
@@ -1273,6 +1328,18 @@ class MainServerLobbyRoutingService(
                     } else {
                         "Requester '${payload.playerId.value}' passt nicht " +
                             "zur aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE -> {
+                    val payloadTooLarge = cause as? PrivateStatePayloadTooLargeException
+                    if (payloadTooLarge == null) {
+                        "Privater Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ueberschreitet die konfigurierte Transportgrenze."
+                    } else {
+                        "Privater Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
+                            "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
+                            "als die konfigurierte Grenze von " +
+                            "${payloadTooLarge.maxAllowedBytes} Bytes."
                     }
                 }
             }
@@ -2443,14 +2510,30 @@ class MainServerLobbyRoutingService(
         }
 
         val payload = publicGameStateBuilder.buildSnapshotBroadcast(currentState)
+        val encodedPayloadSize =
+            runCatching { requirePublicStatePayloadWithinLimit(payload) }
+                .getOrElse { cause ->
+                    if (cause is PublicStatePayloadTooLargeException) {
+                        logger.warn(
+                            "Skipping public snapshot broadcast for lobby {} because payload " +
+                                "size {} exceeds configured limit {}",
+                            lobbyCode.value,
+                            cause.encodedSizeBytes,
+                            cause.maxAllowedBytes,
+                        )
+                        return
+                    }
+                    throw cause
+                }
         logger.info(
             "Public snapshot broadcast: lobbyCode={} playerId={} stateVersion={} " +
-                "turnCount={} mapHash={}",
+                "turnCount={} mapHash={} payloadBytes={}",
             lobbyCode.value,
             currentTurnState.activePlayerId.value,
             payload.stateVersion,
             payload.turnState.turnCount,
             payload.determinism.mapHash,
+            encodedPayloadSize,
         )
         gameStateDelivery.broadcastPublicState(
             lobbyCode = lobbyCode,
@@ -2505,7 +2588,11 @@ class MainServerLobbyRoutingService(
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { activeConnectionId ->
-                network.send(activeConnectionId, event)
+                sendBestEffortPayload(
+                    connectionId = activeConnectionId,
+                    payload = event,
+                    context = "player connection lost broadcast",
+                )
             }
     }
 
@@ -2544,6 +2631,71 @@ class MainServerLobbyRoutingService(
 
     private fun roundHistoryBuffer(lobbyCode: LobbyCode): RoundHistoryBuffer =
         roundHistoryByLobby.computeIfAbsent(lobbyCode) { RoundHistoryBuffer() }
+
+    private fun requirePublicStatePayloadWithinLimit(payload: PublicGameStatePayload): Int {
+        val encodedSize = MessageCodec.encode(payload).size
+        if (encodedSize > publicStatePayloadMaxBytes) {
+            throw PublicStatePayloadTooLargeException(
+                payload = payload,
+                encodedSizeBytes = encodedSize,
+                maxAllowedBytes = publicStatePayloadMaxBytes,
+            )
+        }
+        return encodedSize
+    }
+
+    private fun requirePrivateStatePayloadWithinLimit(payload: PrivateGameStatePayload): Int {
+        val encodedSize = MessageCodec.encode(payload).size
+        if (encodedSize > privateStatePayloadMaxBytes) {
+            throw PrivateStatePayloadTooLargeException(
+                payload = payload,
+                encodedSizeBytes = encodedSize,
+                maxAllowedBytes = privateStatePayloadMaxBytes,
+            )
+        }
+        return encodedSize
+    }
+
+    private suspend fun sendBestEffortPayload(
+        connectionId: ConnectionId,
+        payload: NetworkMessagePayload,
+        context: String,
+    ) {
+        runCatching { network.send(connectionId, payload) }
+            .onFailure { cause ->
+                logger.warn(
+                    "Best-effort payload delivery failed during {} on connection {} payload {}",
+                    context,
+                    connectionId.value,
+                    payload::class.simpleName,
+                    cause,
+                )
+            }
+    }
+
+    private suspend fun sendPrivateStateUpdateBestEffort(
+        lobbyCode: LobbyCode,
+        payload: PrivateGameStatePayload,
+        context: String,
+    ) {
+        runCatching { requirePrivateStatePayloadWithinLimit(payload) }
+            .onFailure { cause ->
+                if (cause is PrivateStatePayloadTooLargeException) {
+                    logger.warn(
+                        "Skipping private payload during {} for lobby {} recipient {} " +
+                            "because payload size {} exceeds configured limit {}",
+                        context,
+                        lobbyCode.value,
+                        payload.recipientPlayerId.value,
+                        cause.encodedSizeBytes,
+                        cause.maxAllowedBytes,
+                    )
+                    return
+                }
+                throw cause
+            }
+        gameStateDelivery.sendPrivateState(lobbyCode, payload)
+    }
 
     private fun createLobbyWithUniqueCode(): LobbyCode {
         repeat(10_000) {
@@ -2631,9 +2783,10 @@ class MainServerLobbyRoutingService(
             .flatMap { event -> listOf(event.eliminatedByPlayerId, event.playerId) }
             .distinct()
             .forEach { playerId ->
-                gameStateDelivery.sendPrivateState(
-                    lobbyCode,
-                    PlayerHandUpdatedEvent.fromGameState(updatedState, playerId),
+                sendPrivateStateUpdateBestEffort(
+                    lobbyCode = lobbyCode,
+                    payload = PlayerHandUpdatedEvent.fromGameState(updatedState, playerId),
+                    context = "elimination private hand update",
                 )
             }
     }

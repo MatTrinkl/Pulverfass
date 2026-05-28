@@ -18,6 +18,7 @@ class ServerRuntimeConfigTest {
         assertEquals(DEFAULT_HOST, config.host)
         assertEquals(DEFAULT_PORT, config.port)
         assertFalse(config.database.isConfigured)
+        assertEquals(WebSocketPolicy.MAX_FRAME_SIZE_BYTES, config.webSocketMaxFrameSizeBytes)
         assertEquals(BuildVersion.DEFAULT_VALUE, config.appVersion)
     }
 
@@ -37,6 +38,7 @@ class ServerRuntimeConfigTest {
                     "DB_POOL_MAX_SIZE" to "16",
                     "DB_CONNECTION_TIMEOUT_MS" to "7000",
                     "DB_VALIDATION_TIMEOUT_MS" to "3000",
+                    "WS_MAX_FRAME_SIZE_BYTES" to "262144",
                 ),
                 manifestVersionProvider = { null },
             )
@@ -52,6 +54,7 @@ class ServerRuntimeConfigTest {
         assertEquals(16, config.database.poolMaxSize)
         assertEquals(7_000L, config.database.connectionTimeoutMillis)
         assertEquals(3_000L, config.database.validationTimeoutMillis)
+        assertEquals(262_144L, config.webSocketMaxFrameSizeBytes)
         assertTrue(config.database.isConfigured)
         assertEquals("v1.2.3", config.appVersion)
     }
@@ -91,6 +94,16 @@ class ServerRuntimeConfigTest {
 
         assertThrows(IllegalArgumentException::class.java) {
             ServerRuntimeConfig.fromEnvironment(mapOf("PORT" to "70000"))
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ServerRuntimeConfig.fromEnvironment(mapOf("WS_MAX_FRAME_SIZE_BYTES" to "0"))
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ServerRuntimeConfig.fromEnvironment(
+                mapOf("WS_MAX_FRAME_SIZE_BYTES" to "${Int.MAX_VALUE.toLong() + 1}"),
+            )
         }
     }
 

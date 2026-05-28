@@ -3,16 +3,11 @@ package at.aau.pulverfass.shared.message.lobby.response
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.message.lobby.PrivateGameStateWireSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.descriptors.element
-import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
@@ -51,112 +46,36 @@ data class GameStatePrivateGetResponse(
  * Technischer Serializer für [GameStatePrivateGetResponse].
  */
 object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetResponse> {
-    private val stringListSerializer = ListSerializer(String.serializer())
-    private val privateHandCardsSerializer = ListSerializer(PrivateHandCardSnapshot.serializer())
+    private val wireSerializer = PrivateGameStateWireSnapshot.serializer()
 
-    override val descriptor =
-        buildClassSerialDescriptor(
-            "at.aau.pulverfass.shared.network.message.GameStatePrivateGetResponse",
-        ) {
-            element("lobbyCode", LobbyCode.serializer().descriptor)
-            element("recipientPlayerId", PlayerId.serializer().descriptor)
-            element<Long>("stateVersion")
-            element("handCards", stringListSerializer.descriptor)
-            element("secretObjectives", stringListSerializer.descriptor)
-            element("privateHandCards", privateHandCardsSerializer.descriptor, isOptional = true)
-        }
+    override val descriptor = wireSerializer.descriptor
 
     override fun serialize(
         encoder: Encoder,
         value: GameStatePrivateGetResponse,
     ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(
-            descriptor,
-            1,
-            PlayerId.serializer(),
-            value.recipientPlayerId,
+        wireSerializer.serialize(
+            encoder,
+            PrivateGameStateWireSnapshot(
+                lobbyCode = value.lobbyCode,
+                recipientPlayerId = value.recipientPlayerId,
+                stateVersion = value.stateVersion,
+                handCards = value.handCards,
+                secretObjectives = value.secretObjectives,
+                privateHandCards = value.privateHandCards,
+            ),
         )
-        composite.encodeLongElement(descriptor, 2, value.stateVersion)
-        composite.encodeSerializableElement(descriptor, 3, stringListSerializer, value.handCards)
-        composite.encodeSerializableElement(
-            descriptor,
-            4,
-            stringListSerializer,
-            value.secretObjectives,
-        )
-        composite.encodeSerializableElement(
-            descriptor,
-            5,
-            privateHandCardsSerializer,
-            value.privateHandCards,
-        )
-        composite.endStructure(descriptor)
     }
 
     override fun deserialize(decoder: Decoder): GameStatePrivateGetResponse {
-        val composite = decoder.beginStructure(descriptor)
-        var lobbyCode: LobbyCode? = null
-        var recipientPlayerId: PlayerId? = null
-        var stateVersion: Long? = null
-        var handCards: List<String>? = null
-        var secretObjectives: List<String>? = null
-        var privateHandCards: List<PrivateHandCardSnapshot> = emptyList()
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 ->
-                    lobbyCode =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            0,
-                            LobbyCode.serializer(),
-                        )
-                1 ->
-                    recipientPlayerId =
-                        composite.decodeSerializableElement(descriptor, 1, PlayerId.serializer())
-                2 -> stateVersion = composite.decodeLongElement(descriptor, 2)
-                3 ->
-                    handCards =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            3,
-                            stringListSerializer,
-                        )
-                4 ->
-                    secretObjectives =
-                        composite.decodeSerializableElement(descriptor, 4, stringListSerializer)
-                5 ->
-                    privateHandCards =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            5,
-                            privateHandCardsSerializer,
-                        )
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
-            }
-        }
-
-        composite.endStructure(descriptor)
+        val wire = wireSerializer.deserialize(decoder)
         return GameStatePrivateGetResponse(
-            lobbyCode =
-                lobbyCode
-                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            recipientPlayerId =
-                recipientPlayerId
-                    ?: throw MissingFieldException("recipientPlayerId", descriptor.serialName),
-            stateVersion =
-                stateVersion
-                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            handCards =
-                handCards
-                    ?: throw MissingFieldException("handCards", descriptor.serialName),
-            secretObjectives =
-                secretObjectives
-                    ?: throw MissingFieldException("secretObjectives", descriptor.serialName),
-            privateHandCards = privateHandCards,
+            lobbyCode = wire.lobbyCode,
+            recipientPlayerId = wire.recipientPlayerId,
+            stateVersion = wire.stateVersion,
+            handCards = wire.handCards,
+            secretObjectives = wire.secretObjectives,
+            privateHandCards = wire.privateHandCards,
         )
     }
 }

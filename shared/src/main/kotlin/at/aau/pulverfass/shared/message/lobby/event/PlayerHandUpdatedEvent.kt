@@ -6,8 +6,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.message.codec.ManualSerializerSupport
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
@@ -71,71 +71,78 @@ object PlayerHandUpdatedEventSerializer : KSerializer<PlayerHandUpdatedEvent> {
         encoder: Encoder,
         value: PlayerHandUpdatedEvent,
     ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeSerializableElement(
-            descriptor,
-            1,
-            PlayerId.serializer(),
-            value.recipientPlayerId,
-        )
-        composite.encodeLongElement(descriptor, 2, value.stateVersion)
-        composite.encodeSerializableElement(descriptor, 3, handCardsSerializer, value.handCards)
-        composite.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): PlayerHandUpdatedEvent {
-        val composite = decoder.beginStructure(descriptor)
-        var lobbyCode: LobbyCode? = null
-        var recipientPlayerId: PlayerId? = null
-        var stateVersion: Long? = null
-        var handCards: List<PrivateHandCardSnapshot>? = null
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 ->
-                    lobbyCode =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            0,
-                            LobbyCode.serializer(),
-                        )
-                1 ->
-                    recipientPlayerId =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            1,
-                            PlayerId.serializer(),
-                        )
-                2 -> stateVersion = composite.decodeLongElement(descriptor, 2)
-                3 ->
-                    handCards =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            3,
-                            handCardsSerializer,
-                        )
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
-            }
+        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
+            composite.encodeSerializableElement(
+                descriptor,
+                0,
+                LobbyCode.serializer(),
+                value.lobbyCode,
+            )
+            composite.encodeSerializableElement(
+                descriptor,
+                1,
+                PlayerId.serializer(),
+                value.recipientPlayerId,
+            )
+            composite.encodeLongElement(descriptor, 2, value.stateVersion)
+            composite.encodeSerializableElement(
+                descriptor,
+                3,
+                handCardsSerializer,
+                value.handCards,
+            )
         }
-
-        composite.endStructure(descriptor)
-        return PlayerHandUpdatedEvent(
-            lobbyCode =
-                lobbyCode
-                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            recipientPlayerId =
-                recipientPlayerId
-                    ?: throw MissingFieldException("recipientPlayerId", descriptor.serialName),
-            stateVersion =
-                stateVersion
-                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            handCards =
-                handCards
-                    ?: throw MissingFieldException("handCards", descriptor.serialName),
-        )
     }
+
+    override fun deserialize(decoder: Decoder): PlayerHandUpdatedEvent =
+        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
+            var lobbyCode: LobbyCode? = null
+            var recipientPlayerId: PlayerId? = null
+            var stateVersion: Long? = null
+            var handCards: List<PrivateHandCardSnapshot>? = null
+
+            loop@ while (true) {
+                when (val index = composite.decodeElementIndex(descriptor)) {
+                    0 ->
+                        lobbyCode =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                0,
+                                LobbyCode.serializer(),
+                            )
+                    1 ->
+                        recipientPlayerId =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                1,
+                                PlayerId.serializer(),
+                            )
+                    2 -> stateVersion = composite.decodeLongElement(descriptor, 2)
+                    3 ->
+                        handCards =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                3,
+                                handCardsSerializer,
+                            )
+                    CompositeDecoder.DECODE_DONE -> break@loop
+                    else -> ManualSerializerSupport.unexpectedIndex(index)
+                }
+            }
+
+            PlayerHandUpdatedEvent(
+                lobbyCode =
+                    lobbyCode ?: ManualSerializerSupport.missingField("lobbyCode", descriptor),
+                recipientPlayerId =
+                    recipientPlayerId
+                        ?: ManualSerializerSupport.missingField("recipientPlayerId", descriptor),
+                stateVersion =
+                    stateVersion
+                        ?: ManualSerializerSupport.missingField("stateVersion", descriptor),
+                handCards =
+                    handCards ?: ManualSerializerSupport.missingField("handCards", descriptor),
+            )
+        }
 }
 
 object PrivateHandCardSnapshotSerializer : KSerializer<PrivateHandCardSnapshot> {
@@ -151,42 +158,41 @@ object PrivateHandCardSnapshotSerializer : KSerializer<PrivateHandCardSnapshot> 
         encoder: Encoder,
         value: PrivateHandCardSnapshot,
     ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, CardId.serializer(), value.cardId)
-        composite.encodeSerializableElement(descriptor, 1, CardType.serializer(), value.type)
-        composite.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): PrivateHandCardSnapshot {
-        val composite = decoder.beginStructure(descriptor)
-        var cardId: CardId? = null
-        var type: CardType? = null
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 ->
-                    cardId =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            0,
-                            CardId.serializer(),
-                        )
-                1 ->
-                    type =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            1,
-                            CardType.serializer(),
-                        )
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
-            }
+        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
+            composite.encodeSerializableElement(descriptor, 0, CardId.serializer(), value.cardId)
+            composite.encodeSerializableElement(descriptor, 1, CardType.serializer(), value.type)
         }
-
-        composite.endStructure(descriptor)
-        return PrivateHandCardSnapshot(
-            cardId = cardId ?: throw MissingFieldException("cardId", descriptor.serialName),
-            type = type ?: throw MissingFieldException("type", descriptor.serialName),
-        )
     }
+
+    override fun deserialize(decoder: Decoder): PrivateHandCardSnapshot =
+        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
+            var cardId: CardId? = null
+            var type: CardType? = null
+
+            loop@ while (true) {
+                when (val index = composite.decodeElementIndex(descriptor)) {
+                    0 ->
+                        cardId =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                0,
+                                CardId.serializer(),
+                            )
+                    1 ->
+                        type =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                1,
+                                CardType.serializer(),
+                            )
+                    CompositeDecoder.DECODE_DONE -> break@loop
+                    else -> ManualSerializerSupport.unexpectedIndex(index)
+                }
+            }
+
+            PrivateHandCardSnapshot(
+                cardId = cardId ?: ManualSerializerSupport.missingField("cardId", descriptor),
+                type = type ?: ManualSerializerSupport.missingField("type", descriptor),
+            )
+        }
 }

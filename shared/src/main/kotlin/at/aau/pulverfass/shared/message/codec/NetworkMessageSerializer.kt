@@ -6,9 +6,11 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.NetworkSerializationException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
+import at.aau.pulverfass.shared.text.decodeUtf8Strict
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import java.nio.charset.CharacterCodingException
 
 /**
  * Interner Serializer für Header und Payloads des Netzwerkprotokolls.
@@ -38,8 +40,12 @@ internal object NetworkMessageSerializer {
      */
     fun deserializeHeader(bytes: ByteArray): MessageHeader =
         try {
-            json.decodeFromString(MessageHeader.serializer(), bytes.decodeToString())
+            json.decodeFromString(MessageHeader.serializer(), bytes.decodeUtf8Strict())
         } catch (exception: SerializationException) {
+            throw NetworkSerializationException("Failed to deserialize message header", exception)
+        } catch (exception: IllegalArgumentException) {
+            throw NetworkSerializationException("Failed to deserialize message header", exception)
+        } catch (exception: CharacterCodingException) {
             throw NetworkSerializationException("Failed to deserialize message header", exception)
         }
 
@@ -62,6 +68,11 @@ internal object NetworkMessageSerializer {
                 "Failed to serialize payload of type ${payload.javaClass.name}",
                 exception,
             )
+        } catch (exception: IllegalArgumentException) {
+            throw NetworkSerializationException(
+                "Failed to serialize payload of type ${payload.javaClass.name}",
+                exception,
+            )
         }
 
     /**
@@ -78,6 +89,11 @@ internal object NetworkMessageSerializer {
             NetworkPayloadRegistry.serializePayload(payload).encodeToByteArray()
         } catch (exception: UnsupportedPayloadClassException) {
             throw exception
+        } catch (exception: IllegalArgumentException) {
+            throw NetworkSerializationException(
+                "Failed to serialize payload of type ${payload.javaClass.name}",
+                exception,
+            )
         }
 
     /**
@@ -94,13 +110,21 @@ internal object NetworkMessageSerializer {
         type: MessageType,
         bytes: ByteArray,
     ): NetworkMessagePayload {
-        val jsonString = bytes.decodeToString()
-
         return try {
-            NetworkPayloadRegistry.deserializePayload(type, jsonString)
+            NetworkPayloadRegistry.deserializePayload(type, bytes.decodeUtf8Strict())
         } catch (exception: UnsupportedPayloadTypeException) {
             throw exception
         } catch (exception: SerializationException) {
+            throw NetworkSerializationException(
+                "Failed to deserialize payload for message type $type",
+                exception,
+            )
+        } catch (exception: IllegalArgumentException) {
+            throw NetworkSerializationException(
+                "Failed to deserialize payload for message type $type",
+                exception,
+            )
+        } catch (exception: CharacterCodingException) {
             throw NetworkSerializationException(
                 "Failed to deserialize payload for message type $type",
                 exception,

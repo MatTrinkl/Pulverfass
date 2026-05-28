@@ -1,9 +1,9 @@
 package at.aau.pulverfass.shared.message.lobby.request
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.codec.ManualSerializerSupport
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
@@ -53,57 +53,61 @@ object GameStateCatchUpRequestSerializer : KSerializer<GameStateCatchUpRequest> 
         encoder: Encoder,
         value: GameStateCatchUpRequest,
     ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeLongElement(descriptor, 1, value.clientStateVersion)
-        if (value.reason != null) {
+        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
             composite.encodeSerializableElement(
                 descriptor,
-                2,
-                GameStateCatchUpReason.serializer(),
-                value.reason,
+                0,
+                LobbyCode.serializer(),
+                value.lobbyCode,
             )
-        }
-        composite.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): GameStateCatchUpRequest {
-        val composite = decoder.beginStructure(descriptor)
-        var lobbyCode: LobbyCode? = null
-        var clientStateVersion: Long? = null
-        var reason: GameStateCatchUpReason? = null
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 ->
-                    lobbyCode =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            0,
-                            LobbyCode.serializer(),
-                        )
-                1 -> clientStateVersion = composite.decodeLongElement(descriptor, 1)
-                2 ->
-                    reason =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            2,
-                            GameStateCatchUpReason.serializer(),
-                        )
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
+            composite.encodeLongElement(descriptor, 1, value.clientStateVersion)
+            if (value.reason != null) {
+                composite.encodeSerializableElement(
+                    descriptor,
+                    2,
+                    GameStateCatchUpReason.serializer(),
+                    value.reason,
+                )
             }
         }
-
-        composite.endStructure(descriptor)
-        return GameStateCatchUpRequest(
-            lobbyCode =
-                lobbyCode
-                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            clientStateVersion =
-                clientStateVersion
-                    ?: throw MissingFieldException("clientStateVersion", descriptor.serialName),
-            reason = reason,
-        )
     }
+
+    override fun deserialize(decoder: Decoder): GameStateCatchUpRequest =
+        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
+            var lobbyCode: LobbyCode? = null
+            var clientStateVersion: Long? = null
+            var reason: GameStateCatchUpReason? = null
+
+            loop@ while (true) {
+                when (val index = composite.decodeElementIndex(descriptor)) {
+                    0 ->
+                        lobbyCode =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                0,
+                                LobbyCode.serializer(),
+                            )
+                    1 -> clientStateVersion = composite.decodeLongElement(descriptor, 1)
+                    2 ->
+                        reason =
+                            composite.decodeSerializableElement(
+                                descriptor,
+                                2,
+                                GameStateCatchUpReason.serializer(),
+                            )
+                    CompositeDecoder.DECODE_DONE -> break@loop
+                    else -> ManualSerializerSupport.unexpectedIndex(index)
+                }
+            }
+
+            GameStateCatchUpRequest(
+                lobbyCode =
+                    lobbyCode
+                        ?: ManualSerializerSupport.missingField("lobbyCode", descriptor),
+                clientStateVersion =
+                    clientStateVersion
+                        ?: ManualSerializerSupport.missingField("clientStateVersion", descriptor),
+                reason = reason,
+            )
+        }
 }

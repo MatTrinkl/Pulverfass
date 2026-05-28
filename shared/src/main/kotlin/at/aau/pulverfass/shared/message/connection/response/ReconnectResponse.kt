@@ -2,10 +2,11 @@ package at.aau.pulverfass.shared.message.connection.response
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.requireValidPlayerDisplayName
+import at.aau.pulverfass.shared.message.codec.ManualSerializerSupport
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
@@ -45,6 +46,7 @@ data class ReconnectResponse(
         require(!(playerDisplayName != null && lobbyCode == null)) {
             "ReconnectResponse darf playerDisplayName nur mit lobbyCode übertragen."
         }
+        playerDisplayName?.let { requireValidPlayerDisplayName(it) }
     }
 }
 
@@ -68,83 +70,84 @@ object ReconnectResponseSerializer : KSerializer<ReconnectResponse> {
         encoder: Encoder,
         value: ReconnectResponse,
     ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeBooleanElement(descriptor, 0, value.success)
-        if (value.errorCode != null) {
-            composite.encodeNullableSerializableElement(
-                descriptor = descriptor,
-                index = 1,
-                serializer = ReconnectErrorCode.serializer(),
-                value = value.errorCode,
-            )
-        }
-        if (value.playerId != null) {
-            composite.encodeNullableSerializableElement(
-                descriptor = descriptor,
-                index = 2,
-                serializer = PlayerId.serializer(),
-                value = value.playerId,
-            )
-        }
-        if (value.lobbyCode != null) {
-            composite.encodeNullableSerializableElement(
-                descriptor = descriptor,
-                index = 3,
-                serializer = LobbyCode.serializer(),
-                value = value.lobbyCode,
-            )
-        }
-        if (value.playerDisplayName != null) {
-            composite.encodeStringElement(descriptor, 4, value.playerDisplayName)
-        }
-        composite.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): ReconnectResponse {
-        val composite = decoder.beginStructure(descriptor)
-        var success: Boolean? = null
-        var errorCode: ReconnectErrorCode? = null
-        var playerId: PlayerId? = null
-        var lobbyCode: LobbyCode? = null
-        var playerDisplayName: String? = null
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 -> success = composite.decodeBooleanElement(descriptor, 0)
-                1 ->
-                    errorCode =
-                        composite.decodeNullableSerializableElement(
-                            descriptor,
-                            1,
-                            ReconnectErrorCode.serializer(),
-                        )
-                2 ->
-                    playerId =
-                        composite.decodeNullableSerializableElement(
-                            descriptor,
-                            2,
-                            PlayerId.serializer(),
-                        )
-                3 ->
-                    lobbyCode =
-                        composite.decodeNullableSerializableElement(
-                            descriptor,
-                            3,
-                            LobbyCode.serializer(),
-                        )
-                4 -> playerDisplayName = composite.decodeStringElement(descriptor, 4)
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
+        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
+            composite.encodeBooleanElement(descriptor, 0, value.success)
+            if (value.errorCode != null) {
+                composite.encodeNullableSerializableElement(
+                    descriptor = descriptor,
+                    index = 1,
+                    serializer = ReconnectErrorCode.serializer(),
+                    value = value.errorCode,
+                )
+            }
+            if (value.playerId != null) {
+                composite.encodeNullableSerializableElement(
+                    descriptor = descriptor,
+                    index = 2,
+                    serializer = PlayerId.serializer(),
+                    value = value.playerId,
+                )
+            }
+            if (value.lobbyCode != null) {
+                composite.encodeNullableSerializableElement(
+                    descriptor = descriptor,
+                    index = 3,
+                    serializer = LobbyCode.serializer(),
+                    value = value.lobbyCode,
+                )
+            }
+            if (value.playerDisplayName != null) {
+                composite.encodeStringElement(descriptor, 4, value.playerDisplayName)
             }
         }
-
-        composite.endStructure(descriptor)
-        return ReconnectResponse(
-            success = success ?: throw MissingFieldException("success", descriptor.serialName),
-            errorCode = errorCode,
-            playerId = playerId,
-            lobbyCode = lobbyCode,
-            playerDisplayName = playerDisplayName,
-        )
     }
+
+    override fun deserialize(decoder: Decoder): ReconnectResponse =
+        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
+            var success: Boolean? = null
+            var errorCode: ReconnectErrorCode? = null
+            var playerId: PlayerId? = null
+            var lobbyCode: LobbyCode? = null
+            var playerDisplayName: String? = null
+
+            loop@ while (true) {
+                when (val index = composite.decodeElementIndex(descriptor)) {
+                    0 -> success = composite.decodeBooleanElement(descriptor, 0)
+                    1 ->
+                        errorCode =
+                            composite.decodeNullableSerializableElement(
+                                descriptor,
+                                1,
+                                ReconnectErrorCode.serializer(),
+                            )
+                    2 ->
+                        playerId =
+                            composite.decodeNullableSerializableElement(
+                                descriptor,
+                                2,
+                                PlayerId.serializer(),
+                            )
+                    3 ->
+                        lobbyCode =
+                            composite.decodeNullableSerializableElement(
+                                descriptor,
+                                3,
+                                LobbyCode.serializer(),
+                            )
+                    4 -> playerDisplayName = composite.decodeStringElement(descriptor, 4)
+                    CompositeDecoder.DECODE_DONE -> break@loop
+                    else -> ManualSerializerSupport.unexpectedIndex(index)
+                }
+            }
+
+            ReconnectResponse(
+                success =
+                    success
+                        ?: ManualSerializerSupport.missingField("success", descriptor),
+                errorCode = errorCode,
+                playerId = playerId,
+                lobbyCode = lobbyCode,
+                playerDisplayName = playerDisplayName,
+            )
+        }
 }

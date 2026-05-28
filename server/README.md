@@ -31,6 +31,7 @@ Relevante Runtime-ENV-Variablen:
 - `DB_POOL_MAX_SIZE` optional, Default `10`
 - `DB_CONNECTION_TIMEOUT_MS` optional, Default `5000`
 - `DB_VALIDATION_TIMEOUT_MS` optional, Default `2000`
+- `WS_MAX_FRAME_SIZE_BYTES` optional, Default `1048576`
 
 Smoke-Test auf demselben Port:
 

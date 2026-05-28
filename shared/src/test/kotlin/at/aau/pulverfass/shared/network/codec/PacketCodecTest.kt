@@ -93,4 +93,20 @@ class PacketCodecTest {
 
         assertEquals("Packet too short for declared header length.", exception.message)
     }
+
+    @Test
+    fun `should reject unpack when declared header length would overflow size calculation`() {
+        val bytes =
+            ByteBuffer.allocate(Int.SIZE_BYTES)
+                .order(ByteOrder.BIG_ENDIAN)
+                .putInt(Int.MAX_VALUE)
+                .array()
+
+        val exception =
+            assertThrows(CorruptPacketException::class.java) {
+                PacketCodec.unpack(bytes)
+            }
+
+        assertEquals("Packet too short for declared header length.", exception.message)
+    }
 }
