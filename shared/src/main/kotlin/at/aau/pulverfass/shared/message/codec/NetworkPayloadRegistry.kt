@@ -5,6 +5,7 @@ import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
@@ -89,6 +90,7 @@ internal object NetworkPayloadRegistry {
     private val payloadTypeByClass =
         mapOf<Class<out NetworkMessagePayload>, MessageType>(
             ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
+            GlobalPlayerCountEvent::class.java to MessageType.GLOBAL_PLAYER_COUNT_BROADCAST,
             ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
             ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
             AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
@@ -194,6 +196,7 @@ internal object NetworkPayloadRegistry {
     private val payloadSerializerByClass =
         mapOf<Class<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
             ConnectionResponse::class.java to encodeWith(ConnectionResponse.serializer()),
+            GlobalPlayerCountEvent::class.java to encodeWith(GlobalPlayerCountEvent.serializer()),
             ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
             ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
             AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
@@ -304,6 +307,8 @@ internal object NetworkPayloadRegistry {
     private val payloadDeserializerByType =
         mapOf<MessageType, (String) -> NetworkMessagePayload>(
             MessageType.CONNECTION_RESPONSE to decodeWith(ConnectionResponse.serializer()),
+            MessageType.GLOBAL_PLAYER_COUNT_BROADCAST to
+                decodeWith(GlobalPlayerCountEvent.serializer()),
             MessageType.CONNECTION_RECONNECT_REQUEST to
                 decodeWith(ReconnectRequest.serializer()),
             MessageType.CONNECTION_RECONNECT_RESPONSE to

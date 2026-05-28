@@ -14,7 +14,6 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
-import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
@@ -27,7 +26,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,7 +33,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -312,31 +309,19 @@ class StartGameIntegrationTest {
 
     private suspend fun receivePayload(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload {
-        val frame = withTimeout(5_000) { session.incoming.receive() }
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    ): NetworkMessagePayload = receiveRelevantTestPayload(session)
 
     private suspend fun receivePayloadOrNull(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): NetworkMessagePayload? {
-        val frame =
-            withTimeoutOrNull(200) {
-                session.incoming.receive()
-            } ?: return null
-        assertTrue(frame is Frame.Binary)
-        return MessageCodec.decodePayload((frame as Frame.Binary).readBytes())
-    }
+    ): NetworkMessagePayload? =
+        receiveRelevantTestPayloadOrNull(
+            session = session,
+            timeoutMillis = 200,
+        )
 
     private suspend fun discardConnectionHandshake(
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
-    ): SessionToken {
-        val payload = receivePayload(session)
-        assertTrue(payload is ConnectionResponse)
-        val response = payload as ConnectionResponse
-        return response.sessionToken
-    }
+    ): SessionToken = receiveTestConnectionToken(session)
 
     private suspend fun awaitConnectionId(
         network: ServerNetwork,

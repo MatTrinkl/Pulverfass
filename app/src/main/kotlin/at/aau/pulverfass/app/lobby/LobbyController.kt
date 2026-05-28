@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
@@ -837,6 +838,7 @@ class LobbyController(
                 statusText = statusText,
                 errorText = errorText,
                 pendingCommandKeys = emptySet(),
+                globalPlayerCount = null,
                 gameState =
                     it.gameState.copy(
                         lastSyncError =
@@ -1173,6 +1175,9 @@ class LobbyController(
             }
             is PlayerCountUpdateEvent -> {
                 _state.update { it.copy(onlinePlayerCount = payload.playerCount) }
+            }
+            is GlobalPlayerCountEvent -> {
+                _state.update { it.copy(globalPlayerCount = payload.playerCount) }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)

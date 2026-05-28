@@ -98,7 +98,7 @@ fun LobbyScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ServerStatusPill(isConnected = state.isConnected)
-            OnlinePlayersPill(count = state.onlinePlayerCount)
+            OnlinePlayersPill(count = state.globalPlayerCount)
         }
 
         // Top-Right: Dev-Info-Panel (S-URL, S-Message, MAP-TEST)

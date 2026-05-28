@@ -2,6 +2,7 @@ package at.aau.pulverfass.server
 
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -101,6 +102,7 @@ private suspend fun receiveRawTestPayloadOrNull(
 private fun NetworkMessagePayload.isIgnoredTestPayload(skipGameSync: Boolean): Boolean =
     this is ConnectionResponse ||
         this is PlayerCountUpdateEvent ||
+        this is GlobalPlayerCountEvent ||
         (
             skipGameSync &&
                 (

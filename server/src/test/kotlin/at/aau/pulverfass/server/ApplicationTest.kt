@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -575,7 +576,8 @@ class ApplicationTest {
                 payload !is GameStateDeltaEvent &&
                 payload !is GameStateSnapshotBroadcast &&
                 payload !is TurnStateUpdatedEvent &&
-                payload !is PlayerCountUpdateEvent
+                payload !is PlayerCountUpdateEvent &&
+                payload !is GlobalPlayerCountEvent
             ) {
                 return payload
             }
