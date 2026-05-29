@@ -1,5 +1,9 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
@@ -115,5 +119,35 @@ object GameErrorTextMapper {
                 "Die gewählten Karten bilden kein gültiges Set."
             TradeInCardsErrorCode.INVALID_REQUEST ->
                 "Für einen Tausch müssen genau drei Karten ausgewählt werden."
+        }
+
+    fun map(error: AttackErrorResponse): String =
+        when (error.code) {
+            AttackErrorCode.REQUESTER_MISMATCH -> REQUESTER_MISMATCH_TEXT
+            AttackErrorCode.NOT_ACTIVE_PLAYER -> "Angriffe sind nur im eigenen Zug möglich."
+            AttackErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            AttackErrorCode.PHASE_MISMATCH -> "Die Angriffsphase ist bereits beendet."
+            AttackErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            AttackErrorCode.FROM_TERRITORY_NOT_OWNED ->
+                "Angriffe können nur aus einem eigenen Gebiet gestartet werden."
+            AttackErrorCode.ATTACKING_OWN_TERRITORY ->
+                "Ein eigenes Gebiet kann nicht angegriffen werden."
+            AttackErrorCode.NOT_ADJACENT ->
+                "Das Zielgebiet grenzt nicht an das Ausgangsgebiet."
+            AttackErrorCode.INSUFFICIENT_TROOPS ->
+                "Im Ausgangsgebiet sind nicht genügend Truppen verfügbar."
+            AttackErrorCode.INVALID_MOVE_AFTER_CAPTURE ->
+                "Die gewählte Besetzung nach einer Eroberung ist nicht möglich."
+            AttackErrorCode.INVALID_REQUEST -> "Die gewählte Angriffsaktion ist ungültig."
+        }
+
+    fun map(error: ConfirmAttackDoneErrorResponse): String =
+        when (error.code) {
+            ConfirmAttackDoneErrorCode.REQUESTER_MISMATCH -> REQUESTER_MISMATCH_TEXT
+            ConfirmAttackDoneErrorCode.NOT_ACTIVE_PLAYER ->
+                "Die Angriffsphase kann nur im eigenen Zug beendet werden."
+            ConfirmAttackDoneErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            ConfirmAttackDoneErrorCode.PHASE_MISMATCH -> "Die Angriffsphase ist bereits beendet."
+            ConfirmAttackDoneErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
         }
 }

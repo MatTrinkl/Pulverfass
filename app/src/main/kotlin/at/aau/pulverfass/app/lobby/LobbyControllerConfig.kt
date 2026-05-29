@@ -44,6 +44,11 @@ data class LobbyControllerConfig(
     val errorConfirmReinforcementsFailed: String = "Verstärkungsphase konnte nicht beendet werden",
     val errorTradeInNotAllowed: String = "Wähle genau drei Karten zum Eintauschen aus",
     val errorTradeInFailed: String = "Kartentausch fehlgeschlagen",
+    val errorAttackNotAllowed: String = "Ein Angriff ist gerade nicht möglich",
+    val errorAttackSelectionMissing: String =
+        "Wähle ein eigenes und ein benachbartes fremdes Gebiet",
+    val errorAttackFailed: String = "Angriff fehlgeschlagen",
+    val errorConfirmAttackFailed: String = "Angriffsphase konnte nicht beendet werden",
     val errorDisconnectedDuringGame: String =
         "Verbindung getrennt. Reconnect wird vorbereitet.",
     val errorReconnectFailed: String = "Session konnte nicht wiederhergestellt werden",

@@ -199,7 +199,7 @@ class MapDefinitionHashingTest {
         val definition = MapConfigLoader.loadDefault()
 
         assertEquals(
-            "fbb6d67f4b4f0994ab6bcfe7a875b5411b1eeac9b3b5493fdbdc27c1e48128e4",
+            "2aa316319cf21dd0dbd9fd8191dc70f2ff7710418c03671f60d15ba29c777fe6",
             definition.mapHash,
         )
     }

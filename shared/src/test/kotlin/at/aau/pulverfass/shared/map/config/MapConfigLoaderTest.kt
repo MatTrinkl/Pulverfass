@@ -24,6 +24,44 @@ class MapConfigLoaderTest {
         assertEquals(2, definition.continentsById.getValue(ContinentId("suedamerika")).bonusValue)
         assertEquals(2, definition.continentsById.getValue(ContinentId("afrika")).bonusValue)
         assertEquals(1, definition.continentsById.getValue(ContinentId("ozeanien")).bonusValue)
+        assertTrue(
+            TerritoryId("alaska") !in
+                definition.continentsById.getValue(ContinentId("nordamerika")).territoryIds,
+        )
+        assertTrue(
+            TerritoryId("alaska") in
+                definition.continentsById.getValue(ContinentId("asien")).territoryIds,
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("alaska"))
+                .edges
+                .any { it.targetId == TerritoryId("japan") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("japan"))
+                .edges
+                .any { it.targetId == TerritoryId("alaska") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("alaska"))
+                .edges
+                .any { it.targetId == TerritoryId("china") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("china"))
+                .edges
+                .any { it.targetId == TerritoryId("alaska") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("sibirien"))
+                .edges
+                .none { it.targetId == TerritoryId("japan") },
+        )
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
             definition.territoriesById

@@ -42,7 +42,9 @@
       "territoryId": "alaska",
       "edges": [
         { "targetId": "kanada" },
-        { "targetId": "sibirien" }
+        { "targetId": "sibirien" },
+        { "targetId": "china" },
+        { "targetId": "japan" }
       ]
     },
     {
@@ -119,7 +121,6 @@
       "edges": [
         { "targetId": "russland" },
         { "targetId": "china" },
-        { "targetId": "japan" },
         { "targetId": "alaska" }
       ]
     },
@@ -128,6 +129,7 @@
       "edges": [
         { "targetId": "russland" },
         { "targetId": "sibirien" },
+        { "targetId": "alaska" },
         { "targetId": "japan" },
         { "targetId": "ferner_osten" },
         { "targetId": "naher_osten" }
@@ -137,7 +139,7 @@
       "territoryId": "japan",
       "edges": [
         { "targetId": "china" },
-        { "targetId": "sibirien" }
+        { "targetId": "alaska" }
       ]
     },
     {
@@ -209,7 +211,6 @@
       "territoryIds": [
         "mittelamerika",
         "usa",
-        "alaska",
         "kanada",
         "groenland"
       ],
@@ -241,6 +242,7 @@
         "russland",
         "naher_osten",
         "sibirien",
+        "alaska",
         "china",
         "japan",
         "ferner_osten"

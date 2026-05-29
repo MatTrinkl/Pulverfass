@@ -1,5 +1,9 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
@@ -243,5 +247,60 @@ class GameErrorTextMapperTest {
         assertTrue(messages.getValue(TradeInCardsErrorCode.CARDS_NOT_OWNED).contains("Hand"))
         assertTrue(messages.getValue(TradeInCardsErrorCode.INVALID_SET).contains("gültiges Set"))
         assertTrue(messages.getValue(TradeInCardsErrorCode.INVALID_REQUEST).contains("genau drei"))
+    }
+
+    @Test
+    fun `attack errors are translated for UI`() {
+        val messages =
+            AttackErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(AttackErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(AttackErrorCode.REQUESTER_MISMATCH).contains("Spielerzuordnung"),
+        )
+        assertTrue(messages.getValue(AttackErrorCode.NOT_ACTIVE_PLAYER).contains("eigenen Zug"))
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(AttackErrorCode.GAME_PAUSED),
+        )
+        assertTrue(messages.getValue(AttackErrorCode.PHASE_MISMATCH).contains("beendet"))
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(AttackErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(messages.getValue(AttackErrorCode.FROM_TERRITORY_NOT_OWNED).contains("eigenen"))
+        assertTrue(messages.getValue(AttackErrorCode.ATTACKING_OWN_TERRITORY).contains("eigenes"))
+        assertTrue(messages.getValue(AttackErrorCode.NOT_ADJACENT).contains("grenzt"))
+        assertTrue(messages.getValue(AttackErrorCode.INSUFFICIENT_TROOPS).contains("genügend"))
+        assertTrue(
+            messages.getValue(AttackErrorCode.INVALID_MOVE_AFTER_CAPTURE).contains("Besetzung"),
+        )
+        assertTrue(messages.getValue(AttackErrorCode.INVALID_REQUEST).contains("ungültig"))
+    }
+
+    @Test
+    fun `attack finish errors are translated for UI`() {
+        val messages =
+            ConfirmAttackDoneErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(ConfirmAttackDoneErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(ConfirmAttackDoneErrorCode.REQUESTER_MISMATCH)
+                .contains("Spielerzuordnung"),
+        )
+        assertTrue(
+            messages.getValue(ConfirmAttackDoneErrorCode.NOT_ACTIVE_PLAYER).contains("eigenen"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(ConfirmAttackDoneErrorCode.GAME_PAUSED),
+        )
+        assertTrue(messages.getValue(ConfirmAttackDoneErrorCode.PHASE_MISMATCH).contains("beendet"))
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(ConfirmAttackDoneErrorCode.GAME_NOT_FOUND),
+        )
     }
 }

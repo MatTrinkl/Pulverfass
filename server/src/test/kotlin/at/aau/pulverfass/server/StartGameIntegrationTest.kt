@@ -16,6 +16,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
@@ -163,12 +164,17 @@ class StartGameIntegrationTest {
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(ownerSession.first),
                     )
+                    val grantDelta = receivePayload(ownerSession.first) as GameStateDeltaEvent
+                    val grant = grantDelta.events.single() as ReinforcementsGrantedEvent
+                    assertEquals(expectedStartPlayer, grant.playerId)
+                    assertTrue(grant.amount >= 3)
                     assertEquals(expectedTurnStateEvent, receivePayload(ownerSession.first))
                     assertEquals(expectedDelta, receivePayload(player2Session.first))
                     assertEquals(
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(player2Session.first),
                     )
+                    assertEquals(grantDelta, receivePayload(player2Session.first))
                     assertEquals(expectedTurnStateEvent, receivePayload(player2Session.first))
                     assertEquals(
                         expectedDelta,
@@ -178,6 +184,7 @@ class StartGameIntegrationTest {
                         GameStartedEvent(lobbyCode = lobbyCode),
                         receivePayload(player3Session.first),
                     )
+                    assertEquals(grantDelta, receivePayload(player3Session.first))
                     assertEquals(expectedTurnStateEvent, receivePayload(player3Session.first))
                     assertNull(receivePayloadOrNull(ownerSession.first))
                     assertNull(receivePayloadOrNull(player2Session.first))
@@ -191,7 +198,10 @@ class StartGameIntegrationTest {
                     assertEquals(expectedStartPlayer, currentState?.activePlayer)
                     assertEquals(expectedTurnStateEvent.turnCount, currentState?.turnNumber)
                     assertEquals(expectedStartPlayer, currentState?.configuredStartPlayerId)
-                    assertEquals(1L, currentState?.stateVersion)
+                    assertEquals(2L, currentState?.stateVersion)
+                    assertTrue(
+                        (currentState?.pendingReinforcementsFor(expectedStartPlayer) ?: 0) >= 3,
+                    )
                     assertTrue(
                         currentState
                             ?.allTerritoryStates()

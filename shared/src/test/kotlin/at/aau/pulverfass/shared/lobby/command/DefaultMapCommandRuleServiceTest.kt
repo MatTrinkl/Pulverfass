@@ -466,9 +466,9 @@ class DefaultMapCommandRuleServiceTest {
             expectedMessagePart = "beide Territorien",
         )
         assertMapCommandFailure(
-            state = attackState(rngState = 2L, sourceTroops = 1, targetTroops = 2),
+            state = attackState(rngState = 2L, sourceTroops = 2, targetTroops = 2),
             command = attackCommand(attacker = attacker),
-            expectedMessagePart = "mindestens 2 Truppen",
+            expectedMessagePart = "mindestens 3 Truppen",
         )
         assertMapCommandFailure(
             state = attackState(rngState = 2L, sourceTroops = 5, targetTroops = 2),

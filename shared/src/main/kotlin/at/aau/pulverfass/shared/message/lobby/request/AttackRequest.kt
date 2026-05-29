@@ -3,6 +3,7 @@ package at.aau.pulverfass.shared.message.lobby.request
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.MissingFieldException
@@ -24,8 +25,9 @@ data class AttackRequest(
     val requestId: String? = null,
 ) : NetworkMessagePayload {
     init {
-        require(attackTroops >= 2) {
-            "AttackRequest.attackTroops muss mindestens 2 sein, war aber $attackTroops."
+        require(attackTroops >= MIN_ATTACK_COMMITTED_TROOPS) {
+            "AttackRequest.attackTroops muss mindestens $MIN_ATTACK_COMMITTED_TROOPS sein, " +
+                "war aber $attackTroops."
         }
         require(moveAfterCapture > 0) {
             "AttackRequest.moveAfterCapture muss positiv sein, war aber $moveAfterCapture."

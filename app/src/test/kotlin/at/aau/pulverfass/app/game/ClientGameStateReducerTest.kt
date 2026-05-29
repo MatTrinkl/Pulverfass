@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -24,6 +25,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
@@ -367,6 +369,165 @@ class ClientGameStateReducerTest {
         assertEquals(ownRegion, retainedAfterEnemyTap.selectedRegionId)
         assertEquals(null, retainedAfterEnemyTap.selectionMessage)
         assertEquals(null, dismissed.selectedRegionId)
+    }
+
+    @Test
+    fun `attack selection accepts only usable sources and adjacent enemy targets`() {
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                adjacentTerritoryIds =
+                    mapOf(
+                        TerritoryId("brasilien") to setOf(TerritoryId("argentinien")),
+                    ),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 5),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(TerritoryId("argentinien"), bobId, 2),
+                        TerritoryId("mittelamerika") to
+                            GameTerritoryUiState(TerritoryId("mittelamerika"), bobId, 2),
+                        TerritoryId("usa") to
+                            GameTerritoryUiState(TerritoryId("usa"), aliceId, 2),
+                    ),
+            )
+
+        val weakSource =
+            ClientGameStateReducer.selectRegion(base, "america", aliceId)
+        val selectedSource =
+            ClientGameStateReducer.selectRegion(base, "brazil", aliceId)
+        val ignoredTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "mexico", aliceId)
+        val selectedTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "argentina", aliceId)
+        val increasedAttack =
+            ClientGameStateReducer.adjustAttackTroops(selectedTarget, 20)
+        val increasedOccupation =
+            ClientGameStateReducer.adjustMoveAfterCapture(increasedAttack, 20)
+        val dismissed =
+            ClientGameStateReducer.selectRegion(selectedTarget, "brazil", aliceId)
+
+        assertEquals(null, weakSource.selectionFromRegionId)
+        assertEquals("brazil", selectedSource.selectionFromRegionId)
+        assertEquals(2, selectedSource.attackState.moveAfterCapture)
+        assertEquals(null, ignoredTarget.selectionToRegionId)
+        assertEquals("argentina", selectedTarget.selectionToRegionId)
+        assertTrue(selectedTarget.canSubmitAttack(aliceId))
+        assertFalse(
+            selectedTarget
+                .copy(attackState = selectedTarget.attackState.copy(moveAfterCapture = 1))
+                .canSubmitAttack(aliceId),
+        )
+        assertTrue(selectedTarget.canConfirmAttackDone(aliceId))
+        assertFalse(selectedTarget.canRequestTurnAdvance(aliceId))
+        assertEquals(4, increasedAttack.attackState.attackTroops)
+        assertEquals(3, increasedAttack.attackState.moveAfterCapture)
+        assertEquals(4, increasedOccupation.attackState.moveAfterCapture)
+        assertEquals(null, dismissed.selectionFromRegionId)
+    }
+
+    @Test
+    fun `attack result is taken from public event and clears the prepared selection`() {
+        val result =
+            ClientGameStateReducer.applyDelta(
+                current =
+                    GameUiState(
+                        stateVersion = 1,
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                    ),
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                AttackResolvedBroadcastEvent(
+                                    lobbyCode = lobbyCode,
+                                    attackerPlayerId = aliceId,
+                                    defenderPlayerId = bobId,
+                                    fromTerritoryId = TerritoryId("brasilien"),
+                                    toTerritoryId = TerritoryId("argentinien"),
+                                    attackTroops = 3,
+                                    sourceTroopsBefore = 5,
+                                    targetTroopsBefore = 1,
+                                    requestedAttackDice = 3,
+                                    attackDice = 2,
+                                    defendDice = 1,
+                                    attackerRolls = listOf(6, 4),
+                                    defenderRolls = listOf(2),
+                                    attackerLosses = 0,
+                                    defenderLosses = 1,
+                                    attackerRemaining = 3,
+                                    defenderRemaining = 0,
+                                    occupyingTroopCount = 2,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        val battle = requireNotNull(result.attackState.latestResult)
+        val afterAutomaticAdvance =
+            ClientGameStateReducer.applyPhaseBoundary(
+                result,
+                PhaseBoundaryEvent(
+                    lobbyCode = lobbyCode,
+                    stateVersion = 2,
+                    previousPhase = TurnPhase.ATTACK,
+                    nextPhase = TurnPhase.FORTIFY,
+                    activePlayerId = aliceId,
+                    turnCount = 1,
+                ),
+            )
+        assertEquals(null, result.selectionFromRegionId)
+        assertEquals(listOf(6, 4), battle.attackerRolls)
+        assertEquals(2, battle.occupyingTroopCount)
+        assertTrue(battle.captured)
+        assertEquals(battle, afterAutomaticAdvance.attackState.latestResult)
+    }
+
+    @Test
+    fun `map snapshot exposes adjacency for attack target validation`() {
+        val state =
+            ClientGameStateReducer.applyMapGetResponse(
+                current = GameUiState(),
+                response =
+                    MapGetResponse(
+                        lobbyCode = lobbyCode,
+                        schemaVersion = 1,
+                        mapHash = "hash",
+                        stateVersion = 1,
+                        definition =
+                            MapDefinitionSnapshot(
+                                territories =
+                                    listOf(
+                                        MapTerritoryDefinitionSnapshot(
+                                            territoryId = TerritoryId("brasilien"),
+                                            edges =
+                                                listOf(
+                                                    MapTerritoryEdgeSnapshot(
+                                                        TerritoryId("argentinien"),
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                continents = emptyList(),
+                            ),
+                        territoryStates = emptyList(),
+                    ),
+                players = players,
+            )
+
+        assertEquals(
+            setOf(TerritoryId("argentinien")),
+            state.adjacentTerritoryIds.getValue(TerritoryId("brasilien")),
+        )
     }
 
     @Test
