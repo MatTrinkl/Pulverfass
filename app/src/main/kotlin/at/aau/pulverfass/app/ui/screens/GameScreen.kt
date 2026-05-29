@@ -339,29 +339,13 @@ internal fun GameScreenContent(
         )
     val showCatchUpFeedback = rememberDelayedCatchUpFeedback(uiState.isCatchingUp)
 
-    var showCountdown by remember { mutableStateOf(true) }
-    var countdownValue by remember { mutableStateOf(3) }
-    LaunchedEffect(Unit) {
-        for (i in 3 downTo 1) {
-            countdownValue = i
-            musicManager?.playSfx(R.raw.sfx_ingame)
-            delay(1000L)
-        }
-        delay(800L)
-        showCountdown = false
-    }
+    val (showCountdown, countdownValue) = rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
 
-    val reconnectingText = stringResource(id = R.string.game_sync_reconnecting)
     val desyncedText = stringResource(id = R.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
-    val disconnectMessage =
-        when {
-            !isConnected -> ""
-            uiState.isDesynced -> uiState.lastSyncError ?: desyncedText
-            else -> ""
-        }
+    val disconnectMessage = buildDisconnectMessage(isConnected, uiState, desyncedText)
 
     var showOptionsOverlay by remember { mutableStateOf(false) }
     var isMusicEnabled by remember { mutableStateOf(musicManager?.isMusicMuted?.not() ?: true) }
@@ -504,10 +488,16 @@ internal fun GameScreenContent(
             )
 
             BottomActionClusters(
-                currentPhase = uiState.turnPhase,
-                canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
-                canEndPhase = canEndCurrentPhase,
-                cardsVisible = uiState.cardsVisible,
+                state =
+                    BottomBarState(
+                        currentPhase = uiState.turnPhase,
+                        canUseLocalInput =
+                            isConnected &&
+                                !uiState.isCatchingUp &&
+                                !uiState.isDesynced,
+                        canEndPhase = canEndCurrentPhase,
+                        cardsVisible = uiState.cardsVisible,
+                    ),
                 onToggleCards = onToggleCards,
                 onEndPhase = onEndCurrentPhase,
                 modifier =
@@ -597,40 +587,7 @@ internal fun GameScreenContent(
                 }
             }
 
-            if (showCountdown) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Text(
-                            text = "MACH DICH BEREIT!",
-                            fontFamily = PulverfassFonts.CinzelDecorative,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 48.sp,
-                            color = PulverfassColors.GoldBright,
-                        )
-                        Text(
-                            text = "Das Spiel beginnt gleich...",
-                            fontSize = 20.sp,
-                            color = PulverfassColors.TextOnDark,
-                        )
-                        Text(
-                            text = countdownValue.toString(),
-                            fontFamily = PulverfassFonts.CinzelDecorative,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 96.sp,
-                            color = PulverfassColors.GoldBright,
-                        )
-                    }
-                }
-            }
+            CountdownOverlay(show = showCountdown, value = countdownValue)
         } // end blurred game content group
 
         if (isDisconnectState) {
@@ -642,6 +599,73 @@ internal fun GameScreenContent(
         }
     }
 }
+
+@Composable
+private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<Boolean, Int> {
+    var show by remember { mutableStateOf(true) }
+    var value by remember { mutableStateOf(3) }
+    LaunchedEffect(Unit) {
+        for (i in 3 downTo 1) {
+            value = i
+            musicManager?.playSfx(R.raw.sfx_ingame)
+            delay(1000L)
+        }
+        delay(800L)
+        show = false
+    }
+    return show to value
+}
+
+@Composable
+private fun CountdownOverlay(
+    show: Boolean,
+    value: Int,
+) {
+    if (!show) return
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "MACH DICH BEREIT!",
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 48.sp,
+                color = PulverfassColors.GoldBright,
+            )
+            Text(
+                text = "Das Spiel beginnt gleich...",
+                fontSize = 20.sp,
+                color = PulverfassColors.TextOnDark,
+            )
+            Text(
+                text = value.toString(),
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 96.sp,
+                color = PulverfassColors.GoldBright,
+            )
+        }
+    }
+}
+
+private fun buildDisconnectMessage(
+    isConnected: Boolean,
+    uiState: GameUiState,
+    desyncedText: String,
+): String =
+    when {
+        !isConnected -> ""
+        uiState.isDesynced -> uiState.lastSyncError ?: desyncedText
+        else -> ""
+    }
 
 @Composable
 private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
@@ -1788,12 +1812,16 @@ private fun AttackResultPanel(
  * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
  * in den übrigen Phasen.
  */
+private data class BottomBarState(
+    val currentPhase: TurnPhase?,
+    val canUseLocalInput: Boolean,
+    val canEndPhase: Boolean,
+    val cardsVisible: Boolean,
+)
+
 @Composable
 private fun BottomActionClusters(
-    currentPhase: TurnPhase?,
-    canUseLocalInput: Boolean,
-    canEndPhase: Boolean,
-    cardsVisible: Boolean,
+    state: BottomBarState,
     onToggleCards: () -> Unit,
     onEndPhase: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1818,14 +1846,14 @@ private fun BottomActionClusters(
         ) {
             BlockActionButton(
                 label =
-                    if (cardsVisible) {
+                    if (state.cardsVisible) {
                         stringResource(id = R.string.game_cards_hide)
                     } else {
                         stringResource(id = R.string.game_cards_button)
                     },
                 onClick = onToggleCards,
                 selected = false,
-                enabled = canUseLocalInput,
+                enabled = state.canUseLocalInput,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
                 musicManager = musicManager,
             )
@@ -1836,19 +1864,19 @@ private fun BottomActionClusters(
             ) {
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_reinforce),
-                    selected = currentPhase == TurnPhase.REINFORCEMENTS,
+                    selected = state.currentPhase == TurnPhase.REINFORCEMENTS,
                     enabled = false,
                     modifier = Modifier.weight(1f),
                 )
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_attack),
-                    selected = currentPhase == TurnPhase.ATTACK,
+                    selected = state.currentPhase == TurnPhase.ATTACK,
                     enabled = false,
                     modifier = Modifier.weight(1f),
                 )
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_move),
-                    selected = currentPhase == TurnPhase.FORTIFY,
+                    selected = state.currentPhase == TurnPhase.FORTIFY,
                     enabled = false,
                     modifier = Modifier.weight(1f),
                 )
@@ -1862,7 +1890,7 @@ private fun BottomActionClusters(
                     label = stringResource(id = R.string.game_end_round_button),
                     onClick = onEndPhase,
                     selected = true,
-                    enabled = canEndPhase,
+                    enabled = state.canEndPhase,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                     musicManager = musicManager,
                     sfxResId = R.raw.sfx_schlacht_att,

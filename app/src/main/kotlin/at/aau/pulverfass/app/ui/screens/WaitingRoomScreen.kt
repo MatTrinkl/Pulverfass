@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,11 +47,13 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
+import at.aau.pulverfass.shared.ids.PlayerId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -69,17 +72,7 @@ fun WaitingRoomScreen(
     val ownPlayerId = state.ownPlayerId
     val selectedColor = state.playerColor
 
-    val takenColors =
-        state.players
-            .mapIndexed { index, player ->
-                if (player.playerId != ownPlayerId) {
-                    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-                } else {
-                    null
-                }
-            }
-            .filterNotNull()
-            .toSet()
+    val takenColors = computeTakenColors(state.players, ownPlayerId)
 
     LaunchedEffect(Unit) {
         if (controller.state.value.playerColor == null) {
@@ -90,39 +83,16 @@ fun WaitingRoomScreen(
     }
 
     val players =
-        if (state.players.isEmpty()) {
-            listOf(
-                WaitingRoomPlayerUi(
-                    displayName = effectivePlayerName,
-                    isHost = effectiveIsHost,
-                    color = selectedColor ?: PulverfassColors.playerColors[0],
-                ),
-            )
-        } else {
-            state.players.mapIndexed { index, player ->
-                val color =
-                    if (player.playerId == ownPlayerId && selectedColor != null) {
-                        selectedColor
-                    } else {
-                        PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-                    }
-                WaitingRoomPlayerUi(
-                    displayName = player.displayName,
-                    isHost = player.isHost,
-                    isDisconnected = player.isDisconnected,
-                    color = color,
-                )
-            }
-        }
+        buildWaitingRoomPlayers(
+            players = state.players,
+            ownPlayerId = ownPlayerId,
+            selectedColor = selectedColor,
+            effectivePlayerName = effectivePlayerName,
+            effectiveIsHost = effectiveIsHost,
+        )
 
     var showCharacterPicker by remember { mutableStateOf(false) }
     var coinAnimColor by remember { mutableStateOf<Color?>(null) }
-
-    fun sfx(action: () -> Unit): () -> Unit =
-        {
-            musicManager?.playSfx(R.raw.sfx_ingame)
-            action()
-        }
 
     LaunchedEffect(state.gameStarted) {
         if (state.gameStarted) {
@@ -231,7 +201,7 @@ fun WaitingRoomScreen(
             )
             MainButton(
                 text = "CHARAKTER\nWÄHLEN",
-                onClick = sfx { showCharacterPicker = true },
+                onClick = sfx(musicManager) { showCharacterPicker = true },
                 modifier = Modifier.testTag("character_picker_button"),
             )
         }
@@ -249,7 +219,7 @@ fun WaitingRoomScreen(
                 val canStart = players.size >= 3
                 MainButton(
                     text = "SPIEL STARTEN",
-                    onClick = sfx(controller::startGame),
+                    onClick = sfx(musicManager, controller::startGame),
                     enabled = canStart,
                     modifier = Modifier.weight(1f),
                 )
@@ -257,7 +227,7 @@ fun WaitingRoomScreen(
             MainButton(
                 text = "LOBBY VERLASSEN",
                 onClick =
-                    sfx {
+                    sfx(musicManager) {
                         controller.leaveLobby()
                         navController.popBackStack()
                     },
@@ -265,60 +235,186 @@ fun WaitingRoomScreen(
             )
         }
 
-        // Bottom-Right: Error Text
-        state.errorText?.let { error ->
-            Text(
-                text = "ERROR: $error".uppercase(),
-                color = PulverfassColors.DangerBright,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+        WaitingRoomStatusOverlays(
+            errorText = state.errorText,
+            isHost = effectiveIsHost,
+            playerCount = players.size,
+        )
+
+        WaitingRoomOverlays(
+            showCharacterPicker = showCharacterPicker,
+            coinAnimColor = coinAnimColor,
+            currentColor = selectedColor ?: PulverfassColors.playerColors[0],
+            takenColors = takenColors,
+            playerCount = players.size,
+            onDismiss = sfx(musicManager) { showCharacterPicker = false },
+            onSave = { color ->
+                musicManager?.playSfx(R.raw.sfx_karten)
+                coinAnimColor = color
+            },
+            onCoinComplete = {
+                controller.updatePlayerColor(coinAnimColor!!)
+                showCharacterPicker = false
+                coinAnimColor = null
+            },
+        )
+    }
+}
+
+private fun sfx(
+    musicManager: BackgroundMusicManager?,
+    action: () -> Unit,
+): () -> Unit =
+    {
+        musicManager?.playSfx(R.raw.sfx_ingame)
+        action()
+    }
+
+private fun computeTakenColors(
+    players: List<LobbyPlayerUi>,
+    ownPlayerId: PlayerId?,
+): Set<Color> =
+    players.mapIndexedNotNull { index, player ->
+        if (player.playerId != ownPlayerId) {
+            PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+        } else {
+            null
+        }
+    }.toSet()
+
+private fun buildWaitingRoomPlayers(
+    players: List<LobbyPlayerUi>,
+    ownPlayerId: PlayerId?,
+    selectedColor: Color?,
+    effectivePlayerName: String,
+    effectiveIsHost: Boolean,
+): List<WaitingRoomPlayerUi> =
+    if (players.isEmpty()) {
+        listOf(
+            WaitingRoomPlayerUi(
+                displayName = effectivePlayerName,
+                isHost = effectiveIsHost,
+                color = selectedColor ?: PulverfassColors.playerColors[0],
+            ),
+        )
+    } else {
+        players.mapIndexed { index, player ->
+            val color =
+                if (player.playerId == ownPlayerId && selectedColor != null) {
+                    selectedColor
+                } else {
+                    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+                }
+            WaitingRoomPlayerUi(
+                displayName = player.displayName,
+                isHost = player.isHost,
+                isDisconnected = player.isDisconnected,
+                color = color,
+            )
+        }
+    }
+
+private fun resolveInitialColor(
+    currentColor: Color,
+    takenColors: Set<Color>,
+    colors: List<Color>,
+): Color =
+    if (currentColor !in takenColors) {
+        currentColor
+    } else {
+        colors.firstOrNull { it !in takenColors } ?: currentColor
+    }
+
+@Composable
+private fun BoxScope.WaitingRoomStatusOverlays(
+    errorText: String?,
+    isHost: Boolean,
+    playerCount: Int,
+) {
+    errorText?.let { error ->
+        Text(
+            text = "ERROR: $error".uppercase(),
+            color = PulverfassColors.DangerBright,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 24.dp, bottom = 96.dp),
+        )
+    }
+    if (isHost && playerCount < 3) {
+        Text(
+            text = "MIND. 3 SPIELER",
+            color = PulverfassColors.DangerBright,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
+        )
+    }
+}
+
+@Composable
+private fun WaitingRoomOverlays(
+    showCharacterPicker: Boolean,
+    coinAnimColor: Color?,
+    currentColor: Color,
+    takenColors: Set<Color>,
+    playerCount: Int,
+    onDismiss: () -> Unit,
+    onSave: (Color) -> Unit,
+    onCoinComplete: () -> Unit,
+) {
+    if (showCharacterPicker && coinAnimColor == null) {
+        CharacterPickerOverlay(
+            currentColor = currentColor,
+            takenColors = takenColors,
+            playerCount = playerCount,
+            onDismiss = onDismiss,
+            onSave = onSave,
+        )
+    }
+    if (coinAnimColor != null) {
+        CoinAnimation(color = coinAnimColor, onComplete = onCoinComplete)
+    }
+}
+
+@Composable
+private fun PlayerColorCircle(
+    color: Color,
+    isSelected: Boolean,
+    isTaken: Boolean,
+    onClick: () -> Unit,
+) {
+    val borderWidth = if (isSelected) 3.dp else 1.dp
+    val borderColor = if (isSelected) PulverfassColors.GoldBright else PulverfassColors.GoldDark
+    Box(
+        modifier = Modifier.size(64.dp).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(color, CircleShape)
+                    .border(borderWidth, borderColor, CircleShape),
+        )
+        if (isTaken) {
+            Box(
                 modifier =
                     Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 24.dp, bottom = 96.dp),
-            )
-        }
-
-        // Min-players warning (host only)
-        if (effectiveIsHost && players.size < 3) {
-            Text(
-                text = "MIND. 3 SPIELER",
-                color = PulverfassColors.DangerBright,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 96.dp),
-            )
-        }
-
-        // Character picker overlay (hidden during coin animation)
-        if (showCharacterPicker && coinAnimColor == null) {
-            CharacterPickerOverlay(
-                currentColor = selectedColor ?: PulverfassColors.playerColors[0],
-                takenColors = takenColors,
-                playerCount = players.size,
-                onDismiss = sfx { showCharacterPicker = false },
-                onSave = { color ->
-                    musicManager?.playSfx(R.raw.sfx_karten)
-                    coinAnimColor = color
-                },
-                musicManager = musicManager,
-            )
-        }
-
-        // Coin animation (runs after SPEICHERN, lands on preview circle)
-        if (coinAnimColor != null) {
-            CoinAnimation(
-                color = coinAnimColor!!,
-                onComplete = {
-                    controller.updatePlayerColor(coinAnimColor!!)
-                    showCharacterPicker = false
-                    coinAnimColor = null
-                },
-            )
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.65f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "✕",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }
@@ -383,16 +479,13 @@ private fun CharacterPickerOverlay(
     playerCount: Int,
     onDismiss: () -> Unit,
     onSave: (Color) -> Unit,
-    musicManager: BackgroundMusicManager? = null,
 ) {
     val colors = PulverfassColors.playerColors.take(6)
-    val initialColor =
-        if (currentColor !in takenColors) {
-            currentColor
-        } else {
-            colors.firstOrNull { it !in takenColors } ?: currentColor
-        }
-    var tempColor by remember { mutableStateOf(initialColor) }
+    var tempColor by remember {
+        mutableStateOf(
+            resolveInitialColor(currentColor, takenColors, colors),
+        )
+    }
     val isTakenSelected = tempColor in takenColors
 
     Box(
@@ -432,50 +525,12 @@ private fun CharacterPickerOverlay(
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 colors.forEach { color ->
-                    val isSelected = color == tempColor
-                    val isTaken = color in takenColors
-                    val borderWidth = if (isSelected) 3.dp else 1.dp
-                    val borderColor =
-                        if (isSelected) {
-                            PulverfassColors.GoldBright
-                        } else {
-                            PulverfassColors.GoldDark
-                        }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(64.dp)
-                                .clickable { tempColor = color },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(color, CircleShape)
-                                    .border(borderWidth, borderColor, CircleShape),
-                        )
-                        if (isTaken) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Color.Black.copy(alpha = 0.65f),
-                                            CircleShape,
-                                        ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "✕",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
+                    PlayerColorCircle(
+                        color = color,
+                        isSelected = color == tempColor,
+                        isTaken = color in takenColors,
+                        onClick = { tempColor = color },
+                    )
                 }
             }
 
