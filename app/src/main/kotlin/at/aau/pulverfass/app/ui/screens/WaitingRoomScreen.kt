@@ -46,8 +46,8 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
-import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
@@ -374,23 +374,6 @@ private fun PlayerRow(player: WaitingRoomPlayerUi) {
             )
         }
     }
-}
-
-@Composable
-private fun LobbyVideoBackground() {
-    VideoPlayer(
-        videoResId = R.raw.lobby,
-        loop = true,
-        cover = true,
-        muted = true,
-        modifier = Modifier.fillMaxSize(),
-    )
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
-    )
 }
 
 @Composable
