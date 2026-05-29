@@ -242,11 +242,14 @@ fun WaitingRoomScreen(
         )
 
         WaitingRoomOverlays(
-            showCharacterPicker = showCharacterPicker,
-            coinAnimColor = coinAnimColor,
-            currentColor = selectedColor ?: PulverfassColors.playerColors[0],
-            takenColors = takenColors,
-            playerCount = players.size,
+            overlayState =
+                WaitingRoomOverlayState(
+                    showCharacterPicker = showCharacterPicker,
+                    coinAnimColor = coinAnimColor,
+                    currentColor = selectedColor ?: PulverfassColors.playerColors[0],
+                    takenColors = takenColors,
+                    playerCount = players.size,
+                ),
             onDismiss = sfx(musicManager) { showCharacterPicker = false },
             onSave = { color ->
                 musicManager?.playSfx(R.raw.sfx_karten)
@@ -355,28 +358,32 @@ private fun BoxScope.WaitingRoomStatusOverlays(
     }
 }
 
+private data class WaitingRoomOverlayState(
+    val showCharacterPicker: Boolean,
+    val coinAnimColor: Color?,
+    val currentColor: Color,
+    val takenColors: Set<Color>,
+    val playerCount: Int,
+)
+
 @Composable
 private fun WaitingRoomOverlays(
-    showCharacterPicker: Boolean,
-    coinAnimColor: Color?,
-    currentColor: Color,
-    takenColors: Set<Color>,
-    playerCount: Int,
+    overlayState: WaitingRoomOverlayState,
     onDismiss: () -> Unit,
     onSave: (Color) -> Unit,
     onCoinComplete: () -> Unit,
 ) {
-    if (showCharacterPicker && coinAnimColor == null) {
+    if (overlayState.showCharacterPicker && overlayState.coinAnimColor == null) {
         CharacterPickerOverlay(
-            currentColor = currentColor,
-            takenColors = takenColors,
-            playerCount = playerCount,
+            currentColor = overlayState.currentColor,
+            takenColors = overlayState.takenColors,
+            playerCount = overlayState.playerCount,
             onDismiss = onDismiss,
             onSave = onSave,
         )
     }
-    if (coinAnimColor != null) {
-        CoinAnimation(color = coinAnimColor, onComplete = onCoinComplete)
+    if (overlayState.coinAnimColor != null) {
+        CoinAnimation(color = overlayState.coinAnimColor, onComplete = onCoinComplete)
     }
 }
 
