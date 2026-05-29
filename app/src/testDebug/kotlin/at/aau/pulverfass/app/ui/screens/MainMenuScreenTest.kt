@@ -96,6 +96,7 @@ class MainMenuScreenTest {
             )
         }
         composeTestRule.onNodeWithTag("MenuButton_Exit").performClick()
+        composeTestRule.onNodeWithText("JA").performClick() // Dialog bestätigen
         assertEquals(true, clicked)
     }
 
