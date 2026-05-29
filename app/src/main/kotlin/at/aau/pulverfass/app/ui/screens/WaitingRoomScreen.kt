@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -135,19 +136,7 @@ fun WaitingRoomScreen(
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        VideoPlayer(
-            videoResId = R.raw.lobby,
-            loop = true,
-            cover = true,
-            muted = true,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
-        )
+        LobbyVideoBackground()
 
         // TOP-LEFT: Host marker + Lobby code
         Column(
@@ -243,6 +232,7 @@ fun WaitingRoomScreen(
             MainButton(
                 text = "CHARAKTER\nWÄHLEN",
                 onClick = sfx { showCharacterPicker = true },
+                modifier = Modifier.testTag("character_picker_button"),
             )
         }
 
@@ -387,6 +377,23 @@ private fun PlayerRow(player: WaitingRoomPlayerUi) {
 }
 
 @Composable
+private fun LobbyVideoBackground() {
+    VideoPlayer(
+        videoResId = R.raw.lobby,
+        loop = true,
+        cover = true,
+        muted = true,
+        modifier = Modifier.fillMaxSize(),
+    )
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
+    )
+}
+
+@Composable
 private fun CharacterPickerOverlay(
     currentColor: Color,
     takenColors: Set<Color>,
@@ -409,19 +416,7 @@ private fun CharacterPickerOverlay(
         modifier = Modifier.fillMaxSize().background(PulverfassColors.SurfaceVoid),
         contentAlignment = Alignment.Center,
     ) {
-        VideoPlayer(
-            videoResId = R.raw.lobby,
-            loop = true,
-            cover = true,
-            muted = true,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
-        )
+        LobbyVideoBackground()
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
