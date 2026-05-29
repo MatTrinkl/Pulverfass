@@ -111,8 +111,8 @@ private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 @Composable
 fun GameScreen(
     controller: LobbyController,
-    musicManager: BackgroundMusicManager,
-    onNavigateToMain: () -> Unit,
+    musicManager: BackgroundMusicManager? = null,
+    onNavigateToMain: () -> Unit = {},
 ) {
     val lobbyState by controller.state.collectAsState()
     val players =
@@ -358,7 +358,7 @@ internal fun GameScreenContent(
     val isDisconnectState = !isConnected || uiState.isDesynced
     val disconnectMessage =
         when {
-            !isConnected -> reconnectingText
+            !isConnected -> ""
             uiState.isDesynced -> uiState.lastSyncError ?: desyncedText
             else -> ""
         }
@@ -417,19 +417,17 @@ internal fun GameScreenContent(
                 modifier = Modifier.align(Alignment.Center),
             )
 
-            if (!isDisconnectState) {
-                OptionalGameStatusBanner(
-                    message = statusMessage,
-                    canRefresh = isConnected && !isRefreshPending,
-                    isRefreshPending = isRefreshPending,
-                    onRefreshGameState = onRefreshGameState,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = TopBarHeight)
-                            .fillMaxWidth(),
-                )
-            }
+            OptionalGameStatusBanner(
+                message = statusMessage,
+                canRefresh = isConnected && !isRefreshPending,
+                isRefreshPending = isRefreshPending,
+                onRefreshGameState = onRefreshGameState,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = TopBarHeight)
+                        .fillMaxWidth(),
+            )
 
             CardsSidebar(
                 state =
@@ -909,7 +907,7 @@ private fun gameStatusMessage(
     showCatchUpFeedback: Boolean,
 ): String? =
     when {
-        !isConnected -> null
+        !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
         uiState.isDesynced -> null
         uiState.isCatchingUp && showCatchUpFeedback ->
             stringResource(id = R.string.game_sync_catching_up)
