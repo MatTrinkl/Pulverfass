@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -64,56 +66,66 @@ fun MainMenuScreen(
         // Video Background
         background()
 
-        // Dark overlay für Kontrast zwischen Logo und Video
+        // Horizontal gradient overlay: transparent left → dark right
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.4f)),
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                PulverfassColors.SurfaceVoid.copy(alpha = 0.85f),
+                            ),
+                        ),
+                    ),
         )
 
-        // Main Content: Logo groß über Buttons
-        Column(
+        // Logo + Buttons auf der rechten Seite
+        Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 48.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 64.dp),
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.gamelogo),
-                contentDescription = "Pulverfass Logo",
-                contentScale = ContentScale.Fit,
-                modifier =
-                    Modifier
-                        .fillMaxWidth(0.5f)
-                        .height(120.dp)
-                        .testTag("GameLogo"),
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.width(280.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
-                MainButton(
-                    text = "START",
-                    onClick = onStartClick,
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Start"),
+                Image(
+                    painter = painterResource(id = R.drawable.gamelogo),
+                    contentDescription = "Pulverfass Logo",
+                    contentScale = ContentScale.Fit,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(120.dp)
+                            .testTag("GameLogo"),
                 )
-                MainButton(
-                    text = "OPTIONS",
-                    onClick = onOptionsClick,
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Options"),
-                )
-                MainButton(
-                    text = "EXIT",
-                    onClick = { showExitDialog = true },
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
-                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.wrapContentWidth(),
+                ) {
+                    MainButton(
+                        text = "START",
+                        onClick = onStartClick,
+                        modifier = Modifier.testTag("MenuButton_Start"),
+                    )
+                    MainButton(
+                        text = "OPTIONS",
+                        onClick = onOptionsClick,
+                        modifier = Modifier.testTag("MenuButton_Options"),
+                    )
+                    MainButton(
+                        text = "EXIT",
+                        onClick = { showExitDialog = true },
+                        modifier = Modifier.testTag("MenuButton_Exit"),
+                    )
+                }
             }
         }
 

@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                             musicManager.play(R.raw.settings)
 
                         route == Screen.Game.route ->
-                            musicManager.stop()
+                            musicManager.play(R.raw.game_tension, loop = true)
                     }
                 }
 
@@ -210,7 +210,15 @@ class MainActivity : AppCompatActivity() {
                                 )
                             }
                             composable(Screen.Game.route) {
-                                GameScreen(controller = lobbyController)
+                                GameScreen(
+                                    controller = lobbyController,
+                                    musicManager = musicManager,
+                                    onNavigateToMain = {
+                                        navController.navigate(Screen.MainMenu.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    },
+                                )
                             }
                             composable(Screen.Options.route) {
                                 val optionsState by lobbyController.state.collectAsState()

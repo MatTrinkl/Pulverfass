@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GameUiState
@@ -217,6 +218,10 @@ class LobbyController(
     fun updatePlayerName(playerName: String) {
         playerNameStore.savePlayerName(playerName)
         _state.update { it.copy(playerName = playerName) }
+    }
+
+    fun updatePlayerColor(color: Color) {
+        _state.update { it.copy(playerColor = color) }
     }
 
     fun updateLobbyCode(lobbyCode: String) {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +37,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.painter.Painter
@@ -57,7 +61,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.PrivateHandCardUi
@@ -65,9 +71,12 @@ import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.app.ui.theme.PulverfassColors
+import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.CardType
@@ -92,9 +101,20 @@ private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
  * GameState verwaltet
  */
 @Composable
-fun GameScreen(controller: LobbyController) {
+fun GameScreen(
+    controller: LobbyController,
+    musicManager: BackgroundMusicManager,
+    onNavigateToMain: () -> Unit,
+) {
     val lobbyState by controller.state.collectAsState()
-    val players = remember(lobbyState.players) { lobbyPlayersToGamePlayers(lobbyState.players) }
+    val players =
+        remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.playerColor) {
+            lobbyPlayersToGamePlayers(
+                lobbyState.players,
+                lobbyState.ownPlayerId,
+                lobbyState.playerColor,
+            )
+        }
     val mapPainter = painterResource(id = R.drawable.map_world)
 
     GameScreenContent(
@@ -120,6 +140,9 @@ fun GameScreen(controller: LobbyController) {
                 onTradeInCards = controller::tradeInCards,
                 onRefreshGameState = controller::refreshGameState,
             ),
+        musicManager = musicManager,
+        onNavigateToMain = onNavigateToMain,
+        onReconnect = controller::connect,
     )
 }
 
@@ -198,6 +221,9 @@ private data class ReinforcementPanelActions(
 internal fun GameScreenContent(
     contentState: GameScreenContentState,
     actions: GameScreenActions,
+    musicManager: BackgroundMusicManager? = null,
+    onNavigateToMain: () -> Unit = {},
+    onReconnect: () -> Unit = {},
 ) {
     val players = contentState.players
     val localPlayerId = contentState.localPlayerId
@@ -243,8 +269,34 @@ internal fun GameScreenContent(
         }
     }
 
+    var showCountdown by remember { mutableStateOf(true) }
+    var countdownValue by remember { mutableStateOf(3) }
+    LaunchedEffect(Unit) {
+        for (i in 3 downTo 1) {
+            countdownValue = i
+            musicManager?.playSfx(R.raw.sfx_ingame)
+            delay(1000L)
+        }
+        delay(800L)
+        showCountdown = false
+    }
+
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
+
+    val reconnectingText = stringResource(id = R.string.game_sync_reconnecting)
+    val desyncedText = stringResource(id = R.string.game_sync_desynced)
+    val isDisconnectState = !isConnected || uiState.isDesynced
+    val disconnectMessage =
+        when {
+            !isConnected -> reconnectingText
+            uiState.isDesynced -> uiState.lastSyncError ?: desyncedText
+            else -> ""
+        }
+
+    var showOptionsOverlay by remember { mutableStateOf(false) }
+    var isMusicEnabled by remember { mutableStateOf(musicManager?.isMusicMuted?.not() ?: true) }
+    var isSfxEnabled by remember { mutableStateOf(musicManager?.isSfxMuted?.not() ?: true) }
 
     Box(
         modifier =
@@ -253,132 +305,271 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        InteractiveGameMap(
-            regions = PulverfassMapDefaults.regions,
-            regionStates = uiState.regionStates,
-            selectedRegionId = uiState.selectedRegionId,
-            onRegionSelected = { region ->
+        // Game content group — blurred when disconnected so the sharp overlay reads clearly
+        Box(
+            modifier =
+                if (isDisconnectState) {
+                    Modifier.fillMaxSize().blur(20.dp)
+                } else {
+                    Modifier.fillMaxSize()
+                },
+        ) {
+            InteractiveGameMap(
+                regions = PulverfassMapDefaults.regions,
+                regionStates = uiState.regionStates,
+                selectedRegionId = uiState.selectedRegionId,
+                onRegionSelected = { region ->
                 /*
                  * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
                  * handeln darf und der Client synchron verbunden ist.
                  */
-                if (canUseGameActions) {
-                    onRegionSelected(region.id)
-                }
-            },
-            options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
-            modifier = Modifier.fillMaxSize(),
-        )
-
-        GameTopBar(
-            personalPlayer = personalPlayer,
-            phase = uiState.turnPhase,
-            round = uiState.turnCount.coerceAtLeast(1),
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth(),
-        )
-
-        OptionalGameStatusBanner(
-            message = statusMessage,
-            canRefresh = isConnected && !isRefreshPending,
-            isRefreshPending = isRefreshPending,
-            onRefreshGameState = onRefreshGameState,
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = TopBarHeight)
-                    .fillMaxWidth(),
-        )
-
-        if (uiState.isCatchingUp && showCatchUpFeedback) {
-            SyncProgressOverlay(
-                modifier = Modifier.align(Alignment.Center),
+                    if (canUseGameActions) {
+                        onRegionSelected(region.id)
+                    }
+                },
+                options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
+                modifier = Modifier.fillMaxSize(),
             )
-        }
 
-        CardsSidebar(
-            state =
-                PrivateHandPanelState(
-                    playerName = personalPlayer.name,
-                    handCards = uiState.handCards,
-                    privateHandCards = uiState.privateHandCards,
-                    selectedTradeInCardIds = uiState.selectedTradeInCardIds,
-                    showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
-                    canSelectTradeCards =
-                        uiState.canUseGameActions(localPlayerId, isConnected) &&
-                            !isReinforcementCommandPending,
-                    canTradeInCards =
-                        uiState.canTradeInCards(localPlayerId, isConnected) &&
-                            !isReinforcementCommandPending,
-                    isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
-                ),
-            actions =
-                PrivateHandPanelActions(
-                    onToggleTradeInCard = onToggleTradeInCard,
-                    onTradeInCards = onTradeInCards,
-                ),
-            isVisible = uiState.cardsVisible,
-            modifier =
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                    .requiredWidth(CardsSidebarWidth)
-                    .fillMaxHeight(),
-        )
+            GameTopBar(
+                personalPlayer = personalPlayer,
+                phase = uiState.turnPhase,
+                round = uiState.turnCount.coerceAtLeast(1),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(),
+            )
 
-        PlayerSidebar(
-            players = players,
-            activePlayerId = uiState.activePlayerId,
-            modifier =
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                    .width(SidebarWidth)
-                    .fillMaxHeight(),
-        )
+            if (!isDisconnectState) {
+                OptionalGameStatusBanner(
+                    message = statusMessage,
+                    canRefresh = isConnected && !isRefreshPending,
+                    isRefreshPending = isRefreshPending,
+                    onRefreshGameState = onRefreshGameState,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = TopBarHeight)
+                            .fillMaxWidth(),
+                )
+            }
 
-        reinforcementPanelRegionId?.let { selectedRegionId ->
-            ReinforcementPanel(
+            if (uiState.isCatchingUp && showCatchUpFeedback) {
+                SyncProgressOverlay(
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+
+            CardsSidebar(
                 state =
-                    ReinforcementPanelState(
-                        reinforcementState = uiState.reinforcementState,
-                        remainingAmount = remainingReinforcementAmount,
-                        placementAmount = uiState.reinforcementPlacementAmount,
-                        selectedRegionId = selectedRegionId,
-                        canAdjust = canManageReinforcements && !isReinforcementCommandPending,
-                        canPlace =
-                            uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
+                    PrivateHandPanelState(
+                        playerName = personalPlayer.name,
+                        handCards = uiState.handCards,
+                        privateHandCards = uiState.privateHandCards,
+                        selectedTradeInCardIds = uiState.selectedTradeInCardIds,
+                        showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
+                        canSelectTradeCards =
+                            uiState.canUseGameActions(localPlayerId, isConnected) &&
                                 !isReinforcementCommandPending,
+                        canTradeInCards =
+                            uiState.canTradeInCards(localPlayerId, isConnected) &&
+                                !isReinforcementCommandPending,
+                        isTradePending =
+                            pendingCommandKeys.contains(
+                                LobbyCommandKey.TRADE_IN_CARDS,
+                            ),
                     ),
                 actions =
-                    ReinforcementPanelActions(
-                        onDismiss = { onRegionSelected(selectedRegionId) },
-                        onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
-                        onPlace = onPlaceReinforcements,
+                    PrivateHandPanelActions(
+                        onToggleTradeInCard = onToggleTradeInCard,
+                        onTradeInCards = onTradeInCards,
                     ),
+                isVisible = uiState.cardsVisible,
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
+                        .requiredWidth(CardsSidebarWidth)
+                        .fillMaxHeight(),
+                musicManager = musicManager,
+            )
+
+            PlayerSidebar(
+                players = players,
+                activePlayerId = uiState.activePlayerId,
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
+                        .width(SidebarWidth)
+                        .fillMaxHeight(),
+            )
+
+            reinforcementPanelRegionId?.let { selectedRegionId ->
+                ReinforcementPanel(
+                    state =
+                        ReinforcementPanelState(
+                            reinforcementState = uiState.reinforcementState,
+                            remainingAmount = remainingReinforcementAmount,
+                            placementAmount = uiState.reinforcementPlacementAmount,
+                            selectedRegionId = selectedRegionId,
+                            canAdjust = canManageReinforcements && !isReinforcementCommandPending,
+                            canPlace =
+                                uiState.canPlaceReinforcements(localPlayerId, isConnected) &&
+                                    !isReinforcementCommandPending,
+                        ),
+                    actions =
+                        ReinforcementPanelActions(
+                            onDismiss = { onRegionSelected(selectedRegionId) },
+                            onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+                            onPlace = onPlaceReinforcements,
+                        ),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = BottomBarHeight + 8.dp),
+                )
+            }
+
+            BottomActionClusters(
+                currentPhase = uiState.turnPhase,
+                canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
+                canEndPhase = canEndCurrentPhase,
+                cardsVisible = uiState.cardsVisible,
+                onToggleCards = onToggleCards,
+                onEndPhase = onEndCurrentPhase,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = BottomBarHeight + 8.dp),
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+                musicManager = musicManager,
+            )
+
+            FilledTonalButton(
+                onClick = { showOptionsOverlay = true },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 16.dp, top = TopBarHeight + 8.dp),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
+                        contentColor = PulverfassColors.TextOnDark,
+                    ),
+            ) {
+                Text(
+                    text = "⚙ OPTIONEN",
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.sp,
+                )
+            }
+
+            if (showOptionsOverlay) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.85f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(0.45f)
+                                .background(
+                                    PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
+                                    RoundedCornerShape(12.dp),
+                                )
+                                .padding(horizontal = 32.dp, vertical = 24.dp),
+                    ) {
+                        Text(
+                            text = "OPTIONEN",
+                            fontFamily = PulverfassFonts.CinzelDecorative,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 32.sp,
+                            color = PulverfassColors.GoldBright,
+                            letterSpacing = 3.sp,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InGameAudioToggleRow(
+                            label = "MUSIK",
+                            isEnabled = isMusicEnabled,
+                            onToggle = { enabled ->
+                                isMusicEnabled = enabled
+                                musicManager?.setMusicMuted(!enabled)
+                            },
+                        )
+                        InGameAudioToggleRow(
+                            label = "SOUND-EFFEKTE",
+                            isEnabled = isSfxEnabled,
+                            onToggle = { enabled ->
+                                isSfxEnabled = enabled
+                                musicManager?.setSfxMuted(!enabled)
+                            },
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        MainButton(
+                            text = "ZURÜCK ZUM HAUPTMENÜ",
+                            onClick = onNavigateToMain,
+                        )
+                        MainButton(
+                            text = "SCHLIESSEN",
+                            onClick = { showOptionsOverlay = false },
+                        )
+                    }
+                }
+            }
+
+            if (showCountdown) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Text(
+                            text = "MACH DICH BEREIT!",
+                            fontFamily = PulverfassFonts.CinzelDecorative,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 48.sp,
+                            color = PulverfassColors.GoldBright,
+                        )
+                        Text(
+                            text = "Das Spiel beginnt gleich...",
+                            fontSize = 20.sp,
+                            color = PulverfassColors.TextOnDark,
+                        )
+                        Text(
+                            text = countdownValue.toString(),
+                            fontFamily = PulverfassFonts.CinzelDecorative,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 96.sp,
+                            color = PulverfassColors.GoldBright,
+                        )
+                    }
+                }
+            }
+        } // end blurred game content group
+
+        if (isDisconnectState) {
+            DisconnectOverlay(
+                message = disconnectMessage,
+                onReconnect = onReconnect,
+                onNavigateToMain = onNavigateToMain,
             )
         }
-
-        BottomActionClusters(
-            currentPhase = uiState.turnPhase,
-            canUseLocalInput = isConnected && !uiState.isCatchingUp && !uiState.isDesynced,
-            canEndPhase = canEndCurrentPhase,
-            cardsVisible = uiState.cardsVisible,
-            onToggleCards = onToggleCards,
-            onEndPhase = onEndCurrentPhase,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
-        )
     }
 }
 
@@ -477,12 +668,11 @@ private fun gameStatusMessage(
     showCatchUpFeedback: Boolean,
 ): String? =
     when {
-        !isConnected -> stringResource(id = R.string.game_sync_reconnecting)
+        !isConnected -> null
+        uiState.isDesynced -> null
         uiState.isCatchingUp && showCatchUpFeedback ->
             stringResource(id = R.string.game_sync_catching_up)
         uiState.isCatchingUp -> null
-        uiState.isDesynced ->
-            uiState.lastSyncError ?: stringResource(id = R.string.game_sync_desynced)
         uiState.lastSyncError != null -> uiState.lastSyncError
         uiState.selectionMessage != null -> uiState.selectionMessage
         else -> null
@@ -508,7 +698,7 @@ private fun GameStatusBanner(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -570,23 +760,25 @@ private fun GameTopBar(
     Surface(
         modifier = modifier.testTag("game_top_bar"),
         shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
+        color = PulverfassColors.SurfaceDark.copy(alpha = 0.92f),
+        contentColor = PulverfassColors.TextOnDark,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, PulverfassColors.GoldDark),
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(TopBarHeight),
+                    .height(TopBarHeight)
+                    .displayCutoutPadding(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -595,12 +787,12 @@ private fun GameTopBar(
                     Text(
                         text = stringResource(id = R.string.game_personal_player_label),
                         style = MaterialTheme.typography.labelSmall,
-                        color = HudContentColor,
+                        color = PulverfassColors.TextOnDark,
                     )
                     Text(
                         text = personalPlayer.name,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = HudContentColor,
+                        color = PulverfassColors.GoldBright,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -610,20 +802,20 @@ private fun GameTopBar(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
                     text = stringResource(id = R.string.game_phase_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = HudContentColor,
+                    color = PulverfassColors.TextOnDark,
                 )
                 Text(
                     text = stringResource(id = phase.labelRes()),
                     modifier = Modifier.testTag("game_phase_value"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = HudContentColor,
+                    color = PulverfassColors.GoldBright,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -632,20 +824,20 @@ private fun GameTopBar(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
                     text = stringResource(id = R.string.game_round_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = HudContentColor,
+                    color = PulverfassColors.TextOnDark,
                 )
                 Text(
                     text = stringResource(id = R.string.game_round_value, round),
                     modifier = Modifier.testTag("game_round_value"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = HudContentColor,
+                    color = PulverfassColors.GoldBright,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -659,6 +851,7 @@ private fun CardsSidebar(
     actions: PrivateHandPanelActions,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
 ) {
     if (isVisible) {
         Surface(
@@ -676,6 +869,7 @@ private fun CardsSidebar(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp, vertical = 10.dp),
+                musicManager = musicManager,
             )
         }
     }
@@ -859,6 +1053,7 @@ internal fun PrivateHandPanel(
     state: PrivateHandPanelState,
     actions: PrivateHandPanelActions = PrivateHandPanelActions(),
     modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
 ) {
     val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
     val typeLabels =
@@ -936,7 +1131,10 @@ internal fun PrivateHandPanel(
             }
             if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
                 FilledTonalButton(
-                    onClick = actions.onTradeInCards,
+                    onClick = {
+                        musicManager?.playSfx(R.raw.sfx_karten)
+                        actions.onTradeInCards()
+                    },
                     enabled = state.canTradeInCards,
                     modifier = Modifier.fillMaxWidth().testTag("trade_in_cards_button"),
                     shape = RoundedCornerShape(6.dp),
@@ -1154,6 +1352,7 @@ private fun BottomActionClusters(
     onToggleCards: () -> Unit,
     onEndPhase: () -> Unit,
     modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
 ) {
     Surface(
         modifier = modifier,
@@ -1168,7 +1367,7 @@ private fun BottomActionClusters(
                 Modifier
                     .fillMaxWidth()
                     .height(BottomBarHeight)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -1183,6 +1382,7 @@ private fun BottomActionClusters(
                 selected = false,
                 enabled = canUseLocalInput,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
+                musicManager = musicManager,
             )
 
             Row(
@@ -1219,6 +1419,8 @@ private fun BottomActionClusters(
                     selected = true,
                     enabled = canEndPhase,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
+                    musicManager = musicManager,
+                    sfxResId = R.raw.sfx_schlacht_att,
                 )
             }
         }
@@ -1248,12 +1450,23 @@ private fun BlockActionButton(
     selected: Boolean,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
+    sfxResId: Int = R.raw.sfx_ingame,
 ) {
     val contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+    val wrappedOnClick: () -> Unit =
+        if (musicManager != null) {
+            {
+                musicManager.playSfx(sfxResId)
+                onClick()
+            }
+        } else {
+            onClick
+        }
 
     if (selected) {
         Button(
-            onClick = onClick,
+            onClick = wrappedOnClick,
             modifier = modifier,
             enabled = enabled,
             shape = RoundedCornerShape(14.dp),
@@ -1273,7 +1486,7 @@ private fun BlockActionButton(
     }
 
     FilledTonalButton(
-        onClick = onClick,
+        onClick = wrappedOnClick,
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(14.dp),
@@ -1288,6 +1501,84 @@ private fun BlockActionButton(
             text = label,
             style = MaterialTheme.typography.labelLarge,
         )
+    }
+}
+
+@Composable
+private fun InGameAudioToggleRow(
+    label: String,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = PulverfassColors.TextOnDark,
+            fontFamily = PulverfassFonts.CinzelDecorative,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = onToggle,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = PulverfassColors.GoldBright,
+                    checkedTrackColor = PulverfassColors.GoldDark,
+                    uncheckedThumbColor = PulverfassColors.TextMuted,
+                    uncheckedTrackColor = PulverfassColors.SurfaceDark,
+                ),
+        )
+    }
+}
+
+@Composable
+private fun DisconnectOverlay(
+    message: String,
+    onReconnect: () -> Unit,
+    onNavigateToMain: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.35f))
+                .background(Color(0xFFCC0000).copy(alpha = 0.45f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "⚠ VERBINDUNG UNTERBROCHEN",
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                color = PulverfassColors.GoldBright,
+            )
+            Text(
+                text = message,
+                fontSize = 16.sp,
+                color = PulverfassColors.TextOnDark,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            MainButton(
+                text = "ERNEUT VERBINDEN",
+                onClick = onReconnect,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            MainButton(
+                text = "ZURÜCK ZUM HAUPTMENÜ",
+                onClick = onNavigateToMain,
+            )
+        }
     }
 }
 
