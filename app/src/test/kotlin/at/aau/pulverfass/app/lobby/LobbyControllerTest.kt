@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.CardId
@@ -105,6 +106,18 @@ class LobbyControllerTest {
             assertNull(state.sessionToken)
             assertNull(state.lastMessageType)
             assertTrue(state.playerNames.isEmpty())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updatePlayerColor stores the chosen color in state`() {
+        val controller = createController()
+        try {
+            val color = Color(0xFF6FD4C5)
+            controller.updatePlayerColor(color)
+            assertEquals(color, controller.state.value.playerColor)
         } finally {
             controller.close()
         }
