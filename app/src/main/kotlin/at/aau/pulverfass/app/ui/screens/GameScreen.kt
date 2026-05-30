@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -529,63 +530,21 @@ internal fun GameScreenContent(
                 )
             }
 
-            if (showOptionsOverlay) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.85f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth(0.45f)
-                                .background(
-                                    PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
-                                    RoundedCornerShape(12.dp),
-                                )
-                                .padding(horizontal = 32.dp, vertical = 24.dp),
-                    ) {
-                        Text(
-                            text = "OPTIONEN",
-                            fontFamily = PulverfassFonts.CinzelDecorative,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 32.sp,
-                            color = PulverfassColors.GoldBright,
-                            letterSpacing = 3.sp,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        InGameAudioToggleRow(
-                            label = "MUSIK",
-                            isEnabled = isMusicEnabled,
-                            onToggle = { enabled ->
-                                isMusicEnabled = enabled
-                                musicManager?.setMusicMuted(!enabled)
-                            },
-                        )
-                        InGameAudioToggleRow(
-                            label = "SOUND-EFFEKTE",
-                            isEnabled = isSfxEnabled,
-                            onToggle = { enabled ->
-                                isSfxEnabled = enabled
-                                musicManager?.setSfxMuted(!enabled)
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        MainButton(
-                            text = "ZURÜCK ZUM HAUPTMENÜ",
-                            onClick = onNavigateToMain,
-                        )
-                        MainButton(
-                            text = "SCHLIESSEN",
-                            onClick = { showOptionsOverlay = false },
-                        )
-                    }
-                }
-            }
+            OptionsOverlay(
+                show = showOptionsOverlay,
+                isMusicEnabled = isMusicEnabled,
+                isSfxEnabled = isSfxEnabled,
+                onMusicToggle = { enabled ->
+                    isMusicEnabled = enabled
+                    musicManager?.setMusicMuted(!enabled)
+                },
+                onSfxToggle = { enabled ->
+                    isSfxEnabled = enabled
+                    musicManager?.setSfxMuted(!enabled)
+                },
+                onNavigateToMain = onNavigateToMain,
+                onClose = { showOptionsOverlay = false },
+            )
 
             CountdownOverlay(show = showCountdown, value = countdownValue)
         } // end blurred game content group
@@ -597,6 +556,73 @@ internal fun GameScreenContent(
                 onNavigateToMain = onNavigateToMain,
             )
         }
+    }
+}
+
+@Composable
+private fun GameScreenOverlayContainer(
+    overlayAlpha: Float = 0.88f,
+    arrangement: Arrangement.Vertical = Arrangement.spacedBy(16.dp),
+    columnModifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid.copy(alpha = overlayAlpha)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = arrangement,
+            modifier = columnModifier,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun OptionsOverlay(
+    show: Boolean,
+    isMusicEnabled: Boolean,
+    isSfxEnabled: Boolean,
+    onMusicToggle: (Boolean) -> Unit,
+    onSfxToggle: (Boolean) -> Unit,
+    onNavigateToMain: () -> Unit,
+    onClose: () -> Unit,
+) {
+    if (!show) return
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.85f,
+        arrangement = Arrangement.spacedBy(12.dp),
+        columnModifier =
+            Modifier
+                .fillMaxWidth(0.45f)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+    ) {
+        Text(
+            text = "OPTIONEN",
+            fontFamily = PulverfassFonts.CinzelDecorative,
+            fontWeight = FontWeight.Bold,
+            fontSize = 32.sp,
+            color = PulverfassColors.GoldBright,
+            letterSpacing = 3.sp,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        InGameAudioToggleRow(label = "MUSIK", isEnabled = isMusicEnabled, onToggle = onMusicToggle)
+        InGameAudioToggleRow(
+            label = "SOUND-EFFEKTE",
+            isEnabled = isSfxEnabled,
+            onToggle = onSfxToggle,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        MainButton(text = "ZURÜCK ZUM HAUPTMENÜ", onClick = onNavigateToMain)
+        MainButton(text = "SCHLIESSEN", onClick = onClose)
     }
 }
 
@@ -622,37 +648,26 @@ private fun CountdownOverlay(
     value: Int,
 ) {
     if (!show) return
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = "MACH DICH BEREIT!",
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontWeight = FontWeight.Bold,
-                fontSize = 48.sp,
-                color = PulverfassColors.GoldBright,
-            )
-            Text(
-                text = "Das Spiel beginnt gleich...",
-                fontSize = 20.sp,
-                color = PulverfassColors.TextOnDark,
-            )
-            Text(
-                text = value.toString(),
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontWeight = FontWeight.Bold,
-                fontSize = 96.sp,
-                color = PulverfassColors.GoldBright,
-            )
-        }
+    GameScreenOverlayContainer {
+        Text(
+            text = "MACH DICH BEREIT!",
+            fontFamily = PulverfassFonts.CinzelDecorative,
+            fontWeight = FontWeight.Bold,
+            fontSize = 48.sp,
+            color = PulverfassColors.GoldBright,
+        )
+        Text(
+            text = "Das Spiel beginnt gleich...",
+            fontSize = 20.sp,
+            color = PulverfassColors.TextOnDark,
+        )
+        Text(
+            text = value.toString(),
+            fontFamily = PulverfassFonts.CinzelDecorative,
+            fontWeight = FontWeight.Bold,
+            fontSize = 96.sp,
+            color = PulverfassColors.GoldBright,
+        )
     }
 }
 
