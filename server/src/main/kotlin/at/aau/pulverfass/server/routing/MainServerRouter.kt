@@ -5,10 +5,10 @@ import at.aau.pulverfass.server.lobby.mapping.MappedLobbyEvents
 import at.aau.pulverfass.server.lobby.mapping.NetworkToLobbyEventMapper
 import at.aau.pulverfass.server.lobby.mapping.NetworkToLobbyEventMappingException
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.lobby.reducer.InvalidLobbyEventException
 import at.aau.pulverfass.shared.lobby.reducer.LobbyCodeMismatchException
-import org.slf4j.LoggerFactory
 
 /**
  * Orchestriert das Routing von technisch dekodierten Requests in Lobby-Runtimes.
@@ -21,7 +21,7 @@ class MainServerRouter(
     private val mapper: NetworkToLobbyEventMapper,
     private val hooks: MainServerRouterHooks = MainServerRouterHooks(),
 ) {
-    private val logger = LoggerFactory.getLogger(MainServerRouter::class.java)
+    private val logger = ServerLoggers.technical("MainServerRouter")
 
     /**
      * Kompatible Exception-basierte API für bestehende Aufrufer.

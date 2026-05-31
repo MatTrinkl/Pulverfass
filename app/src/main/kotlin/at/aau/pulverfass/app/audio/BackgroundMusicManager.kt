@@ -14,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArraySet
  *  - [playSfx] für einmalige Sound-Effects (auto-released onCompletion)
  *  - [release] beim onDestroy gibt alles frei (inkl. aktiver SFX)
  *
- * Mute-State persistiert via SharedPreferences (app-restart-stabil).
+ * Music- und SFX-Mute getrennt persistiert via SharedPreferences.
  */
 class BackgroundMusicManager(context: Context) {
     private val appContext = context.applicationContext
@@ -30,9 +30,13 @@ class BackgroundMusicManager(context: Context) {
      */
     private val activeSfxPlayers = CopyOnWriteArraySet<MediaPlayer>()
 
-    val isMuted: Boolean
-        get() = prefs.getBoolean(KEY_MUTED, false)
+    val isMusicMuted: Boolean
+        get() = prefs.getBoolean(KEY_MUSIC_MUTED, false)
 
+    val isSfxMuted: Boolean
+        get() = prefs.getBoolean(KEY_SFX_MUTED, false)
+
+    @Synchronized
     fun play(
         @RawRes resId: Int,
         loop: Boolean = true,
@@ -40,14 +44,27 @@ class BackgroundMusicManager(context: Context) {
         if (currentTrack == resId && player?.isPlaying == true) return
         stop()
         currentTrack = resId
-        if (isMuted) return
-        player =
-            MediaPlayer.create(appContext, resId)?.apply {
-                isLooping = loop
-                start()
-            }
+        if (isMusicMuted) return
+        // Prepare asynchronously to avoid blocking UI thread and to ensure proper start timing
+        val afd = appContext.resources.openRawResourceFd(resId)
+        afd?.use { fileDesc ->
+            player =
+                MediaPlayer().apply {
+                    setDataSource(fileDesc.fileDescriptor, fileDesc.startOffset, fileDesc.length)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = loop
+                        mp.start()
+                    }
+                    setOnErrorListener { mp, _, _ ->
+                        runCatching { mp.release() }
+                        true
+                    }
+                    prepareAsync()
+                }
+        }
     }
 
+    @Synchronized
     fun stop() {
         player?.let {
             runCatching {
@@ -59,17 +76,19 @@ class BackgroundMusicManager(context: Context) {
         currentTrack = null
     }
 
+    @Synchronized
     fun pause() {
         player?.takeIf { it.isPlaying }?.pause()
     }
 
+    @Synchronized
     fun resume() {
-        if (isMuted) return
+        if (isMusicMuted) return
         player?.takeIf { !it.isPlaying }?.start()
     }
 
-    fun setMuted(muted: Boolean) {
-        prefs.edit().putBoolean(KEY_MUTED, muted).apply()
+    fun setMusicMuted(muted: Boolean) {
+        prefs.edit().putBoolean(KEY_MUSIC_MUTED, muted).apply()
         if (muted) {
             pause()
         } else {
@@ -81,17 +100,17 @@ class BackgroundMusicManager(context: Context) {
         }
     }
 
+    fun setSfxMuted(muted: Boolean) {
+        prefs.edit().putBoolean(KEY_SFX_MUTED, muted).apply()
+    }
+
     /**
      * Spielt einen Sound-Effect einmalig ab.
-     *
-     * Player wird in [activeSfxPlayers] getrackt und gibt sich selbst frei
-     * via [MediaPlayer.OnCompletionListener] / [MediaPlayer.OnErrorListener].
-     * Falls die App zerstört wird bevor das passiert, räumt [release] auf.
      */
     fun playSfx(
         @RawRes resId: Int,
     ) {
-        if (isMuted) return
+        if (isSfxMuted) return
         val sfxPlayer = MediaPlayer.create(appContext, resId) ?: return
         activeSfxPlayers.add(sfxPlayer)
         sfxPlayer.setOnCompletionListener { mp ->
@@ -106,6 +125,7 @@ class BackgroundMusicManager(context: Context) {
         sfxPlayer.start()
     }
 
+    @Synchronized
     fun release() {
         stop()
         activeSfxPlayers.forEach { sfx ->
@@ -119,6 +139,7 @@ class BackgroundMusicManager(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "pulverfass_audio"
-        private const val KEY_MUTED = "is_muted"
+        private const val KEY_MUSIC_MUTED = "is_music_muted"
+        private const val KEY_SFX_MUTED = "is_sfx_muted"
     }
 }

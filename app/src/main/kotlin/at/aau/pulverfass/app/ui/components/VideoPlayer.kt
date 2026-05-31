@@ -1,15 +1,20 @@
 package at.aau.pulverfass.app.ui.components
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.net.Uri
+import android.view.View
 import android.widget.VideoView
 import androidx.annotation.RawRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.viewinterop.AndroidView
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Wiederverwendbarer Video-Player für lokale res/raw Videos.
@@ -64,44 +69,76 @@ private fun VideoViewInterop(
     muted: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val videoRef = remember { AtomicReference<VideoView?>(null) }
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val view: VideoView =
-                if (centerCrop) CenterCropVideoView(ctx) else VideoView(ctx)
-            view.apply {
-                val uri = Uri.parse("android.resource://${ctx.packageName}/$videoResId")
-                setVideoURI(uri)
-                setOnPreparedListener { mediaPlayer ->
-                    mediaPlayer.isLooping = loop
-                    if (muted) {
-                        mediaPlayer.setVolume(0f, 0f)
-                    }
-                    (view as? CenterCropVideoView)?.setVideoSize(
-                        mediaPlayer.videoWidth,
-                        mediaPlayer.videoHeight,
-                    )
-                }
-                setOnCompletionListener {
-                    if (!loop) onCompleted()
-                }
-                start()
+            val view: VideoView = if (centerCrop) CenterCropVideoView(ctx) else VideoView(ctx)
+            videoRef.set(view)
+            view.setOnPreparedListener { mediaPlayer ->
+                runCatching { configureMediaPlayer(mediaPlayer, view, loop, muted, centerCrop) }
+                view.visibility = View.VISIBLE
+                view.start()
             }
+            view.setOnCompletionListener { if (!loop) onCompleted() }
+            view.visibility = View.VISIBLE
+            view.setVideoURI(Uri.parse("android.resource://${ctx.packageName}/$videoResId"))
+            view
         },
+        update = { view -> resetVideoUri(view, videoResId) },
+    )
+    DisposableEffect(videoResId, loop, muted) {
+        onDispose { releaseVideoView(videoRef) }
+    }
+}
+
+private fun configureMediaPlayer(
+    mediaPlayer: MediaPlayer,
+    view: VideoView,
+    loop: Boolean,
+    muted: Boolean,
+    centerCrop: Boolean,
+) {
+    mediaPlayer.isLooping = loop
+    if (muted) mediaPlayer.setVolume(0f, 0f)
+    (view as? CenterCropVideoView)?.setVideoSize(
+        mediaPlayer.videoWidth,
+        mediaPlayer.videoHeight,
     )
 }
 
+private fun resetVideoUri(
+    view: VideoView,
+    @RawRes videoResId: Int,
+) {
+    val expected = "android.resource://${view.context.packageName}/$videoResId"
+    if (view.tag == expected) return
+    view.tag = expected
+    runCatching { view.stopPlayback() }
+    view.setVideoURI(Uri.parse(expected))
+}
+
+private fun releaseVideoView(videoRef: AtomicReference<VideoView?>) {
+    videoRef.get()?.let { v ->
+        runCatching {
+            v.setOnPreparedListener(null)
+            v.setOnCompletionListener(null)
+            v.stopPlayback()
+        }
+    }
+    videoRef.set(null)
+}
+
 private class CenterCropVideoView(context: Context) : VideoView(context) {
-    private var sourceWidth = 0
-    private var sourceHeight = 0
+    private var videoWidth = 0
+    private var videoHeight = 0
 
     fun setVideoSize(
         width: Int,
         height: Int,
     ) {
-        if (sourceWidth == width && sourceHeight == height) return
-        sourceWidth = width
-        sourceHeight = height
+        videoWidth = width
+        videoHeight = height
         requestLayout()
     }
 
@@ -109,18 +146,18 @@ private class CenterCropVideoView(context: Context) : VideoView(context) {
         widthMeasureSpec: Int,
         heightMeasureSpec: Int,
     ) {
-        val parentWidth = MeasureSpec.getSize(widthMeasureSpec)
-        val parentHeight = MeasureSpec.getSize(heightMeasureSpec)
-        if (sourceWidth == 0 || sourceHeight == 0) {
-            setMeasuredDimension(parentWidth, parentHeight)
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val height = MeasureSpec.getSize(heightMeasureSpec)
+        if (videoWidth == 0 || videoHeight == 0) {
+            setMeasuredDimension(width, height)
             return
         }
-        val videoRatio = sourceWidth.toFloat() / sourceHeight.toFloat()
-        val parentRatio = parentWidth.toFloat() / parentHeight.toFloat()
-        if (videoRatio > parentRatio) {
-            setMeasuredDimension((parentHeight * videoRatio).toInt(), parentHeight)
+        val videoAspect = videoWidth.toFloat() / videoHeight
+        val viewAspect = width.toFloat() / height
+        if (videoAspect > viewAspect) {
+            setMeasuredDimension((height * videoAspect).toInt(), height)
         } else {
-            setMeasuredDimension(parentWidth, (parentWidth / videoRatio).toInt())
+            setMeasuredDimension(width, (width / videoAspect).toInt())
         }
     }
 }

@@ -14,11 +14,13 @@ import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -293,7 +295,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         lobbyCode = lobbyCode,
                         playerDisplayName = "Alice",
                     ),
-                    receiveRawTestPayload(session),
+                    receiveRelevantTestPayload(session),
                 )
             } finally {
                 session.close()
@@ -368,7 +370,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         lobbyCode = lobbyCode,
                         playerDisplayName = "Alice",
                     ),
-                    receiveRawTestPayload(firstSession),
+                    receiveRelevantTestPayload(firstSession),
                 )
 
                 sessionStore.deleteSession(sessionToken)
@@ -391,7 +393,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                             lobbyCode = lobbyCode,
                             playerDisplayName = "Alice",
                         ),
-                        receiveRawTestPayload(reconnectingSession),
+                        receiveRelevantTestPayload(reconnectingSession),
                     )
                 } finally {
                     reconnectingSession.close()
@@ -510,7 +512,9 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                 payload !is ConnectionResponse &&
                 payload !is GameStateDeltaEvent &&
                 payload !is GameStateSnapshotBroadcast &&
-                payload !is TurnStateUpdatedEvent
+                payload !is TurnStateUpdatedEvent &&
+                payload !is PlayerCountUpdateEvent &&
+                payload !is GlobalPlayerCountEvent
             ) {
                 return payload
             }
