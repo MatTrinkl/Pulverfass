@@ -80,7 +80,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.net.ServerSocket
-import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -288,7 +288,7 @@ class LobbyControllerTest {
     fun `start game should send backend request and trigger catch up after game started event`() {
         runBlocking {
             val lobbyCode = LobbyCode("S123")
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -444,7 +444,7 @@ class LobbyControllerTest {
     fun `refresh game state should request public turn and private snapshots`() {
         runBlocking {
             val lobbyCode = LobbyCode("R123")
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -506,7 +506,7 @@ class LobbyControllerTest {
             val playerId = PlayerId(1)
             val cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c"))
             val config = LobbyControllerConfig()
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             var placeAttempts = 0
             var tradeInAttempts = 0
             var confirmAttempts = 0
@@ -831,7 +831,7 @@ class LobbyControllerTest {
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val config = LobbyControllerConfig()
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             var attackAttempts = 0
             var confirmAttempts = 0
             val server =
@@ -1065,7 +1065,7 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("RC01")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174202")
             val replacementToken = SessionToken("123e4567-e89b-12d3-a456-426614174203")
-            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val reconnectPayloads = CopyOnWriteArrayList<Any>()
             val firstServer =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
@@ -1191,7 +1191,7 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("MR01")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
-            val payloads = Collections.synchronizedList(mutableListOf<Any>())
+            val payloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
@@ -1291,7 +1291,7 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("PR35")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174210")
-            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val reconnectPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload =
