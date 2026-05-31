@@ -63,7 +63,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
@@ -81,6 +80,7 @@ import at.aau.pulverfass.app.game.minimumOccupyingTroopsForAttack
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.components.MainButton
+import at.aau.pulverfass.app.ui.components.PulverfassTitleText
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
@@ -561,22 +561,6 @@ internal fun GameScreenContent(
 }
 
 @Composable
-private fun GameScreenTitleText(
-    text: String,
-    fontSize: TextUnit,
-    letterSpacing: TextUnit = TextUnit.Unspecified,
-) {
-    Text(
-        text = text,
-        fontFamily = PulverfassFonts.CinzelDecorative,
-        fontWeight = FontWeight.Bold,
-        fontSize = fontSize,
-        color = PulverfassColors.GoldBright,
-        letterSpacing = letterSpacing,
-    )
-}
-
-@Composable
 private fun GameScreenOverlayContainer(
     overlayAlpha: Float = 0.88f,
     arrangement: Arrangement.Vertical = Arrangement.spacedBy(16.dp),
@@ -622,7 +606,7 @@ private fun OptionsOverlay(
                 )
                 .padding(horizontal = 32.dp, vertical = 24.dp),
     ) {
-        GameScreenTitleText(text = "OPTIONEN", fontSize = 32.sp, letterSpacing = 3.sp)
+        PulverfassTitleText(text = "OPTIONEN", fontSize = 32.sp, letterSpacing = 3.sp)
         Spacer(modifier = Modifier.height(8.dp))
         InGameAudioToggleRow(label = "MUSIK", isEnabled = isMusicEnabled, onToggle = onMusicToggle)
         InGameAudioToggleRow(
@@ -659,13 +643,13 @@ private fun CountdownOverlay(
 ) {
     if (!show) return
     GameScreenOverlayContainer {
-        GameScreenTitleText(text = "MACH DICH BEREIT!", fontSize = 48.sp)
+        PulverfassTitleText(text = "MACH DICH BEREIT!", fontSize = 48.sp)
         Text(
             text = "Das Spiel beginnt gleich...",
             fontSize = 20.sp,
             color = PulverfassColors.TextOnDark,
         )
-        GameScreenTitleText(text = value.toString(), fontSize = 96.sp)
+        PulverfassTitleText(text = value.toString(), fontSize = 96.sp)
     }
 }
 
@@ -2042,7 +2026,7 @@ private fun DisconnectOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GameScreenTitleText(text = "⚠ VERBINDUNG UNTERBROCHEN", fontSize = 28.sp)
+            PulverfassTitleText(text = "⚠ VERBINDUNG UNTERBROCHEN", fontSize = 28.sp)
             Text(
                 text = message,
                 fontSize = 16.sp,

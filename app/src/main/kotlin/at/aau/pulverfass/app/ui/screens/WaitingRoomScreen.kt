@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -50,6 +51,7 @@ import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
+import at.aau.pulverfass.app.ui.components.PulverfassTitleText
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
@@ -480,6 +482,20 @@ private fun PlayerRow(player: WaitingRoomPlayerUi) {
 }
 
 @Composable
+private fun CharacterPickerLabel(
+    text: String,
+    fontSize: TextUnit,
+) {
+    Text(
+        text = text,
+        fontFamily = PulverfassFonts.CinzelDecorative,
+        fontSize = fontSize,
+        color = PulverfassColors.TextOnDark,
+        letterSpacing = 2.sp,
+    )
+}
+
+@Composable
 private fun CharacterPickerOverlay(
     currentColor: Color,
     takenColors: Set<Color>,
@@ -505,30 +521,10 @@ private fun CharacterPickerOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(
-                text = "CHARAKTER WÄHLEN",
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                color = PulverfassColors.GoldBright,
-                letterSpacing = 3.sp,
-            )
+            PulverfassTitleText(text = "CHARAKTER WÄHLEN", fontSize = 28.sp, letterSpacing = 3.sp)
 
-            Text(
-                text = "$playerCount / 6 SPIELER IM RAUM",
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontSize = 13.sp,
-                color = PulverfassColors.TextOnDark,
-                letterSpacing = 2.sp,
-            )
-
-            Text(
-                text = "SPIELERFARBE",
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontSize = 12.sp,
-                color = PulverfassColors.TextOnDark,
-                letterSpacing = 2.sp,
-            )
+            CharacterPickerLabel(text = "$playerCount / 6 SPIELER IM RAUM", fontSize = 13.sp)
+            CharacterPickerLabel(text = "SPIELERFARBE", fontSize = 12.sp)
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 colors.forEach { color ->
