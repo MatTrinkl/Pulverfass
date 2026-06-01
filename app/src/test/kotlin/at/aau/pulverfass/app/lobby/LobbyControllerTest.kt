@@ -1607,10 +1607,18 @@ class LobbyControllerTest {
     private class InMemoryPlayerNameStore(
         private var playerName: String? = null,
     ) : PlayerNameStore {
+        private var characterId: String? = null
+
         override fun readPlayerName(): String? = playerName
 
         override fun savePlayerName(playerName: String) {
             this.playerName = playerName
+        }
+
+        override fun readCharacterId(): String? = characterId
+
+        override fun saveCharacterId(characterId: String) {
+            this.characterId = characterId
         }
     }
 }

@@ -30,4 +30,30 @@ class PlayerNameStoreTest {
 
         assertNull(NoOpPlayerNameStore.readPlayerName())
     }
+
+    @Test
+    fun `shared preferences store should persist character id across instances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = SharedPreferencesPlayerNameStore(context)
+
+        store.saveCharacterId("doctor")
+
+        val restoredStore = SharedPreferencesPlayerNameStore(context)
+        assertEquals("doctor", restoredStore.readCharacterId())
+    }
+
+    @Test
+    fun `shared preferences store should return null when no character id saved`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = SharedPreferencesPlayerNameStore(context)
+        store.saveCharacterId("")
+        assertNull(store.readCharacterId())
+    }
+
+    @Test
+    fun `no op store should never persist character id`() {
+        NoOpPlayerNameStore.saveCharacterId("doctor")
+
+        assertNull(NoOpPlayerNameStore.readCharacterId())
+    }
 }

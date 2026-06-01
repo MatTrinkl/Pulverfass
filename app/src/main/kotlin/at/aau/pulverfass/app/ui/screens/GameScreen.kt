@@ -1,8 +1,15 @@
 package at.aau.pulverfass.app.ui.screens
 
+import android.media.MediaPlayer
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,12 +62,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -77,13 +90,18 @@ import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
 import at.aau.pulverfass.app.game.minimumOccupyingTroopsForAttack
+import at.aau.pulverfass.app.lobby.CharacterDef
+import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.CharacterCoin
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.PulverfassTitleText
+import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.app.ui.theme.CormorantGaramond
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 import at.aau.pulverfass.shared.ids.CardId
@@ -117,6 +135,7 @@ fun GameScreen(
     onNavigateToMain: () -> Unit = {},
 ) {
     val lobbyState by controller.state.collectAsState()
+    val character = lobbyState.characterId?.let { Characters.byId(it) }
     val players =
         remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.playerColor) {
             lobbyPlayersToGamePlayers(
@@ -136,6 +155,8 @@ fun GameScreen(
                 isConnected = lobbyState.isConnected,
                 pendingCommandKeys = lobbyState.pendingCommandKeys,
                 mapPainter = mapPainter,
+                character = character,
+                playerName = lobbyState.playerName,
             ),
         actions =
             GameScreenActions(
@@ -167,6 +188,8 @@ internal data class GameScreenContentState(
     val isConnected: Boolean,
     val pendingCommandKeys: Set<LobbyCommandKey>,
     val mapPainter: Painter,
+    val character: CharacterDef? = null,
+    val playerName: String = "",
 )
 
 internal data class GameScreenActions(
@@ -290,6 +313,7 @@ internal fun GameScreenContent(
     musicManager: BackgroundMusicManager? = null,
     onNavigateToMain: () -> Unit = {},
     onReconnect: () -> Unit = {},
+    countdownState: Pair<Boolean, Int>? = null,
 ) {
     val players = contentState.players
     val localPlayerId = contentState.localPlayerId
@@ -341,7 +365,7 @@ internal fun GameScreenContent(
         )
     val showCatchUpFeedback = rememberDelayedCatchUpFeedback(uiState.isCatchingUp)
 
-    val (showCountdown, countdownValue) = rememberCountdownState(musicManager)
+    val (showCountdown, countdownValue) = countdownState ?: rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
 
@@ -547,7 +571,13 @@ internal fun GameScreenContent(
                 onClose = { showOptionsOverlay = false },
             )
 
-            CountdownOverlay(show = showCountdown, value = countdownValue)
+            CountdownOverlay(
+                show = showCountdown,
+                value = countdownValue,
+                character = contentState.character,
+                playerName = contentState.playerName,
+                onCountdownComplete = {},
+            )
         } // end blurred game content group
 
         if (isDisconnectState) {
@@ -564,12 +594,13 @@ internal fun GameScreenContent(
 private fun GameScreenOverlayContainer(
     overlayAlpha: Float = 0.88f,
     arrangement: Arrangement.Vertical = Arrangement.spacedBy(16.dp),
+    modifier: Modifier = Modifier,
     columnModifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid.copy(alpha = overlayAlpha)),
         contentAlignment = Alignment.Center,
@@ -625,12 +656,12 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
     var show by remember { mutableStateOf(true) }
     var value by remember { mutableStateOf(3) }
     LaunchedEffect(Unit) {
-        for (i in 3 downTo 1) {
+        for (i in 3 downTo 0) {
             value = i
             musicManager?.playSfx(R.raw.sfx_ingame)
             delay(1000L)
         }
-        delay(800L)
+        delay(2000L)
         show = false
     }
     return show to value
@@ -640,16 +671,188 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
 private fun CountdownOverlay(
     show: Boolean,
     value: Int,
+    character: CharacterDef?,
+    playerName: String = "",
+    onCountdownComplete: () -> Unit = {},
 ) {
     if (!show) return
-    GameScreenOverlayContainer {
-        PulverfassTitleText(text = "MACH DICH BEREIT!", fontSize = 48.sp)
-        Text(
-            text = "Das Spiel beginnt gleich...",
-            fontSize = 20.sp,
-            color = PulverfassColors.TextOnDark,
+    val inputBlocker =
+        Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                }
+            }
+        }
+    if (character != null) {
+        CinematicCountdown(
+            value = value,
+            character = character,
+            playerName = playerName,
+            modifier = inputBlocker,
+            onCountdownComplete = onCountdownComplete,
         )
-        PulverfassTitleText(text = value.toString(), fontSize = 96.sp)
+    } else {
+        GameScreenOverlayContainer(modifier = inputBlocker) {
+            PulverfassTitleText(text = "MACH DICH BEREIT!", fontSize = 48.sp)
+            Text(
+                text = "Das Spiel beginnt gleich...",
+                fontSize = 20.sp,
+                color = PulverfassColors.TextOnDark,
+            )
+            PulverfassTitleText(text = value.toString(), fontSize = 96.sp)
+        }
+    }
+}
+
+@Composable
+private fun CinematicCountdown(
+    value: Int,
+    character: CharacterDef,
+    playerName: String = "",
+    modifier: Modifier = Modifier,
+    onCountdownComplete: () -> Unit = {},
+) {
+    val isZooming = value <= 0
+    val zoomScale by animateFloatAsState(
+        targetValue = if (isZooming) 15f else 1f,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "zoomScale",
+    )
+    val blackOverlayAlpha by animateFloatAsState(
+        targetValue = if (isZooming) 1f else 0f,
+        animationSpec = tween(900, delayMillis = 600),
+        label = "blackOverlay",
+    )
+    LaunchedEffect(isZooming) {
+        if (isZooming) {
+            delay(1500)
+            onCountdownComplete()
+        }
+    }
+    Box(modifier = modifier.fillMaxSize()) {
+        if (character.isVideoWallpaper) {
+            VideoPlayer(
+                videoResId = character.wallpaperResId,
+                loop = true,
+                cover = true,
+                muted = true,
+                modifier = Modifier.fillMaxSize().blur(radius = 6.dp),
+            )
+        } else {
+            val imageRes = character.fallbackImageResId ?: character.wallpaperResId
+            Image(
+                painter = painterResource(imageRes),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().blur(radius = 6.dp),
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.05f)),
+        )
+        val context = LocalContext.current
+        val headerAlpha = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
+            headerAlpha.animateTo(1f, tween(600))
+            try {
+                val mp = MediaPlayer.create(context, R.raw.sfx_schlacht_att)
+                mp?.start()
+                delay(3_000)
+                mp?.stop()
+                mp?.release()
+            } catch (_: Exception) {
+            }
+        }
+
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "MACH DICH BEREIT!!!",
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                color = PulverfassColors.GoldCoin,
+                letterSpacing = 6.sp,
+                style =
+                    androidx.compose.ui.text.TextStyle(
+                        shadow =
+                            androidx.compose.ui.graphics.Shadow(
+                                color = PulverfassColors.GoldCoin,
+                                blurRadius = 24f,
+                            ),
+                    ),
+                modifier = Modifier.graphicsLayer { alpha = headerAlpha.value },
+            )
+            Text(
+                text = "Das Spiel beginnt",
+                fontFamily = CormorantGaramond,
+                fontStyle = FontStyle.Italic,
+                fontSize = 16.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier =
+                    Modifier.graphicsLayer {
+                        scaleX = zoomScale
+                        scaleY = zoomScale
+                    },
+            ) {
+                CharacterCoin(character = character, size = 130.dp)
+            }
+            Text(
+                text = playerName.uppercase(),
+                fontFamily = CormorantGaramond,
+                fontWeight = FontWeight.SemiBold,
+                fontStyle = FontStyle.Italic,
+                fontSize = 18.sp,
+                letterSpacing = 4.sp,
+                color = Color.White.copy(alpha = 0.85f),
+            )
+            val countdownScale = remember { Animatable(1f) }
+            LaunchedEffect(value) {
+                countdownScale.snapTo(1.4f)
+                countdownScale.animateTo(
+                    1f,
+                    animationSpec = spring(dampingRatio = 0.4f, stiffness = 200f),
+                )
+            }
+            Text(
+                text = value.toString(),
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 64.sp,
+                color = PulverfassColors.GoldCoin,
+                style =
+                    androidx.compose.ui.text.TextStyle(
+                        shadow =
+                            androidx.compose.ui.graphics.Shadow(
+                                color = PulverfassColors.GoldCoin,
+                                blurRadius = 40f,
+                            ),
+                    ),
+                modifier =
+                    Modifier.graphicsLayer {
+                        scaleX = countdownScale.value
+                        scaleY = countdownScale.value
+                    },
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = blackOverlayAlpha)),
+        )
     }
 }
 

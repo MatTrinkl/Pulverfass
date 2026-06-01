@@ -17,6 +17,7 @@ import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -28,6 +29,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -44,6 +46,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -57,6 +60,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -116,14 +120,20 @@ class LobbyController(
 
     private val _state =
         MutableStateFlow(
-            LobbyUiState(
-                serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
-                playerName = playerNameStore.readPlayerName().orEmpty(),
-                statusText = config.statusNotConnected,
-                sessionToken = reconnectSessionStore.readSessionToken(),
-                gameStarted = wasGameStartedOnLastAppRun,
-                gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
-            ),
+            run {
+                val savedCharacterId = playerNameStore.readCharacterId()
+                val savedCharacterColor = savedCharacterId?.let { Characters.byId(it)?.color }
+                LobbyUiState(
+                    serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
+                    playerName = playerNameStore.readPlayerName().orEmpty(),
+                    statusText = config.statusNotConnected,
+                    sessionToken = reconnectSessionStore.readSessionToken(),
+                    gameStarted = wasGameStartedOnLastAppRun,
+                    gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
+                    characterId = savedCharacterId,
+                    playerColor = savedCharacterColor,
+                )
+            },
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
@@ -228,6 +238,36 @@ class LobbyController(
 
     fun updatePlayerColor(color: Color) {
         _state.update { it.copy(playerColor = color) }
+    }
+
+    fun updateCharacter(id: String) {
+        playerNameStore.saveCharacterId(id)
+        val color = Characters.byId(id)?.color
+        _state.update { it.copy(characterId = id, playerColor = color) }
+    }
+
+    fun selectCharacter(characterId: String) {
+        val lobbyCode = state.value.activeLobbyCode ?: return
+        val playerId = state.value.ownPlayerId ?: return
+        scope.launch {
+            runCatching {
+                commandDispatcher.send(
+                    LobbyCommand(
+                        key = LobbyCommandKey.CHARACTER_SELECT,
+                        payload =
+                            CharacterSelectRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                characterId = characterId,
+                            ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun clearCharacterSelectError() {
+        _state.update { it.copy(characterSelectError = null) }
     }
 
     fun updateLobbyCode(lobbyCode: String) {
@@ -1302,6 +1342,18 @@ class LobbyController(
             }
             is GlobalPlayerCountEvent -> {
                 _state.update { it.copy(globalPlayerCount = payload.playerCount) }
+            }
+            is CharacterSelectResponse -> updateCharacter(payload.characterId)
+            is CharacterSelectErrorResponse -> {
+                _state.update { it.copy(characterSelectError = payload.reason) }
+            }
+            is CharacterSelectedBroadcast -> {
+                val existing = playersById[payload.playerId.value]
+                if (existing != null) {
+                    playersById[payload.playerId.value] =
+                        existing.copy(characterId = payload.characterId)
+                    publishPlayers()
+                }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)

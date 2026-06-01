@@ -349,6 +349,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -389,6 +390,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -456,6 +458,7 @@ class ScreenComposableTest {
                             onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -518,6 +521,7 @@ class ScreenComposableTest {
                             onConfirmReinforcementsDone = { finished = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -562,6 +566,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -621,6 +626,7 @@ class ScreenComposableTest {
                             onConfirmAttackDone = { finished = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -685,6 +691,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }

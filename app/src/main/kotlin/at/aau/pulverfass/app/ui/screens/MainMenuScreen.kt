@@ -5,13 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,22 +109,22 @@ fun MainMenuScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.wrapContentWidth(),
+                    modifier = Modifier.width(IntrinsicSize.Max),
                 ) {
                     MainButton(
                         text = "START",
                         onClick = onStartClick,
-                        modifier = Modifier.testTag("MenuButton_Start"),
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Start"),
                     )
                     MainButton(
-                        text = "OPTIONS",
+                        text = "OPTIONEN",
                         onClick = onOptionsClick,
-                        modifier = Modifier.testTag("MenuButton_Options"),
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Options"),
                     )
                     MainButton(
-                        text = "EXIT",
+                        text = "BEENDEN",
                         onClick = { showExitDialog = true },
-                        modifier = Modifier.testTag("MenuButton_Exit"),
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
                     )
                 }
             }
