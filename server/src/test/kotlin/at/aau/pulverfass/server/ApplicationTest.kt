@@ -38,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -484,7 +485,11 @@ class ApplicationTest {
 
         try {
             server.start(wait = false)
-            Thread.sleep(100)
+            runBlocking {
+                withTimeout(5_000) {
+                    server.resolvedConnectors()
+                }
+            }
         } finally {
             server.stop(1_000, 1_000)
         }
@@ -501,7 +506,11 @@ class ApplicationTest {
 
         try {
             server.start(wait = false)
-            Thread.sleep(100)
+            runBlocking {
+                withTimeout(5_000) {
+                    server.resolvedConnectors()
+                }
+            }
         } finally {
             server.stop(1_000, 1_000)
         }

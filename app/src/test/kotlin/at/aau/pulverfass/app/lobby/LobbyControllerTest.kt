@@ -77,7 +77,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import java.net.ServerSocket
 import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -1455,42 +1454,35 @@ class LobbyControllerTest {
         onOpenPayload: NetworkMessagePayload? = null,
         onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
     ): TestWebSocketServer {
-        repeat(5) { attempt ->
-            val port = findFreePort()
-            val server =
-                embeddedServer(Netty, port = port) {
-                    install(WebSockets)
-                    routing {
-                        webSocket("/ws") {
-                            if (onOpenPayload != null) {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(onOpenPayload),
-                                    ),
-                                )
-                            }
-                            for (frame in incoming) {
-                                if (frame is Frame.Binary) {
-                                    val payload = MessageCodec.decodePayload(frame.readBytes())
-                                    onPayload(payload, this)
-                                }
+        val server =
+            embeddedServer(Netty, port = 0) {
+                install(WebSockets)
+                routing {
+                    webSocket("/ws") {
+                        if (onOpenPayload != null) {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(onOpenPayload),
+                                ),
+                            )
+                        }
+                        for (frame in incoming) {
+                            if (frame is Frame.Binary) {
+                                val payload = MessageCodec.decodePayload(frame.readBytes())
+                                onPayload(payload, this)
                             }
                         }
                     }
                 }
-
-            try {
-                server.start(wait = false)
-                return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
-            } catch (error: Exception) {
-                server.stop(0, 0)
-                if (attempt == 4) {
-                    throw error
-                }
             }
-        }
-        error("Unable to start test websocket server")
+
+        server.start(wait = false)
+        val port =
+            runBlocking {
+                server.resolvedConnectors().single().port
+            }
+        return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
     }
 
     private fun startProtocolServerAt(
@@ -1524,11 +1516,6 @@ class LobbyControllerTest {
         server.start(wait = false)
         return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
     }
-
-    private fun findFreePort(): Int =
-        ServerSocket(0).use { socket ->
-            socket.localPort
-        }
 
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
