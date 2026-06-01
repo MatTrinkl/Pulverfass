@@ -8,6 +8,17 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Anfrage an den Server, einen Angriff zwischen zwei Territorien auszuführen.
+ *
+ * @property lobbyCode betroffene Lobby
+ * @property playerId anfordernder Spieler
+ * @property fromTerritoryId angreifendes Territorium
+ * @property toTerritoryId verteidigtes Territorium
+ * @property attackTroops Anzahl der für den Angriff eingesetzten Truppen
+ * @property moveAfterCapture gewünschte Truppenanzahl, die nach einer Eroberung nachzieht
+ * @property requestId optionale Client-Korrelation für idempotente UI-Rückmeldungen
+ */
 @Serializable
 data class AttackRequest(
     val lobbyCode: LobbyCode,
@@ -32,6 +43,9 @@ data class AttackRequest(
     }
 }
 
+/**
+ * Legacy-Serializer für [AttackRequest].
+ */
 object AttackRequestSerializer :
     KSerializer<AttackRequest> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(AttackRequest.serializer())

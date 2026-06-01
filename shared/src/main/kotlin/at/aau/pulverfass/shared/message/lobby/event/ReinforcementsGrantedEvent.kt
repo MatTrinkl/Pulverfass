@@ -5,6 +5,16 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Öffentliches Transport-Event über neu gewährte Verstärkungen zu Beginn oder während eines Zuges.
+ *
+ * @property lobbyCode betroffene Lobby
+ * @property playerId Spieler, der die Verstärkungen erhält
+ * @property amount Gesamtanzahl der gewährten Verstärkungen
+ * @property territoryBonus Anteil aus Gebietsanzahl
+ * @property continentBonus Anteil aus Kontinentboni
+ * @property cardBonus Anteil aus Kartentausch
+ */
 @Serializable
 data class ReinforcementsGrantedEvent(
     val lobbyCode: LobbyCode,
@@ -35,6 +45,9 @@ data class ReinforcementsGrantedEvent(
     }
 }
 
+/**
+ * Legacy-Serializer für [ReinforcementsGrantedEvent].
+ */
 object ReinforcementsGrantedEventSerializer :
     KSerializer<ReinforcementsGrantedEvent> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(

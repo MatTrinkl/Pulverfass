@@ -4,6 +4,9 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Typisierte Fehlercodes für fehlgeschlagene Fortify-Anfragen.
+ */
 @Serializable
 enum class FortifyMoveErrorCode {
     GAME_NOT_FOUND,
@@ -17,12 +20,21 @@ enum class FortifyMoveErrorCode {
     FORTIFY_ALREADY_USED,
 }
 
+/**
+ * Fehlantwort des Servers auf eine nicht erfolgreiche Fortify-Anfrage.
+ *
+ * @property code fachlicher Fehlercode
+ * @property reason lesbare Fehlerbeschreibung
+ */
 @Serializable
 data class FortifyMoveErrorResponse(
     val code: FortifyMoveErrorCode,
     val reason: String,
 ) : NetworkMessagePayload
 
+/**
+ * Legacy-Serializer für [FortifyMoveErrorResponse].
+ */
 object FortifyMoveErrorResponseSerializer :
     KSerializer<FortifyMoveErrorResponse> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(

@@ -7,6 +7,13 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Anfrage an den Server, genau drei Handkarten gegen Verstärkungen einzutauschen.
+ *
+ * @property lobbyCode betroffene Lobby
+ * @property playerId anfordernder Spieler
+ * @property cardIds genau drei unterschiedliche Karten-IDs
+ */
 @Serializable
 data class TradeInCardsRequest(
     val lobbyCode: LobbyCode,
@@ -23,6 +30,9 @@ data class TradeInCardsRequest(
     }
 }
 
+/**
+ * Legacy-Serializer für [TradeInCardsRequest].
+ */
 object TradeInCardsRequestSerializer :
     KSerializer<TradeInCardsRequest> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(

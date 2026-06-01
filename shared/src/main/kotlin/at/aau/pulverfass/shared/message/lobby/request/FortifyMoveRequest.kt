@@ -7,6 +7,15 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Anfrage an den Server, Truppen in der Fortify-Phase zwischen zwei eigenen Territorien zu verschieben.
+ *
+ * @property lobbyCode betroffene Lobby
+ * @property playerId anfordernder Spieler
+ * @property fromTerritoryId Ursprungsterritorium
+ * @property toTerritoryId Zielterritorium
+ * @property troopCount Anzahl zu verschiebender Truppen
+ */
 @Serializable
 data class FortifyMoveRequest(
     val lobbyCode: LobbyCode,
@@ -25,6 +34,9 @@ data class FortifyMoveRequest(
     }
 }
 
+/**
+ * Legacy-Serializer für [FortifyMoveRequest].
+ */
 object FortifyMoveRequestSerializer :
     KSerializer<FortifyMoveRequest> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(

@@ -4,6 +4,9 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Typisierte Fehlercodes für fehlgeschlagene Angriffsanfragen.
+ */
 @Serializable
 enum class AttackErrorCode {
     REQUESTER_MISMATCH,
@@ -19,6 +22,13 @@ enum class AttackErrorCode {
     INVALID_REQUEST,
 }
 
+/**
+ * Fehlantwort des Servers auf eine nicht erfolgreiche Angriffsanfrage.
+ *
+ * @property code fachlicher Fehlercode
+ * @property reason lesbare Fehlerbeschreibung
+ * @property requestId optionale Rückgabe der Client-Korrelation aus der Anfrage
+ */
 @Serializable
 data class AttackErrorResponse(
     val code: AttackErrorCode,
@@ -26,6 +36,9 @@ data class AttackErrorResponse(
     val requestId: String? = null,
 ) : NetworkMessagePayload
 
+/**
+ * Legacy-Serializer für [AttackErrorResponse].
+ */
 object AttackErrorResponseSerializer :
     KSerializer<AttackErrorResponse> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(

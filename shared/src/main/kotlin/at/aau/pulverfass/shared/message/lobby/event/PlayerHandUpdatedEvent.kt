@@ -9,6 +9,17 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
+/**
+ * Privates Transport-Event mit der aktuell autoritativen Hand eines Spielers.
+ *
+ * Das Event wird gezielt nur an [recipientPlayerId] zugestellt und ist deshalb kein Broadcast
+ * an alle Lobby-Teilnehmer.
+ *
+ * @property lobbyCode betroffene Lobby
+ * @property recipientPlayerId Spieler, dessen Hand übertragen wird
+ * @property stateVersion State-Version, zu der die Hand gehört
+ * @property handCards private Karten-Snapshots des Empfängers
+ */
 @Serializable
 data class PlayerHandUpdatedEvent(
     val lobbyCode: LobbyCode,
@@ -17,6 +28,11 @@ data class PlayerHandUpdatedEvent(
     val handCards: List<PrivateHandCardSnapshot>,
 ) : PrivateGameEvent {
     companion object {
+        /**
+         * Baut das private Handevent aus einem vollständigen [GameState].
+         *
+         * @throws IllegalArgumentException wenn [recipientPlayerId] nicht Teil der Lobby ist
+         */
         fun fromGameState(
             gameState: GameState,
             recipientPlayerId: PlayerId,
@@ -36,23 +52,38 @@ data class PlayerHandUpdatedEvent(
     }
 }
 
+/**
+ * Serialisierbarer Auszug einer einzelnen Handkarte.
+ *
+ * @property cardId eindeutige Karten-ID
+ * @property type fachlicher Kartentyp
+ */
 @Serializable
 data class PrivateHandCardSnapshot(
     val cardId: CardId,
     val type: CardType,
 ) {
     companion object {
+        /**
+         * Erzeugt den Transport-Snapshot aus einer Domain-Karte.
+         */
         fun from(card: CardState): PrivateHandCardSnapshot =
             PrivateHandCardSnapshot(cardId = card.cardId, type = card.type)
     }
 }
 
+/**
+ * Legacy-Serializer für [PlayerHandUpdatedEvent].
+ */
 object PlayerHandUpdatedEventSerializer :
     KSerializer<PlayerHandUpdatedEvent> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(
         PlayerHandUpdatedEvent.serializer(),
     )
 
+/**
+ * Legacy-Serializer für [PrivateHandCardSnapshot].
+ */
 object PrivateHandCardSnapshotSerializer :
     KSerializer<PrivateHandCardSnapshot> by
     at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(
