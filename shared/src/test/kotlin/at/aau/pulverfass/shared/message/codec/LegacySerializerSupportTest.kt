@@ -29,7 +29,11 @@ class LegacySerializerSupportTest {
 
     @Test
     fun `manual serializer support encodes and decodes structure consistently`() {
-        val serialized = json.encodeToString(ManualStringPayloadSerializer, ManualStringPayload("legacy"))
+        val serialized =
+            json.encodeToString(
+                ManualStringPayloadSerializer,
+                ManualStringPayload("legacy"),
+            )
         val deserialized =
             json.decodeFromString(
                 ManualStringPayloadSerializer,
@@ -56,7 +60,7 @@ class LegacySerializerSupportTest {
                 ManualStringPayloadSerializer.deserialize(
                     SerializerTestDecoder(indices = intArrayOf(99)),
                 )
-        }
+            }
         assertEquals("Unexpected index 99", unexpectedIndex.message)
     }
 
@@ -116,9 +120,12 @@ class LegacySerializerSupportTest {
     }
 
     @Test
-    fun `legacy generated serializer preserves missing field exceptions and wraps unknown fields`() {
+    fun `legacy generated serializer preserves missing field exceptions`() {
         val missingField = MissingFieldException("value", "test.GeneratedPayload")
-        val missingSerializer = LegacyGeneratedSerializer(ThrowingSerializer<String>(missingField))
+        val missingSerializer =
+            LegacyGeneratedSerializer(
+                ThrowingSerializer<String>(missingField),
+            )
 
         val propagated =
             assertThrows(MissingFieldException::class.java) {
@@ -197,7 +204,11 @@ class LegacySerializerSupportTest {
                         CompositeDecoder.DECODE_DONE ->
                             return@decodeStructure ManualStringPayload(
                                 value =
-                                    value ?: ManualSerializerSupport.missingField("value", descriptor),
+                                    value
+                                        ?: ManualSerializerSupport.missingField(
+                                            "value",
+                                            descriptor,
+                                        ),
                             )
 
                         else -> ManualSerializerSupport.unexpectedIndex(index)
@@ -390,7 +401,9 @@ class LegacySerializerSupportTest {
             return this
         }
 
-        override fun decodeElementIndex(descriptor: SerialDescriptor): Int = CompositeDecoder.DECODE_DONE
+        override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
+            return CompositeDecoder.DECODE_DONE
+        }
 
         override fun endStructure(descriptor: SerialDescriptor) {
             endStructureCalled = true
