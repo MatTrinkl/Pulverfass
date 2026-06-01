@@ -8,8 +8,6 @@ import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
  * Privater Snapshot für genau einen Spieler.
@@ -45,17 +43,11 @@ data class GameStatePrivateGetResponse(
 /**
  * Technischer Serializer für [GameStatePrivateGetResponse].
  */
-object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetResponse> {
-    private val wireSerializer = PrivateGameStateWireSnapshot.serializer()
-
-    override val descriptor = wireSerializer.descriptor
-
-    override fun serialize(
-        encoder: Encoder,
-        value: GameStatePrivateGetResponse,
-    ) {
-        wireSerializer.serialize(
-            encoder,
+object GameStatePrivateGetResponseSerializer :
+    KSerializer<GameStatePrivateGetResponse> by
+    at.aau.pulverfass.shared.message.codec.LegacyTransformingSerializer(
+        PrivateGameStateWireSnapshot.serializer(),
+        toWire = { value ->
             PrivateGameStateWireSnapshot(
                 lobbyCode = value.lobbyCode,
                 recipientPlayerId = value.recipientPlayerId,
@@ -63,22 +55,19 @@ object GameStatePrivateGetResponseSerializer : KSerializer<GameStatePrivateGetRe
                 handCards = value.handCards,
                 secretObjectives = value.secretObjectives,
                 privateHandCards = value.privateHandCards,
-            ),
-        )
-    }
-
-    override fun deserialize(decoder: Decoder): GameStatePrivateGetResponse {
-        val wire = wireSerializer.deserialize(decoder)
-        return GameStatePrivateGetResponse(
-            lobbyCode = wire.lobbyCode,
-            recipientPlayerId = wire.recipientPlayerId,
-            stateVersion = wire.stateVersion,
-            handCards = wire.handCards,
-            secretObjectives = wire.secretObjectives,
-            privateHandCards = wire.privateHandCards,
-        )
-    }
-}
+            )
+        },
+        fromWire = { wire ->
+            GameStatePrivateGetResponse(
+                lobbyCode = wire.lobbyCode,
+                recipientPlayerId = wire.recipientPlayerId,
+                stateVersion = wire.stateVersion,
+                handCards = wire.handCards,
+                secretObjectives = wire.secretObjectives,
+                privateHandCards = wire.privateHandCards,
+            )
+        },
+    )
 
 internal fun GameState.toGameStatePrivateGetResponse(
     recipientPlayerId: PlayerId,

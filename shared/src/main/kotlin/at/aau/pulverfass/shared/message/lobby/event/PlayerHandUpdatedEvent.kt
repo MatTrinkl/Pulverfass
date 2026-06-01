@@ -6,17 +6,10 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.GameState
-import at.aau.pulverfass.shared.message.codec.ManualSerializerSupport
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.descriptors.element
-import kotlinx.serialization.encoding.CompositeDecoder
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
-@Serializable(with = PlayerHandUpdatedEventSerializer::class)
+@Serializable
 data class PlayerHandUpdatedEvent(
     val lobbyCode: LobbyCode,
     override val recipientPlayerId: PlayerId,
@@ -43,7 +36,7 @@ data class PlayerHandUpdatedEvent(
     }
 }
 
-@Serializable(with = PrivateHandCardSnapshotSerializer::class)
+@Serializable
 data class PrivateHandCardSnapshot(
     val cardId: CardId,
     val type: CardType,
@@ -54,145 +47,14 @@ data class PrivateHandCardSnapshot(
     }
 }
 
-object PlayerHandUpdatedEventSerializer : KSerializer<PlayerHandUpdatedEvent> {
-    private val handCardsSerializer = ListSerializer(PrivateHandCardSnapshot.serializer())
+object PlayerHandUpdatedEventSerializer :
+    KSerializer<PlayerHandUpdatedEvent> by
+    at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(
+        PlayerHandUpdatedEvent.serializer(),
+    )
 
-    override val descriptor =
-        buildClassSerialDescriptor(
-            "at.aau.pulverfass.shared.network.message.PlayerHandUpdatedEvent",
-        ) {
-            element("lobbyCode", LobbyCode.serializer().descriptor)
-            element("recipientPlayerId", PlayerId.serializer().descriptor)
-            element<Long>("stateVersion")
-            element("handCards", handCardsSerializer.descriptor)
-        }
-
-    override fun serialize(
-        encoder: Encoder,
-        value: PlayerHandUpdatedEvent,
-    ) {
-        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
-            composite.encodeSerializableElement(
-                descriptor,
-                0,
-                LobbyCode.serializer(),
-                value.lobbyCode,
-            )
-            composite.encodeSerializableElement(
-                descriptor,
-                1,
-                PlayerId.serializer(),
-                value.recipientPlayerId,
-            )
-            composite.encodeLongElement(descriptor, 2, value.stateVersion)
-            composite.encodeSerializableElement(
-                descriptor,
-                3,
-                handCardsSerializer,
-                value.handCards,
-            )
-        }
-    }
-
-    override fun deserialize(decoder: Decoder): PlayerHandUpdatedEvent =
-        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
-            var lobbyCode: LobbyCode? = null
-            var recipientPlayerId: PlayerId? = null
-            var stateVersion: Long? = null
-            var handCards: List<PrivateHandCardSnapshot>? = null
-
-            loop@ while (true) {
-                when (val index = composite.decodeElementIndex(descriptor)) {
-                    0 ->
-                        lobbyCode =
-                            composite.decodeSerializableElement(
-                                descriptor,
-                                0,
-                                LobbyCode.serializer(),
-                            )
-                    1 ->
-                        recipientPlayerId =
-                            composite.decodeSerializableElement(
-                                descriptor,
-                                1,
-                                PlayerId.serializer(),
-                            )
-                    2 -> stateVersion = composite.decodeLongElement(descriptor, 2)
-                    3 ->
-                        handCards =
-                            composite.decodeSerializableElement(
-                                descriptor,
-                                3,
-                                handCardsSerializer,
-                            )
-                    CompositeDecoder.DECODE_DONE -> break@loop
-                    else -> ManualSerializerSupport.unexpectedIndex(index)
-                }
-            }
-
-            PlayerHandUpdatedEvent(
-                lobbyCode =
-                    lobbyCode ?: ManualSerializerSupport.missingField("lobbyCode", descriptor),
-                recipientPlayerId =
-                    recipientPlayerId
-                        ?: ManualSerializerSupport.missingField("recipientPlayerId", descriptor),
-                stateVersion =
-                    stateVersion
-                        ?: ManualSerializerSupport.missingField("stateVersion", descriptor),
-                handCards =
-                    handCards ?: ManualSerializerSupport.missingField("handCards", descriptor),
-            )
-        }
-}
-
-object PrivateHandCardSnapshotSerializer : KSerializer<PrivateHandCardSnapshot> {
-    override val descriptor =
-        buildClassSerialDescriptor(
-            "at.aau.pulverfass.shared.network.message.PrivateHandCardSnapshot",
-        ) {
-            element("cardId", CardId.serializer().descriptor)
-            element("type", CardType.serializer().descriptor)
-        }
-
-    override fun serialize(
-        encoder: Encoder,
-        value: PrivateHandCardSnapshot,
-    ) {
-        ManualSerializerSupport.encodeStructure(encoder, descriptor) { composite ->
-            composite.encodeSerializableElement(descriptor, 0, CardId.serializer(), value.cardId)
-            composite.encodeSerializableElement(descriptor, 1, CardType.serializer(), value.type)
-        }
-    }
-
-    override fun deserialize(decoder: Decoder): PrivateHandCardSnapshot =
-        ManualSerializerSupport.decodeStructure(decoder, descriptor) { composite ->
-            var cardId: CardId? = null
-            var type: CardType? = null
-
-            loop@ while (true) {
-                when (val index = composite.decodeElementIndex(descriptor)) {
-                    0 ->
-                        cardId =
-                            composite.decodeSerializableElement(
-                                descriptor,
-                                0,
-                                CardId.serializer(),
-                            )
-                    1 ->
-                        type =
-                            composite.decodeSerializableElement(
-                                descriptor,
-                                1,
-                                CardType.serializer(),
-                            )
-                    CompositeDecoder.DECODE_DONE -> break@loop
-                    else -> ManualSerializerSupport.unexpectedIndex(index)
-                }
-            }
-
-            PrivateHandCardSnapshot(
-                cardId = cardId ?: ManualSerializerSupport.missingField("cardId", descriptor),
-                type = type ?: ManualSerializerSupport.missingField("type", descriptor),
-            )
-        }
-}
+object PrivateHandCardSnapshotSerializer :
+    KSerializer<PrivateHandCardSnapshot> by
+    at.aau.pulverfass.shared.message.codec.LegacyGeneratedSerializer(
+        PrivateHandCardSnapshot.serializer(),
+    )

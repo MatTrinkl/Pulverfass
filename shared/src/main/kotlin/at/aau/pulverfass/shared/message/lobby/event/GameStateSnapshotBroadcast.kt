@@ -9,8 +9,6 @@ import at.aau.pulverfass.shared.message.lobby.response.PublicGameStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
  * Vollständiger öffentlicher GameState-Snapshot für Self-Healing beim Turnwechsel.
@@ -43,17 +41,11 @@ data class GameStateSnapshotBroadcast(
 /**
  * Technischer Serializer für [GameStateSnapshotBroadcast].
  */
-object GameStateSnapshotBroadcastSerializer : KSerializer<GameStateSnapshotBroadcast> {
-    private val wireSerializer = PublicGameStateWireSnapshot.serializer()
-
-    override val descriptor = wireSerializer.descriptor
-
-    override fun serialize(
-        encoder: Encoder,
-        value: GameStateSnapshotBroadcast,
-    ) {
-        wireSerializer.serialize(
-            encoder,
+object GameStateSnapshotBroadcastSerializer :
+    KSerializer<GameStateSnapshotBroadcast> by
+    at.aau.pulverfass.shared.message.codec.LegacyTransformingSerializer(
+        PublicGameStateWireSnapshot.serializer(),
+        toWire = { value ->
             PublicGameStateWireSnapshot(
                 lobbyCode = value.lobbyCode,
                 stateVersion = value.stateVersion,
@@ -61,19 +53,16 @@ object GameStateSnapshotBroadcastSerializer : KSerializer<GameStateSnapshotBroad
                 turnState = value.turnState,
                 definition = value.definition,
                 territoryStates = value.territoryStates,
-            ),
-        )
-    }
-
-    override fun deserialize(decoder: Decoder): GameStateSnapshotBroadcast {
-        val wire = wireSerializer.deserialize(decoder)
-        return GameStateSnapshotBroadcast(
-            lobbyCode = wire.lobbyCode,
-            stateVersion = wire.stateVersion,
-            determinism = wire.determinism,
-            turnState = wire.turnState,
-            definition = wire.definition,
-            territoryStates = wire.territoryStates,
-        )
-    }
-}
+            )
+        },
+        fromWire = { wire ->
+            GameStateSnapshotBroadcast(
+                lobbyCode = wire.lobbyCode,
+                stateVersion = wire.stateVersion,
+                determinism = wire.determinism,
+                turnState = wire.turnState,
+                definition = wire.definition,
+                territoryStates = wire.territoryStates,
+            )
+        },
+    )

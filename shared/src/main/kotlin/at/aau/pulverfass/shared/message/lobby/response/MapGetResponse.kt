@@ -5,8 +5,6 @@ import at.aau.pulverfass.shared.message.lobby.MapStateWireSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
  * Erfolgsantwort des Servers mit vollständigem Map-Snapshot.
@@ -43,17 +41,11 @@ data class MapGetResponse(
 /**
  * Technischer Serializer für [MapGetResponse].
  */
-object MapGetResponseSerializer : KSerializer<MapGetResponse> {
-    private val wireSerializer = MapStateWireSnapshot.serializer()
-
-    override val descriptor = wireSerializer.descriptor
-
-    override fun serialize(
-        encoder: Encoder,
-        value: MapGetResponse,
-    ) {
-        wireSerializer.serialize(
-            encoder,
+object MapGetResponseSerializer :
+    KSerializer<MapGetResponse> by
+    at.aau.pulverfass.shared.message.codec.LegacyTransformingSerializer(
+        MapStateWireSnapshot.serializer(),
+        toWire = { value ->
             MapStateWireSnapshot(
                 lobbyCode = value.lobbyCode,
                 schemaVersion = value.schemaVersion,
@@ -61,19 +53,16 @@ object MapGetResponseSerializer : KSerializer<MapGetResponse> {
                 stateVersion = value.stateVersion,
                 definition = value.definition,
                 territoryStates = value.territoryStates,
-            ),
-        )
-    }
-
-    override fun deserialize(decoder: Decoder): MapGetResponse {
-        val wire = wireSerializer.deserialize(decoder)
-        return MapGetResponse(
-            lobbyCode = wire.lobbyCode,
-            schemaVersion = wire.schemaVersion,
-            mapHash = wire.mapHash,
-            stateVersion = wire.stateVersion,
-            definition = wire.definition,
-            territoryStates = wire.territoryStates,
-        )
-    }
-}
+            )
+        },
+        fromWire = { wire ->
+            MapGetResponse(
+                lobbyCode = wire.lobbyCode,
+                schemaVersion = wire.schemaVersion,
+                mapHash = wire.mapHash,
+                stateVersion = wire.stateVersion,
+                definition = wire.definition,
+                territoryStates = wire.territoryStates,
+            )
+        },
+    )
