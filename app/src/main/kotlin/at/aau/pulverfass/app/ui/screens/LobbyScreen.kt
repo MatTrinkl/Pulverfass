@@ -40,11 +40,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.MainInputField
-import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
@@ -72,21 +71,7 @@ fun LobbyScreen(
                 .systemBarsPadding()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        // Video Background
-        VideoPlayer(
-            videoResId = R.raw.lobby,
-            loop = true,
-            cover = true,
-            muted = true,
-            modifier = Modifier.fillMaxSize(),
-        )
-        // Dark overlay für Lesbarkeit
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
-        )
+        LobbyVideoBackground()
 
         // Top-Left: Server-Status-Pill + Online-Count-Pill
         Row(

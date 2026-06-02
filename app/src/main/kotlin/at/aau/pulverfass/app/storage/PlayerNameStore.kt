@@ -22,6 +22,12 @@ interface PlayerNameStore {
      * @param playerName Anzeigename, der für den nächsten Lobby-Join verwendet wird
      */
     fun savePlayerName(playerName: String)
+
+    /** Liefert die zuletzt gewählte Charakter-ID oder `null`. */
+    fun readCharacterId(): String?
+
+    /** Speichert die gewählte Charakter-ID. */
+    fun saveCharacterId(characterId: String)
 }
 
 /**
@@ -31,6 +37,10 @@ object NoOpPlayerNameStore : PlayerNameStore {
     override fun readPlayerName(): String? = null
 
     override fun savePlayerName(playerName: String) = Unit
+
+    override fun readCharacterId(): String? = null
+
+    override fun saveCharacterId(characterId: String) = Unit
 }
 
 /**
@@ -60,8 +70,19 @@ class SharedPreferencesPlayerNameStore(
             .apply()
     }
 
+    override fun readCharacterId(): String? =
+        preferences.getString(KEY_CHARACTER_ID, null)
+            ?.takeIf { it.isNotBlank() }
+
+    override fun saveCharacterId(characterId: String) {
+        preferences.edit()
+            .putString(KEY_CHARACTER_ID, characterId)
+            .apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "pulverfass_player_settings"
         const val KEY_PLAYER_NAME = "player_name"
+        const val KEY_CHARACTER_ID = "character_id"
     }
 }

@@ -3,18 +3,10 @@ package at.aau.pulverfass.app.game
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
+import at.aau.pulverfass.app.ui.theme.PulverfassColors
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
-
-private val PlayerPalette =
-    listOf(
-        Color(0xFF6FD4C5),
-        Color(0xFFE0B35C),
-        Color(0xFFE78D91),
-        Color(0xFF79A8E8),
-        Color(0xFFA7D36B),
-        Color(0xFFB78BEA),
-    )
 
 private val NeutralTerritoryColor = Color(0xFF8F8F8F)
 
@@ -77,13 +69,23 @@ object GameMapTerritoryMapper {
  * @param players Lobby-Spieler aus dem Controller
  * @return UI-Spieler mit stabiler Farbe und Avatar-Kürzel
  */
-fun lobbyPlayersToGamePlayers(players: List<LobbyPlayerUi>): List<GamePlayerUi> =
+fun lobbyPlayersToGamePlayers(
+    players: List<LobbyPlayerUi>,
+    ownPlayerId: PlayerId? = null,
+    ownPlayerColor: Color? = null,
+): List<GamePlayerUi> =
     players.mapIndexed { index, player ->
+        val color =
+            if (player.playerId == ownPlayerId && ownPlayerColor != null) {
+                ownPlayerColor
+            } else {
+                PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+            }
         GamePlayerUi(
             playerId = player.playerId,
             name = player.displayName,
             avatarText = player.displayName.toAvatarText(),
-            color = PlayerPalette[index % PlayerPalette.size],
+            color = color,
             isHost = player.isHost,
         )
     }
