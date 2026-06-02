@@ -59,4 +59,19 @@ class GameStateMapperTest {
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
     }
+
+    @Test
+    fun `lobbyPlayersToGamePlayers uses palette when ownPlayerId matches but color is null`() {
+        val ownId = PlayerId(1)
+        val players = listOf(LobbyPlayerUi(playerId = ownId, displayName = "Alice"))
+
+        val result =
+            lobbyPlayersToGamePlayers(
+                players,
+                ownPlayerId = ownId,
+                ownPlayerColor = null,
+            )
+
+        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+    }
 }

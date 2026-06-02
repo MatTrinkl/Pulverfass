@@ -56,4 +56,18 @@ class PlayerNameStoreTest {
 
         assertNull(NoOpPlayerNameStore.readCharacterId())
     }
+
+    @Test
+    fun `shared preferences store should return null for character id when key is absent`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs =
+            context.applicationContext.getSharedPreferences(
+                "pulverfass_player_settings",
+                Context.MODE_PRIVATE,
+            )
+        prefs.edit().remove("character_id").commit()
+        val store = SharedPreferencesPlayerNameStore(context)
+
+        assertNull(store.readCharacterId())
+    }
 }
