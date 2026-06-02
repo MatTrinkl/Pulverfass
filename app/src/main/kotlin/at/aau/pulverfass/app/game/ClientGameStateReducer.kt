@@ -217,58 +217,54 @@ object ClientGameStateReducer {
             isPaused = response.isPaused,
             pauseReason = response.pauseReason,
             pausedPlayerId = response.pausedPlayerId,
-            reinforcementState =
-                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
-                    current.reinforcementState
-                } else {
-                    ReinforcementUiState()
-                },
-            attackState =
-                if (response.turnPhase == TurnPhase.ATTACK) {
-                    current.attackState
-                } else {
-                    AttackUiState()
-                },
-            fortifyState =
-                if (response.turnPhase == TurnPhase.FORTIFY) {
-                    current.fortifyState.copy(hasMoved = response.fortifyUsedThisTurn)
-                } else {
-                    FortifyUiState()
-                },
-            selectedTradeInCardIds =
-                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
-                    current.selectedTradeInCardIds
-                } else {
-                    emptySet()
-                },
+            reinforcementState = current.reinforcementStateFor(response.turnPhase),
+            attackState = current.attackStateFor(response.turnPhase),
+            fortifyState = current.fortifyStateFor(response),
+            selectedTradeInCardIds = current.selectedTradeInCardsFor(response.turnPhase),
             isCatchingUp = false,
             lastSyncError = null,
-            selectedRegionId =
-                if (shouldClearFortifySelection) {
-                    null
-                } else {
-                    current.selectedRegionId
-                },
-            selectionFromRegionId =
-                if (shouldClearFortifySelection) {
-                    null
-                } else {
-                    current.selectionFromRegionId
-                },
-            selectionToRegionId =
-                if (shouldClearFortifySelection) {
-                    null
-                } else {
-                    current.selectionToRegionId
-                },
-            selectionMessage =
-                if (shouldClearFortifySelection) {
-                    null
-                } else {
-                    current.selectionMessage
-                },
-        )
+        ).clearSelectionIf(shouldClearFortifySelection)
     }
+
+    private fun GameUiState.reinforcementStateFor(turnPhase: TurnPhase): ReinforcementUiState =
+        if (turnPhase == TurnPhase.REINFORCEMENTS) {
+            reinforcementState
+        } else {
+            ReinforcementUiState()
+        }
+
+    private fun GameUiState.attackStateFor(turnPhase: TurnPhase): AttackUiState =
+        if (turnPhase == TurnPhase.ATTACK) {
+            attackState
+        } else {
+            AttackUiState()
+        }
+
+    private fun GameUiState.fortifyStateFor(response: TurnStateGetResponse): FortifyUiState =
+        if (response.turnPhase == TurnPhase.FORTIFY) {
+            fortifyState.copy(hasMoved = response.fortifyUsedThisTurn)
+        } else {
+            FortifyUiState()
+        }
+
+    private fun GameUiState.selectedTradeInCardsFor(turnPhase: TurnPhase): Set<CardId> =
+        if (turnPhase == TurnPhase.REINFORCEMENTS) {
+            selectedTradeInCardIds
+        } else {
+            emptySet()
+        }
+
+    private fun GameUiState.clearSelectionIf(shouldClearSelection: Boolean): GameUiState =
+        if (shouldClearSelection) {
+            copy(
+                selectedRegionId = null,
+                selectionFromRegionId = null,
+                selectionToRegionId = null,
+                selectionMessage = null,
+            )
+        } else {
+            this
+        }
 
     /**
      * Übernimmt den privaten Snapshot des lokalen Spielers.
