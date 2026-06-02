@@ -68,6 +68,11 @@ class MessageTypeTest {
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE))
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE),
+        )
         assertTrue(
             MessageType.entries.contains(MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST),
         )

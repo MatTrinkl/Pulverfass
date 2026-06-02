@@ -25,6 +25,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
@@ -38,6 +39,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
@@ -57,6 +59,8 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -576,6 +580,43 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_FORTIFY_MOVE_RESPONSE, responseType)
         assertEquals(response, responseDeserialized)
         assertEquals(MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE, errorType)
+        assertEquals(error, errorDeserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for cheat reinforcement bonus messages`() {
+        val request =
+            ClaimCheatReinforcementBonusRequest(
+                lobbyCode = LobbyCode("CH12"),
+                playerId = PlayerId(3),
+            )
+        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("CH12"))
+        val error =
+            ClaimCheatReinforcementBonusErrorResponse(
+                code = ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
+                reason = "Der Schummel-Verstärkungsbonus wurde bereits verwendet.",
+            )
+
+        val requestType = NetworkPayloadRegistry.messageTypeFor(request)
+        val requestSerialized = NetworkPayloadRegistry.serializePayload(request)
+        val requestDeserialized =
+            NetworkPayloadRegistry.deserializePayload(requestType, requestSerialized)
+
+        val responseType = NetworkPayloadRegistry.messageTypeFor(response)
+        val responseSerialized = NetworkPayloadRegistry.serializePayload(response)
+        val responseDeserialized =
+            NetworkPayloadRegistry.deserializePayload(responseType, responseSerialized)
+
+        val errorType = NetworkPayloadRegistry.messageTypeFor(error)
+        val errorSerialized = NetworkPayloadRegistry.serializePayload(error)
+        val errorDeserialized =
+            NetworkPayloadRegistry.deserializePayload(errorType, errorSerialized)
+
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST, requestType)
+        assertEquals(request, requestDeserialized)
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE, responseType)
+        assertEquals(response, responseDeserialized)
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE, errorType)
         assertEquals(error, errorDeserialized)
     }
 
