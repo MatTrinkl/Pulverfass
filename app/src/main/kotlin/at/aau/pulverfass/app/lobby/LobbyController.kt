@@ -646,7 +646,7 @@ class LobbyController(
             _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
             return
         }
-        if (!snapshot.gameState.canPlaceReinforcements(playerId, snapshot.isConnected)) {
+        if (!snapshot.gameState.canManageReinforcements(playerId, snapshot.isConnected)) {
             _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
             return
         }

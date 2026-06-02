@@ -1,5 +1,10 @@
 package at.aau.pulverfass.app.ui.screens
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -59,6 +64,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
@@ -92,6 +100,8 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
+private const val CheatLightBaselineLux = 8f
+private const val CheatLightCoveredLux = 2f
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -123,6 +133,7 @@ fun GameScreen(controller: LobbyController) {
                 onAdjustReinforcementPlacementAmount =
                     controller::adjustReinforcementPlacementAmount,
                 onPlaceReinforcements = controller::placeReinforcements,
+                onClaimCheatReinforcementBonus = controller::claimCheatReinforcementBonus,
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
@@ -150,6 +161,7 @@ internal data class GameScreenActions(
     val onAdvanceTurn: () -> Unit,
     val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
     val onPlaceReinforcements: () -> Unit = {},
+    val onClaimCheatReinforcementBonus: () -> Unit = {},
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
@@ -274,6 +286,7 @@ internal fun GameScreenContent(
     val onAdvanceTurn = actions.onAdvanceTurn
     val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
     val onPlaceReinforcements = actions.onPlaceReinforcements
+    val onClaimCheatReinforcementBonus = actions.onClaimCheatReinforcementBonus
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
@@ -291,6 +304,9 @@ internal fun GameScreenContent(
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
     val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
+    val canClaimCheatReinforcementBonus =
+        uiState.canManageReinforcements(localPlayerId, isConnected) &&
+            !isReinforcementCommandPending
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
@@ -366,6 +382,11 @@ internal fun GameScreenContent(
             isCatchingUp = uiState.isCatchingUp,
             showFeedback = showCatchUpFeedback,
             modifier = Modifier.align(Alignment.Center),
+        )
+
+        LightSensorCheatTrigger(
+            enabled = canClaimCheatReinforcementBonus,
+            onTriggered = onClaimCheatReinforcementBonus,
         )
 
         CardsSidebar(
@@ -454,6 +475,64 @@ internal fun GameScreenContent(
                     .fillMaxWidth()
                     .navigationBarsPadding(),
         )
+    }
+}
+
+@Composable
+private fun LightSensorCheatTrigger(
+    enabled: Boolean,
+    onTriggered: () -> Unit,
+) {
+    val context = LocalContext.current
+    val currentOnTriggered by rememberUpdatedState(onTriggered)
+    var previousLux by remember { mutableStateOf<Float?>(null) }
+
+    DisposableEffect(context, enabled) {
+        if (!enabled) {
+            return@DisposableEffect onDispose {}
+        }
+
+        previousLux = null
+        var triggered = false
+
+        val sensorManager =
+            context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+
+        if (lightSensor == null) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val listener =
+            object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    val lux = event.values.firstOrNull() ?: return
+                    val wasBright = previousLux?.let { it >= CheatLightBaselineLux } ?: false
+                    val isCovered = lux <= CheatLightCoveredLux
+
+                    if (wasBright && isCovered && !triggered) {
+                        triggered = true
+                        currentOnTriggered()
+                    }
+
+                    previousLux = lux
+                }
+
+                override fun onAccuracyChanged(
+                    sensor: Sensor?,
+                    accuracy: Int,
+                ) = Unit
+            }
+
+        sensorManager.registerListener(
+            listener,
+            lightSensor,
+            SensorManager.SENSOR_DELAY_NORMAL,
+        )
+
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
     }
 }
 
@@ -631,6 +710,7 @@ private fun Set<LobbyCommandKey>.hasRefreshRequest(): Boolean =
 private fun Set<LobbyCommandKey>.hasReinforcementRequest(): Boolean =
     any {
         it == LobbyCommandKey.PLACE_REINFORCEMENTS ||
+            it == LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS ||
             it == LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE ||
             it == LobbyCommandKey.TRADE_IN_CARDS
     }
