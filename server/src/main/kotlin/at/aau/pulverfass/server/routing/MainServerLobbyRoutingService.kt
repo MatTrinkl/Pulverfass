@@ -21,6 +21,7 @@ import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -48,6 +49,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -66,6 +68,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -85,6 +88,8 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
@@ -202,6 +207,8 @@ class MainServerLobbyRoutingService(
                     payload = payload,
                 )
             is AttackRequest -> routeAttackRequest(request)
+            is ClaimCheatReinforcementBonusRequest ->
+                routeClaimCheatReinforcementBonusRequest(request)
             is ConfirmAttackDoneRequest -> routeConfirmAttackDoneRequest(request)
             is ConfirmReinforcementsDoneRequest -> routeConfirmReinforcementsDoneRequest(request)
             is CreateLobbyRequest -> routeCreateLobbyRequest(packet)
@@ -601,6 +608,36 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = fortifyMoveErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeClaimCheatReinforcementBonusRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as ClaimCheatReinforcementBonusRequest
+
+        runCatching {
+            val events = buildClaimCheatReinforcementBonusEvents(request, payload)
+            lobbyManager.submitAll(payload.lobbyCode, events, request.context)
+            network.send(
+                request.connectionId,
+                ClaimCheatReinforcementBonusResponse(payload.lobbyCode),
+            )
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = claimCheatReinforcementBonusErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -1438,6 +1475,47 @@ class MainServerLobbyRoutingService(
             )
     }
 
+    private fun buildClaimCheatReinforcementBonusEvents(
+        request: DecodedNetworkRequest,
+        payload: ClaimCheatReinforcementBonusRequest,
+    ): List<LobbyEvent> {
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val state = lobby.currentState()
+        val contextPlayerId = request.context.playerId
+        val currentTurnState =
+            state.resolvedTurnState
+                ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
+
+        require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
+            "REQUESTER_MISMATCH"
+        }
+        requirePlayerCanActInMatch(state, payload.playerId)
+        require(currentTurnState.activePlayerId == payload.playerId) { "NOT_ACTIVE_PLAYER" }
+        check(!(currentTurnState.isPaused)) { "GAME_PAUSED" }
+        require(currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) { "PHASE_MISMATCH" }
+        val hand = state.handOf(payload.playerId)
+        require(!requiresForcedTradeInOnReinforcementPhase(state, payload.playerId, hand)) {
+            "FORCED_TRADE_REQUIRED"
+        }
+        require(payload.playerId !in state.usedCheatReinforcementBonusByPlayer) {
+            "ALREADY_USED"
+        }
+
+        return listOf(
+            CheatReinforcementBonusUsedEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+            ),
+            PendingReinforcementsChangedEvent(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                delta = 3,
+            ),
+        )
+    }
+
     private fun buildAttackEvents(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
@@ -1893,6 +1971,49 @@ class MainServerLobbyRoutingService(
             }
 
         return PlaceReinforcementsErrorResponse(code = code, reason = reason)
+    }
+
+    private fun claimCheatReinforcementBonusErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: ClaimCheatReinforcementBonusRequest,
+        cause: Throwable,
+    ): ClaimCheatReinforcementBonusErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND
+                "REQUESTER_MISMATCH" -> ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH
+                "GAME_PAUSED" -> ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED
+                "PHASE_MISMATCH" -> ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH
+                "ALREADY_USED" -> ClaimCheatReinforcementBonusErrorCode.ALREADY_USED
+                "FORCED_TRADE_REQUIRED" -> ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED
+                else -> ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER
+            }
+
+        val reason =
+            when (code) {
+                ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        connectionNotAssignedToLobby(payload.lobbyCode)
+                    } else {
+                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER ->
+                    "Nur der aktive Spieler darf den Schummel-Verstärkungsbonus beanspruchen."
+                ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED ->
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; der Schummel-Verstärkungsbonus ist aktuell nicht erlaubt."
+                ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH ->
+                    "Der Schummel-Verstärkungsbonus ist nur in der Reinforcements-Phase erlaubt."
+                ClaimCheatReinforcementBonusErrorCode.ALREADY_USED ->
+                    "Spieler '${payload.playerId.value}' hat den Schummel-Verstärkungsbonus bereits verwendet."
+                ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED ->
+                    "Der Schummel-Verstärkungsbonus ist gesperrt: Spieler '${payload.playerId.value}' muss zuerst Karten eintauschen."
+            }
+
+        return ClaimCheatReinforcementBonusErrorResponse(code = code, reason = reason)
     }
 
     private fun attackErrorResponse(
