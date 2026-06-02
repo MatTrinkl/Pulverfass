@@ -106,14 +106,20 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf eine Fortify-Anfrage. */
     LOBBY_FORTIFY_MOVE_ERROR_RESPONSE(78),
 
+    /** Broadcast, pushed when server-side player count changes in a lobby. */
+    LOBBY_PLAYER_COUNT_UPDATE_BROADCAST(79),
+
+    /** Broadcast, pushed to all connections when the global connected-client count changes. */
+    GLOBAL_PLAYER_COUNT_BROADCAST(80),
+
     /** Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(79),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(81),
 
     /** Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(80),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(82),
 
     /** Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(81),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(83),
 
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),

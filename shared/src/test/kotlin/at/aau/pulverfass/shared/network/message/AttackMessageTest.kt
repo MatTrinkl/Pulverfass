@@ -47,6 +47,27 @@ class AttackMessageTest {
     }
 
     @Test
+    fun `attack request rejects less than minimum attack troops`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                AttackRequest(
+                    lobbyCode = LobbyCode("AT12"),
+                    playerId = PlayerId(7),
+                    fromTerritoryId = TerritoryId("alpha"),
+                    toTerritoryId = TerritoryId("beta"),
+                    attackTroops = 1,
+                    moveAfterCapture = 1,
+                    requestId = "req-invalid",
+                )
+            }
+
+        assertEquals(
+            "AttackRequest.attackTroops muss mindestens 2 sein, war aber 1.",
+            exception.message,
+        )
+    }
+
+    @Test
     fun `serializer roundtrip attack response`() {
         val response = AttackResponse(lobbyCode = LobbyCode("AT34"), requestId = "req-2")
 

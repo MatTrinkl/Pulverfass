@@ -4,12 +4,15 @@ import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.network.ClientNetwork
+import at.aau.pulverfass.app.storage.NoOpPlayerNameStore
 import at.aau.pulverfass.app.storage.NoOpReconnectSessionStore
+import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
@@ -18,6 +21,7 @@ import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
@@ -92,12 +96,14 @@ import kotlinx.coroutines.launch
  * @param config zentrale Texte und Retry-Grenzen für den Lobby-Flow
  * @param reconnectSessionStore kleine lokale Persistenz für Session-Token und
  * Reconnect-Metadaten nach App-Neustart
+ * @param playerNameStore lokale Persistenz für den zuletzt gewählten Anzeigenamen
  */
 class LobbyController(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val network: ClientNetwork = ClientNetwork(scope),
     private val config: LobbyControllerConfig = LobbyControllerConfig(),
     private val reconnectSessionStore: ReconnectSessionStore = NoOpReconnectSessionStore,
+    private val playerNameStore: PlayerNameStore = NoOpPlayerNameStore,
 ) {
     private enum class PendingLobbyAction {
         CREATE,
@@ -111,6 +117,7 @@ class LobbyController(
         MutableStateFlow(
             LobbyUiState(
                 serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
+                playerName = playerNameStore.readPlayerName().orEmpty(),
                 statusText = config.statusNotConnected,
                 sessionToken = reconnectSessionStore.readSessionToken(),
                 gameStarted = wasGameStartedOnLastAppRun,
@@ -214,6 +221,7 @@ class LobbyController(
     }
 
     fun updatePlayerName(playerName: String) {
+        playerNameStore.savePlayerName(playerName)
         _state.update { it.copy(playerName = playerName) }
     }
 
@@ -946,6 +954,7 @@ class LobbyController(
                 statusText = statusText,
                 errorText = errorText,
                 pendingCommandKeys = emptySet(),
+                globalPlayerCount = null,
                 gameState =
                     it.gameState.copy(
                         lastSyncError =
@@ -1282,6 +1291,12 @@ class LobbyController(
             is PlayerKickedLobbyEvent -> {
                 playersById.remove(payload.targetPlayerId.value)
                 publishPlayers()
+            }
+            is PlayerCountUpdateEvent -> {
+                _state.update { it.copy(onlinePlayerCount = payload.playerCount) }
+            }
+            is GlobalPlayerCountEvent -> {
+                _state.update { it.copy(globalPlayerCount = payload.playerCount) }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)

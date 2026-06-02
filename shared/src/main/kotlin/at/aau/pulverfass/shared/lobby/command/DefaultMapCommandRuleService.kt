@@ -192,9 +192,10 @@ class DefaultMapCommandRuleService(
         command: AttackCommand,
     ): Int {
         val sourceTroops = state.troopCountOf(command.fromTerritoryId)
-        if (sourceTroops < 2) {
+        if (sourceTroops < MIN_SOURCE_TROOPS_FOR_ATTACK) {
             throw InvalidMapCommandException(
-                "Attack von '${command.fromTerritoryId.value}' benötigt mindestens 2 Truppen, " +
+                "Attack von '${command.fromTerritoryId.value}' benötigt mindestens " +
+                    "$MIN_SOURCE_TROOPS_FOR_ATTACK Truppen, " +
                     "vorhanden sind $sourceTroops.",
             )
         }
@@ -210,9 +211,10 @@ class DefaultMapCommandRuleService(
                 ?: throw InvalidMapCommandException(
                     "Attack benötigt committedTroopCount für ein replayfaehiges Ergebnis-Event.",
                 )
-        if (committedTroopCount < 2) {
+        if (committedTroopCount < MIN_ATTACK_COMMITTED_TROOPS) {
             throw InvalidMapCommandException(
-                "AttackCommand.committedTroopCount muss mindestens 2 sein, war aber " +
+                "AttackCommand.committedTroopCount muss mindestens " +
+                    "$MIN_ATTACK_COMMITTED_TROOPS sein, war aber " +
                     "$committedTroopCount.",
             )
         }

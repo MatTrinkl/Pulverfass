@@ -43,9 +43,9 @@ class AttackResolvedEventTest {
                 { validEvent(attackTroops = 1) },
                 {
                     validEvent(
-                        sourceTroopsBefore = 1,
-                        attackerRemaining = 1,
-                        attackTroops = 1,
+                        sourceTroopsBefore = 2,
+                        attackerRemaining = 2,
+                        attackTroops = 2,
                     )
                 },
                 {

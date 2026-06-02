@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.command.MIN_SOURCE_TROOPS_FOR_ATTACK
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
 
@@ -395,7 +396,7 @@ data class GameState(
         }
 
         val source = requireTerritoryState(territoryId)
-        if (source.ownerId != playerId || source.troopCount < 2) {
+        if (source.ownerId != playerId || source.troopCount < MIN_SOURCE_TROOPS_FOR_ATTACK) {
             return false
         }
 
@@ -417,7 +418,7 @@ data class GameState(
         }
 
         val source = requireTerritoryState(fromTerritoryId)
-        if (source.ownerId != playerId || source.troopCount < 2) {
+        if (source.ownerId != playerId || source.troopCount < MIN_SOURCE_TROOPS_FOR_ATTACK) {
             return emptyList()
         }
 
