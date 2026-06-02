@@ -39,6 +39,7 @@ class ServerRuntimeConfigTest {
                     "DB_CONNECTION_TIMEOUT_MS" to "7000",
                     "DB_VALIDATION_TIMEOUT_MS" to "3000",
                     "WS_MAX_FRAME_SIZE_BYTES" to "262144",
+                    "GITHUB_SHA" to "abcdef1234567890",
                 ),
                 manifestVersionProvider = { null },
             )
@@ -57,6 +58,7 @@ class ServerRuntimeConfigTest {
         assertEquals(262_144L, config.webSocketMaxFrameSizeBytes)
         assertTrue(config.database.isConfigured)
         assertEquals("v1.2.3", config.appVersion)
+        assertEquals("abcdef1234567890", config.commitSha)
     }
 
     @Test

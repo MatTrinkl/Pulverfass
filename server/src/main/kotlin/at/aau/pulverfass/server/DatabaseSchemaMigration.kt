@@ -1,12 +1,9 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.logging.ServerLoggers
 import org.flywaydb.core.Flyway
-import org.slf4j.LoggerFactory
 
-private val migrationLogger =
-    LoggerFactory.getLogger(
-        "at.aau.pulverfass.server.DatabaseSchemaMigration",
-    )
+private val migrationLogger = ServerLoggers.technical("DatabaseSchemaMigration")
 
 /**
  * Führt die Flyway-Schemamigration für die konfigurierte PostgreSQL-Datenbank aus.
@@ -31,17 +28,39 @@ fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
         redactJdbcUrl(config.requireJdbcUrl()),
     )
 
-    Flyway
-        .configure()
-        .dataSource(
-            config.requireJdbcUrl(),
-            config.requireUser(),
-            config.requirePassword(),
-        ).locations("classpath:db/migration")
-        .cleanDisabled(true)
-        .validateOnMigrate(true)
-        .load()
-        .migrate()
+    val flyway =
+        Flyway
+            .configure()
+            .dataSource(
+                config.requireJdbcUrl(),
+                config.requireUser(),
+                config.requirePassword(),
+            ).locations("classpath:db/migration")
+            .cleanDisabled(true)
+            .validateOnMigrate(true)
+            .load()
+
+    val statusBeforeMigration = flyway.info()
+    migrationLogger.info(
+        "Flyway status database={} currentVersion={} pendingMigrations={}",
+        redactJdbcUrl(config.requireJdbcUrl()),
+        statusBeforeMigration.current()?.version?.version ?: "none",
+        statusBeforeMigration.pending().size,
+    )
+
+    val result =
+        flyway
+            .migrate()
+
+    val statusAfterMigration = flyway.info()
+    migrationLogger.info(
+        "Flyway migration completed database={} migrationsExecuted={} " +
+            "currentVersion={} pendingMigrations={}",
+        redactJdbcUrl(config.requireJdbcUrl()),
+        result.migrationsExecuted,
+        statusAfterMigration.current()?.version?.version ?: "none",
+        statusAfterMigration.pending().size,
+    )
 }
 
 /**

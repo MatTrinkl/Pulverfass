@@ -13,9 +13,11 @@ RUN ./gradlew --no-daemon :server:installDist
 FROM eclipse-temurin:25-jre AS runtime
 
 ARG APP_VERSION=dev
+ARG COMMIT_SHA=unknown
 
 ENV PORT=8080 \
-    APP_VERSION=${APP_VERSION}
+    APP_VERSION=${APP_VERSION} \
+    COMMIT_SHA=${COMMIT_SHA}
 
 WORKDIR /app
 
