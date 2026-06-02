@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -43,6 +44,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -56,6 +58,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -630,6 +633,39 @@ class LobbyController(
             ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorPlaceReinforcementsFailed)
+                }
+            }
+        }
+    }
+
+    fun claimCheatReinforcementBonus() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canPlaceReinforcements(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS,
+                        payload =
+                            ClaimCheatReinforcementBonusRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorReinforcementsNotAllowed)
                 }
             }
         }
@@ -1384,6 +1420,16 @@ class LobbyController(
             is PlaceReinforcementsResponse -> {
                 clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
                 _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ClaimCheatReinforcementBonusResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ClaimCheatReinforcementBonusErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                updateGameError(GameErrorTextMapper.map(payload))
                 true
             }
             is PlaceReinforcementsErrorResponse -> {
