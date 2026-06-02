@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server.receive
 
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.shared.network.exception.PacketReceiveException
 import at.aau.pulverfass.shared.network.receive.PacketReceiveAdapter
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
@@ -8,7 +9,6 @@ import at.aau.pulverfass.shared.network.transport.TransportEvent
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.slf4j.LoggerFactory
 
 /**
  * Serverseitige technische Zwischenschicht zwischen WebSocket-Transport und
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 class PacketReceiver(
     private val adapter: PacketReceiveAdapter = PacketReceiveAdapter(),
 ) {
-    private val logger = LoggerFactory.getLogger(PacketReceiver::class.java)
+    private val logger = ServerLoggers.technical("PacketReceiver")
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 64)
     private val _errors = MutableSharedFlow<PacketReceiveException>(extraBufferCapacity = 64)
 

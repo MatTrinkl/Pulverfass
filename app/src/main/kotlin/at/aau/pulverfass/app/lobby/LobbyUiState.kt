@@ -29,4 +29,6 @@ data class LobbyUiState(
     val gameStarted: Boolean = false,
     val gameState: GameUiState = GameUiState(),
     val pendingCommandKeys: Set<LobbyCommandKey> = emptySet(),
+    val onlinePlayerCount: Int? = null,
+    val globalPlayerCount: Int? = null,
 )
