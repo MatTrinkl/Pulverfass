@@ -11,7 +11,7 @@ data class CharacterDef(
     val displayName: String,
     val wallpaperResId: Int,
     val isVideoWallpaper: Boolean = false,
-    val fallbackImageResId: Int? = null,
+    @DrawableRes val fallbackImageResId: Int? = null,
 )
 
 object Characters {
@@ -22,7 +22,9 @@ object Characters {
                 R.drawable.blackpurp,
                 Color(0xFF6B2D8B),
                 "Black Purp",
-                wallpaperResId = R.drawable.vio_mysiker,
+                wallpaperResId = R.raw.vio_mysiker,
+                isVideoWallpaper = true,
+                fallbackImageResId = R.drawable.vio_mysiker,
             ),
             CharacterDef(
                 "bookmen",
@@ -52,7 +54,9 @@ object Characters {
                 R.drawable.indiawatta,
                 Color(0xFFD4763B),
                 "India Watta",
-                wallpaperResId = R.drawable.watermen,
+                wallpaperResId = R.raw.watermen,
+                isVideoWallpaper = true,
+                fallbackImageResId = R.drawable.watermen,
             ),
             CharacterDef(
                 "mommy",
@@ -88,7 +92,9 @@ object Characters {
                 R.drawable.whitewomen,
                 Color(0xFFB8A9C9),
                 "White Women",
-                wallpaperResId = R.drawable.gold,
+                wallpaperResId = R.raw.gold,
+                isVideoWallpaper = true,
+                fallbackImageResId = R.drawable.gold,
             ),
             CharacterDef(
                 "mr",

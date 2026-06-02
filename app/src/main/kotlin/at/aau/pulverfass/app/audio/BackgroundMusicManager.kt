@@ -23,6 +23,7 @@ class BackgroundMusicManager(context: Context) {
 
     private var player: MediaPlayer? = null
     private var currentTrack: Int? = null
+    private var currentLoop: Boolean = true
 
     /**
      * Thread-safe Tracking der aktiven One-Shot SFX-Player damit wir sie bei
@@ -41,9 +42,10 @@ class BackgroundMusicManager(context: Context) {
         @RawRes resId: Int,
         loop: Boolean = true,
     ) {
-        if (currentTrack == resId && player?.isPlaying == true) return
+        if (currentTrack == resId && currentLoop == loop && player?.isPlaying == true) return
         stop()
         currentTrack = resId
+        currentLoop = loop
         if (isMusicMuted) return
         // Prepare asynchronously to avoid blocking UI thread and to ensure proper start timing
         val afd = appContext.resources.openRawResourceFd(resId)
@@ -74,6 +76,7 @@ class BackgroundMusicManager(context: Context) {
         }
         player = null
         currentTrack = null
+        currentLoop = true
     }
 
     @Synchronized

@@ -625,6 +625,7 @@ private fun OptionsOverlay(
     onClose: () -> Unit,
 ) {
     if (!show) return
+    val scrollState = rememberScrollState()
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
         arrangement = Arrangement.spacedBy(12.dp),
@@ -635,7 +636,8 @@ private fun OptionsOverlay(
                     PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
                     RoundedCornerShape(12.dp),
                 )
-                .padding(horizontal = 32.dp, vertical = 24.dp),
+                .padding(horizontal = 32.dp, vertical = 24.dp)
+                .verticalScroll(scrollState),
     ) {
         PulverfassTitleText(text = "OPTIONEN", fontSize = 32.sp, letterSpacing = 3.sp)
         Spacer(modifier = Modifier.height(8.dp))

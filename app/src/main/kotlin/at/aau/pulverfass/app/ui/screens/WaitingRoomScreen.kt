@@ -109,6 +109,14 @@ fun WaitingRoomScreen(
     var showCharacterPicker by remember { mutableStateOf(false) }
     var coinAnimCharacter by remember { mutableStateOf<CharacterDef?>(null) }
 
+    LaunchedEffect(showCharacterPicker) {
+        if (showCharacterPicker) {
+            musicManager?.play(R.raw.lobbyscary)
+        } else {
+            musicManager?.play(R.raw.lobbywaiting)
+        }
+    }
+
     LaunchedEffect(state.gameStarted) {
         if (state.gameStarted) {
             navController.navigate(Screen.LoadGame.route)
@@ -328,15 +336,17 @@ private fun buildWaitingRoomPlayers(
 private fun CharacterPreview(characterDef: CharacterDef?) {
     Box(modifier = Modifier.size(115.dp), contentAlignment = Alignment.Center) {
         if (characterDef != null) {
-            Image(
-                painter = painterResource(id = characterDef.drawableRes),
-                contentDescription = characterDef.displayName,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .size(86.dp)
-                        .clip(CircleShape),
-            )
+            Box(
+                modifier = Modifier.size(86.dp).clip(CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = characterDef.drawableRes),
+                    contentDescription = characterDef.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(100.dp),
+                )
+            }
         } else {
             Box(
                 modifier =
@@ -368,7 +378,7 @@ private fun PlayerAvatar(
                 painter = painterResource(id = character.drawableRes),
                 contentDescription = character.displayName,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.size(62.dp),
             )
         }
     }
@@ -518,12 +528,17 @@ private fun CharacterCard(
         modifier = modifier.size(129.dp).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            painter = painterResource(id = character.drawableRes),
-            contentDescription = character.displayName,
-            contentScale = ContentScale.Crop,
+        Box(
             modifier = Modifier.size(89.dp).clip(CircleShape),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = character.drawableRes),
+                contentDescription = character.displayName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(103.dp),
+            )
+        }
     }
 }
 
@@ -612,12 +627,18 @@ private fun CharacterPickerOverlay(
         val contentWidth = screenWidth - 32.dp
         val hPadding = (contentWidth - itemSize) / 2
 
+        val lazyRowHeight = minOf(349.dp, screenHeight * 0.50f)
+        val buttonRowHeight = 56.dp
+        val bottomSafeOffset = screenHeight * 0.05f
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Column(
                 modifier =
-                    Modifier.align(
-                        Alignment.Center,
-                    ).offset(y = 48.dp - screenHeight * 0.05f),
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(bottom = buttonRowHeight + bottomSafeOffset)
+                        .offset(
+                            y = -(buttonRowHeight + bottomSafeOffset) / 2 + screenHeight * 0.2f,
+                        ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 PulverfassTitleText(
@@ -627,13 +648,13 @@ private fun CharacterPickerOverlay(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 CharacterPickerLabel(text = "$playerCount / 6 SPIELER IM RAUM", fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(24.dp + screenHeight * 0.03f))
+                Spacer(modifier = Modifier.height(16.dp + screenHeight * 0.02f))
                 LazyRow(
                     state = lazyListState,
                     flingBehavior = snapBehavior,
                     contentPadding = PaddingValues(horizontal = hPadding),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.width(contentWidth).height(349.dp),
+                    modifier = Modifier.width(contentWidth).height(lazyRowHeight),
                 ) {
                     itemsIndexed(Characters.all) { index, character ->
                         val distance = kotlin.math.abs(index - centerIndex)
@@ -701,7 +722,10 @@ private fun CharacterPickerOverlay(
             }
 
             Row(
-                modifier = Modifier.align(Alignment.BottomCenter).offset(y = -screenHeight * 0.05f),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = -bottomSafeOffset),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 MainButton(text = "ABBRECHEN", onClick = onDismiss)
@@ -732,6 +756,7 @@ private fun CharacterCoinAnimation(
         val coinRotation = remember { Animatable(0f) }
         val coinOffsetX = remember { Animatable(0f) }
         val coinOffsetY = remember { Animatable(0f) }
+        val coinAlpha = remember { Animatable(1f) }
 
         LaunchedEffect(Unit) {
             launch { overlayAlpha.animateTo(0f, tween(480)) }
@@ -739,11 +764,13 @@ private fun CharacterCoinAnimation(
             launch { coinRotation.animateTo(360f, tween(440)) }
             delay(430)
 
-            launch { coinScale.animateTo(1f, tween(500, easing = FastOutSlowInEasing)) }
-            launch { coinRotation.animateTo(900f, tween(500)) }
-            launch { coinOffsetX.animateTo(dXPx, tween(500, easing = FastOutSlowInEasing)) }
-            launch { coinOffsetY.animateTo(dYPx, tween(500, easing = FastOutSlowInEasing)) }
-            delay(540)
+            launch { coinScale.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
+            launch { coinRotation.animateTo(900f, tween(520)) }
+            launch { coinOffsetX.animateTo(dXPx, tween(520, easing = FastOutSlowInEasing)) }
+            launch { coinOffsetY.animateTo(dYPx, tween(520, easing = FastOutSlowInEasing)) }
+            delay(320)
+            launch { coinAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing)) }
+            delay(240)
 
             onComplete()
         }
@@ -767,6 +794,7 @@ private fun CharacterCoinAnimation(
                         translationX = coinOffsetX.value,
                         translationY = coinOffsetY.value,
                         cameraDistance = 8f * density.density,
+                        alpha = coinAlpha.value,
                     ),
             contentAlignment = Alignment.Center,
         ) {
