@@ -26,7 +26,11 @@ class CardDeckFactoryTest {
     fun `deck order is deterministic for the same seed`() {
         val firstDeck = CardDeckFactory.createShuffledDeck(sampleMapDefinition(), randomSeed = 7L)
         val secondDeck = CardDeckFactory.createShuffledDeck(sampleMapDefinition(), randomSeed = 7L)
-        val differentDeck = CardDeckFactory.createShuffledDeck(sampleMapDefinition(), randomSeed = 8L)
+        val differentDeck =
+            CardDeckFactory.createShuffledDeck(
+                sampleMapDefinition(),
+                randomSeed = 8L,
+            )
 
         assertEquals(firstDeck, secondDeck)
         assertEquals(false, firstDeck == differentDeck)

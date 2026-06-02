@@ -678,6 +678,21 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
+    fun `attack without capture does not mark turn eligible for drawn card`() {
+        val lobbyCode = LobbyCode("AR24")
+        val attacker = PlayerId(1)
+        val defender = PlayerId(2)
+
+        val updatedState =
+            reducer.apply(
+                runningAttackState(lobbyCode, attacker, defender),
+                validAttackResolvedEvent(lobbyCode, attacker, defender),
+            )
+
+        assertEquals(false, updatedState.territoryCapturedThisTurn)
+    }
+
+    @Test
     fun `card drawn event moves exactly one deck card to player hand`() {
         val lobbyCode = LobbyCode("CD23")
         val playerOne = PlayerId(1)
@@ -743,6 +758,39 @@ class DefaultLobbyEventReducerTest {
                     territoryCapturedThisTurn = false,
                 ),
                 CardDrawnEvent(lobbyCode, playerOne, firstCard.cardId),
+            )
+        }
+    }
+
+    @Test
+    fun `card drawn event rejects missing turn state or inactive player`() {
+        val lobbyCode = LobbyCode("CD25")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val firstCard = CardState(CardId("deck-1"), CardType.A)
+        val drawReadyState =
+            runningAttackState(lobbyCode, playerOne, playerTwo).copy(
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                deckState = DeckState(listOf(firstCard)),
+                territoryCapturedThisTurn = true,
+            )
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                drawReadyState.copy(activePlayer = null, turnState = null),
+                CardDrawnEvent(lobbyCode, playerOne, firstCard.cardId),
+            )
+        }
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                drawReadyState,
+                CardDrawnEvent(lobbyCode, playerTwo, firstCard.cardId),
             )
         }
     }
@@ -1015,6 +1063,7 @@ class DefaultLobbyEventReducerTest {
                         startPlayerId = playerOne,
                     ),
                 fortifyUsedThisTurn = true,
+                territoryCapturedThisTurn = true,
                 status = GameStatus.RUNNING,
             )
 
@@ -1032,6 +1081,44 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(playerTwo, updated.activePlayer)
         assertEquals(false, updated.fortifyUsedThisTurn)
+        assertEquals(false, updated.territoryCapturedThisTurn)
+    }
+
+    @Test
+    fun `phase change preserves captured territory flag during same player turn`() {
+        val lobbyCode = LobbyCode("FT13")
+        val playerOne = PlayerId(1)
+        val state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(playerOne),
+                turnOrder = listOf(playerOne),
+                activePlayer = playerOne,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = playerOne,
+                    ),
+                territoryCapturedThisTurn = true,
+                status = GameStatus.RUNNING,
+            )
+
+        val updated =
+            reducer.apply(
+                state,
+                TurnStateUpdatedEvent(
+                    lobbyCode = lobbyCode,
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.DRAW_CARD,
+                    turnCount = 1,
+                    startPlayerId = playerOne,
+                ),
+            )
+
+        assertEquals(true, updated.territoryCapturedThisTurn)
     }
 
     @Test

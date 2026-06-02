@@ -439,10 +439,11 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
                 deckState =
                     CardDeckFactory.createShuffledDeck(
-                        mapDefinition = state.mapDefinition
-                            ?: throw InvalidLobbyEventException(
-                                "Spielstart benötigt eine MapDefinition.",
-                            ),
+                        mapDefinition =
+                            state.mapDefinition
+                                ?: throw InvalidLobbyEventException(
+                                    "Spielstart benötigt eine MapDefinition.",
+                                ),
                         randomSeed = event.randomSeed,
                     ),
                 discardPileState = DiscardPileState(),
