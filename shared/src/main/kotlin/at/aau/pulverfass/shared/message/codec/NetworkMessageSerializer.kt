@@ -20,6 +20,8 @@ import java.nio.charset.CharacterCodingException
  */
 internal object NetworkMessageSerializer {
     private val json = Json
+    private const val HEADER_DESERIALIZATION_FAILURE_MESSAGE =
+        "Failed to deserialize message header"
 
     /**
      * Serialisiert einen [MessageHeader] in UTF-8-kodierte Bytes.
@@ -42,11 +44,11 @@ internal object NetworkMessageSerializer {
         try {
             json.decodeFromString(MessageHeader.serializer(), bytes.decodeUtf8Strict())
         } catch (exception: SerializationException) {
-            throw NetworkSerializationException("Failed to deserialize message header", exception)
+            throw NetworkSerializationException(HEADER_DESERIALIZATION_FAILURE_MESSAGE, exception)
         } catch (exception: IllegalArgumentException) {
-            throw NetworkSerializationException("Failed to deserialize message header", exception)
+            throw NetworkSerializationException(HEADER_DESERIALIZATION_FAILURE_MESSAGE, exception)
         } catch (exception: CharacterCodingException) {
-            throw NetworkSerializationException("Failed to deserialize message header", exception)
+            throw NetworkSerializationException(HEADER_DESERIALIZATION_FAILURE_MESSAGE, exception)
         }
 
     /**

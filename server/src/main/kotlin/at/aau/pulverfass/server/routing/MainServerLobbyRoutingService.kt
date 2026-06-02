@@ -155,6 +155,10 @@ class MainServerLobbyRoutingService(
     private companion object {
         const val ELIMINATED_SPECTATOR_SUFFIX = "zuschauen."
         const val NO_ACTIVE_PLAYER_SET_SUFFIX = "kein aktiver Spieler gesetzt."
+        const val PAYLOAD_LIMIT_EXCEEDED_SUFFIX =
+            "ueberschreitet die konfigurierte Transportgrenze."
+        const val PAYLOAD_LIMIT_DETAILS_PREFIX =
+            "als die konfigurierte Grenze von "
     }
 
     private val logger = LoggerFactory.getLogger(MainServerLobbyRoutingService::class.java)
@@ -1233,11 +1237,11 @@ class MainServerLobbyRoutingService(
                     val payloadTooLarge = cause as? PublicStatePayloadTooLargeException
                     if (payloadTooLarge == null) {
                         "Map-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
-                            "ueberschreitet die konfigurierte Transportgrenze."
+                            PAYLOAD_LIMIT_EXCEEDED_SUFFIX
                     } else {
                         "Map-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
                             "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
-                            "als die konfigurierte Grenze von " +
+                            PAYLOAD_LIMIT_DETAILS_PREFIX +
                             "${payloadTooLarge.maxAllowedBytes} Bytes."
                     }
                 }
@@ -1286,11 +1290,11 @@ class MainServerLobbyRoutingService(
                     val payloadTooLarge = cause as? PublicStatePayloadTooLargeException
                     if (payloadTooLarge == null) {
                         "Catch-up-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
-                            "ueberschreitet die konfigurierte Transportgrenze."
+                            PAYLOAD_LIMIT_EXCEEDED_SUFFIX
                     } else {
                         "Catch-up-Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
                             "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
-                            "als die konfigurierte Grenze von " +
+                            PAYLOAD_LIMIT_DETAILS_PREFIX +
                             "${payloadTooLarge.maxAllowedBytes} Bytes."
                     }
                 }
@@ -1334,11 +1338,11 @@ class MainServerLobbyRoutingService(
                     val payloadTooLarge = cause as? PrivateStatePayloadTooLargeException
                     if (payloadTooLarge == null) {
                         "Privater Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
-                            "ueberschreitet die konfigurierte Transportgrenze."
+                            PAYLOAD_LIMIT_EXCEEDED_SUFFIX
                     } else {
                         "Privater Snapshot fuer Lobby '${payload.lobbyCode.value}' " +
                             "ist mit ${payloadTooLarge.encodedSizeBytes} Bytes groesser " +
-                            "als die konfigurierte Grenze von " +
+                            PAYLOAD_LIMIT_DETAILS_PREFIX +
                             "${payloadTooLarge.maxAllowedBytes} Bytes."
                     }
                 }
