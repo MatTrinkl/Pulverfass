@@ -25,6 +25,7 @@ import kotlinx.serialization.encoding.Encoder
  * @property isPaused signalisiert pausierten Turn-State
  * @property pauseReason optionale Begründung für Pause
  * @property pausedPlayerId optionaler Spieler, auf dessen Verbindung gewartet wird
+ * @property fortifyUsedThisTurn signalisiert, ob die Verschiebung dieser Runde bereits verbraucht ist
  */
 @Serializable(with = TurnStateGetResponseSerializer::class)
 data class TurnStateGetResponse(
@@ -36,6 +37,7 @@ data class TurnStateGetResponse(
     val isPaused: Boolean = false,
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
+    val fortifyUsedThisTurn: Boolean = false,
 ) : PublicGameStatePayload {
     companion object {
         fun fromGameState(gameState: GameState): TurnStateGetResponse {
@@ -54,6 +56,7 @@ data class TurnStateGetResponse(
                 isPaused = resolvedTurnState.isPaused,
                 pauseReason = resolvedTurnState.pauseReason,
                 pausedPlayerId = resolvedTurnState.pausedPlayerId,
+                fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
             )
         }
     }
@@ -75,6 +78,7 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
             element<Boolean>("isPaused")
             element<String>("pauseReason", isOptional = true)
             element("pausedPlayerId", PlayerId.serializer().descriptor, isOptional = true)
+            element<Boolean>("fortifyUsedThisTurn", isOptional = true)
         }
 
     override fun serialize(
@@ -109,6 +113,9 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
                 value.pausedPlayerId,
             )
         }
+        if (value.fortifyUsedThisTurn) {
+            composite.encodeBooleanElement(descriptor, 8, value.fortifyUsedThisTurn)
+        }
         composite.endStructure(descriptor)
     }
 
@@ -122,6 +129,7 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
         var isPaused = false
         var pauseReason: String? = null
         var pausedPlayerId: PlayerId? = null
+        var fortifyUsedThisTurn = false
 
         loop@ while (true) {
             when (val index = composite.decodeElementIndex(descriptor)) {
@@ -163,6 +171,7 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
                             7,
                             PlayerId.serializer(),
                         )
+                8 -> fortifyUsedThisTurn = composite.decodeBooleanElement(descriptor, 8)
                 CompositeDecoder.DECODE_DONE -> break@loop
                 else -> throw IllegalArgumentException("Unexpected index $index")
             }
@@ -188,6 +197,7 @@ object TurnStateGetResponseSerializer : KSerializer<TurnStateGetResponse> {
             isPaused = isPaused,
             pauseReason = pauseReason,
             pausedPlayerId = pausedPlayerId,
+            fortifyUsedThisTurn = fortifyUsedThisTurn,
         )
     }
 }

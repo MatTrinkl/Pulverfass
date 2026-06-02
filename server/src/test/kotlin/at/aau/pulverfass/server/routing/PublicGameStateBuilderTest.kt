@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -88,6 +89,31 @@ class PublicGameStateBuilderTest {
         assertEquals(snapshot.stateVersion, broadcast.stateVersion)
         assertEquals(snapshot.determinism, broadcast.determinism)
         assertEquals(snapshot.turnState, broadcast.turnState)
+    }
+
+    @Test
+    fun `snapshot builder exposes consumed fortify move in public turn state`() {
+        val gameState =
+            sampleGameState().copy(
+                stateVersion = 10,
+                activePlayer = PlayerId(1),
+                fortifyUsedThisTurn = true,
+                turnState =
+                    TurnState(
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 3,
+                        startPlayerId = PlayerId(1),
+                    ),
+            )
+
+        val snapshot = builder.buildSnapshot(gameState)
+        val catchUp = builder.buildCatchUpResponse(gameState)
+        val broadcast = builder.buildSnapshotBroadcast(gameState)
+
+        assertTrue(snapshot.turnState.fortifyUsedThisTurn)
+        assertTrue(catchUp.turnState.fortifyUsedThisTurn)
+        assertTrue(broadcast.turnState.fortifyUsedThisTurn)
     }
 
     @Test

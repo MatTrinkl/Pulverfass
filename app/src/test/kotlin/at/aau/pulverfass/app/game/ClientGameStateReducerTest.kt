@@ -153,6 +153,7 @@ class ClientGameStateReducerTest {
                                 isPaused = true,
                                 pauseReason = "waiting",
                                 pausedPlayerId = bobId,
+                                fortifyUsedThisTurn = true,
                             ),
                         definition = mapDefinition("brasilien"),
                         territoryStates =
@@ -171,6 +172,8 @@ class ClientGameStateReducerTest {
         assertEquals(bobId, state.activePlayerId)
         assertEquals(TurnPhase.FORTIFY, state.turnPhase)
         assertTrue(state.isPaused)
+        assertTrue(state.fortifyState.hasMoved)
+        assertFalse(state.canManageFortify(bobId))
         assertEquals(null, state.selectedRegionId)
         assertEquals("Bob", state.regionStates.getValue("brazil").ownerName)
     }
@@ -485,6 +488,20 @@ class ClientGameStateReducerTest {
                         turnPhase = TurnPhase.FORTIFY,
                         turnCount = 1,
                         startPlayerId = aliceId,
+                        fortifyUsedThisTurn = true,
+                    ),
+            )
+        val serverConsumedSelection =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = selectedTarget,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                        fortifyUsedThisTurn = true,
                     ),
             )
         val resetFortifyState =
@@ -513,6 +530,11 @@ class ClientGameStateReducerTest {
         assertEquals(null, acceptedMove.selectionFromRegionId)
         assertTrue(acceptedMove.fortifyState.hasMoved)
         assertTrue(retainedFortifyState.fortifyState.hasMoved)
+        assertTrue(serverConsumedSelection.fortifyState.hasMoved)
+        assertEquals(null, serverConsumedSelection.selectedRegionId)
+        assertEquals(null, serverConsumedSelection.selectionFromRegionId)
+        assertEquals(null, serverConsumedSelection.selectionToRegionId)
+        assertFalse(serverConsumedSelection.canSubmitFortifyMove(aliceId))
         assertFalse(resetFortifyState.fortifyState.hasMoved)
         assertEquals(null, ignoredAfterMove.selectionFromRegionId)
     }

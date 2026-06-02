@@ -62,6 +62,7 @@ class PublicGameStateBuilder {
                     turnState = resolvedTurnState,
                     pendingReinforcements =
                         gameState.pendingReinforcementsFor(resolvedTurnState.activePlayerId),
+                    fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
                 ),
             definition = mapProjection.definition,
             territoryStates = mapProjection.territoryStates,

@@ -205,8 +205,11 @@ object ClientGameStateReducer {
     fun applyTurnStateGetResponse(
         current: GameUiState,
         response: TurnStateGetResponse,
-    ): GameUiState =
-        current.copy(
+    ): GameUiState {
+        val shouldClearFortifySelection =
+            response.turnPhase == TurnPhase.FORTIFY && response.fortifyUsedThisTurn
+
+        return current.copy(
             activePlayerId = response.activePlayerId,
             turnPhase = response.turnPhase,
             turnCount = response.turnCount,
@@ -228,7 +231,7 @@ object ClientGameStateReducer {
                 },
             fortifyState =
                 if (response.turnPhase == TurnPhase.FORTIFY) {
-                    current.fortifyState
+                    current.fortifyState.copy(hasMoved = response.fortifyUsedThisTurn)
                 } else {
                     FortifyUiState()
                 },
@@ -240,7 +243,32 @@ object ClientGameStateReducer {
                 },
             isCatchingUp = false,
             lastSyncError = null,
+            selectedRegionId =
+                if (shouldClearFortifySelection) {
+                    null
+                } else {
+                    current.selectedRegionId
+                },
+            selectionFromRegionId =
+                if (shouldClearFortifySelection) {
+                    null
+                } else {
+                    current.selectionFromRegionId
+                },
+            selectionToRegionId =
+                if (shouldClearFortifySelection) {
+                    null
+                } else {
+                    current.selectionToRegionId
+                },
+            selectionMessage =
+                if (shouldClearFortifySelection) {
+                    null
+                } else {
+                    current.selectionMessage
+                },
         )
+    }
 
     /**
      * Übernimmt den privaten Snapshot des lokalen Spielers.
@@ -605,7 +633,12 @@ object ClientGameStateReducer {
                         },
                     reinforcementPlacementAmount = 1,
                     attackState = AttackUiState(),
-                    fortifyState = FortifyUiState(),
+                    fortifyState =
+                        if (turnState.turnPhase == TurnPhase.FORTIFY) {
+                            FortifyUiState(hasMoved = turnState.fortifyUsedThisTurn)
+                        } else {
+                            FortifyUiState()
+                        },
                     selectedTradeInCardIds =
                         if (turnState.turnPhase == TurnPhase.REINFORCEMENTS) {
                             current.selectedTradeInCardIds
