@@ -441,7 +441,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     CardDeckFactory.createShuffledDeck(
                         mapDefinition = state.mapDefinition
                             ?: throw InvalidLobbyEventException(
-                                "Spielstart benoetigt eine MapDefinition.",
+                                "Spielstart benötigt eine MapDefinition.",
                             ),
                         randomSeed = event.randomSeed,
                     ),
@@ -714,7 +714,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val currentTurnState =
             state.resolvedTurnState
                 ?: throw InvalidLobbyEventException(
-                    "CardDrawnEvent benoetigt einen initialisierten TurnState.",
+                    "CardDrawnEvent benötigt einen initialisierten TurnState.",
                 )
         if (currentTurnState.activePlayerId != event.playerId) {
             throw InvalidLobbyEventException(
@@ -728,7 +728,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
         if (!state.territoryCapturedThisTurn) {
             throw InvalidLobbyEventException(
-                "CardDrawnEvent benoetigt mindestens eine Eroberung im aktuellen Zug.",
+                "CardDrawnEvent benötigt mindestens eine Eroberung im aktuellen Zug.",
             )
         }
 

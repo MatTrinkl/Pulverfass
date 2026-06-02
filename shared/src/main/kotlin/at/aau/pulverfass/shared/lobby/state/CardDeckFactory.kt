@@ -6,6 +6,12 @@ import kotlin.random.Random
 
 private const val CARD_DECK_RANDOM_SALT = 0x5DEECE66DL
 
+/**
+ * Erzeugt den deterministisch gemischten Kartenstapel für ein neues Spiel.
+ *
+ * Für jedes Territorium wird genau eine Symbolkarte angelegt. Zwei Joker
+ * ergänzen den Kartenstapel.
+ */
 internal object CardDeckFactory {
     private val symbolTypes = listOf(CardType.A, CardType.B, CardType.C)
 

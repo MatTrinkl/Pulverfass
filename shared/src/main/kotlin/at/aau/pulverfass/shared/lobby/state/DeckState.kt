@@ -4,7 +4,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import kotlinx.serialization.Serializable
 
 /**
- * Platzhalter für den serverseitigen Kartenstapel.
+ * Serverseitiger Kartenstapel in stabiler Ziehreihenfolge.
  */
 @Serializable
 data class DeckState(

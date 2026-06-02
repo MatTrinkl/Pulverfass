@@ -36,7 +36,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
- * @property territoryCapturedThisTurn merkt, ob in diesem Zug mindestens ein Gebiet erobert wurde
+ * @property territoryCapturedThisTurn signalisiert, ob im aktuellen Zug mindestens ein Gebiet erobert wurde
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
@@ -675,7 +675,7 @@ data class GameState(
     internal fun withGameRandomState(state: Long): GameState = copy(gameRandomState = state)
 
     /**
-     * Setzt das zuggebundene Eroberungsflag fuer den aktiven Spieler.
+     * Setzt das zuggebundene Eroberungsflag für den aktiven Spieler.
      */
     internal fun withTerritoryCapturedThisTurn(captured: Boolean): GameState =
         copy(territoryCapturedThisTurn = captured)
