@@ -106,6 +106,15 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf eine Fortify-Anfrage. */
     LOBBY_FORTIFY_MOVE_ERROR_RESPONSE(78),
 
+    /** Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(79),
+
+    /** Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(80),
+
+    /** Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(81),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 
