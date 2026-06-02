@@ -182,10 +182,11 @@ data class GameUiState(
     /**
      * Prüft, ob eine Truppenverschiebung in der Fortify-Phase vorbereitet werden kann.
      *
-     * Fortify darf nur einmal pro Zug ausgeführt werden. Da der öffentliche
-     * Snapshot diesen internen Serverstatus aktuell nicht enthält, blockiert der
-     * Client nach einer erfolgreichen Fortify-Antwort lokal weitere Eingaben,
-     * bis die nächste Phase oder ein neuer Snapshot den lokalen Zustand resetet.
+     * Fortify darf nur einmal pro Zug ausgeführt werden. Der öffentliche
+     * Snapshot und die Turn-State-Antwort liefern den serverautoritativen
+     * Verbrauchsstatus. `hasMoved` spiegelt diesen Status lokal und blockiert
+     * nach einem bestätigten Move weitere Fortify-Requests bis zum nächsten
+     * autoritativen Update.
      *
      * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
      * @param isConnected aktueller WebSocket-Zustand
@@ -267,7 +268,8 @@ data class AttackUiState(
  * nur die Bedienoberfläche vor einem zweiten Request im gleichen Zug.
  *
  * @property troopCount lokal ausgewählte Anzahl der zu verschiebenden Truppen
- * @property hasMoved lokaler Marker, ob der einmalige Fortify-Move verbraucht ist
+ * @property hasMoved Marker, ob der einmalige Fortify-Move laut lokalem oder
+ * serverseitigem Status bereits verbraucht ist
  */
 data class FortifyUiState(
     val troopCount: Int = MIN_FORTIFY_TROOPS,
