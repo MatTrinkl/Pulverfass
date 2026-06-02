@@ -1,5 +1,10 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
+import at.aau.pulverfass.server.persistence.FakeConnectionScript
+import at.aau.pulverfass.server.persistence.FakeJdbcDataSource
+import at.aau.pulverfass.server.persistence.FakePreparedStatementScript
+import at.aau.pulverfass.server.persistence.JdbcLobbyReconnectSessionStore
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.session.SessionContextRegistry
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
@@ -9,9 +14,11 @@ import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -35,6 +42,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -207,6 +215,26 @@ class ApplicationTest {
     }
 
     @Test
+    fun `configured readiness probe is postgres typed without connecting`() {
+        val probe =
+            createDatabaseReadinessProbe(
+                DatabaseRuntimeConfig(
+                    host = "127.0.0.1",
+                    port = 5432,
+                    name = "pulverfass",
+                    user = "postgres",
+                    password = "postgres",
+                ),
+            )
+
+        try {
+            assertInstanceOf(PostgresDatabaseReadinessProbe::class.java, probe)
+        } finally {
+            probe.close()
+        }
+    }
+
+    @Test
     fun `createDatabaseReadinessProbe returns postgres probe when database is configured`() {
         val config = requireExternalTestDatabaseConfig()
         val probe = createDatabaseReadinessProbe(config)
@@ -231,6 +259,29 @@ class ApplicationTest {
                 callbacks.readiness(),
             )
         }
+
+    @Test
+    fun `configured persistence callbacks are database backed without connecting`() {
+        val callbacks =
+            createLobbyPersistenceCallbacks(
+                DatabaseRuntimeConfig(
+                    host = "127.0.0.1",
+                    port = 5432,
+                    name = "pulverfass",
+                    user = "postgres",
+                    password = "postgres",
+                ),
+            )
+
+        try {
+            assertInstanceOf(
+                DatabaseBackedLobbyPersistenceGateway::class.java,
+                callbacks,
+            )
+        } finally {
+            callbacks.close()
+        }
+    }
 
     @Test
     fun `createLobbyPersistenceCallbacks returns active callbacks when database is configured`() {
@@ -313,6 +364,47 @@ class ApplicationTest {
     }
 
     @Test
+    fun `persistReconnectSessionIfPossible upserts session for player context`() {
+        val delete =
+            FakePreparedStatementScript(
+                expectedSqlFragment = "DELETE FROM lobby_reconnect_sessions",
+                updateCount = 1,
+            )
+        val insert =
+            FakePreparedStatementScript(
+                expectedSqlFragment = "INSERT INTO lobby_reconnect_sessions",
+                updateCount = 1,
+            )
+        val connection = FakeConnectionScript(listOf(delete, insert))
+        val store =
+            JdbcLobbyReconnectSessionStore(
+                FakeJdbcDataSource(listOf(connection)),
+            )
+        val network = ServerNetwork()
+        val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174603")
+        val sessionContextRegistry = SessionContextRegistry()
+
+        network.sessionManager.restoreDetachedSession(
+            sessionToken = sessionToken,
+            expiresAtEpochMillis = System.currentTimeMillis() + 60_000,
+        )
+        sessionContextRegistry.assignPlayer(sessionToken, PlayerId(21))
+        sessionContextRegistry.updateLobbyContext(sessionToken, LobbyCode("AB12"), "Alice")
+
+        persistReconnectSessionIfPossible(
+            network = network,
+            sessionStore = store,
+            sessionContextRegistry = sessionContextRegistry,
+            sessionToken = sessionToken,
+        )
+
+        assertTrue(connection.committed)
+        assertEquals(21L, delete.lastParameters[1])
+        assertEquals("AB12", insert.lastParameters[3])
+        assertEquals("Alice", insert.lastParameters[4])
+    }
+
+    @Test
     fun `module exposes health endpoint`() =
         testApplication {
             application {
@@ -338,6 +430,19 @@ class ApplicationTest {
 
             assertEquals(HttpStatusCode.OK, response.status)
             assertEquals("v1.2.3", response.bodyAsText())
+        }
+
+    @Test
+    fun `transport only module still exposes standard http endpoints`() =
+        testApplication {
+            application {
+                module(ServerWebSocketTransport())
+            }
+
+            val response = client.get("/health")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("OK", response.bodyAsText())
         }
 
     @Test
@@ -573,7 +678,9 @@ class ApplicationTest {
                 payload !is ConnectionResponse &&
                 payload !is GameStateDeltaEvent &&
                 payload !is GameStateSnapshotBroadcast &&
-                payload !is TurnStateUpdatedEvent
+                payload !is TurnStateUpdatedEvent &&
+                payload !is PlayerCountUpdateEvent &&
+                payload !is GlobalPlayerCountEvent
             ) {
                 return payload
             }

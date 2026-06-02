@@ -3,6 +3,8 @@ package at.aau.pulverfass.shared.lobby.event
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
+import at.aau.pulverfass.shared.lobby.command.MIN_SOURCE_TROOPS_FOR_ATTACK
 import kotlinx.serialization.Serializable
 
 /**
@@ -39,11 +41,13 @@ data class AttackResolvedEvent(
     val stateVersion: Long? = null,
 ) : InternalLobbyEvent {
     init {
-        require(attackTroops >= 2) {
-            "AttackResolvedEvent.attackTroops muss mindestens 2 sein."
+        require(attackTroops >= MIN_ATTACK_COMMITTED_TROOPS) {
+            "AttackResolvedEvent.attackTroops muss mindestens " +
+                "$MIN_ATTACK_COMMITTED_TROOPS sein."
         }
-        require(sourceTroopsBefore >= 2) {
-            "AttackResolvedEvent.sourceTroopsBefore muss mindestens 2 sein."
+        require(sourceTroopsBefore >= MIN_SOURCE_TROOPS_FOR_ATTACK) {
+            "AttackResolvedEvent.sourceTroopsBefore muss mindestens " +
+                "$MIN_SOURCE_TROOPS_FOR_ATTACK sein."
         }
         require(targetTroopsBefore >= 1) {
             "AttackResolvedEvent.targetTroopsBefore muss mindestens 1 sein."

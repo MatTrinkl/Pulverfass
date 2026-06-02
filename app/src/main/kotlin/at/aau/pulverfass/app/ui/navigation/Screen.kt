@@ -24,4 +24,7 @@ sealed class Screen(val route: String) {
 
     /** Platzhalterziel für das eigentliche Spiel. */
     object Game : Screen("game")
+
+    /** Options-Screen (Username, Audio-Toggles). */
+    object Options : Screen("options")
 }

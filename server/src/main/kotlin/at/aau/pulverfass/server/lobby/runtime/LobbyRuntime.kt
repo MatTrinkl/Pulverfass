@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server.lobby.runtime
 
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
@@ -9,7 +10,6 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.LobbyStateReader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import org.slf4j.LoggerFactory
 
 /**
  * Zentrale Lifecycle- und Kapselungseinheit für genau eine Lobby.
@@ -23,7 +23,7 @@ class LobbyRuntime private constructor(
     private val hooks: LobbyRuntimeHooks = LobbyRuntimeHooks(),
 ) : LobbyStateReader by eventLoop {
     companion object {
-        private val logger = LoggerFactory.getLogger(LobbyRuntime::class.java)
+        private val logger = ServerLoggers.technical("LobbyRuntime")
     }
 
     constructor(
@@ -78,7 +78,13 @@ class LobbyRuntime private constructor(
             try {
                 eventLoop.submit(event, context)
             } catch (cause: Throwable) {
-                hooks.onEventRejected(lobbyCode, event, cause)
+                hooks.onEventRejected(
+                    lobbyCode,
+                    event,
+                    context,
+                    runCatching { currentState() }.getOrNull(),
+                    cause,
+                )
                 throw cause
             }
 
@@ -115,7 +121,15 @@ class LobbyRuntime private constructor(
             try {
                 eventLoop.submitBatch(events, context)
             } catch (cause: Throwable) {
-                hooks.onEventRejected(lobbyCode, events.first(), cause)
+                events.firstOrNull()?.let { failedEvent ->
+                    hooks.onEventRejected(
+                        lobbyCode,
+                        failedEvent,
+                        context,
+                        runCatching { currentState() }.getOrNull(),
+                        cause,
+                    )
+                }
                 throw cause
             }
         processedList.forEach { processed ->
@@ -180,5 +194,6 @@ data class LobbyRuntimeHooks(
         GameState,
     ) -> Unit = { _, _, _, _ -> },
     /** Wird bei Verarbeitungsfehlern ausgelöst. */
-    val onEventRejected: (LobbyCode, LobbyEvent, Throwable) -> Unit = { _, _, _ -> },
+    val onEventRejected: (LobbyCode, LobbyEvent, EventContext?, GameState?, Throwable) -> Unit =
+        { _, _, _, _, _ -> },
 )

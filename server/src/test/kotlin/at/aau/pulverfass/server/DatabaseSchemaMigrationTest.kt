@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Test
 
 class DatabaseSchemaMigrationTest {
     @Test
+    fun `migrateDatabaseSchema returns early when database config is disabled`() {
+        migrateDatabaseSchema(DatabaseRuntimeConfig())
+    }
+
+    @Test
     fun `redactJdbcUrl masks authority credentials`() {
         val jdbcUrl = "jdbc:postgresql://pulverfass:secret@db.internal:5432/pulverfass"
 

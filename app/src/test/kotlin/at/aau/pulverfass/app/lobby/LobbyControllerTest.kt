@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -104,6 +105,22 @@ class LobbyControllerTest {
             assertNull(state.sessionToken)
             assertNull(state.lastMessageType)
             assertTrue(state.playerNames.isEmpty())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `controller should restore and persist configured player name`() {
+        val playerNameStore = InMemoryPlayerNameStore("Anne Bonny")
+        val controller = createController(playerNameStore = playerNameStore)
+        try {
+            assertEquals("Anne Bonny", controller.state.value.playerName)
+
+            controller.updatePlayerName("Mary Read")
+
+            assertEquals("Mary Read", controller.state.value.playerName)
+            assertEquals("Mary Read", playerNameStore.readPlayerName())
         } finally {
             controller.close()
         }
@@ -227,10 +244,9 @@ class LobbyControllerTest {
                         )
                     }
                 }
-            val controller = createController()
+            val controller = createController(playerNameStore = InMemoryPlayerNameStore("Bob"))
             try {
                 controller.updateServerUrl(server.url)
-                controller.updatePlayerName("Bob")
                 controller.updateLobbyCode(lobbyCode.value)
                 var readyLobbyCode: String? = null
                 controller.joinLobby { code ->
@@ -1434,12 +1450,14 @@ class LobbyControllerTest {
     private fun createController(
         config: LobbyControllerConfig = LobbyControllerConfig(),
         sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
+        playerNameStore: PlayerNameStore = InMemoryPlayerNameStore(),
     ): LobbyController {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         return LobbyController(
             scope = scope,
             config = config,
             reconnectSessionStore = sessionStore,
+            playerNameStore = playerNameStore,
         )
     }
 
@@ -1570,6 +1588,16 @@ class LobbyControllerTest {
         override fun clearSession() {
             token = null
             wasGameStarted = false
+        }
+    }
+
+    private class InMemoryPlayerNameStore(
+        private var playerName: String? = null,
+    ) : PlayerNameStore {
+        override fun readPlayerName(): String? = playerName
+
+        override fun savePlayerName(playerName: String) {
+            this.playerName = playerName
         }
     }
 }
