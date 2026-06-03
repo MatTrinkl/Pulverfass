@@ -6,12 +6,12 @@ import at.aau.pulverfass.app.R
 
 data class CharacterDef(
     val id: String,
-    @DrawableRes val drawableRes: Int,
+    @param:DrawableRes val drawableRes: Int,
     val color: Color,
     val displayName: String,
     val wallpaperResId: Int,
     val isVideoWallpaper: Boolean = false,
-    @DrawableRes val fallbackImageResId: Int? = null,
+    @param:DrawableRes val fallbackImageResId: Int? = null,
 )
 
 object Characters {
@@ -20,7 +20,7 @@ object Characters {
             CharacterDef(
                 "blackpurp",
                 R.drawable.blackpurp,
-                Color(0xFF6B2D8B),
+                Color(0xFF7B2CBF),
                 "Black Purp",
                 wallpaperResId = R.raw.vio_mysiker,
                 isVideoWallpaper = true,
@@ -29,21 +29,21 @@ object Characters {
             CharacterDef(
                 "bookmen",
                 R.drawable.bookmen,
-                Color(0xFF1A3D7C),
+                Color(0xFF1565C0),
                 "Book Men",
                 wallpaperResId = R.drawable.ghost,
             ),
             CharacterDef(
                 "doctor",
                 R.drawable.doctor,
-                Color(0xFF2A9D8F),
+                Color(0xFF00897B),
                 "Doctor",
                 wallpaperResId = R.drawable.alchemist,
             ),
             CharacterDef(
                 "ice",
                 R.drawable.ice,
-                Color(0xFF7EC8E3),
+                Color(0xFF00A6D6),
                 "Ice",
                 wallpaperResId = R.raw.ice_vid,
                 isVideoWallpaper = true,
@@ -52,7 +52,7 @@ object Characters {
             CharacterDef(
                 "indiawatta",
                 R.drawable.indiawatta,
-                Color(0xFFD4763B),
+                Color(0xFFE76F00),
                 "India Watta",
                 wallpaperResId = R.raw.watermen,
                 isVideoWallpaper = true,
@@ -61,21 +61,21 @@ object Characters {
             CharacterDef(
                 "mommy",
                 R.drawable.mommy,
-                Color(0xFFE07A9B),
+                Color(0xFFD81B60),
                 "Mommy",
                 wallpaperResId = R.drawable.geleehr,
             ),
             CharacterDef(
                 "redmen",
                 R.drawable.redmen,
-                Color(0xFFA6342B),
+                Color(0xFFC62828),
                 "Red Men",
                 wallpaperResId = R.drawable.darkend,
             ),
             CharacterDef(
                 "redwomen",
                 R.drawable.redwomen,
-                Color(0xFFB54A5A),
+                Color(0xFFFF4081),
                 "Red Women",
                 wallpaperResId = R.raw.redwoman,
                 isVideoWallpaper = true,
@@ -83,14 +83,14 @@ object Characters {
             CharacterDef(
                 "redwomen2",
                 R.drawable.redwomen2,
-                Color(0xFF7B1A2A),
+                Color(0xFF8E24AA),
                 "Red Women II",
                 wallpaperResId = R.drawable.le_elegance_w,
             ),
             CharacterDef(
                 "whitewomen",
                 R.drawable.whitewomen,
-                Color(0xFFB8A9C9),
+                Color(0xFFFBC02D),
                 "White Women",
                 wallpaperResId = R.raw.gold,
                 isVideoWallpaper = true,
@@ -99,7 +99,7 @@ object Characters {
             CharacterDef(
                 "mr",
                 R.drawable.mr,
-                Color(0xFFAAAAAA),
+                Color(0xFF43A047),
                 "Mr",
                 wallpaperResId = R.drawable.codesmell,
             ),

@@ -57,6 +57,9 @@
     <string name="game_attack_occupy">Besetzung bei Eroberung</string>
     <string name="game_attack_submit">Angreifen</string>
     <string name="game_attack_close">Schließen</string>
+    <string name="game_attack_resolving_title">Angriff wird aufgelöst</string>
+    <string name="game_attack_resolving_route">%1$s greift von %2$s nach %3$s an</string>
+    <string name="game_attack_resolving_troops">Angriffstruppen: %1$d</string>
     <string name="game_attack_result_title">Kampfergebnis: %1$s → %2$s</string>
     <string name="game_attack_dice">Würfel: %1$s gegen %2$s</string>
     <string name="game_attack_losses">Verluste: Angriff %1$d · Verteidigung %2$d</string>

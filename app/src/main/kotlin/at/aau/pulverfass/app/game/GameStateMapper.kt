@@ -1,6 +1,7 @@
 package at.aau.pulverfass.app.game
 
 import androidx.compose.ui.graphics.Color
+import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
@@ -67,6 +68,8 @@ object GameMapTerritoryMapper {
  * Erzeugt die Spielerprojektion für HUD, Sidebar und Kartenfarben.
  *
  * @param players Lobby-Spieler aus dem Controller
+ * @param ownPlayerId lokale Spieler-ID für noch nicht synchronisierte Charakterwechsel
+ * @param ownPlayerColor lokal gewählte Farbe, solange Server-Events noch nachlaufen
  * @return UI-Spieler mit stabiler Farbe und Avatar-Kürzel
  */
 fun lobbyPlayersToGamePlayers(
@@ -75,17 +78,11 @@ fun lobbyPlayersToGamePlayers(
     ownPlayerColor: Color? = null,
 ): List<GamePlayerUi> =
     players.mapIndexed { index, player ->
-        val color =
-            if (player.playerId == ownPlayerId && ownPlayerColor != null) {
-                ownPlayerColor
-            } else {
-                PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-            }
         GamePlayerUi(
             playerId = player.playerId,
             name = player.displayName,
             avatarText = player.displayName.toAvatarText(),
-            color = color,
+            color = player.gameColor(index, ownPlayerId, ownPlayerColor),
             isHost = player.isHost,
         )
     }
@@ -134,6 +131,25 @@ internal fun String.toAvatarText(): String =
         .take(2)
         .joinToString("") { it.first().uppercaseChar().toString() }
         .ifBlank { "?" }
+
+private fun LobbyPlayerUi.gameColor(
+    index: Int,
+    ownPlayerId: PlayerId?,
+    ownPlayerColor: Color?,
+): Color =
+    when {
+        /*
+         * Die lokale Auswahl ist die schnellste Quelle für den eigenen Spieler:
+         * Der Klick in der Charakterauswahl soll sofort in HUD und Sidebar
+         * sichtbar sein, auch wenn die nächste Server-Spielerliste noch fehlt.
+         */
+        playerId == ownPlayerId && ownPlayerColor != null -> ownPlayerColor
+        characterId != null -> Characters.byId(characterId)?.color ?: fallbackPlayerColor(index)
+        else -> fallbackPlayerColor(index)
+    }
+
+private fun fallbackPlayerColor(index: Int): Color =
+    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
 
 private const val NEUTRAL_OWNER_ID = "neutral"
 private const val NEUTRAL_OWNER_NAME = "Neutral"

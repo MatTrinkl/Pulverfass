@@ -44,15 +44,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,7 +68,6 @@ import at.aau.pulverfass.app.lobby.CharacterDef
 import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
-import at.aau.pulverfass.app.ui.components.GoldenGlowRing
 import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.PulverfassTitleText
@@ -108,6 +112,21 @@ fun WaitingRoomScreen(
 
     var showCharacterPicker by remember { mutableStateOf(false) }
     var coinAnimCharacter by remember { mutableStateOf<CharacterDef?>(null) }
+    var screenSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var characterPreviewCenterPx by remember { mutableStateOf<Offset?>(null) }
+    val characterPreviewTargetOffsetPx =
+        remember(screenSizePx, characterPreviewCenterPx) {
+            if (screenSizePx.width == 0 || screenSizePx.height == 0) {
+                return@remember null
+            }
+            val previewCenter = characterPreviewCenterPx ?: return@remember null
+            val screenCenter =
+                Offset(
+                    x = screenSizePx.width / 2f,
+                    y = screenSizePx.height / 2f,
+                )
+            previewCenter - screenCenter
+        }
 
     LaunchedEffect(showCharacterPicker) {
         if (showCharacterPicker) {
@@ -127,6 +146,7 @@ fun WaitingRoomScreen(
         modifier =
             Modifier
                 .fillMaxSize()
+                .onSizeChanged { screenSizePx = it }
                 .background(PulverfassColors.SurfaceVoid),
     ) {
         LobbyVideoBackground()
@@ -211,7 +231,18 @@ fun WaitingRoomScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CharacterPreview(characterDef = state.characterId?.let { Characters.byId(it) })
+            CharacterPreview(
+                characterDef = state.characterId?.let { Characters.byId(it) },
+                modifier =
+                    Modifier.onGloballyPositioned { coordinates ->
+                        val position = coordinates.positionInRoot()
+                        characterPreviewCenterPx =
+                            Offset(
+                                x = position.x + coordinates.size.width / 2f,
+                                y = position.y + coordinates.size.height / 2f,
+                            )
+                    },
+            )
             MainButton(
                 text = "CHARAKTER\nWÄHLEN",
                 onClick = sfx(musicManager) { showCharacterPicker = true },
@@ -223,9 +254,9 @@ fun WaitingRoomScreen(
         Row(
             modifier =
                 Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
-                    .fillMaxWidth(0.6f),
+                    .align(Alignment.BottomStart)
+                    .padding(start = 32.dp, end = 236.dp, bottom = 32.dp)
+                    .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             if (effectiveIsHost) {
@@ -269,6 +300,7 @@ fun WaitingRoomScreen(
                     playerCount = players.size,
                     takenCharacterIds = takenCharacterIds,
                     characterSelectError = state.characterSelectError,
+                    characterPreviewTargetOffsetPx = characterPreviewTargetOffsetPx,
                 ),
             onDismiss = sfx(musicManager) { showCharacterPicker = false },
             onSave = { id ->
@@ -320,7 +352,8 @@ private fun buildWaitingRoomPlayers(
                 if (isOwn && selectedColor != null) {
                     selectedColor
                 } else {
-                    Characters.byIndex(index).color
+                    player.characterId?.let { Characters.byId(it)?.color }
+                        ?: Characters.byIndex(index).color
                 }
             WaitingRoomPlayerUi(
                 displayName = player.displayName,
@@ -333,8 +366,11 @@ private fun buildWaitingRoomPlayers(
     }
 
 @Composable
-private fun CharacterPreview(characterDef: CharacterDef?) {
-    Box(modifier = Modifier.size(115.dp), contentAlignment = Alignment.Center) {
+private fun CharacterPreview(
+    characterDef: CharacterDef?,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.size(115.dp), contentAlignment = Alignment.Center) {
         if (characterDef != null) {
             Box(
                 modifier = Modifier.size(86.dp).clip(CircleShape),
@@ -361,6 +397,7 @@ private fun CharacterPreview(characterDef: CharacterDef?) {
 @Composable
 private fun PlayerAvatar(
     characterId: String?,
+    color: Color = PulverfassColors.GoldCoin,
     modifier: Modifier = Modifier,
 ) {
     val character = characterId?.let { id -> Characters.all.find { it.id == id } }
@@ -368,7 +405,7 @@ private fun PlayerAvatar(
         modifier =
             modifier
                 .size(54.dp)
-                .border(2.dp, PulverfassColors.GoldCoin, CircleShape)
+                .border(2.dp, color, CircleShape)
                 .clip(CircleShape)
                 .background(PulverfassColors.SurfaceVoid),
         contentAlignment = Alignment.Center,
@@ -421,6 +458,7 @@ private data class WaitingRoomOverlayState(
     val playerCount: Int,
     val takenCharacterIds: Set<String> = emptySet(),
     val characterSelectError: String? = null,
+    val characterPreviewTargetOffsetPx: Offset? = null,
 )
 
 @Composable
@@ -445,6 +483,7 @@ private fun WaitingRoomOverlays(
     if (overlayState.coinAnimCharacter != null) {
         CharacterCoinAnimation(
             characterDef = overlayState.coinAnimCharacter,
+            targetOffsetPx = overlayState.characterPreviewTargetOffsetPx,
             onComplete = onCoinComplete,
         )
     }
@@ -473,7 +512,7 @@ private fun PlayerRow(player: WaitingRoomPlayerUi) {
                 .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlayerAvatar(characterId = player.characterId)
+        PlayerAvatar(characterId = player.characterId, color = player.color)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = player.displayName.uppercase(),
@@ -738,18 +777,21 @@ private fun CharacterPickerOverlay(
     }
 }
 
-// Target X offset: screen center minus right-column center (screenWidth/2 - 84dp = 36dp padding + 48dp half-circle).
-// Target Y offset: circle sits ~32dp above screen center due to button below it in the column.
 @Composable
 private fun CharacterCoinAnimation(
     characterDef: CharacterDef,
+    targetOffsetPx: Offset?,
     onComplete: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-        val dXPx = screenWidthPx / 2f - with(density) { 84.dp.toPx() }
-        val dYPx = with(density) { (-32).dp.toPx() }
+        val targetOffset =
+            targetOffsetPx
+                ?: Offset(
+                    x = screenWidthPx / 2f - with(density) { 84.dp.toPx() },
+                    y = with(density) { (-32).dp.toPx() },
+                )
 
         val overlayAlpha = remember { Animatable(1f) }
         val coinScale = remember { Animatable(0.25f) }
@@ -764,11 +806,21 @@ private fun CharacterCoinAnimation(
             launch { coinRotation.animateTo(360f, tween(440)) }
             delay(430)
 
-            launch { coinScale.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
-            launch { coinRotation.animateTo(900f, tween(520)) }
-            launch { coinOffsetX.animateTo(dXPx, tween(520, easing = FastOutSlowInEasing)) }
-            launch { coinOffsetY.animateTo(dYPx, tween(520, easing = FastOutSlowInEasing)) }
-            delay(320)
+            launch { coinScale.animateTo(0.9f, tween(520, easing = FastOutSlowInEasing)) }
+            launch { coinRotation.animateTo(720f, tween(520)) }
+            launch {
+                coinOffsetX.animateTo(
+                    targetOffset.x,
+                    tween(520, easing = FastOutSlowInEasing),
+                )
+            }
+            launch {
+                coinOffsetY.animateTo(
+                    targetOffset.y,
+                    tween(520, easing = FastOutSlowInEasing),
+                )
+            }
+            delay(520)
             launch { coinAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing)) }
             delay(240)
 
@@ -798,7 +850,6 @@ private fun CharacterCoinAnimation(
                     ),
             contentAlignment = Alignment.Center,
         ) {
-            GoldenGlowRing(size = 96.dp)
             Image(
                 painter = painterResource(id = characterDef.drawableRes),
                 contentDescription = characterDef.displayName,
@@ -806,8 +857,7 @@ private fun CharacterCoinAnimation(
                 modifier =
                     Modifier
                         .size(72.dp)
-                        .clip(CircleShape)
-                        .border(3.dp, PulverfassColors.GoldBright, CircleShape),
+                        .clip(CircleShape),
             )
         }
     }

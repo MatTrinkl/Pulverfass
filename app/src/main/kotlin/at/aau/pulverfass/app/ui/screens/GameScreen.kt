@@ -3,7 +3,11 @@ package at.aau.pulverfass.app.ui.screens
 import android.media.MediaPlayer
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -123,6 +127,7 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
+private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -300,6 +305,13 @@ private data class AttackPanelHostActions(
     val onAttack: () -> Unit,
 )
 
+internal data class AttackResolutionOverlayState(
+    val attackerName: String,
+    val fromRegionId: String,
+    val toRegionId: String,
+    val troopCount: Int,
+)
+
 private data class FortifyPanelState(
     val fortifyState: FortifyUiState,
     val fromRegionId: String,
@@ -378,6 +390,7 @@ internal fun GameScreenContent(
 
     val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
     val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
+    val isAttackRequestPending = LobbyCommandKey.ATTACK in pendingCommandKeys
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
     val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
@@ -388,6 +401,15 @@ internal fun GameScreenContent(
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
     val attackPanelSelection = visibleAttackSelection(uiState, canManageAttacks)
+    val attackResolutionState =
+        createAttackResolutionOverlayState(
+            selection = attackPanelSelection,
+            uiState = uiState,
+            players = players,
+            fallbackPlayerName = personalPlayer.name,
+            isAttackRequestPending = isAttackRequestPending,
+        )
+    val isActionResolutionPending = attackResolutionState != null
     val fortifyPanelSelection = visibleFortifySelection(uiState, canManageFortify)
     val canEndCurrentPhase =
         canEndCurrentPhase(
@@ -414,6 +436,7 @@ internal fun GameScreenContent(
 
     val desyncedText = stringResource(id = R.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
+    val showDisconnectOverlay = rememberDelayedDisconnectFeedback(isDisconnectState)
     val disconnectMessage = buildDisconnectMessage(isConnected, uiState, desyncedText)
 
     var showOptionsOverlay by remember { mutableStateOf(false) }
@@ -427,10 +450,10 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        // Game content group — blurred when disconnected so the sharp overlay reads clearly
+        // Game content group — blurred when the delayed disconnect feedback becomes visible.
         Box(
             modifier =
-                if (isDisconnectState) {
+                if (showDisconnectOverlay) {
                     Modifier.fillMaxSize().blur(20.dp)
                 } else {
                     Modifier.fillMaxSize()
@@ -446,7 +469,7 @@ internal fun GameScreenContent(
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
                  * handeln darf und der Client synchron verbunden ist.
                  */
-                    if (canUseGameActions) {
+                    if (canUseGameActions && !isActionResolutionPending) {
                         onRegionSelected(region.id)
                     }
                 },
@@ -582,7 +605,8 @@ internal fun GameScreenContent(
                         canUseLocalInput =
                             isConnected &&
                                 !uiState.isCatchingUp &&
-                                !uiState.isDesynced,
+                                !uiState.isDesynced &&
+                                !isActionResolutionPending,
                         canEndPhase = canEndCurrentPhase,
                         cardsVisible = uiState.cardsVisible,
                     ),
@@ -633,6 +657,8 @@ internal fun GameScreenContent(
                 onClose = { showOptionsOverlay = false },
             )
 
+            AttackResolutionOverlay(state = attackResolutionState)
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
@@ -642,7 +668,7 @@ internal fun GameScreenContent(
             )
         } // end blurred game content group
 
-        if (isDisconnectState) {
+        if (showDisconnectOverlay) {
             DisconnectOverlay(
                 message = disconnectMessage,
                 onReconnect = onReconnect,
@@ -945,6 +971,19 @@ private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
 }
 
 @Composable
+private fun rememberDelayedDisconnectFeedback(isDisconnectState: Boolean): Boolean {
+    var showDisconnectFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(isDisconnectState) {
+        showDisconnectFeedback = false
+        if (isDisconnectState) {
+            delay(DISCONNECT_FEEDBACK_DELAY_MILLIS)
+            showDisconnectFeedback = true
+        }
+    }
+    return showDisconnectFeedback
+}
+
+@Composable
 private fun CatchUpProgressOverlay(
     isCatchingUp: Boolean,
     showFeedback: Boolean,
@@ -952,6 +991,98 @@ private fun CatchUpProgressOverlay(
 ) {
     if (isCatchingUp && showFeedback) {
         SyncProgressOverlay(modifier = modifier)
+    }
+}
+
+@Composable
+private fun BoxScope.AttackResolutionOverlay(state: AttackResolutionOverlayState?) {
+    if (state == null) {
+        return
+    }
+
+    val inputBlocker =
+        Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                }
+            }
+        }
+    val pulseTransition = rememberInfiniteTransition(label = "attack_resolution_pulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(520, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "attack_resolution_pulse_alpha",
+    )
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(inputBlocker)
+                .background(Color.Black.copy(alpha = 0.18f))
+                .testTag("attack_resolution_overlay"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 460.dp),
+            shape = RoundedCornerShape(6.dp),
+            color = HudSurfaceColor,
+            contentColor = HudContentColor,
+            border = BorderStroke(1.dp, HudBorderColor),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(16.dp)
+                            .background(
+                                PulverfassColors.DangerBright.copy(alpha = pulseAlpha),
+                                CircleShape,
+                            ),
+                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.game_attack_resolving_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = HudContentColor,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.game_attack_resolving_route,
+                                state.attackerName,
+                                state.fromRegionId,
+                                state.toRegionId,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HudContentColor,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.game_attack_resolving_troops,
+                                state.troopCount,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HudContentColor,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1197,6 +1328,29 @@ private fun visibleAttackSelection(
     val fromRegionId = uiState.selectionFromRegionId ?: return null
     val toRegionId = uiState.selectionToRegionId ?: return null
     return fromRegionId to toRegionId
+}
+
+internal fun createAttackResolutionOverlayState(
+    selection: Pair<String, String>?,
+    uiState: GameUiState,
+    players: List<GamePlayerUi>,
+    fallbackPlayerName: String,
+    isAttackRequestPending: Boolean,
+): AttackResolutionOverlayState? {
+    if (!isAttackRequestPending) {
+        return null
+    }
+    val (fromRegionId, toRegionId) = selection ?: return null
+    val attackerName =
+        players.firstOrNull { it.playerId == uiState.activePlayerId }?.name
+            ?: fallbackPlayerName
+
+    return AttackResolutionOverlayState(
+        attackerName = attackerName,
+        fromRegionId = fromRegionId,
+        toRegionId = toRegionId,
+        troopCount = uiState.attackState.attackTroops,
+    )
 }
 
 /**
@@ -1628,7 +1782,7 @@ private fun PlayerAvatar(
     Surface(
         modifier = Modifier.size(size),
         shape = CircleShape,
-        color = HudSurfaceColor,
+        color = player.color.copy(alpha = 0.18f),
         border = BorderStroke(2.dp, player.color),
         shadowElevation = 0.dp,
     ) {
