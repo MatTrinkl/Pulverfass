@@ -147,6 +147,7 @@ class LobbyController(
      */
     private val playersById = linkedMapOf<Long, LobbyPlayerUi>()
     private val commandDispatcher = LobbyCommandDispatcher(network::sendPayload)
+    private var clearCheatErrorJob: Job? = null
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
@@ -1486,7 +1487,7 @@ class LobbyController(
             }
             is ClaimCheatReinforcementBonusErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
-                updateGameError(GameErrorTextMapper.map(payload))
+                updateTemporaryCheatError(GameErrorTextMapper.map(payload))
                 true
             }
             is PlaceReinforcementsErrorResponse -> {
@@ -1632,6 +1633,23 @@ class LobbyController(
                     ),
             )
         }
+    }
+
+    // Cheat-Fehlermeldungen sollen nur 3 Sekunden sichtbar bleiben.
+    private fun updateTemporaryCheatError(reason: String) {
+        updateGameError(reason)
+        clearCheatErrorJob?.cancel()
+        clearCheatErrorJob =
+            scope.launch {
+                delay(3_000)
+                _state.update { current ->
+                    if (current.errorText == reason) {
+                        current.copy(errorText = null)
+                    } else {
+                        current
+                    }
+                }
+            }
     }
 
     private fun executePendingLobbyActionIfAny() {
