@@ -59,6 +59,11 @@ internal object GameStartPreparation {
         require(territoryIds.isNotEmpty()) {
             "Spielstart benötigt mindestens ein Territorium in der Map."
         }
+        require(territoryIds.size * MIN_TROOPS_PER_TERRITORY <= TOTAL_INITIAL_TROOPS) {
+            "Map kann nicht vorbereitet werden: ${territoryIds.size} Territorien benötigen mindestens " +
+                "${territoryIds.size * MIN_TROOPS_PER_TERRITORY} Starttruppen, aber es stehen nur " +
+                "$TOTAL_INITIAL_TROOPS zur Verfügung."
+        }
         require(territoryIds.size * MAX_TROOPS_PER_TERRITORY >= TOTAL_INITIAL_TROOPS) {
             "Map kann nicht vorbereitet werden: ${territoryIds.size} Territorien reichen " +
                 "mit maximal $MAX_TROOPS_PER_TERRITORY Truppen pro Territorium nicht für " +
