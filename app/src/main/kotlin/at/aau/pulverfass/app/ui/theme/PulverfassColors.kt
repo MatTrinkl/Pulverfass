@@ -38,6 +38,7 @@ object PulverfassColors {
     val GoldBright = Color(0xFFE8C268)
     val Gold = Color(0xFFD4B45A)
     val GoldMuted = Color(0xFFC4A14B)
+    val GoldCoin = Color(0xFFD4A843)
     val GoldDark = Color(0xFF8B6F2A)
 
     // ============================================

@@ -116,6 +116,14 @@ class MainActivity : AppCompatActivity() {
                     val route = currentBackStackEntry?.destination?.route
                     when {
                         route == Screen.MainMenu.route ||
+                            route == Screen.LoadGame.route ->
+                            musicManager.play(R.raw.mainmusic)
+                        route == Screen.Lobby.route ->
+                            musicManager.play(R.raw.lobbyneu)
+                        route?.startsWith(Screen.WaitingRoom.route) == true ->
+                            musicManager.play(R.raw.lobbywaiting)
+                        route == Screen.Options.route ->
+                            musicManager.play(R.raw.settings)
                             route == Screen.Lobby.route ||
                             route == Screen.LoadGame.route ||
                             route?.startsWith(Screen.WaitingRoom.route) == true ->
@@ -124,7 +132,7 @@ class MainActivity : AppCompatActivity() {
                             musicManager.play(R.raw.settings)
 
                         route == Screen.Game.route ->
-                            musicManager.stop()
+                            musicManager.play(R.raw.maingame, loop = true)
                     }
                 }
 
@@ -210,7 +218,24 @@ class MainActivity : AppCompatActivity() {
                                 )
                             }
                             composable(Screen.Game.route) {
-                                GameScreen(controller = lobbyController)
+                                GameScreen(
+                                    controller = lobbyController,
+                                    musicManager = musicManager,
+                                    onNavigateToMain = {
+                                        navController.navigate(Screen.MainMenu.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    },
+                                )
+                            }
+                            composable(Screen.Options.route) {
+                                val optionsState by lobbyController.state.collectAsState()
+                                OptionsScreen(
+                                    navController = navController,
+                                    playerName = optionsState.playerName,
+                                    onPlayerNameChange = lobbyController::updatePlayerName,
+                                    musicManager = musicManager,
+                                )
                             }
                             composable(Screen.Options.route) {
                                 val optionsState by lobbyController.state.collectAsState()

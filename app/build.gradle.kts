@@ -113,6 +113,8 @@ val jacocoCoverageExclusions =
         "**/Manifest*.*",
         "**/*Test*.*",
         "android/**/*.*",
+        "**/ui/**",
+        "**/MainActivity*",
     )
 
 val unitTestTaskName = "testDebugUnitTest"

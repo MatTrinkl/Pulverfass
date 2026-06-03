@@ -50,8 +50,8 @@ class MainMenuScreenTest {
         }
         // composeTestRule.onNodeWithText("PULVERFASS").assertExists()
         composeTestRule.onNodeWithText("START").assertIsDisplayed()
-        composeTestRule.onNodeWithText("OPTIONS").assertIsDisplayed()
-        composeTestRule.onNodeWithText("EXIT").assertIsDisplayed()
+        composeTestRule.onNodeWithText("OPTIONEN").assertIsDisplayed()
+        composeTestRule.onNodeWithText("BEENDEN").assertIsDisplayed()
     }
 
     @Test
