@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
+import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
@@ -206,6 +207,81 @@ class ClaimCheatReinforcementBonusIntegrationTest {
 
             assertEquals(ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH, error.code)
             assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+        }
+
+    @Test
+    fun `request is rejected when requester does not match payload player`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CHS4")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingClaim(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ClaimCheatReinforcementBonusRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                        ),
+                )
+
+            assertEquals(ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+            assertTrue(playerOne !in snapshot.usedCheatReinforcementBonusByPlayer)
+        }
+
+    @Test
+    fun `request is rejected while game is paused`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CHS5")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                ).let { state ->
+                    state.copy(
+                        turnState =
+                            state.turnState?.copy(
+                                isPaused = true,
+                                pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                                pausedPlayerId = playerOne,
+                            ),
+                    )
+                }
+
+            val (error, snapshot) =
+                exerciseFailingClaim(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ClaimCheatReinforcementBonusRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+            assertTrue(playerOne !in snapshot.usedCheatReinforcementBonusByPlayer)
         }
 
     private suspend fun ApplicationTestBuilder.exerciseFailingClaim(

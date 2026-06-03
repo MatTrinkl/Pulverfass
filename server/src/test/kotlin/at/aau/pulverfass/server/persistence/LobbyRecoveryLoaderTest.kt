@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -460,6 +461,17 @@ class LobbyRecoveryLoaderTest {
                 {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"REINFORCEMENTS","turnCount":4,
                 "startPlayerId":1,"isPaused":true,"pauseReason":"WAITING_FOR_PLAYER","pausedPlayerId":6}
                 """.trimIndent().replace("\n", ""),
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            CheatReinforcementBonusUsedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(5),
+            ),
+            record(
+                "cheat_reinforcement_bonus_used",
+                """{"lobbyCode":"LR11","playerId":5}""",
                 createdAt,
             ).toLobbyEvent(),
         )
