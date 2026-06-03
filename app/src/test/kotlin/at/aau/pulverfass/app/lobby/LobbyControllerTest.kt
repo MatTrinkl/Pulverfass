@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -40,6 +41,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -625,6 +627,15 @@ class LobbyControllerTest {
                                     ),
                                 ),
                             )
+                        is ClaimCheatReinforcementBonusRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        ClaimCheatReinforcementBonusResponse(lobbyCode),
+                                    ),
+                                ),
+                            )
                         is PlaceReinforcementsRequest -> {
                             placeAttempts += 1
                             if (placeAttempts == 1) {
@@ -732,6 +743,7 @@ class LobbyControllerTest {
                         }
                     }
                 }
+
             val controller = createController()
             try {
                 controller.updateServerUrl(server.url)
@@ -741,6 +753,19 @@ class LobbyControllerTest {
 
                 waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 2 }
                 waitUntil { controller.state.value.gameState.privateHandCards.size == 3 }
+
+                controller.claimCheatReinforcementBonus()
+                waitUntil { seenPayloads.any { it is ClaimCheatReinforcementBonusRequest } }
+
+                val cheatRequest =
+                    seenPayloads.filterIsInstance<ClaimCheatReinforcementBonusRequest>().single()
+                assertEquals(lobbyCode, cheatRequest.lobbyCode)
+                assertEquals(playerId, cheatRequest.playerId)
+                waitUntil {
+                    !controller.state.value.pendingCommandKeys.contains(
+                        LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS,
+                    )
+                }
 
                 controller.placeReinforcements()
                 assertEquals(
