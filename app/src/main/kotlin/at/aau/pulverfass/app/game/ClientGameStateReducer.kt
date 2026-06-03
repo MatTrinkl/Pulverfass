@@ -206,9 +206,6 @@ object ClientGameStateReducer {
         current: GameUiState,
         response: TurnStateGetResponse,
     ): GameUiState {
-        val shouldClearFortifySelection =
-            response.turnPhase == TurnPhase.FORTIFY && response.fortifyUsedThisTurn
-
         return current.copy(
             activePlayerId = response.activePlayerId,
             turnPhase = response.turnPhase,
@@ -223,8 +220,12 @@ object ClientGameStateReducer {
             selectedTradeInCardIds = current.selectedTradeInCardsFor(response.turnPhase),
             isCatchingUp = false,
             lastSyncError = null,
-        ).clearSelectionIf(shouldClearFortifySelection)
+        ).clearSelectionIf(current.shouldClearSelectionAfter(response))
     }
+
+    private fun GameUiState.shouldClearSelectionAfter(response: TurnStateGetResponse): Boolean =
+        response.turnPhase != turnPhase ||
+            (response.turnPhase == TurnPhase.FORTIFY && response.fortifyUsedThisTurn)
 
     private fun GameUiState.reinforcementStateFor(turnPhase: TurnPhase): ReinforcementUiState =
         if (turnPhase == TurnPhase.REINFORCEMENTS) {

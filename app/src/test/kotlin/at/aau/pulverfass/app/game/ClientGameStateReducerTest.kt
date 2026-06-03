@@ -1046,6 +1046,25 @@ class ClientGameStateReducerTest {
                         pausedPlayerId = aliceId,
                     ),
             )
+        val turnPhaseRefresh =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current =
+                    GameUiState(
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                        selectionMessage = "Zielgebiet ausgewählt.",
+                    ),
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 3,
+                        startPlayerId = aliceId,
+                    ),
+            )
         val private =
             ClientGameStateReducer.applyPrivateGetResponse(
                 current = GameUiState(lastSyncError = "old"),
@@ -1065,6 +1084,10 @@ class ClientGameStateReducerTest {
         assertEquals(bobId, phase.activePlayerId)
         assertEquals(TurnPhase.DRAW_CARD, turn.turnPhase)
         assertTrue(turn.isPaused)
+        assertEquals(null, turnPhaseRefresh.selectedRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionFromRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionToRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionMessage)
         assertEquals(listOf("card-a"), private.handCards)
         assertEquals(listOf("objective-a"), private.secretObjectives)
         assertEquals(null, private.lastSyncError)
