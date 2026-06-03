@@ -35,6 +35,4 @@ data class LobbyUiState(
     val playerColor: Color? = null,
     val characterId: String? = null,
     val characterSelectError: String? = null,
-    val onlinePlayerCount: Int? = null,
-    val globalPlayerCount: Int? = null,
 )

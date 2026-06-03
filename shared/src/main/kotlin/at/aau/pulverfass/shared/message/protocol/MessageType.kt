@@ -124,20 +124,14 @@ enum class MessageType(val id: Int) {
     /** Broadcast, dass ein Spieler einen Charakter gewählt hat. */
     LOBBY_CHARACTER_SELECTED_BROADCAST(84),
 
-    /** Broadcast, pushed when server-side player count changes in a lobby. */
-    LOBBY_PLAYER_COUNT_UPDATE_BROADCAST(79),
-
-    /** Broadcast, pushed to all connections when the global connected-client count changes. */
-    GLOBAL_PLAYER_COUNT_BROADCAST(80),
-
     /** Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(81),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(85),
 
     /** Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(82),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(86),
 
     /** Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
-    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(83),
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(87),
 
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),

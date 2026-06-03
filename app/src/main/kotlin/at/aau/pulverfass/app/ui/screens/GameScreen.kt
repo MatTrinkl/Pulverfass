@@ -489,30 +489,6 @@ internal fun GameScreenContent(
             onTriggered = onClaimCheatReinforcementBonus,
         )
 
-        CardsSidebar(
-            state =
-                privateHandPanelState(
-                    player = personalPlayer,
-                    uiState = uiState,
-                    localPlayerId = localPlayerId,
-                    isConnected = isConnected,
-                    isReinforcementCommandPending = isReinforcementCommandPending,
-                    pendingCommandKeys = pendingCommandKeys,
-                ),
-            actions =
-                PrivateHandPanelActions(
-                    onToggleTradeInCard = onToggleTradeInCard,
-                    onTradeInCards = onTradeInCards,
-                ),
-            isVisible = uiState.cardsVisible,
-            modifier =
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                    .requiredWidth(CardsSidebarWidth)
-                    .fillMaxHeight(),
-        )
-
             PlayerSidebar(
                 players = players,
                 activePlayerId = uiState.activePlayerId,

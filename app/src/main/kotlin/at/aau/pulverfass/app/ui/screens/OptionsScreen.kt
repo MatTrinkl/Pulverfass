@@ -79,7 +79,6 @@ fun OptionsScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 48.dp, vertical = 48.dp),
-                    .padding(horizontal = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -98,7 +97,6 @@ fun OptionsScreen(
             MainInputField(
                 value = playerName,
                 onValueChange = { if (it.length <= 20) onPlayerNameChange(it) },
-                onValueChange = onPlayerNameChange,
                 placeholder = "SPIELERNAME",
                 modifier = Modifier.fillMaxWidth(0.5f),
             )

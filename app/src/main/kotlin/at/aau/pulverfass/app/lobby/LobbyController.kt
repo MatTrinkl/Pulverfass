@@ -137,14 +137,6 @@ class LobbyController(
                     playerColor = savedCharacterColor,
                 )
             },
-            LobbyUiState(
-                serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
-                playerName = playerNameStore.readPlayerName().orEmpty(),
-                statusText = config.statusNotConnected,
-                sessionToken = reconnectSessionStore.readSessionToken(),
-                gameStarted = wasGameStartedOnLastAppRun,
-                gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
-            ),
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
@@ -1398,12 +1390,6 @@ class LobbyController(
                         existing.copy(characterId = payload.characterId)
                     publishPlayers()
                 }
-            }
-            is PlayerCountUpdateEvent -> {
-                _state.update { it.copy(onlinePlayerCount = payload.playerCount) }
-            }
-            is GlobalPlayerCountEvent -> {
-                _state.update { it.copy(globalPlayerCount = payload.playerCount) }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)

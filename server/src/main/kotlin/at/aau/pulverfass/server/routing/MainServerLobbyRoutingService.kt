@@ -23,6 +23,7 @@ import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
@@ -55,6 +56,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
 import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest

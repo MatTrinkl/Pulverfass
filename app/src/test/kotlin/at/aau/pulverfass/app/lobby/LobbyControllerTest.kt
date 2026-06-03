@@ -2,7 +2,6 @@ package at.aau.pulverfass.app.lobby
 
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.storage.PlayerNameStore
-import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -1849,12 +1848,14 @@ class LobbyControllerTest {
     private fun createController(
         config: LobbyControllerConfig = LobbyControllerConfig(),
         sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
+        playerNameStore: PlayerNameStore = InMemoryPlayerNameStore(),
     ): LobbyController {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         return LobbyController(
             scope = scope,
             config = config,
             reconnectSessionStore = sessionStore,
+            playerNameStore = playerNameStore,
         )
     }
 
@@ -2003,16 +2004,6 @@ class LobbyControllerTest {
 
         override fun saveCharacterId(characterId: String) {
             this.characterId = characterId
-        }
-    }
-
-    private class InMemoryPlayerNameStore(
-        private var playerName: String? = null,
-    ) : PlayerNameStore {
-        override fun readPlayerName(): String? = playerName
-
-        override fun savePlayerName(playerName: String) {
-            this.playerName = playerName
         }
     }
 }

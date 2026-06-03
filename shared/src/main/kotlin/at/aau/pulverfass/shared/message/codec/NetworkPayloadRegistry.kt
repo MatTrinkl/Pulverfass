@@ -104,7 +104,6 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_CHARACTER_SELECT_ERROR_RESPONSE,
             CharacterSelectedBroadcast::class.java to
                 MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST,
-            GlobalPlayerCountEvent::class.java to MessageType.GLOBAL_PLAYER_COUNT_BROADCAST,
             ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
             ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
             AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
@@ -223,7 +222,6 @@ internal object NetworkPayloadRegistry {
                 encodeWith(CharacterSelectErrorResponse.serializer()),
             CharacterSelectedBroadcast::class.java to
                 encodeWith(CharacterSelectedBroadcast.serializer()),
-            GlobalPlayerCountEvent::class.java to encodeWith(GlobalPlayerCountEvent.serializer()),
             ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
             ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
             AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
@@ -350,8 +348,6 @@ internal object NetworkPayloadRegistry {
                 decodeWith(CharacterSelectErrorResponse.serializer()),
             MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST to
                 decodeWith(CharacterSelectedBroadcast.serializer()),
-            MessageType.GLOBAL_PLAYER_COUNT_BROADCAST to
-                decodeWith(GlobalPlayerCountEvent.serializer()),
             MessageType.CONNECTION_RECONNECT_REQUEST to
                 decodeWith(ReconnectRequest.serializer()),
             MessageType.CONNECTION_RECONNECT_RESPONSE to
