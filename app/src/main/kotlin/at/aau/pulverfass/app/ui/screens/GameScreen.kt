@@ -475,7 +475,6 @@ internal fun GameScreenContent(
                         .padding(top = TopBarHeight, bottom = BottomBarHeight)
                         .requiredWidth(CardsSidebarWidth)
                         .fillMaxHeight(),
-                musicManager = musicManager,
             )
             CatchUpProgressOverlay(
                 isCatchingUp = uiState.isCatchingUp,
@@ -1398,7 +1397,6 @@ private fun CardsSidebar(
     actions: PrivateHandPanelActions,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
-    musicManager: BackgroundMusicManager? = null,
 ) {
     if (isVisible) {
         Surface(
