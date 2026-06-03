@@ -62,7 +62,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -898,7 +897,6 @@ private fun LightSensorCheatTrigger(
     onTriggered: () -> Unit,
 ) {
     val context = LocalContext.current
-    val currentOnTriggered by rememberUpdatedState(onTriggered)
     var previousLux by remember { mutableStateOf<Float?>(null) }
 
     DisposableEffect(context, enabled) {
@@ -926,7 +924,7 @@ private fun LightSensorCheatTrigger(
 
                     if (wasBright && isCovered && !triggered) {
                         triggered = true
-                        currentOnTriggered()
+                        onTriggered()
                     }
 
                     previousLux = lux
