@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.shared.ids.PlayerId
 
@@ -31,4 +32,7 @@ data class LobbyUiState(
     val pendingCommandKeys: Set<LobbyCommandKey> = emptySet(),
     val onlinePlayerCount: Int? = null,
     val globalPlayerCount: Int? = null,
+    val playerColor: Color? = null,
+    val characterId: String? = null,
+    val characterSelectError: String? = null,
 )

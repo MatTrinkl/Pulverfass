@@ -25,6 +25,7 @@ enum class LobbyCommandKey {
     ATTACK,
     CONFIRM_ATTACK_DONE,
     FORTIFY_MOVE,
+    CHARACTER_SELECT,
 }
 
 /**

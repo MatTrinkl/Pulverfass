@@ -10,6 +10,7 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.lang.reflect.InvocationTargetException
 
@@ -41,6 +42,26 @@ class JoinLobbyRequestTest {
 
         assertEquals("""{"lobbyCode":"EF56","playerDisplayName":"Carol"}""", serialized)
         assertEquals(request, deserialized)
+    }
+
+    @Test
+    fun `should reject blank player display name`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                JoinLobbyRequest(LobbyCode("AB12"), "   ")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
+    }
+
+    @Test
+    fun `should reject player display name longer than 32 characters`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(33))
+            }
+
+        assertTrue(exception.message.orEmpty().contains("32"))
     }
 
     @Test

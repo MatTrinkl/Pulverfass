@@ -5,6 +5,9 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 
+/**
+ * Fachliche Fehlercodes für die Validierung eines Fortify-Zugs.
+ */
 enum class FortifyMoveValidationError {
     NOT_ACTIVE_PLAYER,
     WRONG_PHASE,
@@ -14,7 +17,16 @@ enum class FortifyMoveValidationError {
     FORTIFY_ALREADY_USED,
 }
 
+/**
+ * Prüft, ob ein Spieler in der aktuellen Spielsituation Truppen zwischen zwei eigenen
+ * Territorien verschieben darf.
+ */
 interface FortifyMoveValidator {
+    /**
+     * Validiert einen konkreten Fortify-Zug.
+     *
+     * @return `null`, wenn der Zug erlaubt ist, sonst der fachliche Ablehnungsgrund
+     */
     fun validateFortifyMove(
         state: GameState,
         playerId: PlayerId,
@@ -23,6 +35,9 @@ interface FortifyMoveValidator {
         troopCount: Int,
     ): FortifyMoveValidationError?
 
+    /**
+     * Ermittelt alle legal erreichbaren Zielterritorien für ein Ausgangsterritorium.
+     */
     fun validFortifyTargets(
         state: GameState,
         playerId: PlayerId,
@@ -30,6 +45,9 @@ interface FortifyMoveValidator {
     ): List<TerritoryId>
 }
 
+/**
+ * Standardimplementierung der Fortify-Regeln auf Basis des aktuellen [GameState].
+ */
 class DefaultFortifyMoveValidator : FortifyMoveValidator {
     override fun validateFortifyMove(
         state: GameState,

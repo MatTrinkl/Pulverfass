@@ -10,6 +10,8 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -22,7 +24,11 @@ class WebSocketServerTest {
 
         try {
             server.start(wait = false)
-            Thread.sleep(100)
+            runBlocking {
+                withTimeout(5_000) {
+                    server.resolvedConnectors()
+                }
+            }
         } finally {
             server.stop(1_000, 1_000)
         }

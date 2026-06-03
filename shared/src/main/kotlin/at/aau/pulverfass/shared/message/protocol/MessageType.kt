@@ -112,6 +112,18 @@ enum class MessageType(val id: Int) {
     /** Broadcast, pushed to all connections when the global connected-client count changes. */
     GLOBAL_PLAYER_COUNT_BROADCAST(80),
 
+    /** Anfrage zur serverseitigen Charakterwahl in einer Lobby. */
+    LOBBY_CHARACTER_SELECT_REQUEST(81),
+
+    /** Erfolgsantwort auf eine Charakterwahl-Anfrage. */
+    LOBBY_CHARACTER_SELECT_RESPONSE(82),
+
+    /** Fehlantwort auf eine Charakterwahl-Anfrage (Charakter bereits vergeben). */
+    LOBBY_CHARACTER_SELECT_ERROR_RESPONSE(83),
+
+    /** Broadcast, dass ein Spieler einen Charakter gewählt hat. */
+    LOBBY_CHARACTER_SELECTED_BROADCAST(84),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

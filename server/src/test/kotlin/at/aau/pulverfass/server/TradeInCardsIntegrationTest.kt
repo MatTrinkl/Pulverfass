@@ -212,6 +212,197 @@ class TradeInCardsIntegrationTest {
         }
 
     @Test
+    fun `trade in keeps success response when private hand update exceeds payload limit`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    privateStatePayloadMaxBytes = 128,
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("TRI9")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val tradeCards =
+                listOf(
+                    CardState(CardId("card-a"), CardType.A),
+                    CardState(CardId("card-b"), CardType.B),
+                    CardState(CardId("card-j"), CardType.JOKER),
+                )
+            val remainingCards =
+                (1..16).map { index ->
+                    CardState(CardId("card-extra-$index"), CardType.C)
+                }
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    reinforcementTradeGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        pendingPlayerId = playerOne,
+                        pendingAmount = 3,
+                        handState =
+                            HandState(
+                                cardsByPlayer =
+                                    mapOf(
+                                        playerOne to tradeCards + remainingCards,
+                                    ),
+                            ),
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val actorSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val watcherSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    actorSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TradeInCardsRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        cardIds = tradeCards.map { it.cardId },
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        amount = 2,
+                                        territoryBonus = 0,
+                                        continentBonus = 0,
+                                        cardBonus = 2,
+                                    ),
+                                ),
+                        ),
+                        receiveRelevantTestPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events =
+                                listOf(
+                                    PendingReinforcementsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        delta = 2,
+                                    ),
+                                ),
+                        ),
+                        receiveRelevantTestPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        TradeInCardsResponse(lobbyCode),
+                        receiveRelevantTestPayload(actorSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 1,
+                            toVersion = 1,
+                            events =
+                                listOf(
+                                    ReinforcementsGrantedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        amount = 2,
+                                        territoryBonus = 0,
+                                        continentBonus = 0,
+                                        cardBonus = 2,
+                                    ),
+                                ),
+                        ),
+                        receiveRelevantTestPayload(watcherSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 2,
+                            toVersion = 2,
+                            events =
+                                listOf(
+                                    PendingReinforcementsChangedEvent(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        delta = 2,
+                                    ),
+                                ),
+                        ),
+                        receiveRelevantTestPayload(watcherSession.first),
+                    )
+                    assertNull(receiveRelevantTestPayloadOrNull(actorSession.first))
+                    assertNull(receiveRelevantTestPayloadOrNull(watcherSession.first))
+
+                    val updatedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("state missing")
+                    assertEquals(16, updatedState.handOf(playerOne).size)
+
+                    actorSession.first.close()
+                    watcherSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
     fun `invalid trade is rejected when set is not valid`() =
         testApplication {
             val playerOne = PlayerId(1)

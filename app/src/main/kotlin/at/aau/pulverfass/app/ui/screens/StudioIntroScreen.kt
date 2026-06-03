@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.ui.screens
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.components.VideoPlayer
@@ -39,6 +41,7 @@ private const val MAX_INTRO_DURATION_MS = 10_000L
 @Composable
 fun StudioIntroScreen(navController: NavController) {
     var hasNavigated by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     /*
      * navigateNext ist idempotent — egal wie oft sie aufgerufen wird
@@ -50,6 +53,14 @@ fun StudioIntroScreen(navController: NavController) {
             navController.navigate(Screen.Load.route) {
                 popUpTo(Screen.StudioIntro.route) { inclusive = true }
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            val mp = MediaPlayer.create(context, R.raw.gamestudio)
+            mp?.start()
+        } catch (_: Exception) {
         }
     }
 

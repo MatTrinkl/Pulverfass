@@ -20,6 +20,7 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
@@ -502,7 +503,11 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     }
 
     private suspend fun discardConnectionHandshake(session: DefaultClientWebSocketSession) {
-        assertTrue(receiveRawTestPayload(session) is ConnectionResponse)
+        repeat(20) {
+            val payload = receiveRawTestPayload(session)
+            if (payload is ConnectionResponse) return
+        }
+        error("Expected ConnectionResponse within 20 messages.")
     }
 
     private suspend fun receiveRelevantTestPayload(session: DefaultClientWebSocketSession): Any {
@@ -514,7 +519,8 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                 payload !is GameStateSnapshotBroadcast &&
                 payload !is TurnStateUpdatedEvent &&
                 payload !is PlayerCountUpdateEvent &&
-                payload !is GlobalPlayerCountEvent
+                payload !is GlobalPlayerCountEvent &&
+                payload !is PlayerConnectionLostEvent
             ) {
                 return payload
             }

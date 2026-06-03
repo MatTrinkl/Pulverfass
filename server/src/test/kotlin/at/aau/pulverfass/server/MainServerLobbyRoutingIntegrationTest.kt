@@ -176,6 +176,79 @@ class MainServerLobbyRoutingIntegrationTest {
         }
 
     @Test
+    fun `map get request returns payload too large error when configured limit is exceeded`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    publicStatePayloadMaxBytes = 128,
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("MP13")
+            val playerId = PlayerId(1)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState = createMappedGameState(lobbyCode, playerId),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val sessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerId,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    sessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(MapGetRequest(lobbyCode)),
+                        ),
+                    )
+
+                    val payload = receivePayload(sessionAndConnection.first)
+                    val error = assertIs<MapGetErrorResponse>(payload)
+
+                    assertEquals(MapGetErrorCode.PAYLOAD_TOO_LARGE, error.code)
+                    assertTrue(error.reason.contains("128 Bytes"))
+
+                    sessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
     fun `module with lobby runtime loads default map at startup and returns it via map get`() =
         testApplication {
             val network = ServerNetwork()

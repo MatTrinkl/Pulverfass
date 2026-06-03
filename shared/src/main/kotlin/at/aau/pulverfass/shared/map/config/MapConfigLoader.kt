@@ -1,8 +1,10 @@
 package at.aau.pulverfass.shared.map.config
 
+import at.aau.pulverfass.shared.text.decodeUtf8Strict
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.io.InputStream
+import java.nio.charset.CharacterCodingException
 
 /**
  * Lädt Map-Konfigurationen aus JSON-Strings oder Klassenpfad-Ressourcen.
@@ -34,7 +36,14 @@ object MapConfigLoader {
     }
 
     fun load(inputStream: InputStream): MapDefinition =
-        loadFromJson(inputStream.readBytes().decodeToString())
+        try {
+            loadFromJson(inputStream.readBytes().decodeUtf8Strict())
+        } catch (cause: CharacterCodingException) {
+            throw MapConfigLoadException(
+                "Map-Config konnte nicht als UTF-8 gelesen werden: ${cause.message}",
+                cause,
+            )
+        }
 
     fun loadFromJson(jsonString: String): MapDefinition {
         val rawConfig =

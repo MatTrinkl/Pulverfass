@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import org.slf4j.LoggerFactory
 
 /**
  * Zentraler Delivery-Layer für autoritative GameState-Payloads.
@@ -21,6 +22,8 @@ class GameStateDeliveryDispatcher(
     private val lobbyMembers: (LobbyCode) -> List<PlayerId>,
     private val connectionIdResolver: (PlayerId) -> ConnectionId?,
 ) {
+    private val logger = LoggerFactory.getLogger(GameStateDeliveryDispatcher::class.java)
+
     /**
      * Sendet eine öffentliche GameState-Payload gezielt an eine konkrete
      * Verbindung, ohne selbst Autorisierungslogik auszuführen.
@@ -44,7 +47,17 @@ class GameStateDeliveryDispatcher(
         payload: PublicGameStatePayload,
     ) {
         lobbyMemberConnections(lobbyCode).forEach { connectionId ->
-            sendPayload(connectionId, payload)
+            runCatching { sendPayload(connectionId, payload) }
+                .onFailure { cause ->
+                    logger.warn(
+                        "Best-effort public payload delivery failed " +
+                            "for lobby {} connection {} payload {}",
+                        lobbyCode.value,
+                        connectionId.value,
+                        payload::class.simpleName,
+                        cause,
+                    )
+                }
         }
     }
 
@@ -99,7 +112,18 @@ class GameStateDeliveryDispatcher(
         }
 
         val connectionId = connectionIdResolver(payload.recipientPlayerId) ?: return
-        sendPayload(connectionId, payload)
+        runCatching { sendPayload(connectionId, payload) }
+            .onFailure { cause ->
+                logger.warn(
+                    "Best-effort private payload delivery failed for lobby {} " +
+                        "recipient {} connection {} payload {}",
+                    lobbyCode.value,
+                    payload.recipientPlayerId.value,
+                    connectionId.value,
+                    payload::class.simpleName,
+                    cause,
+                )
+            }
     }
 
     private fun lobbyMemberConnections(lobbyCode: LobbyCode): List<ConnectionId> =

@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -23,6 +24,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -41,6 +43,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -59,6 +62,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -91,6 +95,12 @@ internal object NetworkPayloadRegistry {
         mapOf<Class<out NetworkMessagePayload>, MessageType>(
             ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
             GlobalPlayerCountEvent::class.java to MessageType.GLOBAL_PLAYER_COUNT_BROADCAST,
+            CharacterSelectRequest::class.java to MessageType.LOBBY_CHARACTER_SELECT_REQUEST,
+            CharacterSelectResponse::class.java to MessageType.LOBBY_CHARACTER_SELECT_RESPONSE,
+            CharacterSelectErrorResponse::class.java to
+                MessageType.LOBBY_CHARACTER_SELECT_ERROR_RESPONSE,
+            CharacterSelectedBroadcast::class.java to
+                MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST,
             ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
             ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
             AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
@@ -197,6 +207,12 @@ internal object NetworkPayloadRegistry {
         mapOf<Class<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
             ConnectionResponse::class.java to encodeWith(ConnectionResponse.serializer()),
             GlobalPlayerCountEvent::class.java to encodeWith(GlobalPlayerCountEvent.serializer()),
+            CharacterSelectRequest::class.java to encodeWith(CharacterSelectRequest.serializer()),
+            CharacterSelectResponse::class.java to encodeWith(CharacterSelectResponse.serializer()),
+            CharacterSelectErrorResponse::class.java to
+                encodeWith(CharacterSelectErrorResponse.serializer()),
+            CharacterSelectedBroadcast::class.java to
+                encodeWith(CharacterSelectedBroadcast.serializer()),
             ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
             ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
             AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
@@ -309,6 +325,14 @@ internal object NetworkPayloadRegistry {
             MessageType.CONNECTION_RESPONSE to decodeWith(ConnectionResponse.serializer()),
             MessageType.GLOBAL_PLAYER_COUNT_BROADCAST to
                 decodeWith(GlobalPlayerCountEvent.serializer()),
+            MessageType.LOBBY_CHARACTER_SELECT_REQUEST to
+                decodeWith(CharacterSelectRequest.serializer()),
+            MessageType.LOBBY_CHARACTER_SELECT_RESPONSE to
+                decodeWith(CharacterSelectResponse.serializer()),
+            MessageType.LOBBY_CHARACTER_SELECT_ERROR_RESPONSE to
+                decodeWith(CharacterSelectErrorResponse.serializer()),
+            MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST to
+                decodeWith(CharacterSelectedBroadcast.serializer()),
             MessageType.CONNECTION_RECONNECT_REQUEST to
                 decodeWith(ReconnectRequest.serializer()),
             MessageType.CONNECTION_RECONNECT_RESPONSE to

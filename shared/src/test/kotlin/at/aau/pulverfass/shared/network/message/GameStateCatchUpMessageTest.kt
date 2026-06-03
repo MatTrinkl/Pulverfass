@@ -95,8 +95,8 @@ class GameStateCatchUpMessageTest {
     fun `serializer roundtrip error response`() {
         val response =
             GameStateCatchUpErrorResponse(
-                code = GameStateCatchUpErrorCode.NOT_IN_GAME,
-                reason = "Spieler '7' ist nicht Teil von Lobby 'CU56'.",
+                code = GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE,
+                reason = "Catch-up-Snapshot fuer Lobby 'CU56' ist groesser als 128 Bytes.",
             )
 
         val serialized = json.encodeToString(GameStateCatchUpErrorResponse.serializer(), response)

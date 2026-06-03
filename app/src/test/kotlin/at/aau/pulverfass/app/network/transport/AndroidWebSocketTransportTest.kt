@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import java.net.ServerSocket
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -245,42 +244,30 @@ class AndroidWebSocketTransportTest {
             }
         },
     ): TestWebSocketServer {
-        repeat(5) { attempt ->
-            val port = findFreePort()
-            val receivedBinary = Channel<ByteArray>(Channel.UNLIMITED)
-            val closeReasons = Channel<CloseReason?>(Channel.UNLIMITED)
-            val server =
-                embeddedServer(Netty, port = port) {
-                    install(WebSockets)
-                    routing {
-                        webSocket("/ws") {
-                            sessionBlock(receivedBinary, closeReasons)
-                        }
+        val receivedBinary = Channel<ByteArray>(Channel.UNLIMITED)
+        val closeReasons = Channel<CloseReason?>(Channel.UNLIMITED)
+        val server =
+            embeddedServer(Netty, port = 0) {
+                install(WebSockets)
+                routing {
+                    webSocket("/ws") {
+                        sessionBlock(receivedBinary, closeReasons)
                     }
                 }
-
-            try {
-                server.start(wait = false)
-                return TestWebSocketServer(
-                    engine = server,
-                    url = "ws://127.0.0.1:$port/ws",
-                    receivedBinary = receivedBinary,
-                    closeReasons = closeReasons,
-                )
-            } catch (error: Exception) {
-                server.stop(0, 0)
-                if (attempt == 4) {
-                    throw error
-                }
             }
-        }
-        error("Unable to start test websocket server")
-    }
 
-    private fun findFreePort(): Int =
-        ServerSocket(0).use { socket ->
-            socket.localPort
-        }
+        server.start(wait = false)
+        val port =
+            runBlocking {
+                server.resolvedConnectors().single().port
+            }
+        return TestWebSocketServer(
+            engine = server,
+            url = "ws://127.0.0.1:$port/ws",
+            receivedBinary = receivedBinary,
+            closeReasons = closeReasons,
+        )
+    }
 
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,

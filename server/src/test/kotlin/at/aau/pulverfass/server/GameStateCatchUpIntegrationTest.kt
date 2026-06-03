@@ -210,6 +210,88 @@ class GameStateCatchUpIntegrationTest {
             }
         }
 
+    @Test
+    fun `catch up request returns payload too large error when configured limit is exceeded`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    publicStatePayloadMaxBytes = 128,
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("CU03")
+            val playerOne = PlayerId(1)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    GameState.initial(
+                        lobbyCode = lobbyCode,
+                        mapDefinition = defaultMapDefinition(),
+                        players = listOf(playerOne),
+                        playerDisplayNames = mapOf(playerOne to "One"),
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val session =
+                        connectSessionWithPlayer(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                        )
+
+                    session.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    GameStateCatchUpRequest(
+                                        lobbyCode = lobbyCode,
+                                        clientStateVersion = 0,
+                                        reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val response = receivePayload(session.first) as GameStateCatchUpErrorResponse
+                    assertEquals(GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE, response.code)
+                    assertEquals(true, response.reason.contains("128 Bytes"))
+
+                    session.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private suspend fun connectSessionWithPlayer(
         client: io.ktor.client.HttpClient,
         network: ServerNetwork,

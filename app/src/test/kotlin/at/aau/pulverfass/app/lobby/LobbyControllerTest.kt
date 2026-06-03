@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.storage.PlayerNameStore
 import at.aau.pulverfass.app.storage.ReconnectSessionStore
 import at.aau.pulverfass.shared.ids.CardId
@@ -16,6 +17,7 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -25,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -38,6 +41,7 @@ import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -56,6 +60,7 @@ import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
@@ -73,9 +78,12 @@ import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,8 +91,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import java.net.ServerSocket
-import java.util.Collections
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -110,6 +117,18 @@ class LobbyControllerTest {
             assertNull(state.sessionToken)
             assertNull(state.lastMessageType)
             assertTrue(state.playerNames.isEmpty())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updatePlayerColor stores the chosen color in state`() {
+        val controller = createController()
+        try {
+            val color = Color(0xFF6FD4C5)
+            controller.updatePlayerColor(color)
+            assertEquals(color, controller.state.value.playerColor)
         } finally {
             controller.close()
         }
@@ -280,7 +299,7 @@ class LobbyControllerTest {
     fun `start game should send backend request and trigger catch up after game started event`() {
         runBlocking {
             val lobbyCode = LobbyCode("S123")
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -436,7 +455,7 @@ class LobbyControllerTest {
     fun `refresh game state should request public turn and private snapshots`() {
         runBlocking {
             val lobbyCode = LobbyCode("R123")
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -498,7 +517,7 @@ class LobbyControllerTest {
             val playerId = PlayerId(1)
             val cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c"))
             val config = LobbyControllerConfig()
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             var placeAttempts = 0
             var tradeInAttempts = 0
             var confirmAttempts = 0
@@ -826,7 +845,7 @@ class LobbyControllerTest {
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val config = LobbyControllerConfig()
-            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             var attackAttempts = 0
             var confirmAttempts = 0
             val server =
@@ -1263,7 +1282,7 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("RC01")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174202")
             val replacementToken = SessionToken("123e4567-e89b-12d3-a456-426614174203")
-            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val reconnectPayloads = CopyOnWriteArrayList<Any>()
             val firstServer =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
@@ -1330,13 +1349,8 @@ class LobbyControllerTest {
                 controller.startGame()
                 waitUntil { controller.state.value.gameStarted }
 
-                val reconnectPort = firstServer.port
-                firstServer.close()
-                waitUntil { controller.state.value.isReconnecting }
-
                 val secondServer =
-                    startProtocolServerAt(
-                        port = reconnectPort,
+                    startProtocolServer(
                         onOpenPayload = ConnectionResponse(replacementToken),
                     ) { payload, outgoing ->
                         reconnectPayloads += payload
@@ -1357,6 +1371,9 @@ class LobbyControllerTest {
                                 )
                         }
                     }
+
+                controller.updateServerUrl(secondServer.url)
+                firstServer.disconnectClients("server restart")
 
                 try {
                     waitUntil {
@@ -1389,7 +1406,7 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("MR01")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
-            val payloads = Collections.synchronizedList(mutableListOf<Any>())
+            val payloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
@@ -1489,7 +1506,7 @@ class LobbyControllerTest {
         runBlocking {
             val lobbyCode = LobbyCode("PR35")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174210")
-            val reconnectPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val reconnectPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -1658,6 +1675,387 @@ class LobbyControllerTest {
         }
     }
 
+    @Test
+    fun `updateCharacter stores characterId and color in state`() {
+        val controller = createController()
+        try {
+            controller.updateCharacter("warrior")
+            assertEquals("warrior", controller.state.value.characterId)
+            assertEquals(Characters.byId("warrior")?.color, controller.state.value.playerColor)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updateCharacter persists characterId to playerNameStore`() {
+        val store = InMemoryPlayerNameStore()
+        val controller = createController(playerNameStore = store)
+        try {
+            controller.updateCharacter("ice")
+            assertEquals("ice", store.readCharacterId())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updateCharacter sets null color for unknown character id`() {
+        val controller = createController()
+        try {
+            controller.updateCharacter("nonexistent")
+            assertEquals("nonexistent", controller.state.value.characterId)
+            assertNull(controller.state.value.playerColor)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `selectCharacter returns early when activeLobbyCode is null`() {
+        val controller = createController()
+        try {
+            controller.selectCharacter("warrior")
+            assertNull(controller.state.value.characterId)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `character select response updates characterId in state`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC10")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174220"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(10),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        CharacterSelectResponse(
+                                            lobbyCode = lobbyCode,
+                                            characterId = "warrior",
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+                waitUntil { controller.state.value.characterId == "warrior" }
+                assertEquals("warrior", controller.state.value.characterId)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `character select error response sets error and clearCharacterSelectError clears it`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC20")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174221"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(11),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        CharacterSelectErrorResponse("Charakter ist vergeben"),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Bob")
+                controller.createLobby { }
+                waitUntil { controller.state.value.characterSelectError != null }
+                assertEquals("Charakter ist vergeben", controller.state.value.characterSelectError)
+                controller.clearCharacterSelectError()
+                assertNull(controller.state.value.characterSelectError)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `character selected broadcast updates existing player characterId`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC30")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174222"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(12),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        CharacterSelectedBroadcast(
+                                            lobbyCode = lobbyCode,
+                                            playerId = PlayerId(12),
+                                            characterId = "ice",
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Charlie")
+                controller.createLobby { }
+                waitUntil {
+                    controller.state.value.players.any {
+                        it.playerId == PlayerId(12) && it.characterId == "ice"
+                    }
+                }
+                val player = controller.state.value.players.first { it.playerId == PlayerId(12) }
+                assertEquals("ice", player.characterId)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `character selected broadcast is silently ignored for unknown player id`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC40")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174223"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(13),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        CharacterSelectedBroadcast(
+                                            lobbyCode = lobbyCode,
+                                            playerId = PlayerId(99),
+                                            characterId = "doctor",
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Dana")
+                controller.createLobby { }
+                waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
+                waitUntil { controller.state.value.players.isNotEmpty() }
+                val players = controller.state.value.players
+                assertTrue(players.none { it.playerId == PlayerId(99) })
+                assertTrue(players.all { it.characterId == null })
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `selectCharacter sends CharacterSelectRequest when lobby and player are set`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC50")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174224"),
+                        ),
+                ) { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(14),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Eve")
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId != null }
+                controller.selectCharacter("warrior")
+                waitUntil { seenPayloads.any { it is CharacterSelectRequest } }
+                val request = seenPayloads.filterIsInstance<CharacterSelectRequest>().first()
+                assertEquals("warrior", request.characterId)
+                assertEquals(lobbyCode, request.lobbyCode)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
     private fun createController(
         config: LobbyControllerConfig = LobbyControllerConfig(),
         sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
@@ -1682,15 +2080,17 @@ class LobbyControllerTest {
 
     private fun startProtocolServer(
         onOpenPayload: NetworkMessagePayload? = null,
-        onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
+        onPayload: suspend (Any, DefaultWebSocketServerSession) -> Unit,
     ): TestWebSocketServer {
-        repeat(5) { attempt ->
-            val port = findFreePort()
-            val server =
-                embeddedServer(Netty, port = port) {
-                    install(WebSockets)
-                    routing {
-                        webSocket("/ws") {
+        val activeSessions =
+            CopyOnWriteArrayList<DefaultWebSocketServerSession>()
+        val server =
+            embeddedServer(Netty, port = 0) {
+                install(WebSockets)
+                routing {
+                    webSocket("/ws") {
+                        activeSessions += this
+                        try {
                             if (onOpenPayload != null) {
                                 outgoing.send(
                                     Frame.Binary(
@@ -1705,66 +2105,42 @@ class LobbyControllerTest {
                                     onPayload(payload, this)
                                 }
                             }
-                        }
-                    }
-                }
-
-            try {
-                server.start(wait = false)
-                return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
-            } catch (error: Exception) {
-                server.stop(0, 0)
-                if (attempt == 4) {
-                    throw error
-                }
-            }
-        }
-        error("Unable to start test websocket server")
-    }
-
-    private fun startProtocolServerAt(
-        port: Int,
-        onOpenPayload: NetworkMessagePayload? = null,
-        onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
-    ): TestWebSocketServer {
-        val server =
-            embeddedServer(Netty, port = port) {
-                install(WebSockets)
-                routing {
-                    webSocket("/ws") {
-                        if (onOpenPayload != null) {
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(onOpenPayload),
-                                ),
-                            )
-                        }
-                        for (frame in incoming) {
-                            if (frame is Frame.Binary) {
-                                val payload = MessageCodec.decodePayload(frame.readBytes())
-                                onPayload(payload, this)
-                            }
+                        } finally {
+                            activeSessions -= this
                         }
                     }
                 }
             }
 
         server.start(wait = false)
-        return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
+        val port =
+            runBlocking {
+                server.resolvedConnectors().single().port
+            }
+        return TestWebSocketServer(
+            engine = server,
+            port = port,
+            url = "ws://127.0.0.1:$port/ws",
+            activeSessions = activeSessions,
+        )
     }
-
-    private fun findFreePort(): Int =
-        ServerSocket(0).use { socket ->
-            socket.localPort
-        }
 
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
         val port: Int,
         val url: String,
+        private val activeSessions: CopyOnWriteArrayList<DefaultWebSocketServerSession>,
     ) {
+        fun disconnectClients(message: String = "server disconnect") {
+            runBlocking {
+                activeSessions.forEach { session ->
+                    session.close(CloseReason(CloseReason.Codes.NORMAL, message))
+                }
+            }
+        }
+
         fun close() {
+            disconnectClients("server shutdown")
             engine.stop(100, 1_000)
         }
     }
@@ -1805,10 +2181,18 @@ class LobbyControllerTest {
     private class InMemoryPlayerNameStore(
         private var playerName: String? = null,
     ) : PlayerNameStore {
+        private var characterId: String? = null
+
         override fun readPlayerName(): String? = playerName
 
         override fun savePlayerName(playerName: String) {
             this.playerName = playerName
+        }
+
+        override fun readCharacterId(): String? = characterId
+
+        override fun saveCharacterId(characterId: String) {
+            this.characterId = characterId
         }
     }
 }

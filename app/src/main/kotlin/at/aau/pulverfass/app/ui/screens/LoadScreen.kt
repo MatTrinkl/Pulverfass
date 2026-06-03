@@ -23,6 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
@@ -44,7 +47,7 @@ private const val DEFAULT_LOADING_TEXT_INTERVAL_MS = 2200L
 internal val LoadingTexts =
     listOf(
         "Hisse die Segel...",
-        "Schartnerbomb building...",
+        "Schartnerbomb wird gebaut...",
         "Pulver ins Fass laden...",
         "Karten entrollen...",
         "Würfel polieren...",
@@ -151,12 +154,23 @@ fun LoadScreen(
         }
     }
 
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid)
-                .testTag("LoadScreen"),
+                .testTag("LoadScreen")
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(
+                                PointerEventPass.Initial,
+                            ).changes.forEach { it.consume() }
+                        }
+                    }
+                },
         contentAlignment = Alignment.Center,
     ) {
         background()
@@ -169,14 +183,18 @@ fun LoadScreen(
                         Brush.verticalGradient(
                             colors =
                                 listOf(
-                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.35f),
-                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.75f),
+                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.30f),
+                                    PulverfassColors.SurfaceVoid.copy(alpha = 0.70f),
                                 ),
                         ),
                     ),
         )
 
         Column(
+            modifier =
+                Modifier.align(
+                    Alignment.BottomCenter,
+                ).padding(bottom = screenHeight * 0.05f),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
