@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                             musicManager.play(R.raw.lobbywaiting)
                         route == Screen.Options.route ->
                             musicManager.play(R.raw.settings)
-                            route == Screen.Lobby.route ||
+                        route == Screen.Lobby.route ||
                             route == Screen.LoadGame.route ||
                             route?.startsWith(Screen.WaitingRoom.route) == true ->
                             musicManager.play(R.raw.menu_theme2)

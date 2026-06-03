@@ -2156,7 +2156,8 @@ class MainServerLobbyRoutingService(
                 "GAME_PAUSED" -> ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED
                 "PHASE_MISMATCH" -> ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH
                 "ALREADY_USED" -> ClaimCheatReinforcementBonusErrorCode.ALREADY_USED
-                "FORCED_TRADE_REQUIRED" -> ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED
+                "FORCED_TRADE_REQUIRED" ->
+                    ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED
                 else -> ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER
             }
 
@@ -2169,19 +2170,23 @@ class MainServerLobbyRoutingService(
                     if (contextPlayerId == null) {
                         connectionNotAssignedToLobby(payload.lobbyCode)
                     } else {
-                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen Connection '${contextPlayerId.value}'."
+                        "Requester '${payload.playerId.value}' passt nicht zur aktuellen " +
+                            "Connection '${contextPlayerId.value}'."
                     }
                 }
                 ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER ->
                     "Nur der aktive Spieler darf den Schummel-Verstärkungsbonus beanspruchen."
                 ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED ->
-                    "Lobby '${payload.lobbyCode.value}' ist pausiert; der Schummel-Verstärkungsbonus ist aktuell nicht erlaubt."
+                    "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
+                        "der Schummel-Verstärkungsbonus ist aktuell nicht erlaubt."
                 ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH ->
                     "Der Schummel-Verstärkungsbonus ist nur in der Reinforcements-Phase erlaubt."
                 ClaimCheatReinforcementBonusErrorCode.ALREADY_USED ->
-                    "Spieler '${payload.playerId.value}' hat den Schummel-Verstärkungsbonus bereits verwendet."
+                    "Spieler '${payload.playerId.value}' hat den " +
+                        "Schummel-Verstärkungsbonus bereits verwendet."
                 ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED ->
-                    "Der Schummel-Verstärkungsbonus ist gesperrt: Spieler '${payload.playerId.value}' muss zuerst Karten eintauschen."
+                    "Der Schummel-Verstärkungsbonus ist gesperrt: " +
+                        "Spieler '${payload.playerId.value}' muss zuerst Karten eintauschen."
             }
 
         return ClaimCheatReinforcementBonusErrorResponse(code = code, reason = reason)

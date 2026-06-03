@@ -1,16 +1,16 @@
 package at.aau.pulverfass.app.ui.screens
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.MediaPlayer
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -56,11 +56,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,9 +84,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
@@ -129,8 +128,8 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
-private const val CheatLightBaselineLux = 8f
-private const val CheatLightCoveredLux = 2f
+private const val CHEAT_LIGHT_BASELINE_LUX = 8f
+private const val CHEAT_LIGHT_COVERED_LUX = 2f
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -478,16 +477,16 @@ internal fun GameScreenContent(
                         .fillMaxHeight(),
                 musicManager = musicManager,
             )
-        CatchUpProgressOverlay(
-            isCatchingUp = uiState.isCatchingUp,
-            showFeedback = showCatchUpFeedback,
-            modifier = Modifier.align(Alignment.Center),
-        )
+            CatchUpProgressOverlay(
+                isCatchingUp = uiState.isCatchingUp,
+                showFeedback = showCatchUpFeedback,
+                modifier = Modifier.align(Alignment.Center),
+            )
 
-        LightSensorCheatTrigger(
-            enabled = canClaimCheatReinforcementBonus,
-            onTriggered = onClaimCheatReinforcementBonus,
-        )
+            LightSensorCheatTrigger(
+                enabled = canClaimCheatReinforcementBonus,
+                onTriggered = onClaimCheatReinforcementBonus,
+            )
 
             PlayerSidebar(
                 players = players,
@@ -923,8 +922,8 @@ private fun LightSensorCheatTrigger(
             object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent) {
                     val lux = event.values.firstOrNull() ?: return
-                    val wasBright = previousLux?.let { it >= CheatLightBaselineLux } ?: false
-                    val isCovered = lux <= CheatLightCoveredLux
+                    val wasBright = previousLux?.let { it >= CHEAT_LIGHT_BASELINE_LUX } ?: false
+                    val isCovered = lux <= CHEAT_LIGHT_COVERED_LUX
 
                     if (wasBright && isCovered && !triggered) {
                         triggered = true

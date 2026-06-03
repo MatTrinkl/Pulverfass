@@ -109,7 +109,8 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
-                    val delta = assertIs<GameStateDeltaEvent>(receiveRelevantTestPayload(session.first))
+                    val delta =
+                        assertIs<GameStateDeltaEvent>(receiveRelevantTestPayload(session.first))
                     assertEquals(
                         listOf(
                             PendingReinforcementsChangedEvent(
@@ -314,11 +315,11 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             territoryStates =
                 baseState.allTerritoryStates().associate { territoryState ->
                     territoryState.territoryId to
-                            TerritoryState(
-                                territoryId = territoryState.territoryId,
-                                ownerId = players.first(),
-                                troopCount = 1,
-                            )
+                        TerritoryState(
+                            territoryId = territoryState.territoryId,
+                            ownerId = players.first(),
+                            troopCount = 1,
+                        )
                 },
             pendingReinforcements = PendingReinforcements(pendingPlayerId, pendingAmount),
             usedCheatReinforcementBonusByPlayer = usedCheatReinforcementBonusByPlayer,

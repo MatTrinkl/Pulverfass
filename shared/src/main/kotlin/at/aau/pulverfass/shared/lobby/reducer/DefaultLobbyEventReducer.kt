@@ -566,7 +566,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         requireKnownPlayer(state, event.playerId)
         if (event.playerId in state.usedCheatReinforcementBonusByPlayer) {
             throw InvalidLobbyEventException(
-                "Spieler '${event.playerId.value}' hat den Schummel-Verstärkungsbonus bereits verwendet.",
+                "Spieler '${event.playerId.value}' hat den " +
+                    "Schummel-Verstärkungsbonus bereits verwendet.",
             )
         }
 
