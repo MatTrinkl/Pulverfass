@@ -699,6 +699,7 @@ class ScreenComposableTest {
                             onFortifyMove = { moved = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
