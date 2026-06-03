@@ -45,6 +45,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -57,6 +58,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -75,6 +77,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -94,6 +97,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
@@ -181,6 +185,7 @@ class MainServerLobbyRoutingService(
         )
     private val publicGameStateBuilder = PublicGameStateBuilder()
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
+    private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
 
     init {
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
@@ -231,6 +236,7 @@ class MainServerLobbyRoutingService(
             is TradeInCardsRequest -> routeTradeInCardsRequest(request)
             is TurnStateGetRequest -> routeTurnStateGetRequest(request)
             is TurnAdvanceRequest -> routeTurnAdvanceRequest(request)
+            is CharacterSelectRequest -> routeCharacterSelectRequest(request)
             else -> routeDecodedRequest(request)
         }
     }
@@ -902,6 +908,53 @@ class MainServerLobbyRoutingService(
                 ),
             )
         }
+    }
+
+    private suspend fun routeCharacterSelectRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as CharacterSelectRequest
+        val requesterPlayerId = request.context.playerId?.value ?: return
+
+        val charMap = charactersByLobby.getOrPut(payload.lobbyCode) { ConcurrentHashMap() }
+        val success =
+            synchronized(charMap) {
+                charMap.entries.removeIf { it.value == requesterPlayerId }
+                if (charMap.containsKey(payload.characterId)) {
+                    false
+                } else {
+                    charMap[payload.characterId] = requesterPlayerId
+                    true
+                }
+            }
+
+        if (!success) {
+            network.send(
+                request.connectionId,
+                CharacterSelectErrorResponse("Achtung, dieser Charakter ist schon vergeben"),
+            )
+            return
+        }
+
+        network.send(
+            request.connectionId,
+            CharacterSelectResponse(
+                lobbyCode = payload.lobbyCode,
+                characterId = payload.characterId,
+            ),
+        )
+
+        val broadcast =
+            CharacterSelectedBroadcast(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                characterId = payload.characterId,
+            )
+        lobbyManager.getLobby(payload.lobbyCode)
+            ?.currentState()
+            ?.players
+            .orEmpty()
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId -> network.send(connectionId, broadcast) }
     }
 
     private suspend fun routeDecodedRequest(request: DecodedNetworkRequest) {

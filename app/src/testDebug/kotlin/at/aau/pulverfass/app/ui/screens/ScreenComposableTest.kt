@@ -192,6 +192,86 @@ class ScreenComposableTest {
     }
 
     @Test
+    fun waiting_room_character_picker_opens_on_button_click() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                val navController = rememberNavController()
+                val controller = LobbyController()
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.WaitingRoom.route + "/XY99/false/Dave",
+                ) {
+                    composable(
+                        route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
+                        arguments =
+                            listOf(
+                                navArgument("lobbyCode") { type = NavType.StringType },
+                                navArgument("isHost") { type = NavType.BoolType },
+                                navArgument("playerName") { type = NavType.StringType },
+                            ),
+                    ) {
+                        val lobbyCode = it.arguments?.getString("lobbyCode").orEmpty()
+                        val isHost = it.arguments?.getBoolean("isHost") ?: false
+                        val playerName = it.arguments?.getString("playerName").orEmpty()
+                        WaitingRoomScreen(
+                            navController = navController,
+                            controller = controller,
+                            lobbyCode = lobbyCode,
+                            isHost = isHost,
+                            playerName = playerName,
+                        )
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag("character_picker_button").performClick()
+        composeTestRule.onNodeWithText("CHARAKTER WÄHLEN").assertExists()
+        composeTestRule.onNodeWithText("SPEICHERN").assertExists()
+        composeTestRule.onNodeWithText("ABBRECHEN").assertExists()
+    }
+
+    @Test
+    fun waiting_room_character_picker_closes_on_abbrechen() {
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                val navController = rememberNavController()
+                val controller = LobbyController()
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.WaitingRoom.route + "/ZZ88/false/Eve",
+                ) {
+                    composable(
+                        route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
+                        arguments =
+                            listOf(
+                                navArgument("lobbyCode") { type = NavType.StringType },
+                                navArgument("isHost") { type = NavType.BoolType },
+                                navArgument("playerName") { type = NavType.StringType },
+                            ),
+                    ) {
+                        val lobbyCode = it.arguments?.getString("lobbyCode").orEmpty()
+                        val isHost = it.arguments?.getBoolean("isHost") ?: false
+                        val playerName = it.arguments?.getString("playerName").orEmpty()
+                        WaitingRoomScreen(
+                            navController = navController,
+                            controller = controller,
+                            lobbyCode = lobbyCode,
+                            isHost = isHost,
+                            playerName = playerName,
+                        )
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag("character_picker_button").performClick()
+        composeTestRule.onNodeWithText("CHARAKTER WÄHLEN").assertExists()
+        composeTestRule.onNodeWithText("ABBRECHEN").performClick()
+        composeTestRule.onAllNodesWithText("CHARAKTER WÄHLEN").assertCountEquals(0)
+    }
+
+    @Test
     fun game_screen_shows_dynamic_map_ui_and_reacts_to_actions() {
         val controller = LobbyController()
         try {
@@ -269,6 +349,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -309,6 +390,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -376,6 +458,7 @@ class ScreenComposableTest {
                             onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -438,6 +521,7 @@ class ScreenComposableTest {
                             onConfirmReinforcementsDone = { finished = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -482,6 +566,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -541,6 +626,7 @@ class ScreenComposableTest {
                             onConfirmAttackDone = { finished = true },
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
@@ -605,6 +691,7 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onRefreshGameState = {},
                         ),
+                    countdownState = false to 0,
                 )
             }
         }
