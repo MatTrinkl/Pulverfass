@@ -42,23 +42,54 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 
+/**
+ * Callback-Schnittstelle zwischen Lobby-Laufzeit und Persistenzschicht.
+ *
+ * Implementierungen reagieren auf akzeptierte Domain-Events und auf Snapshot-Broadcasts, damit
+ * Recovery-Daten unabhängig von der eigentlichen Spielorchestrierung gespeichert werden können.
+ */
 interface LobbyPersistenceCallbacks : DatabaseReadinessProbe {
+    /**
+     * Wird nach erfolgreicher Anwendung eines Domain-Events aufgerufen.
+     *
+     * @param event akzeptiertes Domain-Event
+     * @param previousState Zustand direkt vor der Event-Anwendung
+     * @param currentState Zustand direkt nach der Event-Anwendung
+     */
     suspend fun onLobbyEventAccepted(
         event: LobbyEvent,
         previousState: GameState,
         currentState: GameState,
     )
 
+    /**
+     * Beobachtet einen Broadcast an einer Phasengrenze.
+     *
+     * Die Standardimplementierung persistiert diesen Broadcast nicht separat, weil die Information
+     * aus Event-Store und Snapshot wieder ableitbar ist.
+     */
     suspend fun onPhaseBoundaryBroadcast(payload: PhaseBoundaryEvent)
 
+    /**
+     * Legacy-Variante für Snapshot-Broadcasts ohne direkten GameState.
+     *
+     * Neue Aufrufer sollen die Überladung mit [GameState] verwenden.
+     */
     suspend fun onSnapshotBroadcast(payload: GameStateSnapshotBroadcast)
 
+    /**
+     * Persistiert einen transportierbaren Snapshot zusammen mit dem dazugehörigen autoritativen
+     * Zustand.
+     */
     suspend fun onSnapshotBroadcast(
         currentState: GameState,
         payload: GameStateSnapshotBroadcast,
     )
 
     companion object {
+        /**
+         * Liefert eine No-op-Implementierung für Deployments ohne Persistenz.
+         */
         fun disabled(): LobbyPersistenceCallbacks = DisabledLobbyPersistenceCallbacks
     }
 }
@@ -86,6 +117,16 @@ private object DisabledLobbyPersistenceCallbacks : LobbyPersistenceCallbacks {
     ) = Unit
 }
 
+/**
+ * Produktive Persistenzanbindung für Lobby-Events und Recovery-Snapshots.
+ *
+ * Fehler beim Schreiben werden absichtlich nicht bis in die Spiellogik propagiert. Stattdessen
+ * bleibt der laufende Server verfügbar und meldet den Persistenzfehler über den Health-Check.
+ *
+ * @param store JDBC-Store für Events und Snapshots
+ * @param closeAction optionaler Cleanup-Hook für abhängige Ressourcen
+ * @param json JSON-Konfiguration für Snapshot-Persistierung
+ */
 @OptIn(ExperimentalSerializationApi::class)
 class DatabaseBackedLobbyPersistenceGateway(
     private val store: JdbcLobbyPersistenceStore,
@@ -101,6 +142,12 @@ class DatabaseBackedLobbyPersistenceGateway(
     @Volatile
     private var lastFailureDetail: String? = null
 
+    /**
+     * Liefert den zuletzt beobachteten Persistenzzustand.
+     *
+     * Sobald eine Schreiboperation fehlschlägt, meldet der Probe `DOWN`, bis die nächste
+     * Persistierung erfolgreich war.
+     */
     override fun readiness(): DatabaseReadiness =
         lastFailureDetail?.let { detail ->
             DatabaseReadiness(
@@ -109,6 +156,9 @@ class DatabaseBackedLobbyPersistenceGateway(
             )
         } ?: DatabaseReadiness(DatabaseReadinessState.UP)
 
+    /**
+     * Persistiert ein akzeptiertes Domain-Event im Event-Store.
+     */
     override suspend fun onLobbyEventAccepted(
         event: LobbyEvent,
         previousState: GameState,
@@ -132,10 +182,17 @@ class DatabaseBackedLobbyPersistenceGateway(
         // one row per (lobby_code, state_version), we do not persist them separately.
     }
 
+    /**
+     * Diese Legacy-Signatur bleibt absichtlich unerfüllt, weil für Recovery immer auch der
+     * dazugehörige [GameState] benötigt wird.
+     */
     override suspend fun onSnapshotBroadcast(payload: GameStateSnapshotBroadcast) {
         error("Use onSnapshotBroadcast(currentState, payload).")
     }
 
+    /**
+     * Persistiert einen vollständigen Recovery-Snapshot des aktuellen Spielzustands.
+     */
     override suspend fun onSnapshotBroadcast(
         currentState: GameState,
         payload: GameStateSnapshotBroadcast,
@@ -158,6 +215,9 @@ class DatabaseBackedLobbyPersistenceGateway(
         closeAction()
     }
 
+    /**
+     * Führt einen Persistenzschritt aus und merkt sich den letzten Fehlerzustand für Health-Checks.
+     */
     private inline fun persist(
         failurePrefix: String,
         block: () -> Unit,

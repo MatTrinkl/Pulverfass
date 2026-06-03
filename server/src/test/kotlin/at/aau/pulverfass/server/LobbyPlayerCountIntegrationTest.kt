@@ -30,6 +30,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -105,6 +107,7 @@ class LobbyPlayerCountIntegrationTest {
                         0,
                         lobbyManager.getLobby(lobbyCode)?.currentState()?.processedEventCount,
                     )
+                    waitUntilAtLeast(routedPackets, expectedCount = 1)
                     assertEquals(1, routedPackets.get())
                     assertEquals(0, routingErrors.get())
                     assertNull(receivePayloadOrNull(requester.first))
@@ -301,6 +304,17 @@ class LobbyPlayerCountIntegrationTest {
                 joinerSession.close()
             }
         }
+
+    private suspend fun waitUntilAtLeast(
+        counter: AtomicInteger,
+        expectedCount: Int,
+    ) {
+        withTimeout(5_000) {
+            while (counter.get() < expectedCount) {
+                delay(5)
+            }
+        }
+    }
 
     private fun lobbyState(
         lobbyCode: LobbyCode,

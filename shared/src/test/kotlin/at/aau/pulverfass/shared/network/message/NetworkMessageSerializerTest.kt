@@ -79,6 +79,16 @@ class NetworkMessageSerializerTest {
     }
 
     @Test
+    fun `should reject malformed utf8 header bytes`() {
+        val exception =
+            assertThrows(NetworkSerializationException::class.java) {
+                NetworkMessageSerializer.deserializeHeader(byteArrayOf(0xC3.toByte(), 0x28))
+            }
+
+        assertTrue(exception.message.orEmpty().contains("Failed to deserialize message header"))
+    }
+
+    @Test
     fun `should deserialize create lobby request payload for create request type`() {
         val payload = CreateLobbyRequest
         val bytes =
@@ -175,6 +185,23 @@ class NetworkMessageSerializerTest {
             )
 
         assertEquals(payload, result)
+    }
+
+    @Test
+    fun `should wrap invalid payload values as network serialization exception`() {
+        val exception =
+            assertThrows(NetworkSerializationException::class.java) {
+                NetworkMessageSerializer.deserializePayload(
+                    MessageType.CONNECTION_RESPONSE,
+                    """{"sessionToken":"not-a-valid-session-token"}""".encodeToByteArray(),
+                )
+            }
+
+        assertTrue(
+            exception.message.orEmpty().contains(
+                "Failed to deserialize payload for message type CONNECTION_RESPONSE",
+            ),
+        )
     }
 
     @Test

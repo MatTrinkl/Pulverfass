@@ -12,9 +12,22 @@ import java.sql.Timestamp
 import java.time.Instant
 import javax.sql.DataSource
 
+/**
+ * JDBC-basierter Store für wiederverwendbare Reconnect-Sessions.
+ *
+ * Gespeichert werden nur die für eine Wiederaufnahme benötigten Kontextdaten. Das Session-Token
+ * selbst wird nie im Klartext persistiert, sondern vor der Ablage gehasht.
+ *
+ * @param dataSource Datenquelle für PostgreSQL-Zugriffe
+ */
 class JdbcLobbyReconnectSessionStore(
     private val dataSource: DataSource,
 ) {
+    /**
+     * Lädt eine persistierte Session anhand ihres Tokens.
+     *
+     * @return persistierte Session oder `null`, wenn kein Eintrag existiert
+     */
     fun loadSession(sessionToken: SessionToken): PersistedReconnectSession? =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -48,9 +61,20 @@ class JdbcLobbyReconnectSessionStore(
             }
         }
 
+    /**
+     * Lädt nur den fachlichen Reconnect-Kontext zu einem Token.
+     */
     fun loadContext(sessionToken: SessionToken): SessionReconnectContext? =
         loadSession(sessionToken)?.context
 
+    /**
+     * Legt eine Session an oder aktualisiert sie atomar.
+     *
+     * Pro Spieler bleibt höchstens ein gültiges Session-Token erhalten. Vor dem Upsert werden
+     * deshalb ältere Tokens desselben Spielers entfernt.
+     *
+     * @throws IllegalArgumentException wenn [context] keine `playerId` enthält
+     */
     fun upsertSession(
         session: Session,
         context: SessionReconnectContext,
@@ -62,6 +86,8 @@ class JdbcLobbyReconnectSessionStore(
 
         dataSource.connection.use { connection ->
             connection.inReconnectSessionTransaction {
+                // Ein Spieler darf genau ein wiederverwendbares Token besitzen, damit spätere
+                // Reconnect-Versuche deterministisch dem neuesten Login folgen.
                 connection.prepareStatement(
                     """
                     DELETE FROM lobby_reconnect_sessions
@@ -106,6 +132,14 @@ class JdbcLobbyReconnectSessionStore(
         }
     }
 
+    /**
+     * Entfernt den fachlichen Lobby-Kontext aller Sessions einer Lobby, ohne die Tokens selbst zu löschen.
+     *
+     * Das wird beim Schließen einer Lobby genutzt, damit alte Tokens nicht versehentlich in eine
+     * nicht mehr existente Lobby zurückführen.
+     *
+     * @return Anzahl aktualisierter Zeilen
+     */
     fun clearLobbyContextForLobby(lobbyCode: LobbyCode): Int =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -122,6 +156,11 @@ class JdbcLobbyReconnectSessionStore(
             }
         }
 
+    /**
+     * Löscht genau eine persistierte Session.
+     *
+     * @return Anzahl gelöschter Zeilen
+     */
     fun deleteSession(sessionToken: SessionToken): Int =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -135,6 +174,11 @@ class JdbcLobbyReconnectSessionStore(
             }
         }
 
+    /**
+     * Liefert die höchste bislang persistierte Spieler-ID.
+     *
+     * Der Server nutzt diesen Wert beim Neustart, um neue Spieler-IDs ohne Kollision zu vergeben.
+     */
     fun maxPersistedPlayerId(): Long =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -151,6 +195,9 @@ class JdbcLobbyReconnectSessionStore(
         }
 }
 
+/**
+ * Führt mehrere Reconnect-Session-Schreibzugriffe als gemeinsame JDBC-Transaktion aus.
+ */
 private fun Connection.inReconnectSessionTransaction(block: () -> Int): Int {
     val previousAutoCommit = autoCommit
     autoCommit = false
@@ -166,6 +213,12 @@ private fun Connection.inReconnectSessionTransaction(block: () -> Int): Int {
     }
 }
 
+/**
+ * Leitet aus einem Session-Token einen stabilen Speicher-Hash ab.
+ *
+ * Der Klartextwert bleibt damit außerhalb des Arbeitsspeichers unbekannt, was Datenbankleaks
+ * weniger kritisch macht.
+ */
 private fun SessionToken.storageHash(): String =
     MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))

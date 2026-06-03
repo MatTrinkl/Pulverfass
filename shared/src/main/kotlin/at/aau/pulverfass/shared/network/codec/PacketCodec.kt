@@ -1,6 +1,4 @@
 package at.aau.pulverfass.shared.network.codec
-
-import at.aau.pulverfass.shared.network.exception.NetworkException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -23,8 +21,13 @@ object PacketCodec {
      */
     fun pack(packet: SerializedPacket): ByteArray {
         val headerLength = packet.headerBytes.size
+        val totalPacketSize =
+            Int.SIZE_BYTES.toLong() + headerLength.toLong() + packet.payloadBytes.size.toLong()
+        require(totalPacketSize <= Int.MAX_VALUE.toLong()) {
+            "Packet exceeds the maximum supported size of ${Int.MAX_VALUE} bytes."
+        }
         val buffer =
-            ByteBuffer.allocate(Int.SIZE_BYTES + headerLength + packet.payloadBytes.size)
+            ByteBuffer.allocate(totalPacketSize.toInt())
                 .order(ByteOrder.BIG_ENDIAN)
 
         buffer.putInt(headerLength)
@@ -39,7 +42,8 @@ object PacketCodec {
      *
      * @param bytes empfangenes ByteArray im Wire-Format
      * @return entpacktes [SerializedPacket]
-     * @throws NetworkException wenn das Wire-Format ungültig ist
+     * @throws at.aau.pulverfass.shared.network.exception.NetworkException wenn
+     * das Wire-Format ungueltig ist
      */
     fun unpack(bytes: ByteArray): SerializedPacket {
         if (bytes.size < Int.SIZE_BYTES) {
@@ -52,7 +56,8 @@ object PacketCodec {
         if (headerLength <= 0) {
             throw InvalidHeaderLengthException(headerLength)
         }
-        if (bytes.size < Int.SIZE_BYTES + headerLength) {
+        val remainingBytes = bytes.size - Int.SIZE_BYTES
+        if (remainingBytes < headerLength) {
             throw CorruptPacketException("Packet too short for declared header length.")
         }
 

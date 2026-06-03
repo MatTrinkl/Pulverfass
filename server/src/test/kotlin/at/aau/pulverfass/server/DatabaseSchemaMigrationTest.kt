@@ -1,12 +1,26 @@
 package at.aau.pulverfass.server
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class DatabaseSchemaMigrationTest {
     @Test
     fun `migrateDatabaseSchema returns early when database config is disabled`() {
         migrateDatabaseSchema(DatabaseRuntimeConfig())
+    }
+
+    @Test
+    fun `migrateDatabaseSchema fails fast for unsupported configured jdbc url`() {
+        assertThrows(org.flywaydb.core.api.FlywayException::class.java) {
+            migrateDatabaseSchema(
+                DatabaseRuntimeConfig(
+                    url = "jdbc:unsupported://localhost/pulverfass",
+                    user = "pulverfass",
+                    password = "secret",
+                ),
+            )
+        }
     }
 
     @Test

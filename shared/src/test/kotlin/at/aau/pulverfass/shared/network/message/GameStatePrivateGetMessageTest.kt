@@ -72,8 +72,8 @@ class GameStatePrivateGetMessageTest {
     fun `serializer roundtrip error response`() {
         val response =
             GameStatePrivateGetErrorResponse(
-                code = GameStatePrivateGetErrorCode.REQUESTER_MISMATCH,
-                reason = "Requester '2' passt nicht zur aktuellen Connection '1'.",
+                code = GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE,
+                reason = "Privater Snapshot fuer Lobby 'AB12' ist groesser als 128 Bytes.",
             )
 
         val serialized =

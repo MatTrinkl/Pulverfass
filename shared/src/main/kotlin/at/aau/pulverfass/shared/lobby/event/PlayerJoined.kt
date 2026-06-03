@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.lobby.event
 
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.requireValidPlayerDisplayName
 
 /**
  * Signalisiert, dass ein Spieler einer Lobby beigetreten ist.
@@ -14,4 +15,8 @@ data class PlayerJoined(
     override val lobbyCode: LobbyCode,
     val playerId: PlayerId,
     val playerDisplayName: String,
-) : ExternalLobbyEvent
+) : ExternalLobbyEvent {
+    init {
+        requireValidPlayerDisplayName(playerDisplayName)
+    }
+}

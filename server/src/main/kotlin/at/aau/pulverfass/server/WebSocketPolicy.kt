@@ -7,6 +7,15 @@ import io.ktor.websocket.CloseReason
  */
 object WebSocketPolicy {
     /**
+     * Obergrenze pro WebSocket-Frame.
+     *
+     * Die Grenze ist bewusst deutlich oberhalb aller aktuell erwarteten Payloads,
+     * verhindert aber triviale Speicher- und CPU-DoS-Versuche mit extrem großen
+     * Frames.
+     */
+    const val MAX_FRAME_SIZE_BYTES: Long = 1_048_576
+
+    /**
      * Text Frames werden in Serie 1 nicht fachlich verarbeitet und aktiv abgelehnt.
      */
     const val TEXT_FRAMES_NOT_SUPPORTED = "Text frames are not supported on /ws."

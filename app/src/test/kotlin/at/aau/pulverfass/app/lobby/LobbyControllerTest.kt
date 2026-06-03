@@ -73,9 +73,12 @@ import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +86,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import java.net.ServerSocket
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -1136,13 +1138,8 @@ class LobbyControllerTest {
                 controller.startGame()
                 waitUntil { controller.state.value.gameStarted }
 
-                val reconnectPort = firstServer.port
-                firstServer.close()
-                waitUntil { controller.state.value.isReconnecting }
-
                 val secondServer =
-                    startProtocolServerAt(
-                        port = reconnectPort,
+                    startProtocolServer(
                         onOpenPayload = ConnectionResponse(replacementToken),
                     ) { payload, outgoing ->
                         reconnectPayloads += payload
@@ -1163,6 +1160,9 @@ class LobbyControllerTest {
                                 )
                         }
                     }
+
+                controller.updateServerUrl(secondServer.url)
+                firstServer.disconnectClients("server restart")
 
                 try {
                     waitUntil {
@@ -1869,15 +1869,17 @@ class LobbyControllerTest {
 
     private fun startProtocolServer(
         onOpenPayload: NetworkMessagePayload? = null,
-        onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
+        onPayload: suspend (Any, DefaultWebSocketServerSession) -> Unit,
     ): TestWebSocketServer {
-        repeat(5) { attempt ->
-            val port = findFreePort()
-            val server =
-                embeddedServer(Netty, port = port) {
-                    install(WebSockets)
-                    routing {
-                        webSocket("/ws") {
+        val activeSessions =
+            CopyOnWriteArrayList<DefaultWebSocketServerSession>()
+        val server =
+            embeddedServer(Netty, port = 0) {
+                install(WebSockets)
+                routing {
+                    webSocket("/ws") {
+                        activeSessions += this
+                        try {
                             if (onOpenPayload != null) {
                                 outgoing.send(
                                     Frame.Binary(
@@ -1892,66 +1894,42 @@ class LobbyControllerTest {
                                     onPayload(payload, this)
                                 }
                             }
-                        }
-                    }
-                }
-
-            try {
-                server.start(wait = false)
-                return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
-            } catch (error: Exception) {
-                server.stop(0, 0)
-                if (attempt == 4) {
-                    throw error
-                }
-            }
-        }
-        error("Unable to start test websocket server")
-    }
-
-    private fun startProtocolServerAt(
-        port: Int,
-        onOpenPayload: NetworkMessagePayload? = null,
-        onPayload: suspend (Any, io.ktor.server.websocket.DefaultWebSocketServerSession) -> Unit,
-    ): TestWebSocketServer {
-        val server =
-            embeddedServer(Netty, port = port) {
-                install(WebSockets)
-                routing {
-                    webSocket("/ws") {
-                        if (onOpenPayload != null) {
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(onOpenPayload),
-                                ),
-                            )
-                        }
-                        for (frame in incoming) {
-                            if (frame is Frame.Binary) {
-                                val payload = MessageCodec.decodePayload(frame.readBytes())
-                                onPayload(payload, this)
-                            }
+                        } finally {
+                            activeSessions -= this
                         }
                     }
                 }
             }
 
         server.start(wait = false)
-        return TestWebSocketServer(server, port, "ws://127.0.0.1:$port/ws")
+        val port =
+            runBlocking {
+                server.resolvedConnectors().single().port
+            }
+        return TestWebSocketServer(
+            engine = server,
+            port = port,
+            url = "ws://127.0.0.1:$port/ws",
+            activeSessions = activeSessions,
+        )
     }
-
-    private fun findFreePort(): Int =
-        ServerSocket(0).use { socket ->
-            socket.localPort
-        }
 
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
         val port: Int,
         val url: String,
+        private val activeSessions: CopyOnWriteArrayList<DefaultWebSocketServerSession>,
     ) {
+        fun disconnectClients(message: String = "server disconnect") {
+            runBlocking {
+                activeSessions.forEach { session ->
+                    session.close(CloseReason(CloseReason.Codes.NORMAL, message))
+                }
+            }
+        }
+
         fun close() {
+            disconnectClients("server shutdown")
             engine.stop(100, 1_000)
         }
     }

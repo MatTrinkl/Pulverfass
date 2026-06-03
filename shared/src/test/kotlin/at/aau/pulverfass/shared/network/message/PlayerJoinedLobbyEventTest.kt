@@ -11,6 +11,7 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlayerJoinedLobbyEventTest {
@@ -59,6 +60,16 @@ class PlayerJoinedLobbyEventTest {
             serialized,
         )
         assertEquals(event, deserialized)
+    }
+
+    @Test
+    fun `should reject blank player display name`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                PlayerJoinedLobbyEvent(LobbyCode("AB12"), PlayerId(7), " ")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
     }
 
     @Test
