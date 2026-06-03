@@ -92,11 +92,31 @@ fun WaitingRoomScreen(
     val effectivePlayerName = state.playerName.ifBlank { playerName }
     val effectiveIsHost = state.isHost || isHost
     val ownPlayerId = state.ownPlayerId
-    val selectedColor = state.playerColor
+    var submittedInitialCharacterId by remember(
+        lobbyCode,
+        ownPlayerId,
+    ) {
+        mutableStateOf<String?>(null)
+    }
 
-    LaunchedEffect(Unit) {
-        if (controller.state.value.characterId == null) {
-            controller.updateCharacter(Characters.all.random().id)
+    LaunchedEffect(
+        state.activeLobbyCode,
+        ownPlayerId,
+        state.characterId,
+        state.players,
+        submittedInitialCharacterId,
+    ) {
+        val initialCharacterId =
+            initialCharacterIdForLobby(
+                players = state.players,
+                ownPlayerId = ownPlayerId,
+                currentCharacterId = state.characterId,
+                submittedInitialCharacterId = submittedInitialCharacterId,
+            )
+        if (initialCharacterId != null) {
+            submittedInitialCharacterId = initialCharacterId
+            controller.updateCharacter(initialCharacterId)
+            controller.selectCharacter(initialCharacterId)
         }
     }
 
@@ -104,7 +124,6 @@ fun WaitingRoomScreen(
         buildWaitingRoomPlayers(
             players = state.players,
             ownPlayerId = ownPlayerId,
-            selectedColor = selectedColor,
             selectedCharacterId = state.characterId,
             effectivePlayerName = effectivePlayerName,
             effectiveIsHost = effectiveIsHost,
@@ -331,7 +350,6 @@ private fun sfx(
 private fun buildWaitingRoomPlayers(
     players: List<LobbyPlayerUi>,
     ownPlayerId: PlayerId?,
-    selectedColor: Color?,
     selectedCharacterId: String?,
     effectivePlayerName: String,
     effectiveIsHost: Boolean,
@@ -341,29 +359,60 @@ private fun buildWaitingRoomPlayers(
             WaitingRoomPlayerUi(
                 displayName = effectivePlayerName,
                 isHost = effectiveIsHost,
-                color = selectedColor ?: Characters.byIndex(0).color,
+                color = playerColorAt(0),
                 characterId = selectedCharacterId,
             ),
         )
     } else {
-        players.mapIndexed { index, player ->
+        val colorsByPlayerId = playerColorsById(players)
+        players.map { player ->
             val isOwn = player.playerId == ownPlayerId
-            val color =
-                if (isOwn && selectedColor != null) {
-                    selectedColor
-                } else {
-                    player.characterId?.let { Characters.byId(it)?.color }
-                        ?: Characters.byIndex(index).color
-                }
             WaitingRoomPlayerUi(
                 displayName = player.displayName,
                 isHost = player.isHost,
                 isDisconnected = player.isDisconnected,
-                color = color,
+                color = colorsByPlayerId.getValue(player.playerId),
                 characterId = if (isOwn) selectedCharacterId else player.characterId,
             )
         }
     }
+
+internal fun initialCharacterIdForLobby(
+    players: List<LobbyPlayerUi>,
+    ownPlayerId: PlayerId?,
+    currentCharacterId: String?,
+    submittedInitialCharacterId: String?,
+): String? {
+    if (ownPlayerId == null || submittedInitialCharacterId != null) {
+        return null
+    }
+
+    val ownSyncedCharacterId = players.firstOrNull { it.playerId == ownPlayerId }?.characterId
+    if (ownSyncedCharacterId != null) {
+        return null
+    }
+
+    val takenCharacterIds =
+        players
+            .filter { it.playerId != ownPlayerId }
+            .mapNotNull { it.characterId }
+            .toSet()
+    val currentCharacter =
+        currentCharacterId?.takeIf { characterId ->
+            Characters.byId(characterId) != null && characterId !in takenCharacterIds
+        }
+
+    return currentCharacter ?: Characters.all.firstOrNull { it.id !in takenCharacterIds }?.id
+}
+
+private fun playerColorAt(index: Int): Color =
+    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+
+private fun playerColorsById(players: List<LobbyPlayerUi>): Map<PlayerId, Color> =
+    players
+        .sortedBy { it.playerId.value }
+        .mapIndexed { index, player -> player.playerId to playerColorAt(index) }
+        .toMap()
 
 @Composable
 private fun CharacterPreview(

@@ -1677,12 +1677,14 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `updateCharacter stores characterId and color in state`() {
+    fun `updateCharacter stores characterId without changing gameplay color`() {
         val controller = createController()
         try {
+            val gameplayColor = Color(0xFF123456)
+            controller.updatePlayerColor(gameplayColor)
             controller.updateCharacter("warrior")
             assertEquals("warrior", controller.state.value.characterId)
-            assertEquals(Characters.byId("warrior")?.color, controller.state.value.playerColor)
+            assertEquals(gameplayColor, controller.state.value.playerColor)
         } finally {
             controller.close()
         }
@@ -1701,7 +1703,7 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `updateCharacter sets null color for unknown character id`() {
+    fun `updateCharacter stores unknown character id without deriving a color`() {
         val controller = createController()
         try {
             controller.updateCharacter("nonexistent")

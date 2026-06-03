@@ -125,7 +125,6 @@ class LobbyController(
         MutableStateFlow(
             run {
                 val savedCharacterId = playerNameStore.readCharacterId()
-                val savedCharacterColor = savedCharacterId?.let { Characters.byId(it)?.color }
                 LobbyUiState(
                     serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
                     playerName = playerNameStore.readPlayerName().orEmpty(),
@@ -134,7 +133,6 @@ class LobbyController(
                     gameStarted = wasGameStartedOnLastAppRun,
                     gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
                     characterId = savedCharacterId,
-                    playerColor = savedCharacterColor,
                 )
             },
         )
@@ -245,8 +243,7 @@ class LobbyController(
 
     fun updateCharacter(id: String) {
         playerNameStore.saveCharacterId(id)
-        val color = Characters.byId(id)?.color
-        _state.update { it.copy(characterId = id, playerColor = color) }
+        _state.update { it.copy(characterId = id) }
     }
 
     fun selectCharacter(characterId: String) {

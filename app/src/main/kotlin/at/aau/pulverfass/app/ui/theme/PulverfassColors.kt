@@ -44,14 +44,14 @@ object PulverfassColors {
     // ============================================
     // PLAYER COLORS (semantisch — 8 Spieler)
     // ============================================
-    val PlayerRed = Color(0xFFC62828)
-    val PlayerBlue = Color(0xFF1565C0)
-    val PlayerOrange = Color(0xFFE76F00)
-    val PlayerGreen = Color(0xFF43A047)
-    val PlayerPurple = Color(0xFF7B2CBF)
-    val PlayerTeal = Color(0xFF00897B)
-    val PlayerPink = Color(0xFFD81B60)
-    val PlayerCyan = Color(0xFF00A6D6)
+    val PlayerBlue = Color(0xFF0057E7)
+    val PlayerOrange = Color(0xFFFF6D00)
+    val PlayerGreen = Color(0xFF00B050)
+    val PlayerPurple = Color(0xFFAA00FF)
+    val PlayerYellow = Color(0xFFFFD600)
+    val PlayerCyan = Color(0xFF00B8D4)
+    val PlayerRed = Color(0xFFD50000)
+    val PlayerMagenta = Color(0xFFFF1493)
 
     /**
      * Liste aller Player-Farben in fester Reihenfolge.
@@ -59,14 +59,14 @@ object PulverfassColors {
      */
     val playerColors: List<Color> =
         listOf(
-            PlayerRed,
             PlayerBlue,
             PlayerOrange,
             PlayerGreen,
             PlayerPurple,
-            PlayerTeal,
-            PlayerPink,
+            PlayerYellow,
             PlayerCyan,
+            PlayerRed,
+            PlayerMagenta,
         )
 
     // ============================================

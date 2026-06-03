@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
@@ -144,11 +145,11 @@ fun GameScreen(
     val lobbyState by controller.state.collectAsState()
     val character = lobbyState.characterId?.let { Characters.byId(it) }
     val players =
-        remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.playerColor) {
+        remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.characterId) {
             lobbyPlayersToGamePlayers(
-                lobbyState.players,
-                lobbyState.ownPlayerId,
-                lobbyState.playerColor,
+                players = lobbyState.players,
+                ownPlayerId = lobbyState.ownPlayerId,
+                ownCharacterId = lobbyState.characterId,
             )
         }
     val mapPainter = painterResource(id = R.drawable.map_world)
@@ -1779,6 +1780,7 @@ private fun PlayerAvatar(
     player: GamePlayerUi,
     size: Dp,
 ) {
+    val character = player.characterId?.let(Characters::byId)
     Surface(
         modifier = Modifier.size(size),
         shape = CircleShape,
@@ -1787,14 +1789,27 @@ private fun PlayerAvatar(
         shadowElevation = 0.dp,
     ) {
         Box(
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = player.avatarText,
-                style = MaterialTheme.typography.labelMedium,
-                color = HudContentColor,
-                fontWeight = FontWeight.Bold,
-            )
+            if (character != null) {
+                Image(
+                    painter = painterResource(id = character.drawableRes),
+                    contentDescription = character.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                )
+            } else {
+                Text(
+                    text = player.avatarText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = HudContentColor,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }

@@ -1,7 +1,6 @@
 package at.aau.pulverfass.app.game
 
 import androidx.compose.ui.graphics.Color
-import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
@@ -69,22 +68,25 @@ object GameMapTerritoryMapper {
  *
  * @param players Lobby-Spieler aus dem Controller
  * @param ownPlayerId lokale Spieler-ID für noch nicht synchronisierte Charakterwechsel
- * @param ownPlayerColor lokal gewählte Farbe, solange Server-Events noch nachlaufen
+ * @param ownCharacterId lokal gewählter Charakter, solange Server-Events noch nachlaufen
  * @return UI-Spieler mit stabiler Farbe und Avatar-Kürzel
  */
 fun lobbyPlayersToGamePlayers(
     players: List<LobbyPlayerUi>,
     ownPlayerId: PlayerId? = null,
-    ownPlayerColor: Color? = null,
+    ownCharacterId: String? = null,
 ): List<GamePlayerUi> =
-    players.mapIndexed { index, player ->
-        GamePlayerUi(
-            playerId = player.playerId,
-            name = player.displayName,
-            avatarText = player.displayName.toAvatarText(),
-            color = player.gameColor(index, ownPlayerId, ownPlayerColor),
-            isHost = player.isHost,
-        )
+    players.stablePlayerColors().let { colorsByPlayerId ->
+        players.map { player ->
+            GamePlayerUi(
+                playerId = player.playerId,
+                name = player.displayName,
+                avatarText = player.displayName.toAvatarText(),
+                characterId = player.gameCharacterId(ownPlayerId, ownCharacterId),
+                color = colorsByPlayerId.getValue(player.playerId),
+                isHost = player.isHost,
+            )
+        }
     }
 
 fun territorySnapshotsToUiStates(
@@ -132,24 +134,23 @@ internal fun String.toAvatarText(): String =
         .joinToString("") { it.first().uppercaseChar().toString() }
         .ifBlank { "?" }
 
-private fun LobbyPlayerUi.gameColor(
-    index: Int,
+private fun LobbyPlayerUi.gameCharacterId(
     ownPlayerId: PlayerId?,
-    ownPlayerColor: Color?,
-): Color =
-    when {
-        /*
-         * Die lokale Auswahl ist die schnellste Quelle für den eigenen Spieler:
-         * Der Klick in der Charakterauswahl soll sofort in HUD und Sidebar
-         * sichtbar sein, auch wenn die nächste Server-Spielerliste noch fehlt.
-         */
-        playerId == ownPlayerId && ownPlayerColor != null -> ownPlayerColor
-        characterId != null -> Characters.byId(characterId)?.color ?: fallbackPlayerColor(index)
-        else -> fallbackPlayerColor(index)
+    ownCharacterId: String?,
+): String? =
+    if (playerId == ownPlayerId && ownCharacterId != null) {
+        ownCharacterId
+    } else {
+        characterId
     }
 
 private fun fallbackPlayerColor(index: Int): Color =
     PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+
+private fun List<LobbyPlayerUi>.stablePlayerColors(): Map<PlayerId, Color> =
+    sortedBy { it.playerId.value }
+        .mapIndexed { index, player -> player.playerId to fallbackPlayerColor(index) }
+        .toMap()
 
 private const val NEUTRAL_OWNER_ID = "neutral"
 private const val NEUTRAL_OWNER_NAME = "Neutral"

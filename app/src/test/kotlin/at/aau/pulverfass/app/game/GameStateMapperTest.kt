@@ -1,14 +1,11 @@
 package at.aau.pulverfass.app.game
 
-import androidx.compose.ui.graphics.Color
-import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
 
 class GameStateMapperTest {
     @Test
@@ -26,9 +23,8 @@ class GameStateMapperTest {
     }
 
     @Test
-    fun `lobbyPlayersToGamePlayers applies ownPlayerColor for matching playerId`() {
+    fun `lobbyPlayersToGamePlayers applies ownCharacterId for matching playerId`() {
         val ownId = PlayerId(2)
-        val ownColor = Color(0xFFFF0000)
         val players =
             listOf(
                 LobbyPlayerUi(playerId = PlayerId(1), displayName = "Alice"),
@@ -39,16 +35,16 @@ class GameStateMapperTest {
             lobbyPlayersToGamePlayers(
                 players,
                 ownPlayerId = ownId,
-                ownPlayerColor = ownColor,
+                ownCharacterId = "ice",
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(ownColor, result[1].color)
-        assertNotEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals("ice", result[1].characterId)
     }
 
     @Test
-    fun `lobbyPlayersToGamePlayers uses character color before palette fallback`() {
+    fun `lobbyPlayersToGamePlayers keeps gameplay color independent from character`() {
         val players =
             listOf(
                 LobbyPlayerUi(
@@ -65,12 +61,28 @@ class GameStateMapperTest {
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(Characters.byId("doctor")?.color, result[0].color)
-        assertEquals(Characters.byId("redmen")?.color, result[1].color)
+        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals("doctor", result[0].characterId)
+        assertEquals("redmen", result[1].characterId)
     }
 
     @Test
-    fun `buildRegionStates uses same character color as player sidebar projection`() {
+    fun `lobbyPlayersToGamePlayers assigns colors by stable player id order`() {
+        val players =
+            listOf(
+                LobbyPlayerUi(playerId = PlayerId(20), displayName = "Bob"),
+                LobbyPlayerUi(playerId = PlayerId(10), displayName = "Alice"),
+            )
+
+        val result = lobbyPlayersToGamePlayers(players)
+
+        assertEquals(PulverfassColors.playerColors[1], result[0].color)
+        assertEquals(PulverfassColors.playerColors[0], result[1].color)
+    }
+
+    @Test
+    fun `buildRegionStates uses same gameplay color as player sidebar projection`() {
         val aliceId = PlayerId(1)
         val players =
             listOf(
@@ -93,36 +105,44 @@ class GameStateMapperTest {
 
         val result = buildRegionStates(territoryStates = territories, players = players)
 
-        assertEquals(Characters.byId("blackpurp")?.color, result.getValue("brazil").accentColor)
+        assertEquals(PulverfassColors.playerColors[0], result.getValue("brazil").accentColor)
     }
 
     @Test
-    fun `lobbyPlayersToGamePlayers ignores ownPlayerColor when ownPlayerId is null`() {
-        val ownColor = Color(0xFF00FF00)
+    fun `lobbyPlayersToGamePlayers ignores ownCharacterId when ownPlayerId is null`() {
         val players = listOf(LobbyPlayerUi(playerId = PlayerId(1), displayName = "Alice"))
 
         val result =
             lobbyPlayersToGamePlayers(
                 players,
                 ownPlayerId = null,
-                ownPlayerColor = ownColor,
+                ownCharacterId = "doctor",
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(null, result[0].characterId)
     }
 
     @Test
-    fun `lobbyPlayersToGamePlayers uses palette when ownPlayerId matches but color is null`() {
+    fun `lobbyPlayersToGamePlayers uses synced character when ownCharacterId is null`() {
         val ownId = PlayerId(1)
-        val players = listOf(LobbyPlayerUi(playerId = ownId, displayName = "Alice"))
+        val players =
+            listOf(
+                LobbyPlayerUi(
+                    playerId = ownId,
+                    displayName = "Alice",
+                    characterId = "blackpurp",
+                ),
+            )
 
         val result =
             lobbyPlayersToGamePlayers(
                 players,
                 ownPlayerId = ownId,
-                ownPlayerColor = null,
+                ownCharacterId = null,
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals("blackpurp", result[0].characterId)
     }
 }
