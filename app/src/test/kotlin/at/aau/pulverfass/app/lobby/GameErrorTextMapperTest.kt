@@ -303,4 +303,46 @@ class GameErrorTextMapperTest {
             messages.getValue(ConfirmAttackDoneErrorCode.GAME_NOT_FOUND),
         )
     }
+
+    @Test
+    fun `cheat reinforcement bonus errors are translated for UI`() {
+        val messages =
+            ClaimCheatReinforcementBonusErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(ClaimCheatReinforcementBonusErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH,
+            ).contains("Spielerzuordnung"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER,
+            ).contains("eigenen Zug"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH,
+            ).contains("Verstärkungsphase"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
+            ).contains("bereits verwendet"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED,
+            ).contains("Kartenset"),
+        )
+    }
 }

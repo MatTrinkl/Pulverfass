@@ -840,6 +840,9 @@ class LobbyControllerTest {
             controller.confirmReinforcementsDone()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
 
+            controller.claimCheatReinforcementBonus()
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
             controller.tradeInCards()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
 
