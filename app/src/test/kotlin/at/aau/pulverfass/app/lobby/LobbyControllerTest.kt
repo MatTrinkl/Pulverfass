@@ -1585,12 +1585,13 @@ class LobbyControllerTest {
                     "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
                     controller.state.value.autoPhaseNoticeText,
                 )
-                controller.clearAutoPhaseNotice()
-                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     LobbyCommandKey.CONFIRM_ATTACK_DONE !in
-                        controller.state.value.pendingCommandKeys
+                        controller.state.value.pendingCommandKeys &&
+                        controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY
                 }
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
             } finally {
                 controller.close()
                 server.close()
