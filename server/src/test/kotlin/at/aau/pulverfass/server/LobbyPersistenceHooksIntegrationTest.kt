@@ -93,7 +93,7 @@ class LobbyPersistenceHooksIntegrationTest {
     }
 
     @Test
-    fun `turn advance persists accepted event row`() =
+    fun `turn advance persists accepted event rows including automatic attack skip`() =
         testApplication {
             val fixture = createRunningLobbyFixture("PS11")
             application {
@@ -134,9 +134,12 @@ class LobbyPersistenceHooksIntegrationTest {
                     receiveRelevantTestPayload(hostSession, skipGameSync = true)
 
                     val persistedEvents = store.listEvents(fixture.lobbyCode)
-                    assertEquals(listOf("turn_state_updated"), persistedEvents.map { it.eventType })
-                    assertEquals(listOf(1L), persistedEvents.map { it.stateVersion })
-                    assertEquals(listOf(1), persistedEvents.map { it.turnCount })
+                    assertEquals(
+                        listOf("turn_state_updated", "turn_state_updated"),
+                        persistedEvents.map { it.eventType },
+                    )
+                    assertEquals(listOf(1L, 2L), persistedEvents.map { it.stateVersion })
+                    assertEquals(listOf(1, 1), persistedEvents.map { it.turnCount })
 
                     hostSession.close()
                 }
