@@ -607,6 +607,80 @@ class AttackIntegrationTest {
         }
 
     @Test
+    fun `attack can capture territory owned by player who left the lobby`() =
+        testApplication {
+            val lobbyCode = LobbyCode("ATKX")
+            val attacker = PlayerId(1)
+            val bystander = PlayerId(2)
+            val departedDefender = PlayerId(99)
+            val map = defaultMapDefinition()
+            val fromTerritoryId = map.territories.first().territoryId
+            val toTerritoryId = map.territories.first().edges.first().targetId
+
+            val initialState =
+                attackGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(attacker, bystander),
+                    activePlayerId = attacker,
+                    turnPhase = TurnPhase.ATTACK,
+                    rngSeed = 1L,
+                    rngState = 2L,
+                    owners = mapOf(fromTerritoryId to attacker, toTerritoryId to departedDefender),
+                    troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
+                )
+            val fixture = createFixture(lobbyCode, initialState, this)
+
+            try {
+                coroutineScope {
+                    val attackerSession = fixture.connectPlayer(fixture.client, attacker)
+
+                    attackerSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    AttackRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = attacker,
+                                        fromTerritoryId = fromTerritoryId,
+                                        toTerritoryId = toTerritoryId,
+                                        attackTroops = 3,
+                                        moveAfterCapture = 3,
+                                        requestId = "req-departed-capture",
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val delta =
+                        receiveRelevantTestPayload(attackerSession.first) as GameStateDeltaEvent
+                    val resolved =
+                        delta.events
+                            .filterIsInstance<AttackResolvedBroadcastEvent>()
+                            .single()
+                    assertEquals(departedDefender, resolved.defenderPlayerId)
+                    assertEquals(true, resolved.capture)
+                    assertEquals(
+                        AttackResponse(
+                            lobbyCode = lobbyCode,
+                            requestId = "req-departed-capture",
+                        ),
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
+
+                    val snapshot =
+                        fixture.lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
+                    assertEquals(attacker, snapshot.ownerOf(toTerritoryId))
+
+                    attackerSession.first.close()
+                }
+            } finally {
+                fixture.stop()
+            }
+        }
+
+    @Test
     fun `elimination keeps hand updates private and phase changes public`() =
         testApplication {
             val lobbyCode = LobbyCode("AT14")

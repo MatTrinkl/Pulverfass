@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.game
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -106,6 +107,28 @@ class GameStateMapperTest {
         val result = buildRegionStates(territoryStates = territories, players = players)
 
         assertEquals(PulverfassColors.playerColors[0], result.getValue("brazil").accentColor)
+    }
+
+    @Test
+    fun `buildRegionStates grays departed owners while keeping them visible`() {
+        val departedId = PlayerId(99)
+        val territoryId = TerritoryId("brasilien")
+        val territories =
+            mapOf(
+                territoryId to
+                    GameTerritoryUiState(
+                        territoryId = territoryId,
+                        ownerId = departedId,
+                        troopCount = 3,
+                    ),
+            )
+
+        val result = buildRegionStates(territoryStates = territories, players = emptyList())
+        val region = result.getValue("brazil")
+
+        assertEquals("99", region.ownerPlayerId)
+        assertEquals("Verlassener Spieler", region.ownerName)
+        assertEquals(Color(0xFF5E6268), region.accentColor)
     }
 
     @Test

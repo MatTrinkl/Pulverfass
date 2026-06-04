@@ -901,6 +901,7 @@ object ClientGameStateReducer {
         val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
         val isEnemyNeighbor =
             territory != null &&
+                territory.ownerId != null &&
                 territory.ownerId != localPlayerId &&
                 territoryId in current.adjacentTerritoryIds[sourceTerritoryId].orEmpty()
         return if (isEnemyNeighbor) {

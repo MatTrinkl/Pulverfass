@@ -79,6 +79,8 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private const val CHARACTER_COIN_TARGET_SCALE = 1f
+
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
@@ -993,7 +995,12 @@ private fun CharacterCoinAnimation(
             launch { coinRotation.animateTo(360f, tween(440)) }
             delay(430)
 
-            launch { coinScale.animateTo(0.9f, tween(520, easing = FastOutSlowInEasing)) }
+            launch {
+                coinScale.animateTo(
+                    CHARACTER_COIN_TARGET_SCALE,
+                    tween(520, easing = FastOutSlowInEasing),
+                )
+            }
             launch { coinRotation.animateTo(720f, tween(520)) }
             launch {
                 coinOffsetX.animateTo(
@@ -1024,7 +1031,6 @@ private fun CharacterCoinAnimation(
         Box(
             modifier =
                 Modifier
-                    .size(96.dp)
                     .align(Alignment.Center)
                     .graphicsLayer(
                         scaleX = coinScale.value,
@@ -1037,15 +1043,21 @@ private fun CharacterCoinAnimation(
                     ),
             contentAlignment = Alignment.Center,
         ) {
-            Image(
-                painter = painterResource(id = characterDef.drawableRes),
-                contentDescription = characterDef.displayName,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier =
                     Modifier
-                        .size(72.dp)
-                        .clip(CircleShape),
-            )
+                        .size(86.dp)
+                        .clip(CircleShape)
+                        .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = characterDef.drawableRes),
+                    contentDescription = characterDef.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(100.dp),
+                )
+            }
         }
     }
 }

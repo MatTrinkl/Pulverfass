@@ -465,6 +465,40 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `attack selection rejects neutral targets but allows departed owners`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 3),
+                        targetId to GameTerritoryUiState(targetId, null, 3),
+                    ),
+            )
+
+        val selectedSource = ClientGameStateReducer.selectRegion(base, "brazil", aliceId)
+        val rejectedNeutralTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "argentina", aliceId)
+        val departedTarget =
+            selectedSource.copy(
+                territoryStates =
+                    selectedSource.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, PlayerId(99), 3)),
+            )
+        val acceptedDepartedTarget =
+            ClientGameStateReducer.selectRegion(departedTarget, "argentina", aliceId)
+
+        assertEquals(null, rejectedNeutralTarget.selectionToRegionId)
+        assertFalse(rejectedNeutralTarget.canSubmitAttack(aliceId))
+        assertEquals("argentina", acceptedDepartedTarget.selectionToRegionId)
+        assertTrue(acceptedDepartedTarget.canSubmitAttack(aliceId))
+    }
+
+    @Test
     fun `fortify selection accepts only owned connected targets and marks move as consumed`() {
         val base =
             GameUiState(
@@ -570,6 +604,50 @@ class ClientGameStateReducerTest {
         assertFalse(serverConsumedSelection.canSubmitFortifyMove(aliceId))
         assertFalse(resetFortifyState.fortifyState.hasMoved)
         assertEquals(null, ignoredAfterMove.selectionFromRegionId)
+    }
+
+    @Test
+    fun `fortify availability requires movable own troops and owned path`() {
+        val sourceId = TerritoryId("brasilien")
+        val middleId = TerritoryId("kanada")
+        val targetId = TerritoryId("groenland")
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                adjacentTerritoryIds =
+                    mapOf(
+                        sourceId to setOf(middleId),
+                        middleId to setOf(sourceId, targetId),
+                        targetId to setOf(middleId),
+                    ),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 1),
+                        middleId to GameTerritoryUiState(middleId, aliceId, 1),
+                        targetId to GameTerritoryUiState(targetId, aliceId, 1),
+                    ),
+            )
+        val movableSource =
+            base.copy(
+                territoryStates =
+                    base.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 2)),
+            )
+        val blockedPath =
+            movableSource.copy(
+                territoryStates =
+                    movableSource.territoryStates +
+                        (middleId to GameTerritoryUiState(middleId, bobId, 1)),
+            )
+
+        assertFalse(base.hasAvailableFortify(aliceId))
+        assertTrue(movableSource.hasAvailableFortify(aliceId))
+        assertFalse(blockedPath.hasAvailableFortify(aliceId))
+        assertFalse(
+            movableSource.copy(fortifyState = FortifyUiState(hasMoved = true))
+                .hasAvailableFortify(aliceId),
+        )
     }
 
     @Test
@@ -1155,7 +1233,10 @@ class ClientGameStateReducerTest {
                 players = players,
             )
 
-        assertEquals("Neutral", stateWithoutPlayers.regionStates.getValue("brazil").ownerName)
+        assertEquals(
+            "Verlassener Spieler",
+            stateWithoutPlayers.regionStates.getValue("brazil").ownerName,
+        )
         assertEquals("Alice", restoredState.regionStates.getValue("brazil").ownerName)
         assertEquals("1", restoredState.regionStates.getValue("brazil").ownerPlayerId)
     }

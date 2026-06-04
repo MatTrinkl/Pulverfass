@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
 private val NeutralTerritoryColor = Color(0xFF8F8F8F)
+private val DepartedTerritoryColor = Color(0xFF5E6268)
 
 /**
  * Abbildung zwischen Backend-Territories und vorhandenen Android-Kartenmasken.
@@ -116,12 +117,21 @@ fun buildRegionStates(
             GameMapTerritoryMapper.toAndroidRegionId(territory.territoryId)
                 ?: return@mapNotNull null
         val owner = territory.ownerId?.let(playersById::get)
+        val isDepartedOwner = territory.ownerId != null && owner == null
         regionId to
             GameMapRegionState(
-                ownerPlayerId = owner?.playerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
-                ownerName = owner?.name ?: NEUTRAL_OWNER_NAME,
+                ownerPlayerId = territory.ownerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
+                ownerName =
+                    owner?.name
+                        ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
+                        ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                accentColor = owner?.color ?: NeutralTerritoryColor,
+                accentColor =
+                    when {
+                        owner != null -> owner.color
+                        isDepartedOwner -> DepartedTerritoryColor
+                        else -> NeutralTerritoryColor
+                    },
             )
     }.toMap()
 }
@@ -152,5 +162,6 @@ private fun List<LobbyPlayerUi>.stablePlayerColors(): Map<PlayerId, Color> =
         .mapIndexed { index, player -> player.playerId to fallbackPlayerColor(index) }
         .toMap()
 
+private const val DEPARTED_OWNER_NAME = "Verlassener Spieler"
 private const val NEUTRAL_OWNER_ID = "neutral"
 private const val NEUTRAL_OWNER_NAME = "Neutral"

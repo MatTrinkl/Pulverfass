@@ -165,8 +165,7 @@ data class GameUiState(
         isConnected: Boolean = true,
     ): Boolean =
         canManageAttacks(localPlayerId, isConnected) &&
-            selectionFromRegionId != null &&
-            selectionToRegionId != null &&
+            hasValidAttackSelection(localPlayerId) &&
             attackState.attackTroops >= MIN_ATTACK_TROOPS &&
             attackState.moveAfterCapture in
             minimumOccupyingTroopsForAttack(attackState.attackTroops)..attackState.attackTroops
@@ -209,6 +208,26 @@ data class GameUiState(
         }
     }
 
+    private fun hasValidAttackSelection(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        val fromTerritoryId =
+            selectionFromRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val toTerritoryId =
+            selectionToRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val source = territoryStates[fromTerritoryId] ?: return false
+        val targetOwnerId = territoryStates[toTerritoryId]?.ownerId ?: return false
+
+        return source.ownerId == localPlayerId &&
+            source.troopCount > MIN_ATTACK_TROOPS &&
+            targetOwnerId != localPlayerId &&
+            toTerritoryId in adjacentTerritoryIds[fromTerritoryId].orEmpty()
+    }
+
     /**
      * Prüft, ob eine Truppenverschiebung in der Fortify-Phase vorbereitet werden kann.
      *
@@ -231,6 +250,32 @@ data class GameUiState(
             !fortifyState.hasMoved
 
     /**
+     * Prüft, ob der aktive Spieler mindestens eine gültige Fortify-Option besitzt.
+     *
+     * Ein gültiger Move braucht ein eigenes Quellgebiet mit mindestens zwei
+     * Truppen und ein anderes eigenes Zielgebiet, das über durchgehend eigene
+     * Territorien erreichbar ist. Damit spiegelt die Auto-Skip-Logik dieselbe
+     * Verbindungsvoraussetzung wie die manuelle Gebietsauswahl.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @return `true`, wenn mindestens eine Verschiebung möglich ist
+     */
+    fun hasAvailableFortify(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null || fortifyState.hasMoved) {
+            return false
+        }
+
+        val ownTerritories = territoryStates.values.filter { it.ownerId == localPlayerId }
+        val sources = ownTerritories.filter { it.troopCount > MIN_FORTIFY_TROOPS }
+        return sources.any { source ->
+            ownTerritories.any { target ->
+                source.territoryId != target.territoryId &&
+                    hasOwnedPath(localPlayerId, source.territoryId, target.territoryId)
+            }
+        }
+    }
+
+    /**
      * Prüft eine vollständig ausgewählte Fortify-Absicht vor dem Request.
      *
      * Quelle, Ziel, Eigentum und eigener Verbindungspfad werden beim Auswählen
@@ -249,6 +294,41 @@ data class GameUiState(
             selectionFromRegionId != null &&
             selectionToRegionId != null &&
             fortifyState.troopCount >= MIN_FORTIFY_TROOPS
+
+    private fun hasOwnedPath(
+        playerId: PlayerId,
+        sourceTerritoryId: TerritoryId,
+        targetTerritoryId: TerritoryId,
+    ): Boolean {
+        if (
+            territoryStates[sourceTerritoryId]?.ownerId != playerId ||
+            territoryStates[targetTerritoryId]?.ownerId != playerId
+        ) {
+            return false
+        }
+
+        val visited = linkedSetOf(sourceTerritoryId)
+        val queue = ArrayDeque<TerritoryId>()
+        queue.add(sourceTerritoryId)
+
+        while (queue.isNotEmpty()) {
+            val currentTerritoryId = queue.removeFirst()
+            adjacentTerritoryIds[currentTerritoryId].orEmpty().forEach { neighborId ->
+                if (
+                    neighborId !in visited &&
+                    territoryStates[neighborId]?.ownerId == playerId
+                ) {
+                    if (neighborId == targetTerritoryId) {
+                        return true
+                    }
+                    visited.add(neighborId)
+                    queue.add(neighborId)
+                }
+            }
+        }
+
+        return false
+    }
 }
 
 /**

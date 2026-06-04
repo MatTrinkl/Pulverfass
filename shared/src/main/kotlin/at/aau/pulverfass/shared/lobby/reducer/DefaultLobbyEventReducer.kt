@@ -459,7 +459,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ): GameState {
         requireMapLoaded(state)
         requireKnownPlayer(state, event.attackerPlayerId)
-        requireKnownPlayer(state, event.defenderPlayerId)
         requireKnownTerritory(state, event.fromTerritoryId)
         requireKnownTerritory(state, event.toTerritoryId)
 

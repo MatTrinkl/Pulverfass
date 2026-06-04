@@ -299,44 +299,51 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun game_screen_shows_auto_phase_notice_until_acknowledged() {
+    fun game_screen_shows_auto_phase_notice_temporarily() {
+        composeTestRule.mainClock.autoAdvance = false
         var dismissed = false
         val noticeText =
             "Keine Angriffe mehr möglich. Die Angriffsphase wird " +
                 "automatisch beendet."
 
-        composeTestRule.setContent {
-            AndroidAppTheme {
-                GameScreenContent(
-                    contentState =
-                        GameScreenContentState(
-                            players = emptyList(),
-                            localPlayerId = PlayerId(1),
-                            uiState = GameUiState(),
-                            isConnected = true,
-                            pendingCommandKeys = emptySet(),
-                            mapPainter = ColorPainter(Color.White),
-                            autoPhaseNoticeText = noticeText,
-                        ),
-                    actions =
-                        GameScreenActions(
-                            onRegionSelected = {},
-                            onToggleCards = {},
-                            onAdvanceTurn = {},
-                            onRefreshGameState = {},
-                            onClearAutoPhaseNotice = { dismissed = true },
-                        ),
-                    countdownState = false to 0,
-                )
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreenContent(
+                        contentState =
+                            GameScreenContentState(
+                                players = emptyList(),
+                                localPlayerId = PlayerId(1),
+                                uiState = GameUiState(),
+                                isConnected = true,
+                                pendingCommandKeys = emptySet(),
+                                mapPainter = ColorPainter(Color.White),
+                                autoPhaseNoticeText = noticeText,
+                            ),
+                        actions =
+                            GameScreenActions(
+                                onRegionSelected = {},
+                                onToggleCards = {},
+                                onAdvanceTurn = {},
+                                onRefreshGameState = {},
+                                onClearAutoPhaseNotice = { dismissed = true },
+                            ),
+                        countdownState = false to 0,
+                    )
+                }
             }
+
+            composeTestRule.onNodeWithTag("auto_phase_notice_popup").assertIsDisplayed()
+            composeTestRule.onNodeWithText("PHASE GEWECHSELT").assertIsDisplayed()
+            composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
+            assertTrue(!dismissed)
+            composeTestRule.mainClock.advanceTimeBy(2_100)
+            composeTestRule.waitForIdle()
+
+            assertTrue(dismissed)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
         }
-
-        composeTestRule.onNodeWithTag("auto_phase_notice_popup").assertIsDisplayed()
-        composeTestRule.onNodeWithText("PHASE GEWECHSELT").assertIsDisplayed()
-        composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
-        composeTestRule.onNodeWithTag("auto_phase_notice_ack").performClick()
-
-        assertTrue(dismissed)
     }
 
     @Test
@@ -645,6 +652,11 @@ class ScreenComposableTest {
                                             attackTroops = 4,
                                             moveAfterCapture = 3,
                                         ),
+                                    adjacentTerritoryIds =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                setOf(TerritoryId("argentinien")),
+                                        ),
                                     territoryStates =
                                         mapOf(
                                             TerritoryId("brasilien") to
@@ -652,6 +664,12 @@ class ScreenComposableTest {
                                                     TerritoryId("brasilien"),
                                                     playerId,
                                                     6,
+                                                ),
+                                            TerritoryId("argentinien") to
+                                                at.aau.pulverfass.app.game.GameTerritoryUiState(
+                                                    TerritoryId("argentinien"),
+                                                    PlayerId(2),
+                                                    3,
                                                 ),
                                         ),
                                 ),

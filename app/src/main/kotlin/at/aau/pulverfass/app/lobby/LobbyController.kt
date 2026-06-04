@@ -159,6 +159,7 @@ class LobbyController(
     private var reconnectSessionToken: SessionToken? = null
     private var awaitingReconnectResponse = false
     private var manualDisconnectRequested = false
+    private var suppressNextAttackBoundaryNotice = false
 
     init {
         scope.launch {
@@ -272,7 +273,40 @@ class LobbyController(
     }
 
     fun clearAutoPhaseNotice() {
-        _state.update { it.copy(autoPhaseNoticeText = null) }
+        var shouldCheckNextPhase = false
+        _state.update { current ->
+            val nextNotice = current.autoPhaseNoticeQueue.firstOrNull()
+            if (nextNotice == null) {
+                shouldCheckNextPhase = true
+                current.copy(
+                    autoPhaseNoticeText = null,
+                    autoPhaseNoticeQueue = emptyList(),
+                )
+            } else {
+                current.copy(
+                    autoPhaseNoticeText = nextNotice,
+                    autoPhaseNoticeQueue = current.autoPhaseNoticeQueue.drop(1),
+                )
+            }
+        }
+        if (shouldCheckNextPhase) {
+            maybeAdvanceCurrentPhaseAutomatically()
+        }
+    }
+
+    private fun enqueueAutoPhaseNotice(message: String) {
+        _state.update { current ->
+            if (
+                current.autoPhaseNoticeText == message ||
+                message in current.autoPhaseNoticeQueue
+            ) {
+                current
+            } else if (current.autoPhaseNoticeText == null) {
+                current.copy(autoPhaseNoticeText = message)
+            } else {
+                current.copy(autoPhaseNoticeQueue = current.autoPhaseNoticeQueue + message)
+            }
+        }
     }
 
     fun updateLobbyCode(lobbyCode: String) {
@@ -382,6 +416,7 @@ class LobbyController(
 
     fun leaveLobby() {
         val lobbyCode = state.value.activeLobbyCode
+        suppressNextAttackBoundaryNotice = false
         if (lobbyCode != null) {
             scope.launch {
                 runCatching {
@@ -409,6 +444,7 @@ class LobbyController(
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
+                autoPhaseNoticeQueue = emptyList(),
             )
         }
         reconnectSessionStore.clearSession()
@@ -614,11 +650,14 @@ class LobbyController(
     /**
      * Beendet Phasen automatisch, wenn lokal keine sinnvolle Aktion mehr möglich ist.
      *
-     * Das betrifft zwei UX-Fälle:
+     * Das betrifft drei UX-Fälle:
+     * - Reinforcement wird direkt bestätigt, wenn der aktive Spieler keine
+     *   offenen Verstärkungen mehr besitzt.
      * - Attack wird direkt bestätigt, wenn der aktive Spieler kein Gebiet mit
      *   mehr als zwei Truppen und fremdem Nachbarziel besitzt.
-     * - Fortify wird nach einem bestätigten Move direkt weitergeschaltet, weil
-     *   die Phase fachlich nur eine Verschiebung erlaubt.
+     * - Fortify wird nach einem bestätigten Move oder ohne gültigen
+     *   Verbindungspfad direkt weitergeschaltet, weil die Phase fachlich nur
+     *   eine Verschiebung erlaubt.
      *
      * Die Methode nutzt dieselben Requests wie die sichtbaren Buttons. Pending
      * Keys verhindern doppelte Requests, falls Server-Response und öffentliche
@@ -626,12 +665,29 @@ class LobbyController(
      */
     private fun maybeAdvanceCurrentPhaseAutomatically() {
         val snapshot = state.value
+        if (snapshot.autoPhaseNoticeText != null) {
+            return
+        }
         val playerId = snapshot.ownPlayerId ?: return
         if (!snapshot.gameState.canUseGameActions(playerId, snapshot.isConnected)) {
             return
         }
 
         when (snapshot.gameState.turnPhase) {
+            TurnPhase.REINFORCEMENTS -> {
+                if (
+                    LobbyCommandKey.PLACE_REINFORCEMENTS in snapshot.pendingCommandKeys ||
+                    LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE in snapshot.pendingCommandKeys ||
+                    !snapshot.gameState.canConfirmReinforcementsDone(
+                        playerId,
+                        snapshot.isConnected,
+                    )
+                ) {
+                    return
+                }
+                enqueueAutoPhaseNotice(AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE)
+                confirmReinforcementsDone()
+            }
             TurnPhase.ATTACK -> {
                 if (
                     LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys ||
@@ -642,31 +698,28 @@ class LobbyController(
                 ) {
                     return
                 }
-                _state.update {
-                    it.copy(
-                        autoPhaseNoticeText =
-                            "Keine Angriffe mehr möglich. Die Angriffsphase wird " +
-                                "automatisch beendet.",
-                    )
-                }
-                confirmAttackDone()
+                enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+                confirmAttackDoneAutomatically()
             }
             TurnPhase.FORTIFY -> {
                 if (
-                    !snapshot.gameState.fortifyState.hasMoved ||
                     LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
                     LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
-                    !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected)
+                    !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected) ||
+                    snapshot.gameState.territoryStates.isEmpty() ||
+                    snapshot.gameState.adjacentTerritoryIds.isEmpty()
                 ) {
                     return
                 }
-                _state.update {
-                    it.copy(
-                        autoPhaseNoticeText =
-                            "Truppen wurden verschoben. Die Verschiebephase wird " +
-                                "automatisch beendet.",
-                    )
-                }
+                val noticeText =
+                    if (snapshot.gameState.fortifyState.hasMoved) {
+                        AUTO_PHASE_FORTIFY_MOVED_NOTICE
+                    } else if (!snapshot.gameState.hasAvailableFortify(playerId)) {
+                        AUTO_PHASE_FORTIFY_EMPTY_NOTICE
+                    } else {
+                        return
+                    }
+                enqueueAutoPhaseNotice(noticeText)
                 advanceTurn()
             }
             else -> Unit
@@ -869,6 +922,14 @@ class LobbyController(
 
     /** Beendet die Angriffsphase über den dafür vorgesehenen Serverrequest. */
     fun confirmAttackDone() {
+        confirmAttackDone(suppressAutoBoundaryNotice = true)
+    }
+
+    private fun confirmAttackDoneAutomatically() {
+        confirmAttackDone(suppressAutoBoundaryNotice = false)
+    }
+
+    private fun confirmAttackDone(suppressAutoBoundaryNotice: Boolean) {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
         val playerId = snapshot.ownPlayerId
@@ -881,6 +942,9 @@ class LobbyController(
             return
         }
 
+        if (suppressAutoBoundaryNotice) {
+            suppressNextAttackBoundaryNotice = true
+        }
         scope.launch {
             sendCommand(
                 command =
@@ -894,6 +958,9 @@ class LobbyController(
                     ),
                 keepPendingUntilResponse = true,
             ).onFailure { error ->
+                if (suppressAutoBoundaryNotice) {
+                    suppressNextAttackBoundaryNotice = false
+                }
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorConfirmAttackFailed)
                 }
@@ -1531,10 +1598,7 @@ class LobbyController(
                     ClientGameStateReducer.applySnapshotBroadcast(current, payload, players)
                 }
             is GameStateDeltaEvent -> handleGameStateDelta(payload)
-            is PhaseBoundaryEvent ->
-                applyGameState { current, _ ->
-                    ClientGameStateReducer.applyPhaseBoundary(current, payload)
-                }
+            is PhaseBoundaryEvent -> handlePhaseBoundary(payload)
             is TurnStateGetResponse -> {
                 clearPendingCommand(LobbyCommandKey.TURN_STATE_GET)
                 applyGameState { current, _ ->
@@ -1582,6 +1646,7 @@ class LobbyController(
             is PlaceReinforcementsResponse -> {
                 clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
                 _state.update { it.copy(errorText = null) }
+                maybeAdvanceCurrentPhaseAutomatically()
                 true
             }
             is PlaceReinforcementsErrorResponse -> {
@@ -1621,6 +1686,7 @@ class LobbyController(
             is AttackResponse -> {
                 clearPendingCommand(LobbyCommandKey.ATTACK)
                 _state.update { it.copy(errorText = null) }
+                maybeAdvanceCurrentPhaseAutomatically()
                 true
             }
             is AttackErrorResponse -> {
@@ -1635,6 +1701,7 @@ class LobbyController(
             }
             is ConfirmAttackDoneErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.CONFIRM_ATTACK_DONE)
+                suppressNextAttackBoundaryNotice = false
                 updateGameError(GameErrorTextMapper.map(payload))
                 true
             }
@@ -1767,13 +1834,40 @@ class LobbyController(
         }
     }
 
+    private fun handlePhaseBoundary(payload: PhaseBoundaryEvent) {
+        val snapshot = state.value
+        val previousGameState = snapshot.gameState
+        val isAttackBoundary =
+            previousGameState.turnPhase == TurnPhase.ATTACK &&
+                payload.nextPhase == TurnPhase.FORTIFY
+        val shouldSuppressAttackBoundaryNotice =
+            isAttackBoundary && suppressNextAttackBoundaryNotice
+        if (shouldSuppressAttackBoundaryNotice) {
+            suppressNextAttackBoundaryNotice = false
+        }
+        val shouldShowServerAttackAutoNotice =
+            isAttackBoundary &&
+                !shouldSuppressAttackBoundaryNotice
+
+        applyGameState(runAutoAdvance = !shouldShowServerAttackAutoNotice) { current, _ ->
+            ClientGameStateReducer.applyPhaseBoundary(current, payload)
+        }
+
+        if (shouldShowServerAttackAutoNotice) {
+            enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+        }
+    }
+
     private fun applyGameState(
+        runAutoAdvance: Boolean = true,
         reducer: (current: GameUiState, players: List<LobbyPlayerUi>) -> GameUiState,
     ) {
         _state.update { current ->
             current.copy(gameState = reducer(current.gameState, current.players))
         }
-        maybeAdvanceCurrentPhaseAutomatically()
+        if (runAutoAdvance) {
+            maybeAdvanceCurrentPhaseAutomatically()
+        }
     }
 
     private fun updateGameError(reason: String) {
@@ -1913,6 +2007,7 @@ class LobbyController(
 
     private fun resetLobbyMembers() {
         playersById.clear()
+        suppressNextAttackBoundaryNotice = false
         reconnectSessionStore.saveWasGameStarted(false)
         _state.update {
             it.copy(
@@ -1923,6 +2018,7 @@ class LobbyController(
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
+                autoPhaseNoticeQueue = emptyList(),
             )
         }
     }
@@ -1958,3 +2054,14 @@ class LobbyController(
         return currentNames + ownName
     }
 }
+
+private const val AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE =
+    "Keine Verstärkungen mehr verfügbar. Die Verstärkungsphase wird " +
+        "automatisch beendet."
+private const val AUTO_PHASE_ATTACK_DONE_NOTICE =
+    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet."
+private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
+    "Truppen wurden verschoben. Die Verschiebephase wird automatisch beendet."
+private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
+    "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
+        "automatisch beendet."

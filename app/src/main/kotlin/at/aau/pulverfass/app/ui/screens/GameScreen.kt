@@ -127,6 +127,9 @@ private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
+private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val COUNTDOWN_STEP_MILLIS = 1_000L
+private const val COUNTDOWN_ZERO_MILLIS = 450L
 
 /**
  * Einstiegspunkt des Spielbildschirms.
@@ -716,6 +719,11 @@ private fun AutoPhaseNoticeOverlay(
 ) {
     if (message == null) return
 
+    LaunchedEffect(message) {
+        delay(AUTO_PHASE_NOTICE_DURATION_MILLIS)
+        onDismiss()
+    }
+
     GameScreenOverlayContainer(
         overlayAlpha = 0.72f,
         arrangement = Arrangement.spacedBy(14.dp),
@@ -734,14 +742,6 @@ private fun AutoPhaseNoticeOverlay(
             text = message,
             color = PulverfassColors.TextOnDark,
             style = MaterialTheme.typography.bodyLarge,
-        )
-        MainButton(
-            text = "OK",
-            onClick = onDismiss,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .testTag("auto_phase_notice_ack"),
         )
     }
 }
@@ -798,12 +798,14 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
     var show by remember { mutableStateOf(true) }
     var value by remember { mutableStateOf(3) }
     LaunchedEffect(Unit) {
-        for (i in 3 downTo 0) {
+        for (i in 3 downTo 1) {
             value = i
             musicManager?.playSfx(R.raw.sfx_ui_click)
-            delay(1000L)
+            delay(COUNTDOWN_STEP_MILLIS)
         }
-        delay(2000L)
+        value = 0
+        musicManager?.playSfx(R.raw.sfx_ui_click)
+        delay(COUNTDOWN_ZERO_MILLIS)
         show = false
     }
     return show to value

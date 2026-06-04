@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -20,6 +21,7 @@ import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
@@ -63,10 +65,6 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
@@ -523,7 +521,6 @@ class LobbyControllerTest {
             val seenPayloads = CopyOnWriteArrayList<Any>()
             var placeAttempts = 0
             var tradeInAttempts = 0
-            var confirmAttempts = 0
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -575,7 +572,28 @@ class LobbyControllerTest {
                                                                     TerritoryId(
                                                                         "brasilien",
                                                                     ),
-                                                                edges = emptyList(),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "argentinien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId(
+                                                                        "argentinien",
+                                                                    ),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "brasilien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
                                                             ),
                                                         ),
                                                     continents = emptyList(),
@@ -585,6 +603,11 @@ class LobbyControllerTest {
                                                     MapTerritoryStateSnapshot(
                                                         territoryId = TerritoryId("brasilien"),
                                                         ownerId = playerId,
+                                                        troopCount = 1,
+                                                    ),
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        ownerId = PlayerId(2),
                                                         troopCount = 1,
                                                     ),
                                                 ),
@@ -715,30 +738,7 @@ class LobbyControllerTest {
                             }
                         }
                         is ConfirmReinforcementsDoneRequest -> {
-                            confirmAttempts += 1
-                            if (confirmAttempts == 1) {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            ConfirmReinforcementsDoneErrorResponse(
-                                                ConfirmReinforcementsDoneErrorCode
-                                                    .PENDING_REINFORCEMENTS_REMAINING,
-                                                "pending",
-                                            ),
-                                        ),
-                                    ),
-                                )
-                            } else {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            ConfirmReinforcementsDoneResponse(lobbyCode),
-                                        ),
-                                    ),
-                                )
-                            }
+                            outgoing.sendPayload(ConfirmReinforcementsDoneResponse(lobbyCode))
                         }
                     }
                 }
@@ -773,6 +773,18 @@ class LobbyControllerTest {
                 assertEquals(TerritoryId("brasilien"), placement.placements.single().territoryId)
                 assertEquals(2, placement.placements.single().amount)
                 waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 0 }
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().size == 1
+                }
+                assertEquals(
+                    "Keine Verstärkungen mehr verfügbar. Die Verstärkungsphase wird " +
+                        "automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                waitUntil {
+                    LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE !in
+                        controller.state.value.pendingCommandKeys
+                }
 
                 controller.placeReinforcements()
                 assertEquals(config.errorReinforcementsNotAllowed, controller.state.value.errorText)
@@ -793,11 +805,6 @@ class LobbyControllerTest {
                 )
                 waitUntil { controller.state.value.gameState.privateHandCards.isEmpty() }
 
-                controller.confirmReinforcementsDone()
-                waitUntil {
-                    controller.state.value.errorText ==
-                        "Verbleibende Verstärkungen müssen zuerst platziert werden."
-                }
                 controller.confirmReinforcementsDone()
                 waitUntil {
                     seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().size == 2
@@ -850,7 +857,6 @@ class LobbyControllerTest {
             val config = LobbyControllerConfig()
             val seenPayloads = CopyOnWriteArrayList<Any>()
             var attackAttempts = 0
-            var confirmAttempts = 0
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -986,6 +992,26 @@ class LobbyControllerTest {
                                                             defenderRemaining = 0,
                                                             occupyingTroopCount = 2,
                                                         ),
+                                                        TerritoryTroopsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            territoryId = TerritoryId("brasilien"),
+                                                            troopCount = 3,
+                                                            stateVersion = 2,
+                                                        ),
+                                                        TerritoryOwnerChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            territoryId =
+                                                                TerritoryId("argentinien"),
+                                                            ownerId = playerId,
+                                                            stateVersion = 2,
+                                                        ),
+                                                        TerritoryTroopsChangedEvent(
+                                                            lobbyCode = lobbyCode,
+                                                            territoryId =
+                                                                TerritoryId("argentinien"),
+                                                            troopCount = 2,
+                                                            stateVersion = 2,
+                                                        ),
                                                     ),
                                             ),
                                         ),
@@ -1000,27 +1026,17 @@ class LobbyControllerTest {
                             }
                         }
                         is ConfirmAttackDoneRequest -> {
-                            confirmAttempts += 1
-                            if (confirmAttempts == 1) {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            ConfirmAttackDoneErrorResponse(
-                                                ConfirmAttackDoneErrorCode.PHASE_MISMATCH,
-                                                "phase",
-                                            ),
-                                        ),
-                                    ),
-                                )
-                            } else {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(ConfirmAttackDoneResponse(lobbyCode)),
-                                    ),
-                                )
-                            }
+                            outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 3,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
                         }
                     }
                 }
@@ -1056,15 +1072,15 @@ class LobbyControllerTest {
                 assertTrue(
                     controller.state.value.gameState.attackState.latestResult?.captured == true,
                 )
-
-                controller.confirmAttackDone()
                 waitUntil {
-                    controller.state.value.errorText == "Die Angriffsphase ist bereits beendet."
+                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().size == 1
                 }
-                controller.confirmAttackDone()
-                waitUntil {
-                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().size == 2
-                }
+                assertEquals(
+                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     LobbyCommandKey.CONFIRM_ATTACK_DONE !in
                         controller.state.value.pendingCommandKeys
@@ -1226,13 +1242,9 @@ class LobbyControllerTest {
                                 )
                             }
                         }
-                        is TurnAdvanceRequest ->
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(TurnAdvanceResponse(lobbyCode)),
-                                ),
-                            )
+                        is TurnAdvanceRequest -> {
+                            outgoing.sendPayload(TurnAdvanceResponse(lobbyCode))
+                        }
                     }
                 }
             val controller = createController(config = config)
@@ -1287,8 +1299,6 @@ class LobbyControllerTest {
                     "Truppen wurden verschoben. Die Verschiebephase wird automatisch beendet.",
                     controller.state.value.autoPhaseNoticeText,
                 )
-                controller.clearAutoPhaseNotice()
-                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     LobbyCommandKey.TURN_ADVANCE !in controller.state.value.pendingCommandKeys
                 }
@@ -1303,11 +1313,153 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `fortify phase without available moves is advanced automatically`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("FT00")
+            val playerId = PlayerId(1)
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = lobbyCode,
+                                            playerId = playerId,
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateCatchUpResponse(
+                                            lobbyCode = lobbyCode,
+                                            stateVersion = 1,
+                                            determinism =
+                                                PublicDeterminismMetadataSnapshot(
+                                                    mapHash = "hash",
+                                                    schemaVersion = 1,
+                                                ),
+                                            turnState =
+                                                PublicTurnStateSnapshot(
+                                                    activePlayerId = playerId,
+                                                    turnPhase = TurnPhase.FORTIFY,
+                                                    turnCount = 1,
+                                                    startPlayerId = playerId,
+                                                ),
+                                            definition =
+                                                MapDefinitionSnapshot(
+                                                    territories =
+                                                        listOf(
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("brasilien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "argentinien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("argentinien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "brasilien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                        ),
+                                                    continents = emptyList(),
+                                                ),
+                                            territoryStates =
+                                                listOf(
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 1,
+                                                    ),
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 1,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is TurnAdvanceRequest -> {
+                            outgoing.sendPayload(TurnAdvanceResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.FORTIFY,
+                                    nextPhase = TurnPhase.REINFORCEMENTS,
+                                    activePlayerId = PlayerId(2),
+                                    turnCount = 2,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
+                }
+                val request = seenPayloads.filterIsInstance<TurnAdvanceRequest>().single()
+                assertEquals(lobbyCode, request.lobbyCode)
+                assertEquals(playerId, request.playerId)
+                assertEquals(TurnPhase.FORTIFY, request.expectedPhase)
+                assertEquals(
+                    "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
+                        "automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
+                waitUntil {
+                    LobbyCommandKey.TURN_ADVANCE !in controller.state.value.pendingCommandKeys
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `attack phase without available attacks is confirmed automatically`() {
         runBlocking {
             val lobbyCode = LobbyCode("AT00")
             val playerId = PlayerId(1)
-            val defenderId = PlayerId(2)
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
             val server =
                 startProtocolServer { payload, outgoing ->
@@ -1391,8 +1543,8 @@ class LobbyControllerTest {
                                                     ),
                                                     MapTerritoryStateSnapshot(
                                                         territoryId = TerritoryId("argentinien"),
-                                                        ownerId = defenderId,
-                                                        troopCount = 3,
+                                                        ownerId = playerId,
+                                                        troopCount = 1,
                                                     ),
                                                 ),
                                         ),
@@ -1400,13 +1552,19 @@ class LobbyControllerTest {
                                 ),
                             )
                         }
-                        is ConfirmAttackDoneRequest ->
-                            outgoing.send(
-                                Frame.Binary(
-                                    true,
-                                    MessageCodec.encode(ConfirmAttackDoneResponse(lobbyCode)),
+                        is ConfirmAttackDoneRequest -> {
+                            outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
                                 ),
                             )
+                        }
                     }
                 }
             val controller = createController()
@@ -1432,6 +1590,142 @@ class LobbyControllerTest {
                     LobbyCommandKey.CONFIRM_ATTACK_DONE !in
                         controller.state.value.pendingCommandKeys
                 }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `auto phase notices are shown sequentially when attack and fortify are skipped`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AQ00")
+            val playerId = PlayerId(1)
+            val nextPlayerId = PlayerId(2)
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.ATTACK,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories =
+                                                listOf(
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        edges =
+                                                            listOf(
+                                                                MapTerritoryEdgeSnapshot(
+                                                                    TerritoryId("argentinien"),
+                                                                ),
+                                                            ),
+                                                    ),
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        edges =
+                                                            listOf(
+                                                                MapTerritoryEdgeSnapshot(
+                                                                    TerritoryId("brasilien"),
+                                                                ),
+                                                            ),
+                                                    ),
+                                                ),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates =
+                                        listOf(
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("brasilien"),
+                                                ownerId = playerId,
+                                                troopCount = 1,
+                                            ),
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("argentinien"),
+                                                ownerId = playerId,
+                                                troopCount = 1,
+                                            ),
+                                        ),
+                                ),
+                            )
+                        }
+                        is ConfirmAttackDoneRequest -> {
+                            outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
+                        }
+                        is TurnAdvanceRequest -> {
+                            outgoing.sendPayload(TurnAdvanceResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 3,
+                                    previousPhase = TurnPhase.FORTIFY,
+                                    nextPhase = TurnPhase.REINFORCEMENTS,
+                                    activePlayerId = nextPlayerId,
+                                    turnCount = 2,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isNotEmpty()
+                }
+                assertEquals(
+                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+
+                controller.clearAutoPhaseNotice()
+                waitUntil {
+                    seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
+                }
+                assertEquals(
+                    "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
+                        "automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
             } finally {
                 controller.close()
                 server.close()
@@ -2466,6 +2760,15 @@ class LobbyControllerTest {
             port = port,
             url = "ws://127.0.0.1:$port/ws",
             activeSessions = activeSessions,
+        )
+    }
+
+    private suspend fun DefaultWebSocketServerSession.sendPayload(payload: NetworkMessagePayload) {
+        outgoing.send(
+            Frame.Binary(
+                true,
+                MessageCodec.encode(payload),
+            ),
         )
     }
 

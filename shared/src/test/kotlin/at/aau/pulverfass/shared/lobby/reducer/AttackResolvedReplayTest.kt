@@ -72,6 +72,54 @@ class AttackResolvedReplayTest {
         assertEquals(event.rngStateAfter, finalFirst.gameRandomState)
     }
 
+    @Test
+    fun `battle replay can capture territory from a player who left`() {
+        val attacker = PlayerId(1)
+        val departedDefender = PlayerId(99)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("AT13"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(attacker),
+            ).copy(
+                gameRandomSeed = 1L,
+                gameRandomState = 2L,
+                gameStarted = true,
+                status = at.aau.pulverfass.shared.lobby.state.GameStatus.RUNNING,
+                activePlayer = attacker,
+                turnOrder = listOf(attacker),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
+                        TerritoryId("beta") to
+                            TerritoryState(TerritoryId("beta"), departedDefender, 2),
+                    ),
+            )
+
+        val events =
+            ruleService.createEvents(
+                state = baseState,
+                command =
+                    AttackCommand(
+                        lobbyCode = baseState.lobbyCode,
+                        playerId = attacker,
+                        fromTerritoryId = TerritoryId("alpha"),
+                        toTerritoryId = TerritoryId("beta"),
+                        requestedAttackDice = 3,
+                        committedTroopCount = 3,
+                        occupyingTroopCount = 3,
+                    ),
+            )
+        val event = events.single() as AttackResolvedEvent
+
+        val updatedState = reducer.apply(baseState, event, context = null)
+
+        assertEquals(attacker, updatedState.ownerOf(TerritoryId("beta")))
+        assertEquals(2, updatedState.troopCountOf(TerritoryId("alpha")))
+        assertEquals(3, updatedState.troopCountOf(TerritoryId("beta")))
+        assertEquals(listOf(attacker), updatedState.turnOrder)
+    }
+
     private fun sampleMapDefinition(): MapDefinition =
         MapDefinition(
             schemaVersion = 1,
