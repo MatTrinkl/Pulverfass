@@ -133,7 +133,11 @@ class LobbyPersistenceHooksIntegrationTest {
                     )
                     receiveRelevantTestPayload(hostSession, skipGameSync = true)
 
-                    val persistedEvents = store.listEvents(fixture.lobbyCode)
+                    val persistedEvents =
+                        awaitEvents(
+                            lobbyCode = fixture.lobbyCode,
+                            expectedCount = 2,
+                        )
                     assertEquals(
                         listOf("turn_state_updated", "turn_state_updated"),
                         persistedEvents.map { it.eventType },
@@ -345,6 +349,18 @@ class LobbyPersistenceHooksIntegrationTest {
             snapshots = store.listSnapshots(lobbyCode)
         }
         snapshots
+    }
+
+    private suspend fun awaitEvents(
+        lobbyCode: LobbyCode,
+        expectedCount: Int,
+    ) = withTimeout(5_000) {
+        var events = store.listEvents(lobbyCode)
+        while (events.size < expectedCount) {
+            delay(25)
+            events = store.listEvents(lobbyCode)
+        }
+        events
     }
 
     private fun createDataSource() =
