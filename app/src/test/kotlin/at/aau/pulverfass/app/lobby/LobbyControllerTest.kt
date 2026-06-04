@@ -1443,11 +1443,12 @@ class LobbyControllerTest {
                         "automatisch beendet.",
                     controller.state.value.autoPhaseNoticeText,
                 )
+                waitUntil {
+                    LobbyCommandKey.TURN_ADVANCE !in controller.state.value.pendingCommandKeys &&
+                        controller.state.value.gameState.turnPhase == TurnPhase.REINFORCEMENTS
+                }
                 controller.clearAutoPhaseNotice()
                 assertNull(controller.state.value.autoPhaseNoticeText)
-                waitUntil {
-                    LobbyCommandKey.TURN_ADVANCE !in controller.state.value.pendingCommandKeys
-                }
             } finally {
                 controller.close()
                 server.close()
