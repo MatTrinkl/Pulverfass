@@ -399,6 +399,10 @@ data class GameState(
 
     /**
      * Liefert alle legalen Angriffsziele eines Territoriums in stabiler Map-Reihenfolge.
+     *
+     * Ein Ziel mit fremdem Besitzer, aber null Truppen, ist kein kampffähiges
+     * Ziel mehr. Solche Zustände können während Cleanup-/Reconnect-Flows
+     * sichtbar sein und dürfen die leere Angriffsphase nicht blockieren.
      */
     fun validAttackTargets(
         fromTerritoryId: TerritoryId,
@@ -418,7 +422,9 @@ data class GameState(
 
         return adjacentTerritories(fromTerritoryId)
             .filter { adjacent ->
-                adjacent.ownerId != null && adjacent.ownerId != playerId
+                adjacent.ownerId != null &&
+                    adjacent.ownerId != playerId &&
+                    adjacent.troopCount > 0
             }.map(TerritoryState::territoryId)
     }
 

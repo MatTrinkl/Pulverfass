@@ -397,8 +397,8 @@ class DefaultMapCommandRuleServiceTest {
             )
         val state =
             baseState.withTerritories(
-                TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 5),
-                TerritoryId("beta") to TerritoryState(TerritoryId("beta"), departedDefender, 2),
+                TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 6),
+                TerritoryId("beta") to TerritoryState(TerritoryId("beta"), departedDefender, 1),
             )
 
         val events =
@@ -411,15 +411,17 @@ class DefaultMapCommandRuleServiceTest {
                         fromTerritoryId = TerritoryId("alpha"),
                         toTerritoryId = TerritoryId("beta"),
                         requestedAttackDice = 3,
-                        committedTroopCount = 3,
-                        occupyingTroopCount = 3,
+                        committedTroopCount = 5,
+                        occupyingTroopCount = 5,
                     ),
             )
 
         val event = events.single() as AttackResolvedEvent
         assertEquals(departedDefender, event.defenderPlayerId)
         assertEquals(0, event.defenderRemaining)
-        assertEquals(3, event.occupyingTroopCount)
+        assertEquals(5, event.attackTroops)
+        assertEquals(1, event.targetTroopsBefore)
+        assertEquals(5, event.occupyingTroopCount)
     }
 
     @Test

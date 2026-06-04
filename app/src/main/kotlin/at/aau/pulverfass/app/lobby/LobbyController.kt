@@ -18,6 +18,7 @@ import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
@@ -160,6 +161,7 @@ class LobbyController(
     private var awaitingReconnectResponse = false
     private var manualDisconnectRequested = false
     private var suppressNextAttackBoundaryNotice = false
+    private var delayedAttackAutoAdvanceJob: Job? = null
 
     init {
         scope.launch {
@@ -411,12 +413,14 @@ class LobbyController(
 
     fun close() {
         cancelReconnect()
+        cancelDelayedAttackAutoAdvance()
         network.close()
     }
 
     fun leaveLobby() {
         val lobbyCode = state.value.activeLobbyCode
         suppressNextAttackBoundaryNotice = false
+        cancelDelayedAttackAutoAdvance()
         if (lobbyCode != null) {
             scope.launch {
                 runCatching {
@@ -674,56 +678,81 @@ class LobbyController(
         }
 
         when (snapshot.gameState.turnPhase) {
-            TurnPhase.REINFORCEMENTS -> {
-                if (
-                    LobbyCommandKey.PLACE_REINFORCEMENTS in snapshot.pendingCommandKeys ||
-                    LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE in snapshot.pendingCommandKeys ||
-                    !snapshot.gameState.canConfirmReinforcementsDone(
-                        playerId,
-                        snapshot.isConnected,
-                    )
-                ) {
-                    return
-                }
-                enqueueAutoPhaseNotice(AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE)
-                confirmReinforcementsDone()
-            }
-            TurnPhase.ATTACK -> {
-                if (
-                    LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys ||
-                    LobbyCommandKey.CONFIRM_ATTACK_DONE in snapshot.pendingCommandKeys ||
-                    snapshot.gameState.territoryStates.isEmpty() ||
-                    snapshot.gameState.adjacentTerritoryIds.isEmpty() ||
-                    snapshot.gameState.hasAvailableAttack(playerId)
-                ) {
-                    return
-                }
-                enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
-                confirmAttackDoneAutomatically()
-            }
-            TurnPhase.FORTIFY -> {
-                if (
-                    LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
-                    LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
-                    !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected) ||
-                    snapshot.gameState.territoryStates.isEmpty() ||
-                    snapshot.gameState.adjacentTerritoryIds.isEmpty()
-                ) {
-                    return
-                }
-                val noticeText =
-                    if (snapshot.gameState.fortifyState.hasMoved) {
-                        AUTO_PHASE_FORTIFY_MOVED_NOTICE
-                    } else if (!snapshot.gameState.hasAvailableFortify(playerId)) {
-                        AUTO_PHASE_FORTIFY_EMPTY_NOTICE
-                    } else {
-                        return
-                    }
-                enqueueAutoPhaseNotice(noticeText)
-                advanceTurn()
-            }
+            TurnPhase.REINFORCEMENTS -> maybeAutoConfirmReinforcements(snapshot, playerId)
+            TurnPhase.ATTACK -> maybeAutoConfirmAttack(snapshot, playerId)
+            TurnPhase.FORTIFY -> maybeAutoAdvanceFortify(snapshot, playerId)
             else -> Unit
         }
+    }
+
+    private fun maybeAutoConfirmReinforcements(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+    ) {
+        if (
+            LobbyCommandKey.PLACE_REINFORCEMENTS in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE in snapshot.pendingCommandKeys ||
+            !snapshot.gameState.canConfirmReinforcementsDone(playerId, snapshot.isConnected)
+        ) {
+            return
+        }
+        enqueueAutoPhaseNotice(AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE)
+        confirmReinforcementsDone()
+    }
+
+    private fun maybeAutoConfirmAttack(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+    ) {
+        if (
+            LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.CONFIRM_ATTACK_DONE in snapshot.pendingCommandKeys ||
+            snapshot.gameState.territoryStates.isEmpty() ||
+            snapshot.gameState.adjacentTerritoryIds.isEmpty() ||
+            snapshot.gameState.hasAvailableAttack(playerId)
+        ) {
+            return
+        }
+        enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+        confirmAttackDoneAutomatically()
+    }
+
+    private fun maybeAutoAdvanceFortify(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+    ) {
+        if (
+            LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
+            !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected) ||
+            snapshot.gameState.territoryStates.isEmpty() ||
+            snapshot.gameState.adjacentTerritoryIds.isEmpty()
+        ) {
+            return
+        }
+        val noticeText =
+            when {
+                snapshot.gameState.fortifyState.hasMoved -> AUTO_PHASE_FORTIFY_MOVED_NOTICE
+                !snapshot.gameState.hasAvailableFortify(playerId) -> AUTO_PHASE_FORTIFY_EMPTY_NOTICE
+                else -> return
+            }
+        enqueueAutoPhaseNotice(noticeText)
+        advanceTurn()
+    }
+
+    private fun scheduleAttackAutoAdvanceAfterResultDelay() {
+        delayedAttackAutoAdvanceJob?.cancel()
+        delayedAttackAutoAdvanceJob =
+            scope.launch {
+                delay(ATTACK_AUTO_ADVANCE_DELAY_MILLIS)
+                delayedAttackAutoAdvanceJob = null
+                maybeAdvanceCurrentPhaseAutomatically()
+            }
+    }
+
+    private fun cancelDelayedAttackAutoAdvance() {
+        delayedAttackAutoAdvanceJob?.cancel()
+        delayedAttackAutoAdvanceJob = null
     }
 
     /**
@@ -1686,7 +1715,7 @@ class LobbyController(
             is AttackResponse -> {
                 clearPendingCommand(LobbyCommandKey.ATTACK)
                 _state.update { it.copy(errorText = null) }
-                maybeAdvanceCurrentPhaseAutomatically()
+                scheduleAttackAutoAdvanceAfterResultDelay()
                 true
             }
             is AttackErrorResponse -> {
@@ -1817,6 +1846,7 @@ class LobbyController(
     }
 
     private fun handleGameStateDelta(payload: GameStateDeltaEvent) {
+        val containsAttackResult = payload.events.any { it is AttackResolvedBroadcastEvent }
         val result =
             ClientGameStateReducer.applyDelta(
                 current = state.value.gameState,
@@ -1825,7 +1855,11 @@ class LobbyController(
             )
 
         _state.update { it.copy(gameState = result.state) }
-        maybeAdvanceCurrentPhaseAutomatically()
+        if (containsAttackResult) {
+            scheduleAttackAutoAdvanceAfterResultDelay()
+        } else {
+            maybeAdvanceCurrentPhaseAutomatically()
+        }
         if (result.needsCatchUp) {
             requestGameCatchUp(
                 reason = GameStateCatchUpReason.MISSING_DELTA,
@@ -1840,6 +1874,9 @@ class LobbyController(
         val isAttackBoundary =
             previousGameState.turnPhase == TurnPhase.ATTACK &&
                 payload.nextPhase == TurnPhase.FORTIFY
+        if (isAttackBoundary) {
+            cancelDelayedAttackAutoAdvance()
+        }
         val shouldSuppressAttackBoundaryNotice =
             isAttackBoundary && suppressNextAttackBoundaryNotice
         if (shouldSuppressAttackBoundaryNotice) {
@@ -2008,6 +2045,7 @@ class LobbyController(
     private fun resetLobbyMembers() {
         playersById.clear()
         suppressNextAttackBoundaryNotice = false
+        cancelDelayedAttackAutoAdvance()
         reconnectSessionStore.saveWasGameStarted(false)
         _state.update {
             it.copy(
@@ -2065,3 +2103,4 @@ private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
 private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
+private const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 1_200L

@@ -903,6 +903,7 @@ object ClientGameStateReducer {
             territory != null &&
                 territory.ownerId != null &&
                 territory.ownerId != localPlayerId &&
+                territory.troopCount > 0 &&
                 territoryId in current.adjacentTerritoryIds[sourceTerritoryId].orEmpty()
         return if (isEnemyNeighbor) {
             current.copy(

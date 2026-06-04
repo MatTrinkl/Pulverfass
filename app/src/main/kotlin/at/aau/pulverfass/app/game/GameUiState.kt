@@ -157,8 +157,9 @@ data class GameUiState(
     /**
      * Prüft die vollständig ausgewählte lokale Angriffsabsicht vor dem Request.
      *
-     * Eigentum und Nachbarschaft werden beim Auswählen im Reducer geprüft.
-     * Würfelresultat und endgültige Capture-Verschiebung bleiben serverautoritativ.
+     * Zusätzlich zur Auswahl wird die aktuelle Truppenobergrenze nochmals
+     * geprüft. Dadurch kann ein veralteter Sliderwert nach einem Serverdelta
+     * keinen Request mehr erzeugen, der serverseitig sicher scheitern würde.
      */
     fun canSubmitAttack(
         localPlayerId: PlayerId?,
@@ -186,7 +187,8 @@ data class GameUiState(
      * bestätigen. Ein Gebiet braucht mehr als zwei Truppen, weil mindestens
      * zwei Angreifer eingesetzt werden und eine Truppe im Ausgangsgebiet bleiben
      * muss. Zielgebiete verlassener Spieler bleiben angreifbar, solange der
-     * serverseitige Territory-State noch eine fremde Owner-ID trägt.
+     * serverseitige Territory-State noch eine fremde Owner-ID und mindestens
+     * eine verteidigende Truppe trägt.
      *
      * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
      * @return `true`, wenn mindestens ein eigenes Gebiet ein fremdes Nachbarziel
@@ -201,9 +203,10 @@ data class GameUiState(
             source.ownerId == localPlayerId &&
                 source.troopCount > MIN_ATTACK_TROOPS &&
                 adjacentTerritoryIds[source.territoryId].orEmpty().any { targetId ->
-                    val targetOwnerId = territoryStates[targetId]?.ownerId
-                    targetOwnerId != null &&
-                        targetOwnerId != localPlayerId
+                    val target = territoryStates[targetId]
+                    target?.ownerId != null &&
+                        target.ownerId != localPlayerId &&
+                        target.troopCount > 0
                 }
         }
     }
@@ -220,11 +223,15 @@ data class GameUiState(
             selectionToRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
                 ?: return false
         val source = territoryStates[fromTerritoryId] ?: return false
-        val targetOwnerId = territoryStates[toTerritoryId]?.ownerId ?: return false
+        val target = territoryStates[toTerritoryId] ?: return false
+        val targetOwnerId = target.ownerId ?: return false
+        val maxAttackTroops = source.troopCount - 1
 
         return source.ownerId == localPlayerId &&
             source.troopCount > MIN_ATTACK_TROOPS &&
+            attackState.attackTroops in MIN_ATTACK_TROOPS..maxAttackTroops &&
             targetOwnerId != localPlayerId &&
+            target.troopCount > 0 &&
             toTerritoryId in adjacentTerritoryIds[fromTerritoryId].orEmpty()
     }
 

@@ -459,9 +459,19 @@ class ClientGameStateReducerTest {
                                 GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 3)
                         ),
             )
+        val emptyDepartedTargetState =
+            abandonedTargetState.copy(
+                territoryStates =
+                    abandonedTargetState.territoryStates +
+                        (
+                            TerritoryId("argentinien") to
+                                GameTerritoryUiState(TerritoryId("argentinien"), departedPlayer, 0)
+                        ),
+            )
 
         assertFalse(weakSourceState.hasAvailableAttack(aliceId))
         assertTrue(abandonedTargetState.hasAvailableAttack(aliceId))
+        assertFalse(emptyDepartedTargetState.hasAvailableAttack(aliceId))
     }
 
     @Test
@@ -491,11 +501,53 @@ class ClientGameStateReducerTest {
             )
         val acceptedDepartedTarget =
             ClientGameStateReducer.selectRegion(departedTarget, "argentina", aliceId)
+        val emptyDepartedTarget =
+            selectedSource.copy(
+                territoryStates =
+                    selectedSource.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, PlayerId(99), 0)),
+            )
+        val rejectedEmptyDepartedTarget =
+            ClientGameStateReducer.selectRegion(emptyDepartedTarget, "argentina", aliceId)
 
         assertEquals(null, rejectedNeutralTarget.selectionToRegionId)
         assertFalse(rejectedNeutralTarget.canSubmitAttack(aliceId))
         assertEquals("argentina", acceptedDepartedTarget.selectionToRegionId)
         assertTrue(acceptedDepartedTarget.canSubmitAttack(aliceId))
+        assertEquals(null, rejectedEmptyDepartedTarget.selectionToRegionId)
+        assertFalse(rejectedEmptyDepartedTarget.canSubmitAttack(aliceId))
+    }
+
+    @Test
+    fun `attack submission rejects troop count above current source limit`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val selectedAttack =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                selectedRegionId = "argentina",
+                selectionFromRegionId = "brazil",
+                selectionToRegionId = "argentina",
+                adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                        targetId to GameTerritoryUiState(targetId, PlayerId(99), 1),
+                    ),
+                attackState =
+                    AttackUiState(
+                        attackTroops = 5,
+                        moveAfterCapture = 3,
+                    ),
+            )
+
+        assertFalse(selectedAttack.canSubmitAttack(aliceId))
+        assertTrue(
+            selectedAttack
+                .copy(attackState = AttackUiState(attackTroops = 4, moveAfterCapture = 3))
+                .canSubmitAttack(aliceId),
+        )
     }
 
     @Test

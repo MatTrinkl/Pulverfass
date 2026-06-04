@@ -1745,6 +1745,7 @@ class MainServerLobbyRoutingService(
         require(defenderId != null) { "INVALID_REQUEST" }
         require(defenderId != payload.playerId) { "ATTACKING_OWN_TERRITORY" }
         require(state.isAdjacent(payload.fromTerritoryId, payload.toTerritoryId)) { "NOT_ADJACENT" }
+        require(state.troopCountOf(payload.toTerritoryId) > 0) { "INVALID_REQUEST" }
 
         val sourceTroops = state.troopCountOf(payload.fromTerritoryId)
         require(payload.attackTroops <= sourceTroops - 1) { "INSUFFICIENT_TROOPS" }

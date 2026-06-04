@@ -626,7 +626,7 @@ class AttackIntegrationTest {
                     rngSeed = 1L,
                     rngState = 2L,
                     owners = mapOf(fromTerritoryId to attacker, toTerritoryId to departedDefender),
-                    troopCounts = mapOf(fromTerritoryId to 5, toTerritoryId to 2),
+                    troopCounts = mapOf(fromTerritoryId to 6, toTerritoryId to 1),
                 )
             val fixture = createFixture(lobbyCode, initialState, this)
 
@@ -644,8 +644,8 @@ class AttackIntegrationTest {
                                         playerId = attacker,
                                         fromTerritoryId = fromTerritoryId,
                                         toTerritoryId = toTerritoryId,
-                                        attackTroops = 3,
-                                        moveAfterCapture = 3,
+                                        attackTroops = 5,
+                                        moveAfterCapture = 5,
                                         requestId = "req-departed-capture",
                                     ),
                                 ),
@@ -660,6 +660,8 @@ class AttackIntegrationTest {
                             .single()
                     assertEquals(departedDefender, resolved.defenderPlayerId)
                     assertEquals(true, resolved.capture)
+                    assertEquals(5, resolved.attackTroops)
+                    assertEquals(1, resolved.targetTroopsBefore)
                     assertEquals(
                         AttackResponse(
                             lobbyCode = lobbyCode,
