@@ -8,6 +8,16 @@ private val migrationLogger =
         "at.aau.pulverfass.server.DatabaseSchemaMigration",
     )
 
+/**
+ * Führt die Flyway-Schemamigration für die konfigurierte PostgreSQL-Datenbank aus.
+ *
+ * Die Funktion ist bewusst idempotent angelegt: Ohne vollständige Datenbankkonfiguration wird
+ * die Migration übersprungen, damit lokale Entwicklungsstarts ohne Persistenz möglich bleiben.
+ *
+ * @param config aufgelöste Laufzeitkonfiguration für die Datenbank
+ * @throws IllegalArgumentException wenn [config] als konfiguriert gilt, aber Pflichtwerte fehlen
+ * @throws org.flywaydb.core.api.FlywayException wenn Flyway die Migration nicht anwenden kann
+ */
 fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
     if (!config.isConfigured) {
         migrationLogger.info(
@@ -34,6 +44,9 @@ fun migrateDatabaseSchema(config: DatabaseRuntimeConfig) {
         .migrate()
 }
 
+/**
+ * Entfernt Benutzername- und Passwortfragmente aus einer JDBC-URL für Log-Ausgaben.
+ */
 internal fun redactJdbcUrl(jdbcUrl: String): String =
     jdbcUrl
         .replace(Regex("(//)([^/@:]+):([^/@]+)@"), "$1****:****@")

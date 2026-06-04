@@ -72,6 +72,16 @@ class MapConfigLoaderTest {
     }
 
     @Test
+    fun `invalid utf8 input führt zu parse fail`() {
+        val exception =
+            assertThrows<MapConfigLoadException> {
+                MapConfigLoader.load(ByteArrayInputStream(byteArrayOf(0xC3.toByte(), 0x28)))
+            }
+
+        assertTrue(exception.message.orEmpty().contains("UTF-8"))
+    }
+
+    @Test
     fun `edges schema load test`() {
         val definition = MapConfigLoader.loadFromJson(validEdgesJson())
 

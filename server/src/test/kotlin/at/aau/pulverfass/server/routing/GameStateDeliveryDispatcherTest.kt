@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -160,6 +161,80 @@ class GameStateDeliveryDispatcherTest {
                 exception.message,
             )
             assertEquals(emptyList<Pair<ConnectionId, NetworkMessagePayload>>(), sentPayloads)
+        }
+
+    @Test
+    fun `broadcast public state ignores per connection send failures`() =
+        runBlocking {
+            val lobbyCode = LobbyCode("DLV4")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val connectionOne = ConnectionId(101)
+            val connectionTwo = ConnectionId(202)
+            val sentPayloads = mutableListOf<Pair<ConnectionId, NetworkMessagePayload>>()
+            val payload = FakePublicEvent("phase-boundary")
+
+            val dispatcher =
+                GameStateDeliveryDispatcher(
+                    sendPayload = {
+                            connectionId,
+                            sentPayload,
+                        ->
+                        if (connectionId == connectionOne) {
+                            throw IllegalStateException("connection down")
+                        }
+                        sentPayloads += connectionId to sentPayload
+                    },
+                    lobbyMembers = { requestedLobby ->
+                        if (requestedLobby == lobbyCode) {
+                            listOf(playerOne, playerTwo)
+                        } else {
+                            emptyList()
+                        }
+                    },
+                    connectionIdResolver = { playerId ->
+                        when (playerId) {
+                            playerOne -> connectionOne
+                            playerTwo -> connectionTwo
+                            else -> null
+                        }
+                    },
+                )
+
+            assertDoesNotThrow {
+                runBlocking {
+                    dispatcher.broadcastPublicState(lobbyCode, payload)
+                }
+            }
+            assertEquals(listOf(connectionTwo to payload), sentPayloads)
+        }
+
+    @Test
+    fun `best effort private state ignores send failures after membership check`() =
+        runBlocking {
+            val lobbyCode = LobbyCode("DLV5")
+            val playerOne = PlayerId(1)
+            val connectionOne = ConnectionId(101)
+            val payload = FakePrivateEvent(recipientPlayerId = playerOne, secret = "hand-cards")
+
+            val dispatcher =
+                GameStateDeliveryDispatcher(
+                    sendPayload = { _, _ -> throw IllegalStateException("connection down") },
+                    lobbyMembers = { requestedLobby ->
+                        if (requestedLobby == lobbyCode) {
+                            listOf(playerOne)
+                        } else {
+                            emptyList()
+                        }
+                    },
+                    connectionIdResolver = { connectionOne },
+                )
+
+            assertDoesNotThrow {
+                runBlocking {
+                    dispatcher.sendPrivateState(lobbyCode, payload)
+                }
+            }
         }
 
     private data class FakePublicEvent(

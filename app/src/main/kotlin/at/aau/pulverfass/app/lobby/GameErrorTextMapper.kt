@@ -30,6 +30,8 @@ object GameErrorTextMapper {
     internal const val GAME_NOT_FOUND_TEXT = "Das Spiel wurde nicht gefunden."
     internal const val NOT_IN_GAME_TEXT = "Du bist diesem Spiel noch nicht zugeordnet."
     internal const val GAME_PAUSED_TEXT = "Das Spiel ist aktuell pausiert."
+    internal const val PAYLOAD_TOO_LARGE_TEXT =
+        "Der angeforderte Spielstand ist zu groß für die aktuelle Übertragung."
     internal const val REQUESTER_MISMATCH_TEXT =
         "Die Spielerzuordnung stimmt nicht mehr. Lade den Spielstand neu."
 
@@ -38,6 +40,7 @@ object GameErrorTextMapper {
             MapGetErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
             MapGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             MapGetErrorCode.MAP_NOT_READY -> "Die Karte ist noch nicht bereit."
+            MapGetErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: GameStateCatchUpErrorResponse): String =
@@ -46,6 +49,7 @@ object GameErrorTextMapper {
             GameStateCatchUpErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
                 "Der Spielstand ist noch nicht bereit."
+            GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: GameStatePrivateGetErrorResponse): String =
@@ -54,6 +58,7 @@ object GameErrorTextMapper {
             GameStatePrivateGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStatePrivateGetErrorCode.REQUESTER_MISMATCH ->
                 "Private Spielerdaten können nur für dich selbst geladen werden."
+            GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: TurnStateGetErrorResponse): String =

@@ -41,6 +41,12 @@ class GameErrorTextMapperTest {
             "Die Karte ist noch nicht bereit.",
             GameErrorTextMapper.map(MapGetErrorResponse(MapGetErrorCode.MAP_NOT_READY, "raw")),
         )
+        assertEquals(
+            GameErrorTextMapper.PAYLOAD_TOO_LARGE_TEXT,
+            GameErrorTextMapper.map(
+                MapGetErrorResponse(MapGetErrorCode.PAYLOAD_TOO_LARGE, "raw"),
+            ),
+        )
     }
 
     @Test
@@ -62,6 +68,15 @@ class GameErrorTextMapperTest {
             GameErrorTextMapper.map(
                 GameStateCatchUpErrorResponse(
                     GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY,
+                    "raw",
+                ),
+            ),
+        )
+        assertEquals(
+            GameErrorTextMapper.PAYLOAD_TOO_LARGE_TEXT,
+            GameErrorTextMapper.map(
+                GameStateCatchUpErrorResponse(
+                    GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE,
                     "raw",
                 ),
             ),
@@ -92,6 +107,15 @@ class GameErrorTextMapperTest {
                     "raw",
                 ),
             ).contains("Private Spielerdaten"),
+        )
+        assertEquals(
+            GameErrorTextMapper.PAYLOAD_TOO_LARGE_TEXT,
+            GameErrorTextMapper.map(
+                GameStatePrivateGetErrorResponse(
+                    GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE,
+                    "raw",
+                ),
+            ),
         )
         assertEquals(
             GameErrorTextMapper.GAME_NOT_FOUND_TEXT,

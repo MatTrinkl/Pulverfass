@@ -203,7 +203,7 @@ fun Application.module(
     install(WebSockets) {
         pingPeriodMillis = 15_000
         timeoutMillis = 15_000
-        maxFrameSize = Long.MAX_VALUE
+        maxFrameSize = runtimeConfig.webSocketMaxFrameSizeBytes
         masking = false
     }
 
@@ -251,7 +251,7 @@ fun Application.moduleWithLobbyRuntime(
     persistenceCallbacks: LobbyPersistenceCallbacks = LobbyPersistenceCallbacks.disabled(),
 ) {
     module(network, runtimeConfig, databaseReadinessProbe)
-    installLobbyRuntime(network, runtimeConfig.database, persistenceCallbacks)
+    installLobbyRuntime(network, runtimeConfig, persistenceCallbacks)
 }
 
 /**
@@ -380,14 +380,14 @@ internal suspend fun cleanupTerminalLobbyState(
 
 private fun Application.installLobbyRuntime(
     network: ServerNetwork,
-    databaseConfig: DatabaseRuntimeConfig,
+    runtimeConfig: ServerRuntimeConfig,
     persistenceCallbacks: LobbyPersistenceCallbacks,
 ) {
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
     val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
     val recoveryDataSource =
-        databaseConfig.takeIf(DatabaseRuntimeConfig::isConfigured)?.let { config ->
+        runtimeConfig.database.takeIf(DatabaseRuntimeConfig::isConfigured)?.let { config ->
             createPostgresDataSource(
                 config = config,
                 poolName = "pulverfass-lobby-recovery-pool",
@@ -545,6 +545,8 @@ private fun Application.installLobbyRuntime(
                     ?.connectionId
             },
             persistenceCallbacks = persistenceCallbacks,
+            publicStatePayloadMaxBytes = runtimeConfig.webSocketMaxFrameSizeBytes.toInt(),
+            privateStatePayloadMaxBytes = runtimeConfig.webSocketMaxFrameSizeBytes.toInt(),
         )
     lobbyManager.registerAcceptedEventListener { lobbyCode, _, _, currentState ->
         if (!currentState.isTerminal()) {
