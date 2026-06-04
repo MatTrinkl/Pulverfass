@@ -58,7 +58,7 @@ fun OptionsScreen(
     ) {
         // Video Background
         VideoPlayer(
-            videoResId = R.raw.options_vid,
+            videoResId = R.raw.video_options_background,
             loop = true,
             cover = true,
             muted = true,

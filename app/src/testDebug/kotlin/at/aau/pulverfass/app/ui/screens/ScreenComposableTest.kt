@@ -127,6 +127,7 @@ class ScreenComposableTest {
                                 delay(1_000)
                                 onProgressChanged(1, 1)
                             },
+                            minDisplayTimeMillis = 0L,
                         )
                     }
                     composable(Screen.Game.route) {
@@ -286,7 +287,7 @@ class ScreenComposableTest {
             composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_options_button").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Warten")
             composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 1")
             composeTestRule.onNodeWithTag("game_sync_banner").assertIsDisplayed()
@@ -295,6 +296,47 @@ class ScreenComposableTest {
         } finally {
             controller.close()
         }
+    }
+
+    @Test
+    fun game_screen_shows_auto_phase_notice_until_acknowledged() {
+        var dismissed = false
+        val noticeText =
+            "Keine Angriffe mehr möglich. Die Angriffsphase wird " +
+                "automatisch beendet."
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = PlayerId(1),
+                            uiState = GameUiState(),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                            autoPhaseNoticeText = noticeText,
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                            onClearAutoPhaseNotice = { dismissed = true },
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("auto_phase_notice_popup").assertIsDisplayed()
+        composeTestRule.onNodeWithText("PHASE GEWECHSELT").assertIsDisplayed()
+        composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("auto_phase_notice_ack").performClick()
+
+        assertTrue(dismissed)
     }
 
     @Test

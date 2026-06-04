@@ -9,8 +9,11 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
+import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
+import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.HttpClient
@@ -115,6 +118,104 @@ class CharacterSelectRoutingIntegrationTest {
         }
 
     @Test
+    fun `joining player receives existing character selections`() =
+        testApplication {
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = MainServerRouter(lobbyManager, DefaultNetworkToLobbyEventMapper()),
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { id -> playersByConnection[id] },
+                    connectionIdResolver = { pid -> connectionsByPlayer[pid] },
+                )
+
+            application { module(network) }
+
+            val lobbyCode = LobbyCode("CS15")
+            val playerOne = PlayerId(11)
+            val playerTwo = PlayerId(12)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    GameState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne),
+                        playerDisplayNames = mapOf(playerOne to "Alice"),
+                        lobbyOwner = playerOne,
+                    ),
+            )
+            routingService.start(serverScope)
+            val client = createClient { install(WebSockets) }
+
+            try {
+                coroutineScope {
+                    val sessionOne =
+                        connectAndRegister(
+                            client,
+                            network,
+                            playerOne,
+                            playersByConnection,
+                            connectionsByPlayer,
+                        )
+                    sessionOne.send(
+                        Frame.Binary(
+                            true,
+                            MessageCodec.encode(
+                                CharacterSelectRequest(lobbyCode, playerOne, "character_04"),
+                            ),
+                        ),
+                    )
+                    receiveRelevantTestPayload(sessionOne)
+                    receiveRelevantTestPayload(sessionOne)
+
+                    val sessionTwo =
+                        connectAndRegister(
+                            client,
+                            network,
+                            playerTwo,
+                            playersByConnection,
+                            connectionsByPlayer,
+                        )
+                    sessionTwo.send(
+                        Frame.Binary(
+                            true,
+                            MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
+                        ),
+                    )
+
+                    val joinResponse = receiveRelevantTestPayload(sessionTwo, skipGameSync = true)
+                    val existingPlayer = receiveRelevantTestPayload(sessionTwo, skipGameSync = true)
+                    val characterReplay =
+                        receiveRelevantTestPayload(sessionTwo, skipGameSync = true)
+                    val joinedPlayer = receiveRelevantTestPayload(sessionTwo, skipGameSync = true)
+
+                    assertEquals(JoinLobbyResponse(lobbyCode), joinResponse)
+                    assertTrue(existingPlayer is PlayerJoinedLobbyEvent)
+                    assertEquals(playerOne, (existingPlayer as PlayerJoinedLobbyEvent).playerId)
+                    assertTrue(characterReplay is CharacterSelectedBroadcast)
+                    assertEquals(
+                        CharacterSelectedBroadcast(lobbyCode, playerOne, "character_04"),
+                        characterReplay,
+                    )
+                    assertTrue(joinedPlayer is PlayerJoinedLobbyEvent)
+                    assertEquals(playerTwo, (joinedPlayer as PlayerJoinedLobbyEvent).playerId)
+
+                    sessionOne.close()
+                    sessionTwo.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
     fun `second player selecting same character receives error response`() =
         testApplication {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
@@ -166,7 +267,7 @@ class CharacterSelectRoutingIntegrationTest {
                         Frame.Binary(
                             true,
                             MessageCodec.encode(
-                                CharacterSelectRequest(lobbyCode, playerOne, "ice"),
+                                CharacterSelectRequest(lobbyCode, playerOne, "character_04"),
                             ),
                         ),
                     )
@@ -178,7 +279,7 @@ class CharacterSelectRoutingIntegrationTest {
                         Frame.Binary(
                             true,
                             MessageCodec.encode(
-                                CharacterSelectRequest(lobbyCode, playerTwo, "ice"),
+                                CharacterSelectRequest(lobbyCode, playerTwo, "character_04"),
                             ),
                         ),
                     )
@@ -229,7 +330,7 @@ class CharacterSelectRoutingIntegrationTest {
                         Frame.Binary(
                             true,
                             MessageCodec.encode(
-                                CharacterSelectRequest(lobbyCode, PlayerId(5), "doctor"),
+                                CharacterSelectRequest(lobbyCode, PlayerId(5), "character_03"),
                             ),
                         ),
                     )
@@ -302,7 +403,7 @@ class CharacterSelectRoutingIntegrationTest {
                         Frame.Binary(
                             true,
                             MessageCodec.encode(
-                                CharacterSelectRequest(lobbyCode, playerOne, "ice"),
+                                CharacterSelectRequest(lobbyCode, playerOne, "character_04"),
                             ),
                         ),
                     )
@@ -326,13 +427,13 @@ class CharacterSelectRoutingIntegrationTest {
                         Frame.Binary(
                             true,
                             MessageCodec.encode(
-                                CharacterSelectRequest(lobbyCode, playerTwo, "ice"),
+                                CharacterSelectRequest(lobbyCode, playerTwo, "character_04"),
                             ),
                         ),
                     )
                     val response = receiveRelevantTestPayload(sessionTwo)
                     assertTrue(response is CharacterSelectResponse)
-                    assertEquals("ice", (response as CharacterSelectResponse).characterId)
+                    assertEquals("character_04", (response as CharacterSelectResponse).characterId)
 
                     sessionOne.close()
                     sessionTwo.close()

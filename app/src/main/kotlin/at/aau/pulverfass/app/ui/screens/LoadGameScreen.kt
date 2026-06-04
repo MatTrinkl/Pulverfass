@@ -1,6 +1,7 @@
 package at.aau.pulverfass.app.ui.screens
 
 import android.content.res.Resources
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,21 +29,30 @@ import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
+import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+private const val MIN_LOAD_GAME_SCREEN_MILLIS = 1_600L
 
 /**
  * Lädt die Kartenassets vor dem eigentlichen Spielscreen.
  *
  * Der fachliche GameState kommt bereits über den wiederverwendeten
  * [at.aau.pulverfass.app.lobby.LobbyController].
+ *
+ * @param minDisplayTimeMillis minimale sichtbare Dauer des Ladebildschirms
+ * vor der Navigation; Tests setzen den Wert auf `0`, damit keine künstliche
+ * Wartezeit nötig ist
  */
 @Composable
 fun LoadGameScreen(
     navController: NavController,
     preloadGame: suspend (Resources, (loaded: Int, total: Int) -> Unit) -> Unit =
         MapAssetPreloader::preload,
+    minDisplayTimeMillis: Long = MIN_LOAD_GAME_SCREEN_MILLIS,
 ) {
     val resources = LocalContext.current.resources
     var loadedSteps by remember { mutableIntStateOf(0) }
@@ -50,12 +60,18 @@ fun LoadGameScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
+        val startedAtMillis = System.currentTimeMillis()
         runCatching {
             preloadGame(resources) { loaded, total ->
                 loadedSteps = loaded
                 totalSteps = total.coerceAtLeast(1)
             }
         }.onSuccess {
+            val remainingMillis =
+                minDisplayTimeMillis - (System.currentTimeMillis() - startedAtMillis)
+            if (remainingMillis > 0) {
+                delay(remainingMillis)
+            }
             withContext(Dispatchers.Main.immediate) {
                 navController.navigate(Screen.Game.route) {
                     popUpTo(Screen.LoadGame.route) { inclusive = true }
@@ -75,6 +91,7 @@ fun LoadGameScreen(
         modifier =
             Modifier
                 .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid)
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -103,12 +120,10 @@ fun LoadGameScreen(
             LinearProgressIndicator(
                 progress = { loadedSteps.toFloat() / totalSteps.toFloat() },
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text =
-                    loadError
-                        ?: "${stringResource(id = R.string.loading)} $loadedSteps/$totalSteps",
-            )
+            if (loadError != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = loadError.orEmpty())
+            }
         }
     }
 }

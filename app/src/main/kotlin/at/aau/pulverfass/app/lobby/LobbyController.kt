@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
@@ -270,6 +271,10 @@ class LobbyController(
         _state.update { it.copy(characterSelectError = null) }
     }
 
+    fun clearAutoPhaseNotice() {
+        _state.update { it.copy(autoPhaseNoticeText = null) }
+    }
+
     fun updateLobbyCode(lobbyCode: String) {
         _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
     }
@@ -376,18 +381,20 @@ class LobbyController(
     }
 
     fun leaveLobby() {
-        val lobbyCode = state.value.activeLobbyCode ?: return
-        scope.launch {
-            runCatching {
-                sendCommand(
-                    LobbyCommand(
-                        key = LobbyCommandKey.LEAVE_LOBBY,
-                        payload =
-                            LeaveLobbyRequest(
-                                lobbyCode = parseLobbyCode(lobbyCode),
-                            ),
-                    ),
-                )
+        val lobbyCode = state.value.activeLobbyCode
+        if (lobbyCode != null) {
+            scope.launch {
+                runCatching {
+                    sendCommand(
+                        LobbyCommand(
+                            key = LobbyCommandKey.LEAVE_LOBBY,
+                            payload =
+                                LeaveLobbyRequest(
+                                    lobbyCode = parseLobbyCode(lobbyCode),
+                                ),
+                        ),
+                    )
+                }
             }
         }
         _state.update {
@@ -401,6 +408,7 @@ class LobbyController(
                 sessionToken = null,
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
+                autoPhaseNoticeText = null,
             )
         }
         reconnectSessionStore.clearSession()
@@ -600,6 +608,68 @@ class LobbyController(
                     it.copy(errorText = error.message ?: config.errorTurnAdvanceFailed)
                 }
             }
+        }
+    }
+
+    /**
+     * Beendet Phasen automatisch, wenn lokal keine sinnvolle Aktion mehr möglich ist.
+     *
+     * Das betrifft zwei UX-Fälle:
+     * - Attack wird direkt bestätigt, wenn der aktive Spieler kein Gebiet mit
+     *   mehr als zwei Truppen und fremdem Nachbarziel besitzt.
+     * - Fortify wird nach einem bestätigten Move direkt weitergeschaltet, weil
+     *   die Phase fachlich nur eine Verschiebung erlaubt.
+     *
+     * Die Methode nutzt dieselben Requests wie die sichtbaren Buttons. Pending
+     * Keys verhindern doppelte Requests, falls Server-Response und öffentliche
+     * Deltas sehr eng hintereinander eintreffen.
+     */
+    private fun maybeAdvanceCurrentPhaseAutomatically() {
+        val snapshot = state.value
+        val playerId = snapshot.ownPlayerId ?: return
+        if (!snapshot.gameState.canUseGameActions(playerId, snapshot.isConnected)) {
+            return
+        }
+
+        when (snapshot.gameState.turnPhase) {
+            TurnPhase.ATTACK -> {
+                if (
+                    LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys ||
+                    LobbyCommandKey.CONFIRM_ATTACK_DONE in snapshot.pendingCommandKeys ||
+                    snapshot.gameState.territoryStates.isEmpty() ||
+                    snapshot.gameState.adjacentTerritoryIds.isEmpty() ||
+                    snapshot.gameState.hasAvailableAttack(playerId)
+                ) {
+                    return
+                }
+                _state.update {
+                    it.copy(
+                        autoPhaseNoticeText =
+                            "Keine Angriffe mehr möglich. Die Angriffsphase wird " +
+                                "automatisch beendet.",
+                    )
+                }
+                confirmAttackDone()
+            }
+            TurnPhase.FORTIFY -> {
+                if (
+                    !snapshot.gameState.fortifyState.hasMoved ||
+                    LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
+                    LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
+                    !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected)
+                ) {
+                    return
+                }
+                _state.update {
+                    it.copy(
+                        autoPhaseNoticeText =
+                            "Truppen wurden verschoben. Die Verschiebephase wird " +
+                                "automatisch beendet.",
+                    )
+                }
+                advanceTurn()
+            }
+            else -> Unit
         }
     }
 
@@ -1603,15 +1673,49 @@ class LobbyController(
                 displayName = payload.playerDisplayName,
                 isHost = payload.isHost,
                 isDisconnected = existingPlayer?.isDisconnected ?: false,
+                characterId = existingPlayer?.characterId,
             )
 
+        var shouldSelectSavedCharacter = false
         _state.update { current ->
             val ownPlayerId =
                 current.ownPlayerId
                     ?: payload.playerId.takeIf { payload.playerDisplayName == current.playerName }
+            shouldSelectSavedCharacter = current.ownPlayerId == null && ownPlayerId != null
             current.copy(ownPlayerId = ownPlayerId)
         }
         publishPlayers()
+        if (shouldSelectSavedCharacter) {
+            selectSavedCharacterForLobbyIfPossible()
+        }
+    }
+
+    /**
+     * Meldet den lokal gespeicherten Charakter automatisch an die Lobby.
+     *
+     * Der eigene PlayerId-Wert ist erst nach dem Join-Broadcast bekannt. Ohne
+     * diesen Nachlauf sehen andere Clients den initial gespeicherten Charakter
+     * erst nach einem manuellen erneuten Speichern.
+     */
+    private fun selectSavedCharacterForLobbyIfPossible() {
+        val snapshot = state.value
+        val ownPlayerId = snapshot.ownPlayerId ?: return
+        val takenCharacterIds =
+            snapshot.players
+                .filter { it.playerId != ownPlayerId }
+                .mapNotNull { it.characterId }
+                .toSet()
+        val preferredCharacterId =
+            snapshot.characterId?.takeIf { characterId ->
+                characterId.isNotBlank() &&
+                    Characters.byId(characterId) != null &&
+                    characterId !in takenCharacterIds
+            }
+        val characterId =
+            preferredCharacterId
+                ?: Characters.all.firstOrNull { it.id !in takenCharacterIds }?.id
+                ?: return
+        selectCharacter(characterId)
     }
 
     private fun handlePlayerConnectionLost(payload: PlayerConnectionLostEvent) {
@@ -1654,6 +1758,7 @@ class LobbyController(
             )
 
         _state.update { it.copy(gameState = result.state) }
+        maybeAdvanceCurrentPhaseAutomatically()
         if (result.needsCatchUp) {
             requestGameCatchUp(
                 reason = GameStateCatchUpReason.MISSING_DELTA,
@@ -1668,6 +1773,7 @@ class LobbyController(
         _state.update { current ->
             current.copy(gameState = reducer(current.gameState, current.players))
         }
+        maybeAdvanceCurrentPhaseAutomatically()
     }
 
     private fun updateGameError(reason: String) {
@@ -1816,6 +1922,7 @@ class LobbyController(
                 gameStarted = false,
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
+                autoPhaseNoticeText = null,
             )
         }
     }

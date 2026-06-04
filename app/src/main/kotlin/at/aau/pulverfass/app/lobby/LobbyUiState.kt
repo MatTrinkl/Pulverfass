@@ -35,4 +35,5 @@ data class LobbyUiState(
     val playerColor: Color? = null,
     val characterId: String? = null,
     val characterSelectError: String? = null,
+    val autoPhaseNoticeText: String? = null,
 )

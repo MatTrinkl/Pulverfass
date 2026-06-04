@@ -1,6 +1,5 @@
 package at.aau.pulverfass.app.ui.screens
 
-import android.media.MediaPlayer
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -72,7 +71,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -97,7 +95,7 @@ import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
 import at.aau.pulverfass.app.game.minimumOccupyingTroopsForAttack
-import at.aau.pulverfass.app.lobby.CharacterDef
+import at.aau.pulverfass.app.lobby.CharacterDefinition
 import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
@@ -153,6 +151,10 @@ fun GameScreen(
             )
         }
     val mapPainter = painterResource(id = R.drawable.map_world)
+    val onLeaveGame: () -> Unit = {
+        controller.leaveLobby()
+        onNavigateToMain()
+    }
 
     GameScreenContent(
         contentState =
@@ -165,6 +167,7 @@ fun GameScreen(
                 mapPainter = mapPainter,
                 character = character,
                 playerName = lobbyState.playerName,
+                autoPhaseNoticeText = lobbyState.autoPhaseNoticeText,
             ),
         actions =
             GameScreenActions(
@@ -184,9 +187,10 @@ fun GameScreen(
                 onAdjustFortifyTroops = controller::adjustFortifyTroops,
                 onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
+                onClearAutoPhaseNotice = controller::clearAutoPhaseNotice,
             ),
         musicManager = musicManager,
-        onNavigateToMain = onNavigateToMain,
+        onNavigateToMain = onLeaveGame,
         onReconnect = controller::connect,
     )
 }
@@ -198,8 +202,9 @@ internal data class GameScreenContentState(
     val isConnected: Boolean,
     val pendingCommandKeys: Set<LobbyCommandKey>,
     val mapPainter: Painter,
-    val character: CharacterDef? = null,
+    val character: CharacterDefinition? = null,
     val playerName: String = "",
+    val autoPhaseNoticeText: String? = null,
 )
 
 internal data class GameScreenActions(
@@ -218,6 +223,7 @@ internal data class GameScreenActions(
     val onAdjustFortifyTroops: (Int) -> Unit = {},
     val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
+    val onClearAutoPhaseNotice: () -> Unit = {},
 )
 
 /**
@@ -482,6 +488,7 @@ internal fun GameScreenContent(
                 personalPlayer = personalPlayer,
                 phase = uiState.turnPhase,
                 round = uiState.turnCount.coerceAtLeast(1),
+                onOptionsClick = { showOptionsOverlay = true },
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
@@ -621,27 +628,6 @@ internal fun GameScreenContent(
                 musicManager = musicManager,
             )
 
-            FilledTonalButton(
-                onClick = { showOptionsOverlay = true },
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = TopBarHeight + 8.dp),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                colors =
-                    ButtonDefaults.filledTonalButtonColors(
-                        containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                        contentColor = PulverfassColors.TextOnDark,
-                    ),
-            ) {
-                Text(
-                    text = "⚙ OPTIONEN",
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 1.sp,
-                )
-            }
-
             OptionsOverlay(
                 show = showOptionsOverlay,
                 isMusicEnabled = isMusicEnabled,
@@ -658,6 +644,11 @@ internal fun GameScreenContent(
                 onClose = { showOptionsOverlay = false },
             )
 
+            AutoPhaseNoticeOverlay(
+                message = contentState.autoPhaseNoticeText,
+                onDismiss = actions.onClearAutoPhaseNotice,
+            )
+
             AttackResolutionOverlay(state = attackResolutionState)
 
             CountdownOverlay(
@@ -665,6 +656,7 @@ internal fun GameScreenContent(
                 value = countdownValue,
                 character = contentState.character,
                 playerName = contentState.playerName,
+                musicManager = musicManager,
                 onCountdownComplete = {},
             )
         } // end blurred game content group
@@ -694,11 +686,62 @@ private fun GameScreenOverlayContainer(
                 .background(PulverfassColors.SurfaceVoid.copy(alpha = overlayAlpha)),
         contentAlignment = Alignment.Center,
     ) {
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes
+                                    .forEach { it.consume() }
+                            }
+                        }
+                    },
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = arrangement,
             modifier = columnModifier,
             content = content,
+        )
+    }
+}
+
+@Composable
+private fun AutoPhaseNoticeOverlay(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    if (message == null) return
+
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.72f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .widthIn(max = 440.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.82f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+                .testTag("auto_phase_notice_popup"),
+    ) {
+        PulverfassTitleText(text = "PHASE GEWECHSELT", fontSize = 28.sp, letterSpacing = 2.sp)
+        Text(
+            text = message,
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        MainButton(
+            text = "OK",
+            onClick = onDismiss,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("auto_phase_notice_ack"),
         )
     }
 }
@@ -737,8 +780,16 @@ private fun OptionsOverlay(
             onToggle = onSfxToggle,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        MainButton(text = "ZURÜCK ZUM HAUPTMENÜ", onClick = onNavigateToMain)
-        MainButton(text = "SCHLIESSEN", onClick = onClose)
+        MainButton(
+            text = "SCHLIESSEN",
+            onClick = onClose,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MainButton(
+            text = "SPIEL VERLASSEN",
+            onClick = onNavigateToMain,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -749,7 +800,7 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
     LaunchedEffect(Unit) {
         for (i in 3 downTo 0) {
             value = i
-            musicManager?.playSfx(R.raw.sfx_ingame)
+            musicManager?.playSfx(R.raw.sfx_ui_click)
             delay(1000L)
         }
         delay(2000L)
@@ -762,8 +813,9 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
 private fun CountdownOverlay(
     show: Boolean,
     value: Int,
-    character: CharacterDef?,
+    character: CharacterDefinition?,
     playerName: String = "",
+    musicManager: BackgroundMusicManager? = null,
     onCountdownComplete: () -> Unit = {},
 ) {
     if (!show) return
@@ -780,6 +832,7 @@ private fun CountdownOverlay(
             value = value,
             character = character,
             playerName = playerName,
+            musicManager = musicManager,
             modifier = inputBlocker,
             onCountdownComplete = onCountdownComplete,
         )
@@ -799,24 +852,20 @@ private fun CountdownOverlay(
 @Composable
 private fun CinematicCountdown(
     value: Int,
-    character: CharacterDef,
+    character: CharacterDefinition,
     playerName: String = "",
+    musicManager: BackgroundMusicManager? = null,
     modifier: Modifier = Modifier,
     onCountdownComplete: () -> Unit = {},
 ) {
-    val isZooming = value <= 0
-    val zoomScale by animateFloatAsState(
-        targetValue = if (isZooming) 15f else 1f,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "zoomScale",
-    )
+    val isFinishing = value <= 0
     val blackOverlayAlpha by animateFloatAsState(
-        targetValue = if (isZooming) 1f else 0f,
+        targetValue = if (isFinishing) 1f else 0f,
         animationSpec = tween(900, delayMillis = 600),
         label = "blackOverlay",
     )
-    LaunchedEffect(isZooming) {
-        if (isZooming) {
+    LaunchedEffect(isFinishing) {
+        if (isFinishing) {
             delay(1500)
             onCountdownComplete()
         }
@@ -845,18 +894,10 @@ private fun CinematicCountdown(
                     .fillMaxSize()
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.05f)),
         )
-        val context = LocalContext.current
         val headerAlpha = remember { Animatable(0f) }
-        LaunchedEffect(Unit) {
+        LaunchedEffect(musicManager) {
             headerAlpha.animateTo(1f, tween(600))
-            try {
-                val mp = MediaPlayer.create(context, R.raw.sfx_schlacht_att)
-                mp?.start()
-                delay(3_000)
-                mp?.stop()
-                mp?.release()
-            } catch (_: Exception) {
-            }
+            musicManager?.playSfx(R.raw.sfx_attack_confirm)
         }
 
         Column(
@@ -892,11 +933,6 @@ private fun CinematicCountdown(
             )
             Box(
                 contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier.graphicsLayer {
-                        scaleX = zoomScale
-                        scaleY = zoomScale
-                    },
             ) {
                 CharacterCoin(character = character, size = 130.dp)
             }
@@ -1507,6 +1543,7 @@ private fun GameTopBar(
     personalPlayer: GamePlayerUi,
     phase: TurnPhase?,
     round: Int,
+    onOptionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1530,10 +1567,32 @@ private fun GameTopBar(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(horizontal = 20.dp),
+                        .padding(start = 12.dp, end = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val optionsDescription = "Optionen"
+                FilledTonalButton(
+                    onClick = onOptionsClick,
+                    modifier =
+                        Modifier
+                            .size(36.dp)
+                            .semantics { contentDescription = optionsDescription }
+                            .testTag("game_options_button"),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.65f),
+                            contentColor = PulverfassColors.TextOnDark,
+                        ),
+                ) {
+                    Text(
+                        text = "⚙",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = PulverfassColors.TextOnDark,
+                    )
+                }
                 PlayerAvatar(player = personalPlayer, size = 28.dp)
                 Column {
                     Text(
@@ -1898,7 +1957,7 @@ internal fun PrivateHandPanel(
             if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = {
-                        musicManager?.playSfx(R.raw.sfx_karten)
+                        musicManager?.playSfx(R.raw.sfx_card_select)
                         actions.onTradeInCards()
                     },
                     enabled = state.canTradeInCards,
@@ -2472,7 +2531,7 @@ private fun BottomActionClusters(
                     enabled = state.canEndPhase,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                     musicManager = musicManager,
-                    sfxResId = R.raw.sfx_schlacht_att,
+                    sfxResId = R.raw.sfx_attack_confirm,
                 )
             }
         }
@@ -2503,7 +2562,7 @@ private fun BlockActionButton(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
-    sfxResId: Int = R.raw.sfx_ingame,
+    sfxResId: Int = R.raw.sfx_ui_click,
 ) {
     val contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
     val wrappedOnClick: () -> Unit =

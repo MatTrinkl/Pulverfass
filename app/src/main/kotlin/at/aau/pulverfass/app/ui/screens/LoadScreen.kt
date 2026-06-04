@@ -82,7 +82,7 @@ fun LoadScreen(
     loadingTexts: List<String> = LoadingTexts,
     background: @Composable () -> Unit = {
         VideoPlayer(
-            videoResId = R.raw.pulverfass_loading,
+            videoResId = R.raw.video_loading_screen,
             loop = true,
             cover = true,
             muted = true,

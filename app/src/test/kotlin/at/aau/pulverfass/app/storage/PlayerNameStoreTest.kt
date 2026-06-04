@@ -36,10 +36,10 @@ class PlayerNameStoreTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = SharedPreferencesPlayerNameStore(context)
 
-        store.saveCharacterId("doctor")
+        store.saveCharacterId("character_03")
 
         val restoredStore = SharedPreferencesPlayerNameStore(context)
-        assertEquals("doctor", restoredStore.readCharacterId())
+        assertEquals("character_03", restoredStore.readCharacterId())
     }
 
     @Test
@@ -52,7 +52,7 @@ class PlayerNameStoreTest {
 
     @Test
     fun `no op store should never persist character id`() {
-        NoOpPlayerNameStore.saveCharacterId("doctor")
+        NoOpPlayerNameStore.saveCharacterId("character_03")
 
         assertNull(NoOpPlayerNameStore.readCharacterId())
     }

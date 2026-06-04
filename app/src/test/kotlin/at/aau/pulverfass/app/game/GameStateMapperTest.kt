@@ -35,12 +35,12 @@ class GameStateMapperTest {
             lobbyPlayersToGamePlayers(
                 players,
                 ownPlayerId = ownId,
-                ownCharacterId = "ice",
+                ownCharacterId = "character_04",
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
         assertEquals(PulverfassColors.playerColors[1], result[1].color)
-        assertEquals("ice", result[1].characterId)
+        assertEquals("character_04", result[1].characterId)
     }
 
     @Test
@@ -50,12 +50,12 @@ class GameStateMapperTest {
                 LobbyPlayerUi(
                     playerId = PlayerId(1),
                     displayName = "Alice",
-                    characterId = "doctor",
+                    characterId = "character_03",
                 ),
                 LobbyPlayerUi(
                     playerId = PlayerId(2),
                     displayName = "Bob",
-                    characterId = "redmen",
+                    characterId = "character_07",
                 ),
             )
 
@@ -63,8 +63,8 @@ class GameStateMapperTest {
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
         assertEquals(PulverfassColors.playerColors[1], result[1].color)
-        assertEquals("doctor", result[0].characterId)
-        assertEquals("redmen", result[1].characterId)
+        assertEquals("character_03", result[0].characterId)
+        assertEquals("character_07", result[1].characterId)
     }
 
     @Test
@@ -89,7 +89,7 @@ class GameStateMapperTest {
                 LobbyPlayerUi(
                     playerId = aliceId,
                     displayName = "Alice",
-                    characterId = "blackpurp",
+                    characterId = "character_01",
                 ),
             )
         val territoryId = TerritoryId("brasilien")
@@ -116,7 +116,7 @@ class GameStateMapperTest {
             lobbyPlayersToGamePlayers(
                 players,
                 ownPlayerId = null,
-                ownCharacterId = "doctor",
+                ownCharacterId = "character_03",
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
@@ -131,7 +131,7 @@ class GameStateMapperTest {
                 LobbyPlayerUi(
                     playerId = ownId,
                     displayName = "Alice",
-                    characterId = "blackpurp",
+                    characterId = "character_01",
                 ),
             )
 
@@ -143,6 +143,6 @@ class GameStateMapperTest {
             )
 
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals("blackpurp", result[0].characterId)
+        assertEquals("character_01", result[0].characterId)
     }
 }

@@ -29,7 +29,7 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
- * Vollbild-Overlay-Dialog mit Parchment-BG (lobbylist.png).
+ * Vollbild-Overlay-Dialog mit Parchment-BG (ui_lobby_roster_panel.png).
  *
  * Zeigt eine Bestätigungsfrage mit JA/NEIN MainButtons.
  * Klick auf den dunklen Overlay-Hintergrund = dismiss.
@@ -71,7 +71,7 @@ fun ExitConfirmationDialog(
         ) {
             // Parchment background image
             Image(
-                painter = painterResource(R.drawable.lobbylist),
+                painter = painterResource(R.drawable.ui_lobby_roster_panel),
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.fillMaxSize(),

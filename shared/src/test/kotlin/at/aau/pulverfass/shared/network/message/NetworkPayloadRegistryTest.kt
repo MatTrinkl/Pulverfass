@@ -1034,7 +1034,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for character selected broadcast`() {
-        val payload = CharacterSelectedBroadcast(LobbyCode("CS56"), PlayerId(5), "ice")
+        val payload = CharacterSelectedBroadcast(LobbyCode("CS56"), PlayerId(5), "character_04")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)

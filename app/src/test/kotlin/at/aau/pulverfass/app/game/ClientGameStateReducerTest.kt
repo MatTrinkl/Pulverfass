@@ -432,6 +432,39 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `attack availability ignores weak sources and allows departed owners`() {
+        val departedPlayer = PlayerId(99)
+        val weakSourceState =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                adjacentTerritoryIds =
+                    mapOf(
+                        TerritoryId("brasilien") to setOf(TerritoryId("argentinien")),
+                    ),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 2),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(TerritoryId("argentinien"), departedPlayer, 3),
+                    ),
+            )
+        val abandonedTargetState =
+            weakSourceState.copy(
+                territoryStates =
+                    weakSourceState.territoryStates +
+                        (
+                            TerritoryId("brasilien") to
+                                GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 3)
+                        ),
+            )
+
+        assertFalse(weakSourceState.hasAvailableAttack(aliceId))
+        assertTrue(abandonedTargetState.hasAvailableAttack(aliceId))
+    }
+
+    @Test
     fun `fortify selection accepts only owned connected targets and marks move as consumed`() {
         val base =
             GameUiState(

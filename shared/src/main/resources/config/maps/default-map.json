@@ -101,7 +101,6 @@
         { "targetId": "mitteleuropa" },
         { "targetId": "skandinavien" },
         { "targetId": "sibirien" },
-        { "targetId": "china" },
         { "targetId": "naher_osten" }
       ]
     },
@@ -127,7 +126,6 @@
     {
       "territoryId": "china",
       "edges": [
-        { "targetId": "russland" },
         { "targetId": "sibirien" },
         { "targetId": "alaska" },
         { "targetId": "japan" },

@@ -16,7 +16,7 @@ class WaitingRoomScreenStateTest {
                 LobbyPlayerUi(
                     playerId = PlayerId(2),
                     displayName = "Mary",
-                    characterId = "ice",
+                    characterId = "character_04",
                 ),
             )
 
@@ -24,11 +24,11 @@ class WaitingRoomScreenStateTest {
             initialCharacterIdForLobby(
                 players = players,
                 ownPlayerId = ownPlayerId,
-                currentCharacterId = "doctor",
+                currentCharacterId = "character_03",
                 submittedInitialCharacterId = null,
             )
 
-        assertEquals("doctor", result)
+        assertEquals("character_03", result)
     }
 
     @Test
@@ -40,7 +40,7 @@ class WaitingRoomScreenStateTest {
                 LobbyPlayerUi(
                     playerId = PlayerId(2),
                     displayName = "Mary",
-                    characterId = "blackpurp",
+                    characterId = "character_01",
                 ),
             )
 
@@ -48,11 +48,11 @@ class WaitingRoomScreenStateTest {
             initialCharacterIdForLobby(
                 players = players,
                 ownPlayerId = ownPlayerId,
-                currentCharacterId = "blackpurp",
+                currentCharacterId = "character_01",
                 submittedInitialCharacterId = null,
             )
 
-        assertEquals("bookmen", result)
+        assertEquals("character_02", result)
     }
 
     @Test
@@ -63,7 +63,7 @@ class WaitingRoomScreenStateTest {
                 LobbyPlayerUi(
                     playerId = ownPlayerId,
                     displayName = "Anne",
-                    characterId = "doctor",
+                    characterId = "character_03",
                 ),
             )
 
@@ -71,7 +71,7 @@ class WaitingRoomScreenStateTest {
             initialCharacterIdForLobby(
                 players = players,
                 ownPlayerId = ownPlayerId,
-                currentCharacterId = "doctor",
+                currentCharacterId = "character_03",
                 submittedInitialCharacterId = null,
             )
 
@@ -88,9 +88,31 @@ class WaitingRoomScreenStateTest {
                 players = players,
                 ownPlayerId = ownPlayerId,
                 currentCharacterId = null,
-                submittedInitialCharacterId = "doctor",
+                submittedInitialCharacterId = "character_03",
             )
 
         assertNull(result)
+    }
+
+    @Test
+    fun `availableCharacterIndexNear skips taken centered character forward first`() {
+        val result =
+            availableCharacterIndexNear(
+                centerIndex = 0,
+                takenCharacterIds = setOf("character_01"),
+            )
+
+        assertEquals(1, result)
+    }
+
+    @Test
+    fun `availableCharacterIndexNear falls back backward at the end of the list`() {
+        val result =
+            availableCharacterIndexNear(
+                centerIndex = 10,
+                takenCharacterIds = setOf("character_11"),
+            )
+
+        assertEquals(9, result)
     }
 }

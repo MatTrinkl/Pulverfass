@@ -58,7 +58,7 @@ fun StudioIntroScreen(navController: NavController) {
 
     LaunchedEffect(Unit) {
         try {
-            val mp = MediaPlayer.create(context, R.raw.gamestudio)
+            val mp = MediaPlayer.create(context, R.raw.music_studio_intro)
             mp?.start()
         } catch (_: Exception) {
         }
@@ -82,7 +82,7 @@ fun StudioIntroScreen(navController: NavController) {
                 ),
     ) {
         VideoPlayer(
-            videoResId = R.raw.gabumon_intro,
+            videoResId = R.raw.video_studio_intro,
             onCompleted = { navigateNext() },
             loop = false,
             cover = true,

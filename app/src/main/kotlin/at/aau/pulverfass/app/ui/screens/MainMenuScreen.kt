@@ -35,8 +35,8 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
  * Main-Menu Screen mit gamelogo.png groß über den Buttons.
- * Video-Background (menuvid.mp4).
- * EXIT zeigt Bestätigungsdialog via ExitConfirmationDialog (lobbylist.png Parchment).
+ * Video-Background (video_main_menu_background.mp4).
+ * EXIT zeigt Bestätigungsdialog via ExitConfirmationDialog (ui_lobby_roster_panel.png Parchment).
  */
 @Composable
 fun MainMenuScreen(
@@ -46,7 +46,7 @@ fun MainMenuScreen(
     modifier: Modifier = Modifier,
     background: @Composable () -> Unit = {
         VideoPlayer(
-            videoResId = R.raw.menuvid,
+            videoResId = R.raw.video_main_menu_background,
             loop = true,
             cover = true,
             muted = true,
@@ -94,7 +94,7 @@ fun MainMenuScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.gamelogo),
+                    painter = painterResource(id = R.drawable.brand_pulverfass_logo),
                     contentDescription = "Pulverfass Logo",
                     contentScale = ContentScale.Fit,
                     modifier =

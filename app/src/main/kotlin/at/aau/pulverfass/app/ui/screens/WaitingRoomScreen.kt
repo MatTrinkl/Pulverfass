@@ -64,7 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
-import at.aau.pulverfass.app.lobby.CharacterDef
+import at.aau.pulverfass.app.lobby.CharacterDefinition
 import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
@@ -130,7 +130,7 @@ fun WaitingRoomScreen(
         )
 
     var showCharacterPicker by remember { mutableStateOf(false) }
-    var coinAnimCharacter by remember { mutableStateOf<CharacterDef?>(null) }
+    var coinAnimCharacter by remember { mutableStateOf<CharacterDefinition?>(null) }
     var screenSizePx by remember { mutableStateOf(IntSize.Zero) }
     var characterPreviewCenterPx by remember { mutableStateOf<Offset?>(null) }
     val characterPreviewTargetOffsetPx =
@@ -149,9 +149,9 @@ fun WaitingRoomScreen(
 
     LaunchedEffect(showCharacterPicker) {
         if (showCharacterPicker) {
-            musicManager?.play(R.raw.lobbyscary)
+            musicManager?.play(R.raw.music_character_picker)
         } else {
-            musicManager?.play(R.raw.lobbywaiting)
+            musicManager?.play(R.raw.music_lobby_waiting)
         }
     }
 
@@ -204,7 +204,7 @@ fun WaitingRoomScreen(
             )
         }
 
-        // CENTER: Player list on lobbylist.png parchment
+        // CENTER: Player list on ui_lobby_roster_panel.png parchment
         Column(
             modifier =
                 Modifier
@@ -218,7 +218,7 @@ fun WaitingRoomScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.lobbylist),
+                    painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds,
                     modifier = Modifier.matchParentSize(),
@@ -252,6 +252,7 @@ fun WaitingRoomScreen(
         ) {
             CharacterPreview(
                 characterDef = state.characterId?.let { Characters.byId(it) },
+                hideCharacterIcon = coinAnimCharacter != null,
                 modifier =
                     Modifier.onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInRoot()
@@ -269,14 +270,14 @@ fun WaitingRoomScreen(
             )
         }
 
-        // BOTTOM: Action buttons
-        Row(
+        // BOTTOM-LEFT: Fixed lobby actions keep host and non-host layouts aligned.
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 32.dp, end = 236.dp, bottom = 32.dp)
-                    .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    .padding(start = 32.dp, bottom = 32.dp)
+                    .width(220.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (effectiveIsHost) {
                 val canStart = players.size >= 3
@@ -284,7 +285,7 @@ fun WaitingRoomScreen(
                     text = "SPIEL STARTEN",
                     onClick = sfx(musicManager, controller::startGame),
                     enabled = canStart,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             MainButton(
@@ -294,7 +295,7 @@ fun WaitingRoomScreen(
                         controller.leaveLobby()
                         navController.popBackStack()
                     },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -323,7 +324,7 @@ fun WaitingRoomScreen(
                 ),
             onDismiss = sfx(musicManager) { showCharacterPicker = false },
             onSave = { id ->
-                musicManager?.playSfx(R.raw.sfx_karten)
+                musicManager?.playSfx(R.raw.sfx_card_select)
                 coinAnimCharacter = Characters.byId(id)
                 controller.selectCharacter(id)
             },
@@ -343,7 +344,7 @@ private fun sfx(
     action: () -> Unit,
 ): () -> Unit =
     {
-        musicManager?.playSfx(R.raw.sfx_ingame)
+        musicManager?.playSfx(R.raw.sfx_ui_click)
         action()
     }
 
@@ -405,6 +406,34 @@ internal fun initialCharacterIdForLobby(
     return currentCharacter ?: Characters.all.firstOrNull { it.id !in takenCharacterIds }?.id
 }
 
+internal fun availableCharacterIndexNear(
+    centerIndex: Int,
+    takenCharacterIds: Set<String>,
+): Int? {
+    val lastIndex = Characters.all.lastIndex
+    if (lastIndex < 0) {
+        return null
+    }
+    val safeCenterIndex = centerIndex.coerceIn(0, lastIndex)
+    if (Characters.all[safeCenterIndex].id !in takenCharacterIds) {
+        return safeCenterIndex
+    }
+
+    for (offset in 1..lastIndex) {
+        val nextIndex = safeCenterIndex + offset
+        if (nextIndex <= lastIndex && Characters.all[nextIndex].id !in takenCharacterIds) {
+            return nextIndex
+        }
+
+        val previousIndex = safeCenterIndex - offset
+        if (previousIndex >= 0 && Characters.all[previousIndex].id !in takenCharacterIds) {
+            return previousIndex
+        }
+    }
+
+    return null
+}
+
 private fun playerColorAt(index: Int): Color =
     PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
 
@@ -416,21 +445,28 @@ private fun playerColorsById(players: List<LobbyPlayerUi>): Map<PlayerId, Color>
 
 @Composable
 private fun CharacterPreview(
-    characterDef: CharacterDef?,
+    characterDef: CharacterDefinition?,
     modifier: Modifier = Modifier,
+    hideCharacterIcon: Boolean = false,
 ) {
     Box(modifier = modifier.size(115.dp), contentAlignment = Alignment.Center) {
         if (characterDef != null) {
             Box(
-                modifier = Modifier.size(86.dp).clip(CircleShape),
+                modifier =
+                    Modifier
+                        .size(86.dp)
+                        .clip(CircleShape)
+                        .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(
-                    painter = painterResource(id = characterDef.drawableRes),
-                    contentDescription = characterDef.displayName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(100.dp),
-                )
+                if (!hideCharacterIcon) {
+                    Image(
+                        painter = painterResource(id = characterDef.drawableRes),
+                        contentDescription = characterDef.displayName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(100.dp),
+                    )
+                }
             }
         } else {
             Box(
@@ -502,7 +538,7 @@ private fun BoxScope.WaitingRoomStatusOverlays(
 
 private data class WaitingRoomOverlayState(
     val showCharacterPicker: Boolean,
-    val coinAnimCharacter: CharacterDef?,
+    val coinAnimCharacter: CharacterDefinition?,
     val currentCharacterId: String,
     val playerCount: Int,
     val takenCharacterIds: Set<String> = emptySet(),
@@ -608,12 +644,22 @@ private fun CharacterPickerLabel(
 
 @Composable
 private fun CharacterCard(
-    character: CharacterDef,
+    character: CharacterDefinition,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
-        modifier = modifier.size(129.dp).clickable(onClick = onClick),
+        modifier =
+            modifier
+                .size(129.dp)
+                .then(
+                    if (enabled) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -688,8 +734,16 @@ private fun CharacterPickerOverlay(
         }
     }
 
-    LaunchedEffect(centerIndex) {
-        onSelect(Characters.byIndex(centerIndex).id)
+    val selectedCharacterId = Characters.byIndex(centerIndex).id
+    val selectedCharacterTaken = selectedCharacterId in takenCharacterIds
+
+    LaunchedEffect(centerIndex, takenCharacterIds) {
+        val availableIndex = availableCharacterIndexNear(centerIndex, takenCharacterIds)
+        when {
+            availableIndex == null -> Unit
+            availableIndex != centerIndex -> lazyListState.animateScrollToItem(availableIndex)
+            else -> onSelect(Characters.all[availableIndex].id)
+        }
     }
 
     Box(
@@ -697,7 +751,7 @@ private fun CharacterPickerOverlay(
         contentAlignment = Alignment.Center,
     ) {
         VideoPlayer(
-            videoResId = R.raw.wid,
+            videoResId = R.raw.video_character_picker_background,
             loop = true,
             cover = true,
             muted = true,
@@ -773,38 +827,17 @@ private fun CharacterPickerOverlay(
                             label = "alpha",
                         )
                         val isTaken = takenCharacterIds.contains(character.id)
-                        Box {
-                            CharacterCard(
-                                character = character,
-                                onClick = {},
-                                modifier =
-                                    Modifier.graphicsLayer {
-                                        scaleX = animScale
-                                        scaleY = animScale
-                                        alpha = if (isTaken) animAlpha * 0.35f else animAlpha
-                                    },
-                            )
-                            if (isTaken && distance == 0) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .size(89.dp)
-                                            .align(Alignment.Center)
-                                            .clip(CircleShape)
-                                            .background(
-                                                PulverfassColors.SurfaceVoid.copy(alpha = 0.55f),
-                                            ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = "✕",
-                                        color = PulverfassColors.DangerBright,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Black,
-                                    )
-                                }
-                            }
-                        }
+                        CharacterCard(
+                            character = character,
+                            onClick = {},
+                            enabled = !isTaken,
+                            modifier =
+                                Modifier.graphicsLayer {
+                                    scaleX = animScale
+                                    scaleY = animScale
+                                    alpha = if (isTaken) animAlpha * 0.28f else animAlpha
+                                },
+                        )
                     }
                 }
             }
@@ -819,7 +852,8 @@ private fun CharacterPickerOverlay(
                 MainButton(text = "ABBRECHEN", onClick = onDismiss)
                 MainButton(
                     text = "SPEICHERN",
-                    onClick = { onSave(Characters.byIndex(centerIndex).id) },
+                    onClick = { onSave(selectedCharacterId) },
+                    enabled = !selectedCharacterTaken,
                 )
             }
         }
@@ -828,7 +862,7 @@ private fun CharacterPickerOverlay(
 
 @Composable
 private fun CharacterCoinAnimation(
-    characterDef: CharacterDef,
+    characterDef: CharacterDefinition,
     targetOffsetPx: Offset?,
     onComplete: () -> Unit,
 ) {

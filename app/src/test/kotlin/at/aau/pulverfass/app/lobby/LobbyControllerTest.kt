@@ -39,6 +39,7 @@ import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
@@ -58,6 +59,7 @@ import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadata
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
@@ -1224,6 +1226,13 @@ class LobbyControllerTest {
                                 )
                             }
                         }
+                        is TurnAdvanceRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(TurnAdvanceResponse(lobbyCode)),
+                                ),
+                            )
                     }
                 }
             val controller = createController(config = config)
@@ -1267,9 +1276,162 @@ class LobbyControllerTest {
                 assertTrue(
                     LobbyCommandKey.FORTIFY_MOVE !in controller.state.value.pendingCommandKeys,
                 )
+                waitUntil {
+                    seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
+                }
+                val turnAdvanceRequest = seenPayloads.filterIsInstance<TurnAdvanceRequest>().last()
+                assertEquals(lobbyCode, turnAdvanceRequest.lobbyCode)
+                assertEquals(playerId, turnAdvanceRequest.playerId)
+                assertEquals(TurnPhase.FORTIFY, turnAdvanceRequest.expectedPhase)
+                assertEquals(
+                    "Truppen wurden verschoben. Die Verschiebephase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
+                waitUntil {
+                    LobbyCommandKey.TURN_ADVANCE !in controller.state.value.pendingCommandKeys
+                }
 
                 controller.fortifyMove()
                 assertEquals(config.errorFortifySelectionMissing, controller.state.value.errorText)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `attack phase without available attacks is confirmed automatically`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AT00")
+            val playerId = PlayerId(1)
+            val defenderId = PlayerId(2)
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = lobbyCode,
+                                            playerId = playerId,
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        GameStateCatchUpResponse(
+                                            lobbyCode = lobbyCode,
+                                            stateVersion = 1,
+                                            determinism =
+                                                PublicDeterminismMetadataSnapshot(
+                                                    mapHash = "hash",
+                                                    schemaVersion = 1,
+                                                ),
+                                            turnState =
+                                                PublicTurnStateSnapshot(
+                                                    activePlayerId = playerId,
+                                                    turnPhase = TurnPhase.ATTACK,
+                                                    turnCount = 1,
+                                                    startPlayerId = playerId,
+                                                ),
+                                            definition =
+                                                MapDefinitionSnapshot(
+                                                    territories =
+                                                        listOf(
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("brasilien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "argentinien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                            MapTerritoryDefinitionSnapshot(
+                                                                territoryId =
+                                                                    TerritoryId("argentinien"),
+                                                                edges =
+                                                                    listOf(
+                                                                        MapTerritoryEdgeSnapshot(
+                                                                            TerritoryId(
+                                                                                "brasilien",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                            ),
+                                                        ),
+                                                    continents = emptyList(),
+                                                ),
+                                            territoryStates =
+                                                listOf(
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        ownerId = playerId,
+                                                        troopCount = 2,
+                                                    ),
+                                                    MapTerritoryStateSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        ownerId = defenderId,
+                                                        troopCount = 3,
+                                                    ),
+                                                ),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                        is ConfirmAttackDoneRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(ConfirmAttackDoneResponse(lobbyCode)),
+                                ),
+                            )
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isNotEmpty()
+                }
+                val request = seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().single()
+                assertEquals(lobbyCode, request.lobbyCode)
+                assertEquals(playerId, request.playerId)
+                assertEquals(
+                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
+                waitUntil {
+                    LobbyCommandKey.CONFIRM_ATTACK_DONE !in
+                        controller.state.value.pendingCommandKeys
+                }
             } finally {
                 controller.close()
                 server.close()
@@ -1677,6 +1839,24 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `leave lobby should clear reconnect session even without active lobby code`() {
+        val store = InMemoryReconnectSessionStore()
+        val controller = createController(sessionStore = store)
+        try {
+            store.saveSessionToken("123e4567-e89b-12d3-a456-426614174231")
+            store.saveWasGameStarted(true)
+
+            controller.leaveLobby()
+
+            assertNull(store.readSessionToken())
+            assertFalse(store.readWasGameStarted())
+            assertNull(controller.state.value.activeLobbyCode)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
     fun `updateCharacter stores characterId without changing gameplay color`() {
         val controller = createController()
         try {
@@ -1695,8 +1875,8 @@ class LobbyControllerTest {
         val store = InMemoryPlayerNameStore()
         val controller = createController(playerNameStore = store)
         try {
-            controller.updateCharacter("ice")
-            assertEquals("ice", store.readCharacterId())
+            controller.updateCharacter("character_04")
+            assertEquals("character_04", store.readCharacterId())
         } finally {
             controller.close()
         }
@@ -1901,7 +2081,7 @@ class LobbyControllerTest {
                                         CharacterSelectedBroadcast(
                                             lobbyCode = lobbyCode,
                                             playerId = PlayerId(12),
-                                            characterId = "ice",
+                                            characterId = "character_04",
                                         ),
                                     ),
                                 ),
@@ -1916,11 +2096,11 @@ class LobbyControllerTest {
                 controller.createLobby { }
                 waitUntil {
                     controller.state.value.players.any {
-                        it.playerId == PlayerId(12) && it.characterId == "ice"
+                        it.playerId == PlayerId(12) && it.characterId == "character_04"
                     }
                 }
                 val player = controller.state.value.players.first { it.playerId == PlayerId(12) }
-                assertEquals("ice", player.characterId)
+                assertEquals("character_04", player.characterId)
             } finally {
                 controller.close()
                 server.close()
@@ -1973,7 +2153,7 @@ class LobbyControllerTest {
                                         CharacterSelectedBroadcast(
                                             lobbyCode = lobbyCode,
                                             playerId = PlayerId(99),
-                                            characterId = "doctor",
+                                            characterId = "character_03",
                                         ),
                                     ),
                                 ),
@@ -1991,6 +2171,160 @@ class LobbyControllerTest {
                 val players = controller.state.value.players
                 assertTrue(players.none { it.playerId == PlayerId(99) })
                 assertTrue(players.all { it.characterId == null })
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `saved character is selected automatically after own lobby player is known`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC45")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174225"),
+                        ),
+                ) { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(15),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val playerNameStore =
+                InMemoryPlayerNameStore()
+                    .also { it.saveCharacterId("character_04") }
+            val controller = createController(playerNameStore = playerNameStore)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Finn")
+                controller.createLobby { }
+                waitUntil {
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .any { it.characterId == "character_04" }
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `saved character auto selection falls back when preferred character is taken`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC46")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174226"),
+                        ),
+                ) { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(CreateLobbyResponse(lobbyCode)),
+                                ),
+                            )
+                        is JoinLobbyRequest -> {
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(21),
+                                            playerDisplayName = "Alice",
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        CharacterSelectedBroadcast(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(21),
+                                            characterId = "character_04",
+                                        ),
+                                    ),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerJoinedLobbyEvent(
+                                            lobbyCode = payload.lobbyCode,
+                                            playerId = PlayerId(22),
+                                            playerDisplayName = payload.playerDisplayName,
+                                        ),
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            val playerNameStore =
+                InMemoryPlayerNameStore()
+                    .also { it.saveCharacterId("character_04") }
+            val controller = createController(playerNameStore = playerNameStore)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Finn")
+                controller.createLobby { }
+                waitUntil {
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .any { it.characterId != "character_04" }
+                }
+
+                val request = seenPayloads.filterIsInstance<CharacterSelectRequest>().single()
+                assertEquals("character_01", request.characterId)
+                assertTrue(request.characterId !in setOf("character_04"))
             } finally {
                 controller.close()
                 server.close()
@@ -2047,10 +2381,17 @@ class LobbyControllerTest {
                 controller.updatePlayerName("Eve")
                 controller.createLobby { }
                 waitUntil { controller.state.value.ownPlayerId != null }
-                controller.selectCharacter("warrior")
-                waitUntil { seenPayloads.any { it is CharacterSelectRequest } }
-                val request = seenPayloads.filterIsInstance<CharacterSelectRequest>().first()
-                assertEquals("warrior", request.characterId)
+                controller.selectCharacter("character_06")
+                waitUntil {
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .any { it.characterId == "character_06" }
+                }
+                val request =
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .last { it.characterId == "character_06" }
+                assertEquals("character_06", request.characterId)
                 assertEquals(lobbyCode, request.lobbyCode)
             } finally {
                 controller.close()

@@ -11,7 +11,7 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 @Composable
 fun LobbyVideoBackground() {
     VideoPlayer(
-        videoResId = R.raw.lobby,
+        videoResId = R.raw.video_lobby_background,
         loop = true,
         cover = true,
         muted = true,

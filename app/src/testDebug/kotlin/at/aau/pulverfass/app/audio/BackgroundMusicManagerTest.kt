@@ -16,6 +16,7 @@ class BackgroundMusicManagerTest {
     @After
     fun tearDown() {
         manager.setMusicMuted(false) // reset state for next test
+        manager.setSfxMuted(false)
         manager.release()
     }
 
@@ -36,5 +37,18 @@ class BackgroundMusicManagerTest {
         manager.setMusicMuted(true)
         manager.setMusicMuted(false)
         assertFalse(manager.isMusicMuted)
+    }
+
+    @Test
+    fun set_sfx_muted_true_persists_state() {
+        manager.setSfxMuted(true)
+        assertTrue(manager.isSfxMuted)
+    }
+
+    @Test
+    fun toggle_sfx_muted_back_to_false_works() {
+        manager.setSfxMuted(true)
+        manager.setSfxMuted(false)
+        assertFalse(manager.isSfxMuted)
     }
 }

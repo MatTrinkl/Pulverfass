@@ -180,6 +180,36 @@ data class GameUiState(
     ): Boolean = canManageAttacks(localPlayerId, isConnected)
 
     /**
+     * Prüft, ob der aktive Spieler aktuell mindestens einen sinnvollen Angriff
+     * auswählen kann.
+     *
+     * Die UI nutzt diese Information, um eine leere Angriffsphase direkt zu
+     * bestätigen. Ein Gebiet braucht mehr als zwei Truppen, weil mindestens
+     * zwei Angreifer eingesetzt werden und eine Truppe im Ausgangsgebiet bleiben
+     * muss. Zielgebiete verlassener Spieler bleiben angreifbar, solange der
+     * serverseitige Territory-State noch eine fremde Owner-ID trägt.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @return `true`, wenn mindestens ein eigenes Gebiet ein fremdes Nachbarziel
+     * angreifen kann
+     */
+    fun hasAvailableAttack(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        return territoryStates.values.any { source ->
+            source.ownerId == localPlayerId &&
+                source.troopCount > MIN_ATTACK_TROOPS &&
+                adjacentTerritoryIds[source.territoryId].orEmpty().any { targetId ->
+                    val targetOwnerId = territoryStates[targetId]?.ownerId
+                    targetOwnerId != null &&
+                        targetOwnerId != localPlayerId
+                }
+        }
+    }
+
+    /**
      * Prüft, ob eine Truppenverschiebung in der Fortify-Phase vorbereitet werden kann.
      *
      * Fortify darf nur einmal pro Zug ausgeführt werden. Der öffentliche

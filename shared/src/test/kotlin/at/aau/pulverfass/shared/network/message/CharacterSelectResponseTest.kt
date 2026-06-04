@@ -50,7 +50,7 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should resolve message type and serialization via registry`() {
-        val response = CharacterSelectResponse(LobbyCode("CD34"), "doctor")
+        val response = CharacterSelectResponse(LobbyCode("CD34"), "character_03")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(response)
         val serialized = NetworkPayloadRegistry.serializePayload(response)
@@ -62,9 +62,9 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should satisfy equals and hashCode contract`() {
-        val a = CharacterSelectResponse(LobbyCode("EF56"), "ice")
-        val b = CharacterSelectResponse(LobbyCode("EF56"), "ice")
-        val c = CharacterSelectResponse(LobbyCode("EF56"), "doctor")
+        val a = CharacterSelectResponse(LobbyCode("EF56"), "character_04")
+        val b = CharacterSelectResponse(LobbyCode("EF56"), "character_04")
+        val c = CharacterSelectResponse(LobbyCode("EF56"), "character_03")
 
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())

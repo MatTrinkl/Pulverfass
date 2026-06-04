@@ -113,15 +113,15 @@ class MainActivity : AppCompatActivity() {
                     when {
                         route == Screen.MainMenu.route ||
                             route == Screen.LoadGame.route ->
-                            musicManager.play(R.raw.mainmusic)
+                            musicManager.play(R.raw.music_main_menu)
                         route == Screen.Lobby.route ->
-                            musicManager.play(R.raw.lobbyneu)
+                            musicManager.play(R.raw.music_lobby_menu)
                         route?.startsWith(Screen.WaitingRoom.route) == true ->
-                            musicManager.play(R.raw.lobbywaiting)
+                            musicManager.play(R.raw.music_lobby_waiting)
                         route == Screen.Options.route ->
-                            musicManager.play(R.raw.settings)
+                            musicManager.play(R.raw.music_options_menu)
                         route == Screen.Game.route ->
-                            musicManager.play(R.raw.maingame, loop = true)
+                            musicManager.play(R.raw.music_gameplay_loop, loop = true)
                     }
                 }
 

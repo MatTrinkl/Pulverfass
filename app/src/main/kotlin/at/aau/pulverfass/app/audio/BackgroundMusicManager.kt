@@ -103,18 +103,25 @@ class BackgroundMusicManager(context: Context) {
         }
     }
 
+    @Synchronized
     fun setSfxMuted(muted: Boolean) {
         prefs.edit().putBoolean(KEY_SFX_MUTED, muted).apply()
+        if (muted) stopActiveSfx()
     }
 
     /**
      * Spielt einen Sound-Effect einmalig ab.
      */
+    @Synchronized
     fun playSfx(
         @RawRes resId: Int,
     ) {
         if (isSfxMuted) return
         val sfxPlayer = MediaPlayer.create(appContext, resId) ?: return
+        if (isSfxMuted) {
+            runCatching { sfxPlayer.release() }
+            return
+        }
         activeSfxPlayers.add(sfxPlayer)
         sfxPlayer.setOnCompletionListener { mp ->
             activeSfxPlayers.remove(mp)
@@ -131,6 +138,18 @@ class BackgroundMusicManager(context: Context) {
     @Synchronized
     fun release() {
         stop()
+        stopActiveSfx()
+    }
+
+    /**
+     * Stoppt alle aktuell laufenden One-Shot-Sounds sofort.
+     *
+     * Dadurch verhält sich der SFX-Schalter wie der Musik-Schalter: sobald
+     * SFX deaktiviert wird, laufen auch bereits gestartete oder gerade erst
+     * aus der Queue gestartete Sounds nicht hörbar weiter.
+     */
+    @Synchronized
+    private fun stopActiveSfx() {
         activeSfxPlayers.forEach { sfx ->
             runCatching {
                 if (sfx.isPlaying) sfx.stop()

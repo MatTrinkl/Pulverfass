@@ -1101,6 +1101,11 @@ class MainServerLobbyRoutingService(
                 context = "reconnect lobby roster replay",
             )
         }
+        replayCharacterSelections(
+            connectionId = connectionId,
+            lobbyCode = lobbyCode,
+            context = "reconnect character roster replay",
+        )
 
         resumeWaitingTurnForPlayer(reconnectingPlayerId)
     }
@@ -1145,6 +1150,11 @@ class MainServerLobbyRoutingService(
                     context = "join existing roster replay",
                 )
             }
+        replayCharacterSelections(
+            connectionId = request.connectionId,
+            lobbyCode = payload.lobbyCode,
+            context = "join character roster replay",
+        )
 
         val event =
             PlayerJoinedLobbyEvent(
@@ -1175,6 +1185,46 @@ class MainServerLobbyRoutingService(
             }
     }
 
+    private suspend fun replayCharacterSelections(
+        connectionId: ConnectionId,
+        lobbyCode: LobbyCode,
+        context: String,
+    ) {
+        val broadcasts =
+            charactersByLobby[lobbyCode]
+                ?.let { charMap ->
+                    synchronized(charMap) {
+                        charMap.map { (characterId, playerId) ->
+                            CharacterSelectedBroadcast(
+                                lobbyCode = lobbyCode,
+                                playerId = PlayerId(playerId),
+                                characterId = characterId,
+                            )
+                        }
+                    }
+                }
+                .orEmpty()
+
+        broadcasts.forEach { broadcast ->
+            sendBestEffortPayload(
+                connectionId = connectionId,
+                payload = broadcast,
+                context = context,
+            )
+        }
+    }
+
+    private fun releaseCharacterSelection(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ) {
+        charactersByLobby[lobbyCode]?.let { charMap ->
+            synchronized(charMap) {
+                charMap.entries.removeIf { it.value == playerId.value }
+            }
+        }
+    }
+
     private suspend fun dispatchLeaveNetworkMessages(
         request: DecodedNetworkRequest,
         payload: LeaveLobbyRequest,
@@ -1182,6 +1232,7 @@ class MainServerLobbyRoutingService(
         network.send(request.connectionId, LeaveLobbyResponse(payload.lobbyCode))
 
         val playerId = request.context.playerId ?: return
+        releaseCharacterSelection(payload.lobbyCode, playerId)
         resolveSessionToken(request.connectionId)?.let { sessionToken ->
             sessionContextRegistry?.clearLobbyContext(sessionToken)
         }
@@ -1221,6 +1272,7 @@ class MainServerLobbyRoutingService(
         payload: KickPlayerRequest,
     ) {
         network.send(request.connectionId, KickPlayerResponse())
+        releaseCharacterSelection(payload.lobbyCode, payload.targetPlayerId)
         sessionContextRegistry
             ?.sessionTokenForPlayer(payload.targetPlayerId)
             ?.let(sessionContextRegistry::clearLobbyContext)
