@@ -99,26 +99,18 @@ fun WaitingRoomScreen(
         mutableStateOf<String?>(null)
     }
 
-    LaunchedEffect(
-        state.activeLobbyCode,
-        ownPlayerId,
-        state.characterId,
-        state.players,
-        submittedInitialCharacterId,
-    ) {
-        val initialCharacterId =
-            initialCharacterIdForLobby(
-                players = state.players,
-                ownPlayerId = ownPlayerId,
-                currentCharacterId = state.characterId,
-                submittedInitialCharacterId = submittedInitialCharacterId,
-            )
-        if (initialCharacterId != null) {
-            submittedInitialCharacterId = initialCharacterId
-            controller.updateCharacter(initialCharacterId)
-            controller.selectCharacter(initialCharacterId)
-        }
-    }
+    SubmitInitialCharacterEffect(
+        activeLobbyCode = state.activeLobbyCode,
+        players = state.players,
+        ownPlayerId = ownPlayerId,
+        currentCharacterId = state.characterId,
+        submittedInitialCharacterId = submittedInitialCharacterId,
+        onSubmittedInitialCharacterIdChange = { submittedInitialCharacterId = it },
+        onSyncCharacter = { id ->
+            controller.updateCharacter(id)
+            controller.selectCharacter(id)
+        },
+    )
 
     val players =
         buildWaitingRoomPlayers(
@@ -134,32 +126,13 @@ fun WaitingRoomScreen(
     var screenSizePx by remember { mutableStateOf(IntSize.Zero) }
     var characterPreviewCenterPx by remember { mutableStateOf<Offset?>(null) }
     val characterPreviewTargetOffsetPx =
-        remember(screenSizePx, characterPreviewCenterPx) {
-            if (screenSizePx.width == 0 || screenSizePx.height == 0) {
-                return@remember null
-            }
-            val previewCenter = characterPreviewCenterPx ?: return@remember null
-            val screenCenter =
-                Offset(
-                    x = screenSizePx.width / 2f,
-                    y = screenSizePx.height / 2f,
-                )
-            previewCenter - screenCenter
-        }
+        rememberCharacterPreviewTargetOffset(
+            screenSizePx = screenSizePx,
+            characterPreviewCenterPx = characterPreviewCenterPx,
+        )
 
-    LaunchedEffect(showCharacterPicker) {
-        if (showCharacterPicker) {
-            musicManager?.play(R.raw.music_character_picker)
-        } else {
-            musicManager?.play(R.raw.music_lobby_waiting)
-        }
-    }
-
-    LaunchedEffect(state.gameStarted) {
-        if (state.gameStarted) {
-            navController.navigate(Screen.LoadGame.route)
-        }
-    }
+    WaitingRoomMusicEffect(showCharacterPicker = showCharacterPicker, musicManager = musicManager)
+    NavigateToStartedGameEffect(gameStarted = state.gameStarted, navController = navController)
 
     Box(
         modifier =
@@ -170,134 +143,31 @@ fun WaitingRoomScreen(
     ) {
         LobbyVideoBackground()
 
-        // TOP-LEFT: Host marker + Lobby code
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 32.dp, top = 28.dp),
-            horizontalAlignment = Alignment.Start,
-        ) {
-            if (effectiveIsHost) {
-                Text(
-                    text = "DU BIST DER HOST",
-                    color = PulverfassColors.TextOnDark,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 2.sp,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            Text(
-                text = "LOBBY: $lobbyCode",
-                color = PulverfassColors.GoldBright,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 3.sp,
-            )
-            Text(
-                text = "SPIELER (${players.size}/6)",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 2.sp,
-            )
-        }
+        WaitingRoomHeader(
+            lobbyCode = lobbyCode,
+            isHost = effectiveIsHost,
+            playerCount = players.size,
+        )
 
-        // CENTER: Player list on ui_lobby_roster_panel.png parchment
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth(0.55f)
-                    .fillMaxHeight(0.72f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier.matchParentSize(),
-                )
-                LazyColumn(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(
-                                start = 64.dp,
-                                end = 64.dp,
-                                top = 48.dp,
-                                bottom = 48.dp,
-                            ),
-                ) {
-                    items(players) { player ->
-                        PlayerRow(player = player)
-                    }
-                }
-            }
-        }
+        WaitingRoomPlayerList(players = players)
 
-        // RIGHT OF CENTER: Character preview + picker button
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            CharacterPreview(
-                characterDef = state.characterId?.let { Characters.byId(it) },
-                hideCharacterIcon = coinAnimCharacter != null,
-                modifier =
-                    Modifier.onGloballyPositioned { coordinates ->
-                        val position = coordinates.positionInRoot()
-                        characterPreviewCenterPx =
-                            Offset(
-                                x = position.x + coordinates.size.width / 2f,
-                                y = position.y + coordinates.size.height / 2f,
-                            )
-                    },
-            )
-            MainButton(
-                text = "CHARAKTER\nWÄHLEN",
-                onClick = sfx(musicManager) { showCharacterPicker = true },
-                modifier = Modifier.testTag("character_picker_button"),
-            )
-        }
+        WaitingRoomCharacterEntry(
+            characterId = state.characterId,
+            hideCharacterIcon = coinAnimCharacter != null,
+            onPreviewCenterChange = { characterPreviewCenterPx = it },
+            onOpenPicker = sfx(musicManager) { showCharacterPicker = true },
+        )
 
-        // BOTTOM-LEFT: Fixed lobby actions keep host and non-host layouts aligned.
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 32.dp, bottom = 32.dp)
-                    .width(220.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (effectiveIsHost) {
-                val canStart = players.size >= 3
-                MainButton(
-                    text = "SPIEL STARTEN",
-                    onClick = sfx(musicManager, controller::startGame),
-                    enabled = canStart,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            MainButton(
-                text = "LOBBY VERLASSEN",
-                onClick =
-                    sfx(musicManager) {
-                        controller.leaveLobby()
-                        navController.popBackStack()
-                    },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        WaitingRoomActions(
+            isHost = effectiveIsHost,
+            playerCount = players.size,
+            onStartGame = sfx(musicManager, controller::startGame),
+            onLeaveLobby =
+                sfx(musicManager) {
+                    controller.leaveLobby()
+                    navController.popBackStack()
+                },
+        )
 
         WaitingRoomStatusOverlays(
             errorText = state.errorText,
@@ -335,6 +205,240 @@ fun WaitingRoomScreen(
                 coinAnimCharacter = null
             },
             onDismissError = { controller.clearCharacterSelectError() },
+        )
+    }
+}
+
+@Composable
+private fun SubmitInitialCharacterEffect(
+    activeLobbyCode: String?,
+    players: List<LobbyPlayerUi>,
+    ownPlayerId: PlayerId?,
+    currentCharacterId: String?,
+    submittedInitialCharacterId: String?,
+    onSubmittedInitialCharacterIdChange: (String) -> Unit,
+    onSyncCharacter: (String) -> Unit,
+) {
+    LaunchedEffect(
+        activeLobbyCode,
+        ownPlayerId,
+        currentCharacterId,
+        players,
+        submittedInitialCharacterId,
+    ) {
+        val initialCharacterId =
+            initialCharacterIdForLobby(
+                players = players,
+                ownPlayerId = ownPlayerId,
+                currentCharacterId = currentCharacterId,
+                submittedInitialCharacterId = submittedInitialCharacterId,
+            )
+        if (initialCharacterId != null) {
+            onSubmittedInitialCharacterIdChange(initialCharacterId)
+            onSyncCharacter(initialCharacterId)
+        }
+    }
+}
+
+@Composable
+private fun rememberCharacterPreviewTargetOffset(
+    screenSizePx: IntSize,
+    characterPreviewCenterPx: Offset?,
+): Offset? =
+    remember(screenSizePx, characterPreviewCenterPx) {
+        characterPreviewTargetOffset(
+            screenSizePx = screenSizePx,
+            characterPreviewCenterPx = characterPreviewCenterPx,
+        )
+    }
+
+private fun characterPreviewTargetOffset(
+    screenSizePx: IntSize,
+    characterPreviewCenterPx: Offset?,
+): Offset? {
+    if (screenSizePx.width == 0 || screenSizePx.height == 0) {
+        return null
+    }
+    val previewCenter = characterPreviewCenterPx ?: return null
+    val screenCenter =
+        Offset(
+            x = screenSizePx.width / 2f,
+            y = screenSizePx.height / 2f,
+        )
+    return previewCenter - screenCenter
+}
+
+@Composable
+private fun WaitingRoomMusicEffect(
+    showCharacterPicker: Boolean,
+    musicManager: BackgroundMusicManager?,
+) {
+    LaunchedEffect(showCharacterPicker) {
+        val track =
+            if (showCharacterPicker) {
+                R.raw.music_character_picker
+            } else {
+                R.raw.music_lobby_waiting
+            }
+        musicManager?.play(track)
+    }
+}
+
+@Composable
+private fun NavigateToStartedGameEffect(
+    gameStarted: Boolean,
+    navController: NavController,
+) {
+    LaunchedEffect(gameStarted) {
+        if (gameStarted) {
+            navController.navigate(Screen.LoadGame.route)
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.WaitingRoomHeader(
+    lobbyCode: String,
+    isHost: Boolean,
+    playerCount: Int,
+) {
+    Column(
+        modifier =
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 32.dp, top = 28.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        if (isHost) {
+            Text(
+                text = "DU BIST DER HOST",
+                color = PulverfassColors.TextOnDark,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        Text(
+            text = "LOBBY: $lobbyCode",
+            color = PulverfassColors.GoldBright,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 3.sp,
+        )
+        Text(
+            text = "SPIELER ($playerCount/6)",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 2.sp,
+        )
+    }
+}
+
+@Composable
+private fun BoxScope.WaitingRoomPlayerList(players: List<WaitingRoomPlayerUi>) {
+    Column(
+        modifier =
+            Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(0.55f)
+                .fillMaxHeight(0.72f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = 64.dp,
+                            end = 64.dp,
+                            top = 48.dp,
+                            bottom = 48.dp,
+                        ),
+            ) {
+                items(players) { player ->
+                    PlayerRow(player = player)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.WaitingRoomCharacterEntry(
+    characterId: String?,
+    hideCharacterIcon: Boolean,
+    onPreviewCenterChange: (Offset) -> Unit,
+    onOpenPicker: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CharacterPreview(
+            characterDef = characterId?.let { Characters.byId(it) },
+            hideCharacterIcon = hideCharacterIcon,
+            modifier =
+                Modifier.onGloballyPositioned { coordinates ->
+                    val position = coordinates.positionInRoot()
+                    onPreviewCenterChange(
+                        Offset(
+                            x = position.x + coordinates.size.width / 2f,
+                            y = position.y + coordinates.size.height / 2f,
+                        ),
+                    )
+                },
+        )
+        MainButton(
+            text = "CHARAKTER\nWÄHLEN",
+            onClick = onOpenPicker,
+            modifier = Modifier.testTag("character_picker_button"),
+        )
+    }
+}
+
+@Composable
+private fun BoxScope.WaitingRoomActions(
+    isHost: Boolean,
+    playerCount: Int,
+    onStartGame: () -> Unit,
+    onLeaveLobby: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 32.dp, bottom = 32.dp)
+                .width(220.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        if (isHost) {
+            MainButton(
+                text = "SPIEL STARTEN",
+                onClick = onStartGame,
+                enabled = playerCount >= 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        MainButton(
+            text = "LOBBY VERLASSEN",
+            onClick = onLeaveLobby,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
