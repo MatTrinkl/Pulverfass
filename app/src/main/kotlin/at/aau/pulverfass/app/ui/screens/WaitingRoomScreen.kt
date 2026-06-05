@@ -966,6 +966,17 @@ private fun CharacterPickerOverlay(
     }
 }
 
+/**
+ * Animiert die gewählte Charakter-Coin vom Picker in den festen Vorschau-Slot.
+ *
+ * Der echte Slot bleibt während der Bewegung unsichtbar und wird in demselben
+ * Frame wieder freigegeben, in dem die Coin landet. Dadurch entsteht nach der
+ * Landung kein kurzer leerer Zwischenzustand.
+ *
+ * @param characterDef Charakter, dessen Portrait als fliegende Coin gerendert wird.
+ * @param targetOffsetPx Zielverschiebung vom Bildschirmzentrum zum Vorschau-Slot.
+ * @param onComplete Callback direkt nach der Landung.
+ */
 @Composable
 private fun CharacterCoinAnimation(
     characterDef: CharacterDefinition,
@@ -987,7 +998,6 @@ private fun CharacterCoinAnimation(
         val coinRotation = remember { Animatable(0f) }
         val coinOffsetX = remember { Animatable(0f) }
         val coinOffsetY = remember { Animatable(0f) }
-        val coinAlpha = remember { Animatable(1f) }
 
         LaunchedEffect(Unit) {
             launch { overlayAlpha.animateTo(0f, tween(480)) }
@@ -1015,8 +1025,6 @@ private fun CharacterCoinAnimation(
                 )
             }
             delay(520)
-            launch { coinAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing)) }
-            delay(240)
 
             onComplete()
         }
@@ -1039,7 +1047,6 @@ private fun CharacterCoinAnimation(
                         translationX = coinOffsetX.value,
                         translationY = coinOffsetY.value,
                         cameraDistance = 8f * density.density,
-                        alpha = coinAlpha.value,
                     ),
             contentAlignment = Alignment.Center,
         ) {

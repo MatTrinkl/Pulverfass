@@ -162,6 +162,7 @@ class LobbyController(
     private var manualDisconnectRequested = false
     private var suppressNextAttackBoundaryNotice = false
     private var delayedAttackAutoAdvanceJob: Job? = null
+    private var delayedAttackAutoAdvanceDeadlineMillis: Long? = null
 
     init {
         scope.launch {
@@ -740,19 +741,69 @@ class LobbyController(
         advanceTurn()
     }
 
-    private fun scheduleAttackAutoAdvanceAfterResultDelay() {
+    /**
+     * Wartet nach einem sichtbaren Kampfergebnis, bevor der automatische
+     * Wechsel aus der Angriffsphase geprüft wird.
+     *
+     * @param delayMillis Dauer, für die das Kampfergebnis unverdrängt stehen bleibt.
+     */
+    private fun scheduleAttackAutoAdvanceAfterResultDelay(
+        delayMillis: Long = ATTACK_AUTO_ADVANCE_DELAY_MILLIS,
+    ) {
+        val deadlineMillis = System.currentTimeMillis() + delayMillis
         delayedAttackAutoAdvanceJob?.cancel()
+        delayedAttackAutoAdvanceDeadlineMillis = deadlineMillis
         delayedAttackAutoAdvanceJob =
             scope.launch {
-                delay(ATTACK_AUTO_ADVANCE_DELAY_MILLIS)
-                delayedAttackAutoAdvanceJob = null
+                delay(delayMillis)
+                clearDelayedAttackAutoAdvance()
                 maybeAdvanceCurrentPhaseAutomatically()
             }
     }
 
+    /**
+     * Wartet den restlichen Result-Delay ab, bevor eine vom Server bereits
+     * gelieferte Attack-Boundary angewendet wird.
+     *
+     * @param payload serverseitiger Phasenwechsel nach dem Angriff
+     * @param remainingDelayMillis noch offene Zeit des sichtbaren Kampfergebnisses
+     */
+    private fun scheduleAttackBoundaryAfterResultDelay(
+        payload: PhaseBoundaryEvent,
+        remainingDelayMillis: Long,
+    ) {
+        delayedAttackAutoAdvanceJob?.cancel()
+        delayedAttackAutoAdvanceJob =
+            scope.launch {
+                delay(remainingDelayMillis)
+                clearDelayedAttackAutoAdvance()
+                applyPhaseBoundaryWithOptionalAttackNotice(
+                    payload = payload,
+                    showServerAttackAutoNotice = true,
+                )
+            }
+    }
+
+    /**
+     * Berechnet, wie lange das sichtbare Kampfergebnis noch stehen bleiben soll.
+     *
+     * @param nowMillis aktueller Zeitstempel in Millisekunden
+     */
+    private fun remainingAttackResultDelayMillis(
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Long? {
+        val deadlineMillis = delayedAttackAutoAdvanceDeadlineMillis ?: return null
+        return (deadlineMillis - nowMillis).coerceAtLeast(0L)
+    }
+
     private fun cancelDelayedAttackAutoAdvance() {
         delayedAttackAutoAdvanceJob?.cancel()
+        clearDelayedAttackAutoAdvance()
+    }
+
+    private fun clearDelayedAttackAutoAdvance() {
         delayedAttackAutoAdvanceJob = null
+        delayedAttackAutoAdvanceDeadlineMillis = null
     }
 
     /**
@@ -1715,7 +1766,6 @@ class LobbyController(
             is AttackResponse -> {
                 clearPendingCommand(LobbyCommandKey.ATTACK)
                 _state.update { it.copy(errorText = null) }
-                scheduleAttackAutoAdvanceAfterResultDelay()
                 true
             }
             is AttackErrorResponse -> {
@@ -1846,7 +1896,11 @@ class LobbyController(
     }
 
     private fun handleGameStateDelta(payload: GameStateDeltaEvent) {
-        val containsAttackResult = payload.events.any { it is AttackResolvedBroadcastEvent }
+        val ownPlayerId = state.value.ownPlayerId
+        val containsOwnAttackResult =
+            payload.events
+                .filterIsInstance<AttackResolvedBroadcastEvent>()
+                .any { it.attackerPlayerId == ownPlayerId }
         val result =
             ClientGameStateReducer.applyDelta(
                 current = state.value.gameState,
@@ -1855,7 +1909,7 @@ class LobbyController(
             )
 
         _state.update { it.copy(gameState = result.state) }
-        if (containsAttackResult) {
+        if (containsOwnAttackResult) {
             scheduleAttackAutoAdvanceAfterResultDelay()
         } else {
             maybeAdvanceCurrentPhaseAutomatically()
@@ -1874,23 +1928,52 @@ class LobbyController(
         val isAttackBoundary =
             previousGameState.turnPhase == TurnPhase.ATTACK &&
                 payload.nextPhase == TurnPhase.FORTIFY
+        val shouldSuppressAttackBoundaryNotice =
+            isAttackBoundary && suppressNextAttackBoundaryNotice
+        val isOwnAttackBoundary =
+            isAttackBoundary && snapshot.ownPlayerId == payload.activePlayerId
+        if (isOwnAttackBoundary && !shouldSuppressAttackBoundaryNotice) {
+            val remainingDelayMillis = remainingAttackResultDelayMillis()
+            if (remainingDelayMillis != null && remainingDelayMillis > 0L) {
+                scheduleAttackBoundaryAfterResultDelay(
+                    payload = payload,
+                    remainingDelayMillis = remainingDelayMillis,
+                )
+                return
+            }
+        }
         if (isAttackBoundary) {
             cancelDelayedAttackAutoAdvance()
         }
-        val shouldSuppressAttackBoundaryNotice =
-            isAttackBoundary && suppressNextAttackBoundaryNotice
         if (shouldSuppressAttackBoundaryNotice) {
             suppressNextAttackBoundaryNotice = false
         }
         val shouldShowServerAttackAutoNotice =
-            isAttackBoundary &&
+            isOwnAttackBoundary &&
                 !shouldSuppressAttackBoundaryNotice
 
-        applyGameState(runAutoAdvance = !shouldShowServerAttackAutoNotice) { current, _ ->
+        applyPhaseBoundaryWithOptionalAttackNotice(
+            payload = payload,
+            showServerAttackAutoNotice = shouldShowServerAttackAutoNotice,
+        )
+    }
+
+    /**
+     * Wendet einen Phasenwechsel an und hängt nur bei eigenen Attack-Auto-Skips
+     * die lokale UX-Notice an.
+     *
+     * @param payload autoritativer Phasenwechsel vom Server
+     * @param showServerAttackAutoNotice ob der eigene Client die Attack-Notice sehen soll
+     */
+    private fun applyPhaseBoundaryWithOptionalAttackNotice(
+        payload: PhaseBoundaryEvent,
+        showServerAttackAutoNotice: Boolean,
+    ) {
+        applyGameState(runAutoAdvance = !showServerAttackAutoNotice) { current, _ ->
             ClientGameStateReducer.applyPhaseBoundary(current, payload)
         }
 
-        if (shouldShowServerAttackAutoNotice) {
+        if (showServerAttackAutoNotice) {
             enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
         }
     }
@@ -2103,4 +2186,4 @@ private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
 private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
-private const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 1_200L
+private const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
