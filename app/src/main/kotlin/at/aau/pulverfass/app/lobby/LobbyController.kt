@@ -1732,6 +1732,7 @@ class LobbyController(
             is PlayerConnectionLostEvent -> handlePlayerConnectionLost(payload)
             is PlayerLeftLobbyEvent -> {
                 playersById.remove(payload.playerId.value)
+                markLobbyHost(payload.newHost)
                 publishPlayers()
             }
             is PlayerKickedLobbyEvent -> {
@@ -1992,6 +1993,16 @@ class LobbyController(
         playersById[payload.playerId.value] =
             existingPlayer.copy(isDisconnected = true)
         publishPlayers()
+    }
+
+    private fun markLobbyHost(newHost: PlayerId?) {
+        if (newHost == null) {
+            return
+        }
+
+        playersById.replaceAll { _, player ->
+            player.copy(isHost = player.playerId == newHost)
+        }
     }
 
     private fun handleStartGameResponse(payload: StartGameResponse) {
@@ -2423,7 +2434,18 @@ class LobbyController(
     private fun publishPlayers() {
         val players = playersById.values.toList()
         _state.update {
+            val hasAuthoritativeHost = players.any(LobbyPlayerUi::isHost)
+            val isOwnHost =
+                if (hasAuthoritativeHost) {
+                    it.ownPlayerId != null &&
+                        players.any { player ->
+                            player.playerId == it.ownPlayerId && player.isHost
+                        }
+                } else {
+                    it.isHost
+                }
             it.copy(
+                isHost = isOwnHost,
                 players = players,
                 playerNames = players.map(LobbyPlayerUi::displayName),
                 gameState = ClientGameStateReducer.applyPlayers(it.gameState, players),

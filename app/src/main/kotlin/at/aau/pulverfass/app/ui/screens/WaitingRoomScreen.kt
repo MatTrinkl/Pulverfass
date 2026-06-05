@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -40,6 +41,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +78,7 @@ import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 import at.aau.pulverfass.shared.ids.PlayerId
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -92,8 +95,13 @@ fun WaitingRoomScreen(
 ) {
     val state by controller.state.collectAsState()
     val effectivePlayerName = state.playerName.ifBlank { playerName }
-    val effectiveIsHost = state.isHost || isHost
     val ownPlayerId = state.ownPlayerId
+    val ownPlayerIsHost =
+        ownPlayerId != null &&
+            state.players.any { player ->
+                player.playerId == ownPlayerId && player.isHost
+            }
+    val effectiveIsHost = state.isHost || ownPlayerIsHost || (state.players.isEmpty() && isHost)
     var submittedInitialCharacterId by remember(
         lobbyCode,
         ownPlayerId,
@@ -561,8 +569,7 @@ private fun CharacterPreview(
                 modifier =
                     Modifier
                         .size(86.dp)
-                        .clip(CircleShape)
-                        .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)),
+                        .clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 if (!hideCharacterIcon) {
@@ -755,13 +762,19 @@ private fun CharacterCard(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier =
             modifier
                 .size(129.dp)
                 .then(
                     if (enabled) {
-                        Modifier.clickable(onClick = onClick)
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onClick,
+                        )
                     } else {
                         Modifier
                     },
@@ -830,6 +843,9 @@ private fun CharacterPickerOverlay(
     val initialIndex = Characters.all.indexOfFirst { it.id == currentCharacterId }.coerceAtLeast(0)
     val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     val snapBehavior = rememberSnapFlingBehavior(lazyListState)
+    val pickerScope = rememberCoroutineScope()
+    var clickedTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var clickScrollJob by remember { mutableStateOf<Job?>(null) }
     val centerIndex by remember {
         derivedStateOf {
             val info = lazyListState.layoutInfo
@@ -844,6 +860,11 @@ private fun CharacterPickerOverlay(
     val selectedCharacterTaken = selectedCharacterId in takenCharacterIds
 
     LaunchedEffect(centerIndex, takenCharacterIds) {
+        val targetIndex = clickedTargetIndex
+        if (targetIndex != null && centerIndex != targetIndex) {
+            return@LaunchedEffect
+        }
+
         val availableIndex = availableCharacterIndexNear(centerIndex, takenCharacterIds)
         when {
             availableIndex == null -> Unit
@@ -935,7 +956,23 @@ private fun CharacterPickerOverlay(
                         val isTaken = takenCharacterIds.contains(character.id)
                         CharacterCard(
                             character = character,
-                            onClick = {},
+                            onClick = {
+                                clickScrollJob?.cancel()
+                                clickScrollJob =
+                                    pickerScope.launch {
+                                        clickedTargetIndex = index
+                                        try {
+                                            lazyListState.animateScrollToItem(index)
+                                            if (clickedTargetIndex == index) {
+                                                onSelect(character.id)
+                                            }
+                                        } finally {
+                                            if (clickedTargetIndex == index) {
+                                                clickedTargetIndex = null
+                                            }
+                                        }
+                                    }
+                            },
                             enabled = !isTaken,
                             modifier =
                                 Modifier.graphicsLayer {
@@ -993,14 +1030,12 @@ private fun CharacterCoinAnimation(
                     y = with(density) { (-32).dp.toPx() },
                 )
 
-        val overlayAlpha = remember { Animatable(1f) }
         val coinScale = remember { Animatable(0.25f) }
         val coinRotation = remember { Animatable(0f) }
         val coinOffsetX = remember { Animatable(0f) }
         val coinOffsetY = remember { Animatable(0f) }
 
         LaunchedEffect(Unit) {
-            launch { overlayAlpha.animateTo(0f, tween(480)) }
             launch { coinScale.animateTo(2f, tween(400, easing = FastOutSlowInEasing)) }
             launch { coinRotation.animateTo(360f, tween(440)) }
             delay(430)
@@ -1032,13 +1067,6 @@ private fun CharacterCoinAnimation(
         Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = overlayAlpha.value)),
-        )
-
-        Box(
-            modifier =
-                Modifier
                     .align(Alignment.Center)
                     .graphicsLayer(
                         scaleX = coinScale.value,
@@ -1054,8 +1082,7 @@ private fun CharacterCoinAnimation(
                 modifier =
                     Modifier
                         .size(86.dp)
-                        .clip(CircleShape)
-                        .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)),
+                        .clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(

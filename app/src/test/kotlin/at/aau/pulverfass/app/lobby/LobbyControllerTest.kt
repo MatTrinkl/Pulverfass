@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
@@ -449,6 +450,67 @@ class LobbyControllerTest {
                     controller.state.value.players.first { it.playerId == PlayerId(2) }
                 assertEquals("Bob", disconnectedPlayer.displayName)
                 assertTrue(disconnectedPlayer.isDisconnected)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `player left event should promote the announced new host`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("HT42")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174241"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(1),
+                                playerDisplayName = "Alice",
+                                isHost = true,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(2),
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerLeftLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(1),
+                                newHost = PlayerId(2),
+                            ),
+                        )
+                    }
+                }
+            val controller = createController(playerNameStore = InMemoryPlayerNameStore("Bob"))
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+
+                waitUntil {
+                    controller.state.value.players.any { player ->
+                        player.playerId == PlayerId(2) && player.isHost
+                    }
+                }
+
+                val state = controller.state.value
+                assertTrue(state.isHost)
+                assertEquals(listOf("Bob"), state.playerNames)
+                assertTrue(state.players.none { it.playerId == PlayerId(1) })
             } finally {
                 controller.close()
                 server.close()
