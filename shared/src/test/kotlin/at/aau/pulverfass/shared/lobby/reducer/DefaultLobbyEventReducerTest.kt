@@ -39,6 +39,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
@@ -1199,16 +1200,9 @@ class DefaultLobbyEventReducerTest {
         val player2 = PlayerId(2)
         val player3 = PlayerId(3)
         val seed = 123L
+        val mapDefinition = defaultMapDefinition()
         val random = Random(seed)
         val expectedTurnOrder = listOf(owner, player2, player3).shuffled(random)
-        val expectedTerritoryOwners =
-            sampleMapDefinition()
-                .territories
-                .map { territory -> territory.territoryId }
-                .shuffled(random)
-                .mapIndexed { index, territoryId ->
-                    territoryId to expectedTurnOrder[index % expectedTurnOrder.size]
-                }.toMap()
         val stateWithOwner =
             GameState(
                 lobbyCode = lobbyCode,
@@ -1216,9 +1210,9 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(owner, player2, player3),
                 turnOrder = listOf(owner, player2, player3),
                 activePlayer = owner,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = mapDefinition,
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    mapDefinition.territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 status = GameStatus.WAITING_FOR_PLAYERS,
@@ -1236,16 +1230,48 @@ class DefaultLobbyEventReducerTest {
         assertEquals(expectedTurnOrder.first(), started.turnState?.startPlayerId)
         assertEquals(false, started.turnState?.isPaused)
         assertEquals(null, started.turnState?.pauseReason)
-        assertEquals(34, started.setupTroopsToPlaceFor(owner))
-        assertEquals(34, started.setupTroopsToPlaceFor(player2))
-        assertEquals(34, started.setupTroopsToPlaceFor(player3))
-        started.allTerritoryStates().forEach { territoryState ->
-            assertEquals(
-                expectedTerritoryOwners[territoryState.territoryId],
-                territoryState.ownerId,
-            )
-            assertEquals(1, territoryState.troopCount)
-        }
+        assertEquals(0, started.setupTroopsToPlaceFor(owner))
+        assertEquals(0, started.setupTroopsToPlaceFor(player2))
+        assertEquals(0, started.setupTroopsToPlaceFor(player3))
+        assertEquals(
+            60,
+            started.allTerritoryStates().sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == owner }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == player2 }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == player3 }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            true,
+            started.allTerritoryStates().all { territoryState ->
+                territoryState.ownerId != null && territoryState.troopCount in 1..4
+            },
+        )
+        assertEquals(
+            true,
+            mapDefinition.continents
+                .filter { continent -> continent.territoryIds.size >= 2 }
+                .all { continent ->
+                    continent.territoryIds
+                        .map { territoryId -> started.requireTerritoryState(territoryId).ownerId }
+                        .distinct()
+                        .size >= 2
+                },
+        )
     }
 
     @Test
@@ -1260,9 +1286,9 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(owner, player2),
                 turnOrder = listOf(owner, player2),
                 activePlayer = owner,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = defaultMapDefinition(),
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    defaultMapDefinition().territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 status = GameStatus.WAITING_FOR_PLAYERS,
@@ -1402,9 +1428,9 @@ class DefaultLobbyEventReducerTest {
                 configuredStartPlayerId = player2,
                 turnOrder = listOf(owner, player2, player3),
                 activePlayer = player2,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = defaultMapDefinition(),
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    defaultMapDefinition().territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 turnState =
@@ -2077,4 +2103,6 @@ class DefaultLobbyEventReducerTest {
                     ),
                 ),
         )
+
+    private fun defaultMapDefinition(): MapDefinition = MapConfigLoader.loadDefault()
 }

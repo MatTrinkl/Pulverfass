@@ -202,11 +202,20 @@ class StartGameIntegrationTest {
                     assertTrue(
                         (currentState?.pendingReinforcementsFor(expectedStartPlayer) ?: 0) >= 3,
                     )
+                    assertEquals(20, troopsOwnedBy(currentState, ownerId))
+                    assertEquals(20, troopsOwnedBy(currentState, player2Id))
+                    assertEquals(20, troopsOwnedBy(currentState, player3Id))
+                    assertEquals(
+                        60,
+                        currentState
+                            ?.allTerritoryStates()
+                            ?.sumOf { territory -> territory.troopCount },
+                    )
                     assertTrue(
                         currentState
                             ?.allTerritoryStates()
                             ?.all { territory ->
-                                territory.ownerId != null && territory.troopCount == 1
+                                territory.ownerId != null && territory.troopCount in 1..4
                             } == true,
                     )
 
@@ -222,7 +231,7 @@ class StartGameIntegrationTest {
         }
 
     @Test
-    fun `start game with insufficient players returns error`() =
+    fun `start game with two players returns error`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -235,7 +244,7 @@ class StartGameIntegrationTest {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
 
-            val lobbyCode = LobbyCode("STG2")
+            val lobbyCode = LobbyCode("STG3")
             val ownerId = PlayerId(1)
             val player2Id = PlayerId(2)
             lobbyManager.createLobby(
@@ -279,6 +288,14 @@ class StartGameIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
+                    val player2Session =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = player2Id,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
 
                     val startRequest = StartGameRequest(lobbyCode = lobbyCode)
                     ownerSession.first.send(
@@ -291,9 +308,11 @@ class StartGameIntegrationTest {
                     val decoded = receivePayload(ownerSession.first)
                     assertTrue(decoded is StartGameErrorResponse)
                     assertNull(receivePayloadOrNull(ownerSession.first))
+                    assertNull(receivePayloadOrNull(player2Session.first))
                     assertEquals(2, lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size)
 
                     ownerSession.first.close()
+                    player2Session.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -350,4 +369,14 @@ class StartGameIntegrationTest {
     }
 
     private fun defaultMapDefinition() = MapConfigLoader.loadDefault()
+
+    private fun troopsOwnedBy(
+        state: GameState?,
+        playerId: PlayerId,
+    ): Int =
+        state
+            ?.allTerritoryStates()
+            ?.filter { territoryState -> territoryState.ownerId == playerId }
+            ?.sumOf { territoryState -> territoryState.troopCount }
+            ?: 0
 }
