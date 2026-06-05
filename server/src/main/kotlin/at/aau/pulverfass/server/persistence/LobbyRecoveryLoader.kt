@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.persistence
 
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.map.MapDefinitionRepository
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -63,6 +64,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
+private val recoveryLogger = ServerLoggers.technical("LobbyRecoveryLoader")
+
 /**
  * Rekonstruiert Lobbies aus persistierten Snapshots und Event-Folgen.
  *
@@ -77,7 +80,7 @@ import kotlinx.serialization.json.longOrNull
  */
 @OptIn(ExperimentalSerializationApi::class)
 class LobbyRecoveryLoader(
-    private val store: JdbcLobbyPersistenceStore,
+    private val store: LobbyPersistenceReader,
     private val mapDefinitionRepository: MapDefinitionRepository,
     private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
     private val json: Json =
@@ -153,7 +156,29 @@ class LobbyRecoveryLoader(
     fun restoreAll(): List<GameState> =
         store.findLobbyCodesWithPersistedState()
             .sortedBy(LobbyCode::value)
-            .mapNotNull(::restoreLobby)
+            .mapNotNull(::restoreLobbySafely)
+
+    /**
+     * Rekonstruiert eine Lobby für den Serverstart.
+     *
+     * Einzelne beschädigte Persistenzströme dürfen den kompletten Serverstart nicht blockieren.
+     * [restoreLobby] bleibt bewusst streng, damit gezielte Recovery-Checks weiterhin Datenfehler
+     * sichtbar machen.
+     *
+     * @param lobbyCode zu ladende Lobby
+     * @return rekonstruierter Zustand oder `null`, wenn diese Lobby übersprungen werden musste
+     */
+    private fun restoreLobbySafely(lobbyCode: LobbyCode): GameState? =
+        try {
+            restoreLobby(lobbyCode)
+        } catch (exception: RuntimeException) {
+            recoveryLogger.warn(
+                "Skipping persisted lobby '{}' during startup recovery because replay failed.",
+                lobbyCode.value,
+                exception,
+            )
+            null
+        }
 
     private fun validateSequence(
         lobbyCode: LobbyCode,

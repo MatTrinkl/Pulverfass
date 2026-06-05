@@ -590,6 +590,48 @@ class LobbyRecoveryLoaderTest {
         }
     }
 
+    @Test
+    fun `restoreAll skips corrupted lobbies and keeps recoverable lobbies`() {
+        val recoverableLobbyCode = LobbyCode("RA11")
+        val corruptedLobbyCode = LobbyCode("RZ99")
+        val hostId = PlayerId(1)
+        val reader =
+            FakeLobbyPersistenceReader(
+                eventsByLobby =
+                    mapOf(
+                        recoverableLobbyCode to
+                            listOf(
+                                recordFor(
+                                    lobbyCode = recoverableLobbyCode,
+                                    eventType = "player_joined",
+                                    eventJson =
+                                        """
+                                        {"lobbyCode":"RA11","playerId":1,"playerDisplayName":"Host"}
+                                        """.trimIndent(),
+                                ),
+                            ),
+                        corruptedLobbyCode to
+                            listOf(
+                                recordFor(
+                                    lobbyCode = corruptedLobbyCode,
+                                    eventType = "lobby_created",
+                                    stateVersion = 2,
+                                    eventJson = """{"lobbyCode":"RZ99"}""",
+                                ),
+                            ),
+                    ),
+            )
+
+        val restoredStates =
+            LobbyRecoveryLoader(
+                store = reader,
+                mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault(),
+            ).restoreAll()
+
+        assertEquals(listOf(recoverableLobbyCode), restoredStates.map(GameState::lobbyCode))
+        assertEquals(listOf(hostId), restoredStates.single().players)
+    }
+
     private fun record(
         eventType: String,
         eventJson: String,
@@ -603,4 +645,39 @@ class LobbyRecoveryLoaderTest {
         eventJson = eventJson,
         createdAt = createdAt,
     )
+
+    private fun recordFor(
+        lobbyCode: LobbyCode,
+        eventType: String,
+        eventJson: String,
+        stateVersion: Long = 1L,
+        createdAt: Instant = Instant.parse("2026-01-01T00:00:00Z"),
+    ) = PersistedLobbyEventRecord(
+        id = 1L,
+        lobbyCode = lobbyCode,
+        stateVersion = stateVersion,
+        turnCount = 0,
+        eventType = eventType,
+        eventJson = eventJson,
+        createdAt = createdAt,
+    )
+
+    private class FakeLobbyPersistenceReader(
+        private val eventsByLobby: Map<LobbyCode, List<PersistedLobbyEventRecord>>,
+        private val snapshotsByLobby: Map<LobbyCode, PersistedLobbySnapshotRecord> = emptyMap(),
+    ) : LobbyPersistenceReader {
+        override fun loadLatestSnapshot(lobbyCode: LobbyCode): PersistedLobbySnapshotRecord? =
+            snapshotsByLobby[lobbyCode]
+
+        override fun loadEventsAfter(
+            lobbyCode: LobbyCode,
+            stateVersionExclusive: Long,
+        ): List<PersistedLobbyEventRecord> =
+            eventsByLobby[lobbyCode]
+                .orEmpty()
+                .filter { event -> event.stateVersion > stateVersionExclusive }
+
+        override fun findLobbyCodesWithPersistedState(): Set<LobbyCode> =
+            eventsByLobby.keys + snapshotsByLobby.keys
+    }
 }
