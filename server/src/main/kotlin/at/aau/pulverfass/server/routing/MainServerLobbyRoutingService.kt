@@ -132,8 +132,10 @@ import at.aau.pulverfass.shared.network.codec.MessageCodec
 import at.aau.pulverfass.shared.network.receive.ReceivedPacket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
 /**
@@ -158,6 +160,7 @@ class MainServerLobbyRoutingService(
     private val fortifyMoveValidator: FortifyMoveValidator = DefaultFortifyMoveValidator(),
     private val mapCommandRuleService: MapCommandRuleService =
         DefaultMapCommandRuleService(fortifyMoveValidator = fortifyMoveValidator),
+    private val attackAutoAdvanceDelayMillis: Long = ATTACK_AUTO_ADVANCE_DELAY_MILLIS,
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
     private companion object {
@@ -169,6 +172,7 @@ class MainServerLobbyRoutingService(
             "als die konfigurierte Grenze von "
         const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
             "Reconnect snapshot skipped connectionId={} lobbyCode={} "
+        const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
     }
 
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
@@ -3018,6 +3022,19 @@ class MainServerLobbyRoutingService(
             }
     }
 
+    /**
+     * Plant den automatischen Wechsel von Attack nach Fortify, wenn kein
+     * legaler Angriff mehr möglich ist.
+     *
+     * Der Wechsel wird nicht sofort ausgeführt, damit alle Clients das
+     * Kampfergebnis kurz sehen können. Vor dem tatsächlichen Submit wird der
+     * Zustand erneut geprüft; wenn der Spieler die Phase vorher manuell beendet
+     * hat, läuft der Job still aus.
+     *
+     * @param request ursprünglicher Request-Kontext für Audit und EventContext
+     * @param lobbyCode betroffene Lobby
+     * @param playerId aktiver Spieler der Angriffsphase
+     */
     private suspend fun autoAdvanceAttackPhaseIfNoValidAttacks(
         request: DecodedNetworkRequest,
         lobbyCode: LobbyCode,
@@ -3037,7 +3054,52 @@ class MainServerLobbyRoutingService(
             return
         }
 
-        val previousTurnState = currentTurnState
+        CoroutineScope(coroutineContext).launch {
+            delay(attackAutoAdvanceDelayMillis)
+            runCatching {
+                autoAdvanceAttackPhaseIfNoValidAttacksAfterDelay(
+                    request = request,
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                )
+            }.onFailure { cause ->
+                logger.warn(
+                    "Delayed attack auto-advance failed: lobbyCode={} playerId={}",
+                    lobbyCode.value,
+                    playerId.value,
+                    cause,
+                )
+            }
+        }
+    }
+
+    /**
+     * Führt den verzögerten Attack-Auto-Skip nach erneuter Validierung aus.
+     *
+     * @param request ursprünglicher Request-Kontext für Audit und EventContext
+     * @param lobbyCode betroffene Lobby
+     * @param playerId aktiver Spieler der Angriffsphase
+     */
+    private suspend fun autoAdvanceAttackPhaseIfNoValidAttacksAfterDelay(
+        request: DecodedNetworkRequest,
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ) {
+        val stateAfterDelay =
+            lobbyManager.getLobby(lobbyCode)?.currentState()
+                ?: return
+        val turnStateAfterDelay = stateAfterDelay.resolvedTurnState ?: return
+        if (
+            stateAfterDelay.status != GameStatus.RUNNING ||
+            turnStateAfterDelay.isPaused ||
+            turnStateAfterDelay.turnPhase != TurnPhase.ATTACK ||
+            turnStateAfterDelay.activePlayerId != playerId ||
+            stateAfterDelay.hasAnyValidAttack(playerId)
+        ) {
+            return
+        }
+
+        val previousTurnState = turnStateAfterDelay
         val turnStateUpdate =
             buildTurnAdvanceEvent(
                 request = request,

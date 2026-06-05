@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
@@ -161,8 +162,11 @@ class LobbyController(
     private var awaitingReconnectResponse = false
     private var manualDisconnectRequested = false
     private var suppressNextAttackBoundaryNotice = false
-    private var delayedAttackAutoAdvanceJob: Job? = null
-    private var delayedAttackAutoAdvanceDeadlineMillis: Long? = null
+    private var delayedAutoPhaseAdvanceJob: Job? = null
+    private var delayedAutoPhaseAdvanceDeadlineMillis: Long? = null
+    private var deferredOwnAttackPhaseState: GameUiState? = null
+    private var deferredOwnAttackPhaseBoundary: PhaseBoundaryEvent? = null
+    private var manuallyConsumedAttackBoundaryStateVersion: Long? = null
 
     init {
         scope.launch {
@@ -298,19 +302,20 @@ class LobbyController(
     }
 
     private fun enqueueAutoPhaseNotice(message: String) {
-        _state.update { current ->
-            if (
-                current.autoPhaseNoticeText == message ||
-                message in current.autoPhaseNoticeQueue
-            ) {
-                current
-            } else if (current.autoPhaseNoticeText == null) {
-                current.copy(autoPhaseNoticeText = message)
-            } else {
-                current.copy(autoPhaseNoticeQueue = current.autoPhaseNoticeQueue + message)
-            }
-        }
+        _state.update { current -> current.withQueuedAutoPhaseNotice(message) }
     }
+
+    private fun LobbyUiState.withQueuedAutoPhaseNotice(message: String): LobbyUiState =
+        if (
+            autoPhaseNoticeText == message ||
+            message in autoPhaseNoticeQueue
+        ) {
+            this
+        } else if (autoPhaseNoticeText == null) {
+            copy(autoPhaseNoticeText = message)
+        } else {
+            copy(autoPhaseNoticeQueue = autoPhaseNoticeQueue + message)
+        }
 
     fun updateLobbyCode(lobbyCode: String) {
         _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
@@ -414,14 +419,14 @@ class LobbyController(
 
     fun close() {
         cancelReconnect()
-        cancelDelayedAttackAutoAdvance()
+        cancelDelayedAutoPhaseAdvance()
         network.close()
     }
 
     fun leaveLobby() {
         val lobbyCode = state.value.activeLobbyCode
         suppressNextAttackBoundaryNotice = false
-        cancelDelayedAttackAutoAdvance()
+        cancelDelayedAutoPhaseAdvance()
         if (lobbyCode != null) {
             scope.launch {
                 runCatching {
@@ -656,21 +661,27 @@ class LobbyController(
      * Beendet Phasen automatisch, wenn lokal keine sinnvolle Aktion mehr möglich ist.
      *
      * Das betrifft drei UX-Fälle:
-     * - Reinforcement wird direkt bestätigt, wenn der aktive Spieler keine
+     * - Reinforcement wird verzögert bestätigt, wenn der aktive Spieler keine
      *   offenen Verstärkungen mehr besitzt.
-     * - Attack wird direkt bestätigt, wenn der aktive Spieler kein Gebiet mit
-     *   mehr als zwei Truppen und fremdem Nachbarziel besitzt.
+     * - Attack wartet auf den autoritativen Serverwechsel, weil der Server nach
+     *   einem Kampf selbst verzögert prüft, ob noch Angriffe möglich sind.
      * - Fortify wird nach einem bestätigten Move oder ohne gültigen
-     *   Verbindungspfad direkt weitergeschaltet, weil die Phase fachlich nur
+     *   Verbindungspfad verzögert weitergeschaltet, weil die Phase fachlich nur
      *   eine Verschiebung erlaubt.
      *
-     * Die Methode nutzt dieselben Requests wie die sichtbaren Buttons. Pending
-     * Keys verhindern doppelte Requests, falls Server-Response und öffentliche
-     * Deltas sehr eng hintereinander eintreffen.
+     * Reinforcement und Fortify nutzen dieselben Requests wie die sichtbaren
+     * Buttons. Pending Keys verhindern doppelte Requests, falls Server-Response
+     * und öffentliche Deltas sehr eng hintereinander eintreffen.
+     *
+     * @param delayBeforeAdvance ob vor Notice und Request zuerst ein visuelles
+     * Delay geplant werden soll
      */
-    private fun maybeAdvanceCurrentPhaseAutomatically() {
+    private fun maybeAdvanceCurrentPhaseAutomatically(delayBeforeAdvance: Boolean = true) {
         val snapshot = state.value
-        if (snapshot.autoPhaseNoticeText != null) {
+        if (
+            snapshot.autoPhaseNoticeText != null ||
+            delayedAutoPhaseAdvanceJob != null
+        ) {
             return
         }
         val playerId = snapshot.ownPlayerId ?: return
@@ -679,9 +690,12 @@ class LobbyController(
         }
 
         when (snapshot.gameState.turnPhase) {
-            TurnPhase.REINFORCEMENTS -> maybeAutoConfirmReinforcements(snapshot, playerId)
-            TurnPhase.ATTACK -> maybeAutoConfirmAttack(snapshot, playerId)
-            TurnPhase.FORTIFY -> maybeAutoAdvanceFortify(snapshot, playerId)
+            TurnPhase.REINFORCEMENTS ->
+                maybeAutoConfirmReinforcements(snapshot, playerId, delayBeforeAdvance)
+            TurnPhase.ATTACK ->
+                maybeAutoConfirmAttack(snapshot, playerId)
+            TurnPhase.FORTIFY ->
+                maybeAutoAdvanceFortify(snapshot, playerId, delayBeforeAdvance)
             else -> Unit
         }
     }
@@ -689,12 +703,17 @@ class LobbyController(
     private fun maybeAutoConfirmReinforcements(
         snapshot: LobbyUiState,
         playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
     ) {
         if (
             LobbyCommandKey.PLACE_REINFORCEMENTS in snapshot.pendingCommandKeys ||
             LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE in snapshot.pendingCommandKeys ||
             !snapshot.gameState.canConfirmReinforcementsDone(playerId, snapshot.isConnected)
         ) {
+            return
+        }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
             return
         }
         enqueueAutoPhaseNotice(AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE)
@@ -714,13 +733,17 @@ class LobbyController(
         ) {
             return
         }
-        enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
-        confirmAttackDoneAutomatically()
+        /*
+         * Der Server beendet leere Angriffsphasen autoritativ mit eigenem Delay.
+         * Ein zusätzlicher Client-Confirm würde gegen diesen Timer rennen und
+         * kann nach dem serverseitigen Wechsel nur noch ein Fehler-Popup erzeugen.
+         */
     }
 
     private fun maybeAutoAdvanceFortify(
         snapshot: LobbyUiState,
         playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
     ) {
         if (
             LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
@@ -737,27 +760,37 @@ class LobbyController(
                 !snapshot.gameState.hasAvailableFortify(playerId) -> AUTO_PHASE_FORTIFY_EMPTY_NOTICE
                 else -> return
             }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
+            return
+        }
         enqueueAutoPhaseNotice(noticeText)
         advanceTurn()
     }
 
     /**
-     * Wartet nach einem sichtbaren Kampfergebnis, bevor der automatische
-     * Wechsel aus der Angriffsphase geprüft wird.
+     * Wartet vor jedem automatischen Phasenabschluss auf ein sichtbares
+     * Zeitfenster, damit Kartenänderungen nachvollziehbar bleiben.
      *
-     * @param delayMillis Dauer, für die das Kampfergebnis unverdrängt stehen bleibt.
+     * @param delayMillis Dauer, für die die aktuelle Kartenlage stehen bleibt.
      */
-    private fun scheduleAttackAutoAdvanceAfterResultDelay(
-        delayMillis: Long = ATTACK_AUTO_ADVANCE_DELAY_MILLIS,
+    private fun scheduleAutoPhaseAdvanceAfterVisualDelay(
+        delayMillis: Long = AUTO_PHASE_ADVANCE_DELAY_MILLIS,
     ) {
         val deadlineMillis = System.currentTimeMillis() + delayMillis
-        delayedAttackAutoAdvanceJob?.cancel()
-        delayedAttackAutoAdvanceDeadlineMillis = deadlineMillis
-        delayedAttackAutoAdvanceJob =
+        delayedAutoPhaseAdvanceJob?.cancel()
+        delayedAutoPhaseAdvanceDeadlineMillis = deadlineMillis
+        delayedAutoPhaseAdvanceJob =
             scope.launch {
                 delay(delayMillis)
-                clearDelayedAttackAutoAdvance()
-                maybeAdvanceCurrentPhaseAutomatically()
+                val deferredPhaseState = deferredOwnAttackPhaseState
+                clearDelayedAutoPhaseAdvance()
+                deferredOwnAttackPhaseState = null
+                if (deferredPhaseState != null) {
+                    applyDeferredOwnAttackPhaseState(deferredPhaseState)
+                } else {
+                    maybeAdvanceCurrentPhaseAutomatically(delayBeforeAdvance = false)
+                }
             }
     }
 
@@ -768,15 +801,18 @@ class LobbyController(
      * @param payload serverseitiger Phasenwechsel nach dem Angriff
      * @param remainingDelayMillis noch offene Zeit des sichtbaren Kampfergebnisses
      */
-    private fun scheduleAttackBoundaryAfterResultDelay(
+    private fun scheduleAttackBoundaryAfterVisualDelay(
         payload: PhaseBoundaryEvent,
         remainingDelayMillis: Long,
     ) {
-        delayedAttackAutoAdvanceJob?.cancel()
-        delayedAttackAutoAdvanceJob =
+        deferredOwnAttackPhaseBoundary = payload
+        deferredOwnAttackPhaseState = null
+        delayedAutoPhaseAdvanceJob?.cancel()
+        delayedAutoPhaseAdvanceJob =
             scope.launch {
                 delay(remainingDelayMillis)
-                clearDelayedAttackAutoAdvance()
+                clearDelayedAutoPhaseAdvance()
+                deferredOwnAttackPhaseBoundary = null
                 applyPhaseBoundaryWithOptionalAttackNotice(
                     payload = payload,
                     showServerAttackAutoNotice = true,
@@ -789,21 +825,23 @@ class LobbyController(
      *
      * @param nowMillis aktueller Zeitstempel in Millisekunden
      */
-    private fun remainingAttackResultDelayMillis(
+    private fun remainingAutoPhaseAdvanceDelayMillis(
         nowMillis: Long = System.currentTimeMillis(),
     ): Long? {
-        val deadlineMillis = delayedAttackAutoAdvanceDeadlineMillis ?: return null
+        val deadlineMillis = delayedAutoPhaseAdvanceDeadlineMillis ?: return null
         return (deadlineMillis - nowMillis).coerceAtLeast(0L)
     }
 
-    private fun cancelDelayedAttackAutoAdvance() {
-        delayedAttackAutoAdvanceJob?.cancel()
-        clearDelayedAttackAutoAdvance()
+    private fun cancelDelayedAutoPhaseAdvance() {
+        delayedAutoPhaseAdvanceJob?.cancel()
+        clearDelayedAutoPhaseAdvance()
+        deferredOwnAttackPhaseState = null
+        deferredOwnAttackPhaseBoundary = null
     }
 
-    private fun clearDelayedAttackAutoAdvance() {
-        delayedAttackAutoAdvanceJob = null
-        delayedAttackAutoAdvanceDeadlineMillis = null
+    private fun clearDelayedAutoPhaseAdvance() {
+        delayedAutoPhaseAdvanceJob = null
+        delayedAutoPhaseAdvanceDeadlineMillis = null
     }
 
     /**
@@ -1005,10 +1043,6 @@ class LobbyController(
         confirmAttackDone(suppressAutoBoundaryNotice = true)
     }
 
-    private fun confirmAttackDoneAutomatically() {
-        confirmAttackDone(suppressAutoBoundaryNotice = false)
-    }
-
     private fun confirmAttackDone(suppressAutoBoundaryNotice: Boolean) {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
@@ -1019,6 +1053,13 @@ class LobbyController(
         }
         if (!snapshot.gameState.canConfirmAttackDone(playerId, snapshot.isConnected)) {
             _state.update { it.copy(errorText = config.errorAttackNotAllowed) }
+            return
+        }
+
+        if (
+            suppressAutoBoundaryNotice &&
+            applyDeferredOwnAttackPhaseStateForManualConfirm()
+        ) {
             return
         }
 
@@ -1046,6 +1087,41 @@ class LobbyController(
                 }
             }
         }
+    }
+
+    /**
+     * Übernimmt einen bereits empfangenen, aber wegen Result-Delay noch
+     * zurückgehaltenen Attack-Phasenwechsel bei manuellem Abschluss.
+     *
+     * Der Serverzustand ist in diesem Fall schon autoritativ weiter als die
+     * sichtbare Topbar. Ein zusätzlicher Confirm wäre veraltet und könnte nur
+     * eine Fehlerantwort erzeugen.
+     *
+     * @return `true`, wenn ein zurückgehaltener Serverzustand übernommen wurde
+     */
+    private fun applyDeferredOwnAttackPhaseStateForManualConfirm(): Boolean {
+        val deferredBoundary = deferredOwnAttackPhaseBoundary
+        if (deferredBoundary != null) {
+            delayedAutoPhaseAdvanceJob?.cancel()
+            clearDelayedAutoPhaseAdvance()
+            deferredOwnAttackPhaseBoundary = null
+            deferredOwnAttackPhaseState = null
+            manuallyConsumedAttackBoundaryStateVersion = deferredBoundary.stateVersion
+            applyPhaseBoundaryWithOptionalAttackNotice(
+                payload = deferredBoundary,
+                showServerAttackAutoNotice = false,
+            )
+            return true
+        }
+
+        val deferredPhaseState = deferredOwnAttackPhaseState ?: return false
+        delayedAutoPhaseAdvanceJob?.cancel()
+        clearDelayedAutoPhaseAdvance()
+        deferredOwnAttackPhaseState = null
+        manuallyConsumedAttackBoundaryStateVersion = deferredPhaseState.stateVersion
+        _state.update { current -> current.copy(gameState = deferredPhaseState) }
+        maybeAdvanceCurrentPhaseAutomatically()
+        return true
     }
 
     /**
@@ -1896,23 +1972,64 @@ class LobbyController(
     }
 
     private fun handleGameStateDelta(payload: GameStateDeltaEvent) {
-        val ownPlayerId = state.value.ownPlayerId
+        val snapshot = state.value
+        val ownPlayerId = snapshot.ownPlayerId
         val containsOwnAttackResult =
             payload.events
                 .filterIsInstance<AttackResolvedBroadcastEvent>()
                 .any { it.attackerPlayerId == ownPlayerId }
         val result =
             ClientGameStateReducer.applyDelta(
-                current = state.value.gameState,
+                current = snapshot.gameState,
                 delta = payload,
-                players = state.value.players,
+                players = snapshot.players,
             )
+        val isOwnAttackAutoBoundary =
+            isOwnAttackAutoBoundaryDelta(
+                snapshot = snapshot,
+                payload = payload,
+                nextState = result.state,
+            )
+        /*
+         * Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
+         * TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
+         * geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
+         * Fortify umstellen.
+         */
+        val shouldKeepDelayedAttackBoundary =
+            isOwnAttackAutoBoundary &&
+                deferredOwnAttackPhaseBoundary != null &&
+                delayedAutoPhaseAdvanceJob != null
+        val shouldDelayOwnAttackPhaseState =
+            (containsOwnAttackResult && isOwnAttackAutoBoundary) ||
+                shouldKeepDelayedAttackBoundary
+        val shouldShowOwnAttackAutoNotice =
+            isOwnAttackAutoBoundary &&
+                !shouldDelayOwnAttackPhaseState
+        val visibleGameState =
+            if (shouldDelayOwnAttackPhaseState) {
+                deferredOwnAttackPhaseState = result.state
+                result.state.copy(turnPhase = TurnPhase.ATTACK)
+            } else {
+                result.state
+            }
 
-        _state.update { it.copy(gameState = result.state) }
-        if (containsOwnAttackResult) {
-            scheduleAttackAutoAdvanceAfterResultDelay()
-        } else {
-            maybeAdvanceCurrentPhaseAutomatically()
+        if (shouldShowOwnAttackAutoNotice) {
+            cancelDelayedAutoPhaseAdvance()
+        }
+        _state.update { current ->
+            val updated = current.copy(gameState = visibleGameState)
+            if (shouldShowOwnAttackAutoNotice) {
+                updated.withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+            } else {
+                updated
+            }
+        }
+        when {
+            containsOwnAttackResult -> scheduleAutoPhaseAdvanceAfterVisualDelay()
+            shouldKeepDelayedAttackBoundary -> Unit
+            shouldShowOwnAttackAutoNotice -> Unit
+            else -> maybeAdvanceCurrentPhaseAutomatically()
         }
         if (result.needsCatchUp) {
             requestGameCatchUp(
@@ -1922,31 +2039,100 @@ class LobbyController(
         }
     }
 
+    /**
+     * Erkennt den serverseitigen Auto-Wechsel von Attack nach Fortify im Delta.
+     *
+     * Der Server broadcastet bei einem automatischen Attack-Ende zuerst ein
+     * `GameStateDeltaEvent` mit [TurnStateUpdatedEvent] und danach zusätzlich
+     * das erklärende [PhaseBoundaryEvent]. Ohne diese Sonderbehandlung würde die
+     * Topbar beim aktiven Angreifer bereits auf Fortify springen, bevor die
+     * lokale Auto-Skip-Notice sichtbar wird.
+     *
+     * Manuelle Bestätigungen werden bewusst ausgeschlossen, weil der Spieler in
+     * diesem Fall selbst auf "Phase beenden" geklickt hat und kein Auto-Popup
+     * erwartet.
+     *
+     * @param snapshot lokaler Zustand vor Anwendung des Deltas
+     * @param payload empfangenes öffentliches Delta
+     * @param nextState bereits reduzierter Zielzustand aus dem Delta
+     * @return `true`, wenn das Delta den eigenen automatischen Attack-Skip beschreibt
+     */
+    private fun isOwnAttackAutoBoundaryDelta(
+        snapshot: LobbyUiState,
+        payload: GameStateDeltaEvent,
+        nextState: GameUiState,
+    ): Boolean {
+        val playerId = snapshot.ownPlayerId ?: return false
+        if (
+            suppressNextAttackBoundaryNotice ||
+            snapshot.gameState.turnPhase != TurnPhase.ATTACK ||
+            nextState.turnPhase != TurnPhase.FORTIFY ||
+            nextState.activePlayerId != playerId
+        ) {
+            return false
+        }
+
+        return payload.events
+            .filterIsInstance<TurnStateUpdatedEvent>()
+            .any { event ->
+                event.activePlayerId == playerId &&
+                    event.turnPhase == TurnPhase.FORTIFY
+            }
+    }
+
+    /**
+     * Übernimmt einen im Attack-Delta bewusst zurückgehaltenen Phasenwechsel.
+     *
+     * Der Server kann das Kampfergebnis und den Wechsel auf Fortify im selben
+     * Delta liefern. Für den angreifenden Client bleibt die sichtbare Phase
+     * während des Result-Delays auf Angriff, damit die Topbar nicht vor dem
+     * erklärenden Popup springt.
+     *
+     * @param gameState bereits reduzierter Zielzustand aus dem Serverdelta
+     */
+    private fun applyDeferredOwnAttackPhaseState(gameState: GameUiState) {
+        _state.update { current ->
+            current
+                .copy(gameState = gameState)
+                .withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+        }
+    }
+
     private fun handlePhaseBoundary(payload: PhaseBoundaryEvent) {
         val snapshot = state.value
-        val previousGameState = snapshot.gameState
+        if (payload.stateVersion < snapshot.gameState.stateVersion) {
+            return
+        }
+        manuallyConsumedAttackBoundaryStateVersion
+            ?.takeIf { consumedVersion -> payload.stateVersion > consumedVersion }
+            ?.let { manuallyConsumedAttackBoundaryStateVersion = null }
         val isAttackBoundary =
-            previousGameState.turnPhase == TurnPhase.ATTACK &&
+            payload.previousPhase == TurnPhase.ATTACK &&
                 payload.nextPhase == TurnPhase.FORTIFY
+        val wasManuallyConsumedAttackBoundary =
+            isAttackBoundary &&
+                manuallyConsumedAttackBoundaryStateVersion == payload.stateVersion
         val shouldSuppressAttackBoundaryNotice =
-            isAttackBoundary && suppressNextAttackBoundaryNotice
+            isAttackBoundary &&
+                (suppressNextAttackBoundaryNotice || wasManuallyConsumedAttackBoundary)
         val isOwnAttackBoundary =
             isAttackBoundary && snapshot.ownPlayerId == payload.activePlayerId
         if (isOwnAttackBoundary && !shouldSuppressAttackBoundaryNotice) {
-            val remainingDelayMillis = remainingAttackResultDelayMillis()
+            val remainingDelayMillis = remainingAutoPhaseAdvanceDelayMillis()
             if (remainingDelayMillis != null && remainingDelayMillis > 0L) {
-                scheduleAttackBoundaryAfterResultDelay(
+                scheduleAttackBoundaryAfterVisualDelay(
                     payload = payload,
                     remainingDelayMillis = remainingDelayMillis,
                 )
                 return
             }
         }
-        if (isAttackBoundary) {
-            cancelDelayedAttackAutoAdvance()
-        }
+        cancelDelayedAutoPhaseAdvance()
         if (shouldSuppressAttackBoundaryNotice) {
             suppressNextAttackBoundaryNotice = false
+            if (wasManuallyConsumedAttackBoundary) {
+                manuallyConsumedAttackBoundaryStateVersion = null
+            }
         }
         val shouldShowServerAttackAutoNotice =
             isOwnAttackBoundary &&
@@ -1959,8 +2145,12 @@ class LobbyController(
     }
 
     /**
-     * Wendet einen Phasenwechsel an und hängt nur bei eigenen Attack-Auto-Skips
-     * die lokale UX-Notice an.
+     * Wendet einen Phasenwechsel an und zeigt nur bei eigenen Attack-Auto-Skips
+     * die lokale UX-Notice.
+     *
+     * Notice und GameState werden atomar gesetzt. Dadurch kann die Topbar nicht
+     * einen Frame früher die nächste Phase zeigen, während das erklärende Popup
+     * noch fehlt.
      *
      * @param payload autoritativer Phasenwechsel vom Server
      * @param showServerAttackAutoNotice ob der eigene Client die Attack-Notice sehen soll
@@ -1969,12 +2159,26 @@ class LobbyController(
         payload: PhaseBoundaryEvent,
         showServerAttackAutoNotice: Boolean,
     ) {
-        applyGameState(runAutoAdvance = !showServerAttackAutoNotice) { current, _ ->
-            ClientGameStateReducer.applyPhaseBoundary(current, payload)
+        deferredOwnAttackPhaseState = null
+        deferredOwnAttackPhaseBoundary = null
+        _state.update { current ->
+            val updated =
+                current.copy(
+                    gameState =
+                        ClientGameStateReducer.applyPhaseBoundary(
+                            current = current.gameState,
+                            event = payload,
+                        ),
+                )
+            if (showServerAttackAutoNotice) {
+                updated.withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+            } else {
+                updated
+            }
         }
 
-        if (showServerAttackAutoNotice) {
-            enqueueAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+        if (!showServerAttackAutoNotice) {
+            maybeAdvanceCurrentPhaseAutomatically()
         }
     }
 
@@ -2128,7 +2332,8 @@ class LobbyController(
     private fun resetLobbyMembers() {
         playersById.clear()
         suppressNextAttackBoundaryNotice = false
-        cancelDelayedAttackAutoAdvance()
+        manuallyConsumedAttackBoundaryStateVersion = null
+        cancelDelayedAutoPhaseAdvance()
         reconnectSessionStore.saveWasGameStarted(false)
         _state.update {
             it.copy(
@@ -2186,4 +2391,4 @@ private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
 private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
-private const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
+private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L

@@ -152,7 +152,12 @@ class AttackIntegrationTest {
                         receiveRelevantTestPayload(attackerSession.first),
                     )
                     assertEquals(attackDelta, receiveRelevantTestPayload(defenderSession.first))
-                    assertNull(receiveRelevantTestPayloadOrNull(attackerSession.first))
+                    assertNull(
+                        receiveRelevantTestPayloadOrNull(
+                            session = attackerSession.first,
+                            timeoutMillis = 3_000,
+                        ),
+                    )
                     assertNull(receiveRelevantTestPayloadOrNull(defenderSession.first))
 
                     val updatedState =
@@ -1056,6 +1061,10 @@ class AttackIntegrationTest {
                         AttackResponse(lobbyCode = lobbyCode, requestId = "req-auto-end"),
                         receiveRelevantTestPayload(attackerSession.first),
                     )
+                    assertEquals(attackDelta, receiveRelevantTestPayload(watcherSession.first))
+                    assertNull(receiveRelevantTestPayloadOrNull(attackerSession.first))
+                    assertNull(receiveRelevantTestPayloadOrNull(watcherSession.first))
+
                     val autoAdvanceDelta = receiveRelevantTestPayload(attackerSession.first)
                     assertEquals(
                         PhaseBoundaryEvent(
@@ -1079,7 +1088,6 @@ class AttackIntegrationTest {
                         receiveRelevantTestPayload(attackerSession.first),
                     )
 
-                    assertEquals(attackDelta, receiveRelevantTestPayload(watcherSession.first))
                     assertEquals(autoAdvanceDelta, receiveRelevantTestPayload(watcherSession.first))
                     assertEquals(
                         PhaseBoundaryEvent(

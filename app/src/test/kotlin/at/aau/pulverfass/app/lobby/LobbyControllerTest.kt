@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
@@ -89,6 +90,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.util.Collections
@@ -773,6 +775,11 @@ class LobbyControllerTest {
                 assertEquals(TerritoryId("brasilien"), placement.placements.single().territoryId)
                 assertEquals(2, placement.placements.single().amount)
                 waitUntil { controller.state.value.gameState.reinforcementState.pendingAmount == 0 }
+                delay(300)
+                assertTrue(
+                    seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().isEmpty(),
+                )
+                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     seenPayloads.filterIsInstance<ConfirmReinforcementsDoneRequest>().size == 1
                 }
@@ -1023,6 +1030,17 @@ class LobbyControllerTest {
                                         MessageCodec.encode(AttackResponse(lobbyCode)),
                                     ),
                                 )
+                                delay(500)
+                                outgoing.sendPayload(
+                                    PhaseBoundaryEvent(
+                                        lobbyCode = lobbyCode,
+                                        stateVersion = 3,
+                                        previousPhase = TurnPhase.ATTACK,
+                                        nextPhase = TurnPhase.FORTIFY,
+                                        activePlayerId = playerId,
+                                        turnCount = 1,
+                                    ),
+                                )
                             }
                         }
                         is ConfirmAttackDoneRequest -> {
@@ -1072,19 +1090,16 @@ class LobbyControllerTest {
                 assertTrue(
                     controller.state.value.gameState.attackState.latestResult?.captured == true,
                 )
-                waitUntil {
-                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().size == 1
-                }
-                assertEquals(
-                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
-                    controller.state.value.autoPhaseNoticeText,
-                )
-                controller.clearAutoPhaseNotice()
+                delay(300)
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
                 assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
-                    LobbyCommandKey.CONFIRM_ATTACK_DONE !in
-                        controller.state.value.pendingCommandKeys
+                    controller.state.value.autoPhaseNoticeText ==
+                        "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet."
                 }
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
+                controller.clearAutoPhaseNotice()
+                assertNull(controller.state.value.autoPhaseNoticeText)
             } finally {
                 controller.close()
                 server.close()
@@ -1222,10 +1237,37 @@ class LobbyControllerTest {
                                     turnCount = 1,
                                 ),
                             )
+                            outgoing.sendPayload(
+                                GameStateDeltaEvent(
+                                    lobbyCode = lobbyCode,
+                                    fromVersion = 2,
+                                    toVersion = 3,
+                                    events =
+                                        listOf(
+                                            TurnStateUpdatedEvent(
+                                                lobbyCode = lobbyCode,
+                                                activePlayerId = playerId,
+                                                turnPhase = TurnPhase.FORTIFY,
+                                                turnCount = 1,
+                                                startPlayerId = playerId,
+                                            ),
+                                        ),
+                                ),
+                            )
                         }
                     }
                 }
             val controller = createController()
+            val observedPhaseStates =
+                CopyOnWriteArrayList<Pair<TurnPhase?, String?>>()
+            val observer =
+                launch {
+                    controller.state.collect { state ->
+                        observedPhaseStates.add(
+                            state.gameState.turnPhase to state.autoPhaseNoticeText,
+                        )
+                    }
+                }
             try {
                 controller.updateServerUrl(server.url)
                 controller.updatePlayerName("Alice")
@@ -1243,10 +1285,370 @@ class LobbyControllerTest {
                 assertEquals(TurnPhase.ATTACK, controller.state.value.gameState.turnPhase)
 
                 waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY }
+                assertFalse(
+                    observedPhaseStates.any { (phase, notice) ->
+                        phase == TurnPhase.FORTIFY && notice == null
+                    },
+                )
                 assertEquals(
                     "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
                     controller.state.value.autoPhaseNoticeText,
                 )
+            } finally {
+                observer.cancel()
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `manual attack phase end before auto boundary suppresses delayed notice`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AT04")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.ATTACK,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories =
+                                                listOf(
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        edges =
+                                                            listOf(
+                                                                MapTerritoryEdgeSnapshot(
+                                                                    TerritoryId("argentinien"),
+                                                                ),
+                                                            ),
+                                                    ),
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        edges = emptyList(),
+                                                    ),
+                                                ),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates =
+                                        listOf(
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("brasilien"),
+                                                ownerId = playerId,
+                                                troopCount = 5,
+                                            ),
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("argentinien"),
+                                                ownerId = opponentId,
+                                                troopCount = 1,
+                                            ),
+                                        ),
+                                ),
+                            )
+                        }
+                        is AttackRequest -> {
+                            outgoing.sendPayload(
+                                GameStateDeltaEvent(
+                                    lobbyCode = lobbyCode,
+                                    fromVersion = 1,
+                                    toVersion = 2,
+                                    events =
+                                        listOf(
+                                            AttackResolvedBroadcastEvent(
+                                                lobbyCode = lobbyCode,
+                                                attackerPlayerId = playerId,
+                                                defenderPlayerId = opponentId,
+                                                fromTerritoryId = TerritoryId("brasilien"),
+                                                toTerritoryId = TerritoryId("argentinien"),
+                                                attackTroops = 3,
+                                                sourceTroopsBefore = 5,
+                                                targetTroopsBefore = 1,
+                                                requestedAttackDice = 3,
+                                                attackDice = 2,
+                                                defendDice = 1,
+                                                attackerRolls = listOf(6, 4),
+                                                defenderRolls = listOf(2),
+                                                attackerLosses = 0,
+                                                defenderLosses = 1,
+                                                attackerRemaining = 3,
+                                                defenderRemaining = 0,
+                                                occupyingTroopCount = 2,
+                                            ),
+                                            TerritoryTroopsChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("brasilien"),
+                                                troopCount = 3,
+                                                stateVersion = 2,
+                                            ),
+                                            TerritoryOwnerChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("argentinien"),
+                                                ownerId = playerId,
+                                                stateVersion = 2,
+                                            ),
+                                            TerritoryTroopsChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("argentinien"),
+                                                troopCount = 2,
+                                                stateVersion = 2,
+                                            ),
+                                        ),
+                                ),
+                            )
+                            outgoing.sendPayload(AttackResponse(lobbyCode))
+                        }
+                        is ConfirmAttackDoneRequest -> {
+                            outgoing.sendPayload(
+                                GameStateDeltaEvent(
+                                    lobbyCode = lobbyCode,
+                                    fromVersion = 2,
+                                    toVersion = 3,
+                                    events =
+                                        listOf(
+                                            TurnStateUpdatedEvent(
+                                                lobbyCode = lobbyCode,
+                                                activePlayerId = playerId,
+                                                turnPhase = TurnPhase.FORTIFY,
+                                                turnCount = 1,
+                                                startPlayerId = playerId,
+                                            ),
+                                        ),
+                                ),
+                            )
+                            outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 3,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                controller.attack()
+                waitUntil { controller.state.value.gameState.attackState.latestResult != null }
+
+                controller.confirmAttackDone()
+                waitUntil {
+                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isNotEmpty()
+                }
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY }
+                delay(2_800)
+
+                assertEquals(1, seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().size)
+                assertNull(controller.state.value.autoPhaseNoticeText)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `manual attack phase end consumes deferred server boundary without stale request`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AT05")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.ATTACK,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories =
+                                                listOf(
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("brasilien"),
+                                                        edges =
+                                                            listOf(
+                                                                MapTerritoryEdgeSnapshot(
+                                                                    TerritoryId("argentinien"),
+                                                                ),
+                                                            ),
+                                                    ),
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = TerritoryId("argentinien"),
+                                                        edges = emptyList(),
+                                                    ),
+                                                ),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates =
+                                        listOf(
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("brasilien"),
+                                                ownerId = playerId,
+                                                troopCount = 5,
+                                            ),
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = TerritoryId("argentinien"),
+                                                ownerId = opponentId,
+                                                troopCount = 1,
+                                            ),
+                                        ),
+                                ),
+                            )
+                        }
+                        is AttackRequest -> {
+                            outgoing.sendPayload(
+                                GameStateDeltaEvent(
+                                    lobbyCode = lobbyCode,
+                                    fromVersion = 1,
+                                    toVersion = 3,
+                                    events =
+                                        listOf(
+                                            AttackResolvedBroadcastEvent(
+                                                lobbyCode = lobbyCode,
+                                                attackerPlayerId = playerId,
+                                                defenderPlayerId = opponentId,
+                                                fromTerritoryId = TerritoryId("brasilien"),
+                                                toTerritoryId = TerritoryId("argentinien"),
+                                                attackTroops = 3,
+                                                sourceTroopsBefore = 5,
+                                                targetTroopsBefore = 1,
+                                                requestedAttackDice = 3,
+                                                attackDice = 2,
+                                                defendDice = 1,
+                                                attackerRolls = listOf(6, 4),
+                                                defenderRolls = listOf(2),
+                                                attackerLosses = 0,
+                                                defenderLosses = 1,
+                                                attackerRemaining = 3,
+                                                defenderRemaining = 0,
+                                                occupyingTroopCount = 2,
+                                            ),
+                                            TerritoryTroopsChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("brasilien"),
+                                                troopCount = 3,
+                                                stateVersion = 2,
+                                            ),
+                                            TerritoryOwnerChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("argentinien"),
+                                                ownerId = playerId,
+                                                stateVersion = 2,
+                                            ),
+                                            TerritoryTroopsChangedEvent(
+                                                lobbyCode = lobbyCode,
+                                                territoryId = TerritoryId("argentinien"),
+                                                troopCount = 2,
+                                                stateVersion = 2,
+                                            ),
+                                            TurnStateUpdatedEvent(
+                                                lobbyCode = lobbyCode,
+                                                activePlayerId = playerId,
+                                                turnPhase = TurnPhase.FORTIFY,
+                                                turnCount = 1,
+                                                startPlayerId = playerId,
+                                            ),
+                                        ),
+                                ),
+                            )
+                            outgoing.sendPayload(AttackResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 3,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                controller.attack()
+                waitUntil { controller.state.value.gameState.attackState.latestResult != null }
+                delay(100)
+                assertEquals(TurnPhase.ATTACK, controller.state.value.gameState.turnPhase)
+
+                controller.confirmAttackDone()
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY }
+                delay(2_800)
+
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
+                assertNull(controller.state.value.autoPhaseNoticeText)
             } finally {
                 controller.close()
                 server.close()
@@ -1582,6 +1984,9 @@ class LobbyControllerTest {
                 assertTrue(
                     LobbyCommandKey.FORTIFY_MOVE !in controller.state.value.pendingCommandKeys,
                 )
+                delay(300)
+                assertTrue(seenPayloads.filterIsInstance<TurnAdvanceRequest>().isEmpty())
+                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
                 }
@@ -1725,6 +2130,10 @@ class LobbyControllerTest {
                 controller.updateLobbyCode(lobbyCode.value)
                 controller.joinLobby { }
 
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY }
+                delay(300)
+                assertTrue(seenPayloads.filterIsInstance<TurnAdvanceRequest>().isEmpty())
+                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
                     seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
                 }
@@ -1751,7 +2160,7 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `attack phase without available attacks is confirmed automatically`() {
+    fun `attack phase without available attacks waits for server auto boundary`() {
         runBlocking {
             val lobbyCode = LobbyCode("AT00")
             val playerId = PlayerId(1)
@@ -1846,6 +2255,17 @@ class LobbyControllerTest {
                                     ),
                                 ),
                             )
+                            delay(500)
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
                         }
                         is ConfirmAttackDoneRequest -> {
                             outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
@@ -1869,21 +2289,16 @@ class LobbyControllerTest {
                 controller.updateLobbyCode(lobbyCode.value)
                 controller.joinLobby { }
 
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                delay(300)
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
+                assertNull(controller.state.value.autoPhaseNoticeText)
                 waitUntil {
-                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isNotEmpty()
+                    controller.state.value.autoPhaseNoticeText ==
+                        "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet."
                 }
-                val request = seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().single()
-                assertEquals(lobbyCode, request.lobbyCode)
-                assertEquals(playerId, request.playerId)
-                assertEquals(
-                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
-                    controller.state.value.autoPhaseNoticeText,
-                )
-                waitUntil {
-                    LobbyCommandKey.CONFIRM_ATTACK_DONE !in
-                        controller.state.value.pendingCommandKeys &&
-                        controller.state.value.gameState.turnPhase == TurnPhase.FORTIFY
-                }
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
+                assertEquals(TurnPhase.FORTIFY, controller.state.value.gameState.turnPhase)
                 controller.clearAutoPhaseNotice()
                 assertNull(controller.state.value.autoPhaseNoticeText)
             } finally {
@@ -1969,6 +2384,17 @@ class LobbyControllerTest {
                                         ),
                                 ),
                             )
+                            delay(500)
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.ATTACK,
+                                    nextPhase = TurnPhase.FORTIFY,
+                                    activePlayerId = playerId,
+                                    turnCount = 1,
+                                ),
+                            )
                         }
                         is ConfirmAttackDoneRequest -> {
                             outgoing.sendPayload(ConfirmAttackDoneResponse(lobbyCode))
@@ -2006,12 +2432,10 @@ class LobbyControllerTest {
                 controller.joinLobby { }
 
                 waitUntil {
-                    seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isNotEmpty()
+                    controller.state.value.autoPhaseNoticeText ==
+                        "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet."
                 }
-                assertEquals(
-                    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet.",
-                    controller.state.value.autoPhaseNoticeText,
-                )
+                assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
 
                 controller.clearAutoPhaseNotice()
                 waitUntil {

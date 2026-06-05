@@ -647,12 +647,12 @@ internal fun GameScreenContent(
                 onClose = { showOptionsOverlay = false },
             )
 
+            AttackResolutionOverlay(state = attackResolutionState)
+
             AutoPhaseNoticeOverlay(
                 message = contentState.autoPhaseNoticeText,
                 onDismiss = actions.onClearAutoPhaseNotice,
             )
-
-            AttackResolutionOverlay(state = attackResolutionState)
 
             CountdownOverlay(
                 show = showCountdown,
