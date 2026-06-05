@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -1488,6 +1489,60 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(7, updated.troopCountOf(TerritoryId("alpha")))
+    }
+
+    @Test
+    fun `cheat reinforcement bonus used marks player`() {
+        val lobbyCode = LobbyCode("CH01")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val updated =
+            reducer.apply(
+                initialState,
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+            )
+
+        assertEquals(
+            setOf(playerOne),
+            updated.usedCheatReinforcementBonusByPlayer,
+        )
+    }
+
+    @Test
+    fun `cheat reinforcement bonus cannot be used twice by same player`() {
+        val lobbyCode = LobbyCode("CH02")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val withUsedBonus =
+            reducer.apply(
+                initialState,
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    withUsedBonus,
+                    CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+                )
+            }
+
+        assertEquals(
+            "Spieler '1' hat den Schummel-Verstärkungsbonus bereits verwendet.",
+            exception.message,
+        )
     }
 
     @Test

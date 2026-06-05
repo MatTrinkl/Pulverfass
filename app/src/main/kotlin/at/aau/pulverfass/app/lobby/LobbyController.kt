@@ -33,6 +33,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
 import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
@@ -51,6 +52,7 @@ import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
 import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
@@ -66,6 +68,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -148,6 +151,7 @@ class LobbyController(
      */
     private val playersById = linkedMapOf<Long, LobbyPlayerUi>()
     private val commandDispatcher = LobbyCommandDispatcher(network::sendPayload)
+    private var clearCheatErrorJob: Job? = null
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
@@ -916,6 +920,39 @@ class LobbyController(
             ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorPlaceReinforcementsFailed)
+                }
+            }
+        }
+    }
+
+    fun claimCheatReinforcementBonus() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canManageReinforcements(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS,
+                        payload =
+                            ClaimCheatReinforcementBonusRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorReinforcementsNotAllowed)
                 }
             }
         }
@@ -1805,6 +1842,16 @@ class LobbyController(
                 maybeAdvanceCurrentPhaseAutomatically()
                 true
             }
+            is ClaimCheatReinforcementBonusResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ClaimCheatReinforcementBonusErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                updateTemporaryCheatError(GameErrorTextMapper.map(payload))
+                true
+            }
             is PlaceReinforcementsErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
                 updateGameError(GameErrorTextMapper.map(payload))
@@ -2205,6 +2252,23 @@ class LobbyController(
                     ),
             )
         }
+    }
+
+    // Cheat-Fehlermeldungen sollen nur 3 Sekunden sichtbar bleiben.
+    private fun updateTemporaryCheatError(reason: String) {
+        updateGameError(reason)
+        clearCheatErrorJob?.cancel()
+        clearCheatErrorJob =
+            scope.launch {
+                delay(3_000)
+                _state.update { current ->
+                    if (current.errorText == reason) {
+                        current.copy(errorText = null)
+                    } else {
+                        current
+                    }
+                }
+            }
     }
 
     private fun executePendingLobbyActionIfAny() {

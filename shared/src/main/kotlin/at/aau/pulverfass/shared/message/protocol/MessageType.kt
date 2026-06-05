@@ -124,6 +124,15 @@ enum class MessageType(val id: Int) {
     /** Broadcast, dass ein Spieler einen Charakter gewählt hat. */
     LOBBY_CHARACTER_SELECTED_BROADCAST(84),
 
+    /** Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(85),
+
+    /** Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE(86),
+
+    /** Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(87),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

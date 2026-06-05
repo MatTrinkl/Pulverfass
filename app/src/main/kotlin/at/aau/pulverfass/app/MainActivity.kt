@@ -108,6 +108,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // Audio: route-based playback
+                // - Menu-Flow (MainMenu / Lobby / WaitingRoom / LoadGame / Settings): looped menu theme
+                // - Game: stop menu music
+                // - Settings: change Music to "settings"-music
+                // - StudioIntro / Load: video plays its own audio (or silence)
                 LaunchedEffect(currentBackStackEntry) {
                     val route = currentBackStackEntry?.destination?.route
                     when {
@@ -215,6 +219,15 @@ class MainActivity : AppCompatActivity() {
                                             popUpTo(0) { inclusive = true }
                                         }
                                     },
+                                )
+                            }
+                            composable(Screen.Options.route) {
+                                val optionsState by lobbyController.state.collectAsState()
+                                OptionsScreen(
+                                    navController = navController,
+                                    playerName = optionsState.playerName,
+                                    onPlayerNameChange = lobbyController::updatePlayerName,
+                                    musicManager = musicManager,
                                 )
                             }
                             composable(Screen.Options.route) {

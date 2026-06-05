@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -512,6 +513,11 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
                 delta = jsonObject.int("delta"),
+            )
+        "cheat_reinforcement_bonus_used" ->
+            CheatReinforcementBonusUsedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
             )
         "player_cards_removed" ->
             PlayerCardsRemovedEvent(

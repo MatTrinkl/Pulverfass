@@ -2,6 +2,8 @@ package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
@@ -357,6 +359,48 @@ class GameErrorTextMapperTest {
         assertTrue(
             messages.getValue(FortifyMoveErrorCode.FORTIFY_ALREADY_USED)
                 .contains("bereits"),
+        )
+    }
+
+    @Test
+    fun `cheat reinforcement bonus errors are translated for UI`() {
+        val messages =
+            ClaimCheatReinforcementBonusErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(ClaimCheatReinforcementBonusErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH,
+            ).contains("Spielerzuordnung"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER,
+            ).contains("eigenen Zug"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH,
+            ).contains("Verstärkungsphase"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
+            ).contains("bereits verwendet"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED,
+            ).contains("Kartenset"),
         )
     }
 }
