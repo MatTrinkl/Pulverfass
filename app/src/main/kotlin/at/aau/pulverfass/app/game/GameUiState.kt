@@ -285,9 +285,10 @@ data class GameUiState(
     /**
      * Prüft eine vollständig ausgewählte Fortify-Absicht vor dem Request.
      *
-     * Quelle, Ziel, Eigentum und eigener Verbindungspfad werden beim Auswählen
-     * im Reducer geprüft. Der Server validiert denselben Move dennoch
-     * abschließend, insbesondere nach parallelen Deltas oder Reconnects.
+     * Die Auswahl kann nach Deltas, Reconnects oder einem verspäteten Snapshot
+     * veraltet sein. Deshalb prüft diese Methode Quelle, Ziel, Eigentum,
+     * eigenen Verbindungspfad und die aktuelle Truppenobergrenze direkt vor dem
+     * Senden erneut.
      *
      * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
      * @param isConnected aktueller WebSocket-Zustand
@@ -298,9 +299,30 @@ data class GameUiState(
         isConnected: Boolean = true,
     ): Boolean =
         canManageFortify(localPlayerId, isConnected) &&
-            selectionFromRegionId != null &&
-            selectionToRegionId != null &&
-            fortifyState.troopCount >= MIN_FORTIFY_TROOPS
+            hasValidFortifySelection(localPlayerId)
+
+    private fun hasValidFortifySelection(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        val fromTerritoryId =
+            selectionFromRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val toTerritoryId =
+            selectionToRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val source = territoryStates[fromTerritoryId] ?: return false
+        val target = territoryStates[toTerritoryId] ?: return false
+        val maxFortifyTroops = source.troopCount - 1
+
+        return fromTerritoryId != toTerritoryId &&
+            source.ownerId == localPlayerId &&
+            target.ownerId == localPlayerId &&
+            source.troopCount > MIN_FORTIFY_TROOPS &&
+            fortifyState.troopCount in MIN_FORTIFY_TROOPS..maxFortifyTroops &&
+            hasOwnedPath(localPlayerId, fromTerritoryId, toTerritoryId)
+    }
 
     private fun hasOwnedPath(
         playerId: PlayerId,

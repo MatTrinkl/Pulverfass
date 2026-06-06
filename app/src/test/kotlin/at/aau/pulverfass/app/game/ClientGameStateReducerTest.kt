@@ -659,6 +659,64 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `fortify submission rejects stale invalid selections before sending`() {
+        val sourceId = TerritoryId("brasilien")
+        val middleId = TerritoryId("kanada")
+        val targetId = TerritoryId("groenland")
+        val selectedMove =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                selectedRegionId = "greenland",
+                selectionFromRegionId = "brazil",
+                selectionToRegionId = "greenland",
+                adjacentTerritoryIds =
+                    mapOf(
+                        sourceId to setOf(middleId),
+                        middleId to setOf(sourceId, targetId),
+                        targetId to setOf(middleId),
+                    ),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 4),
+                        middleId to GameTerritoryUiState(middleId, aliceId, 1),
+                        targetId to GameTerritoryUiState(targetId, aliceId, 1),
+                    ),
+                fortifyState = FortifyUiState(troopCount = 3),
+            )
+        val targetChangedOwner =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, bobId, 1)),
+            )
+        val pathBecameBlocked =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (middleId to GameTerritoryUiState(middleId, bobId, 1)),
+            )
+        val sourceTroopsReduced =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 3)),
+            )
+        val noMovableSourceTroops =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 1)),
+            )
+
+        assertTrue(selectedMove.canSubmitFortifyMove(aliceId))
+        assertFalse(targetChangedOwner.canSubmitFortifyMove(aliceId))
+        assertFalse(pathBecameBlocked.canSubmitFortifyMove(aliceId))
+        assertFalse(sourceTroopsReduced.canSubmitFortifyMove(aliceId))
+        assertFalse(noMovableSourceTroops.canSubmitFortifyMove(aliceId))
+    }
+
+    @Test
     fun `fortify availability requires movable own troops and owned path`() {
         val sourceId = TerritoryId("brasilien")
         val middleId = TerritoryId("kanada")

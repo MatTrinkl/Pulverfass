@@ -230,15 +230,6 @@ class MainActivity : AppCompatActivity() {
                                     musicManager = musicManager,
                                 )
                             }
-                            composable(Screen.Options.route) {
-                                val optionsState by lobbyController.state.collectAsState()
-                                OptionsScreen(
-                                    navController = navController,
-                                    playerName = optionsState.playerName,
-                                    onPlayerNameChange = lobbyController::updatePlayerName,
-                                    musicManager = musicManager,
-                                )
-                            }
                         }
 
                         ServerStatusIndicator(

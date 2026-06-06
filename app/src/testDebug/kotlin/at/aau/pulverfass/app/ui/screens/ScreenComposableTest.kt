@@ -736,6 +736,13 @@ class ScreenComposableTest {
                                     selectionFromRegionId = "brazil",
                                     selectionToRegionId = "argentina",
                                     fortifyState = FortifyUiState(troopCount = 2),
+                                    adjacentTerritoryIds =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                setOf(TerritoryId("argentinien")),
+                                            TerritoryId("argentinien") to
+                                                setOf(TerritoryId("brasilien")),
+                                        ),
                                     territoryStates =
                                         mapOf(
                                             TerritoryId("brasilien") to
@@ -743,6 +750,12 @@ class ScreenComposableTest {
                                                     TerritoryId("brasilien"),
                                                     playerId,
                                                     5,
+                                                ),
+                                            TerritoryId("argentinien") to
+                                                GameTerritoryUiState(
+                                                    TerritoryId("argentinien"),
+                                                    playerId,
+                                                    1,
                                                 ),
                                         ),
                                 ),

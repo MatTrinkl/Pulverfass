@@ -95,8 +95,9 @@ class BackgroundMusicManager(context: Context) {
         if (muted) {
             pause()
         } else {
-            if (player == null && currentTrack != null) {
-                play(currentTrack!!)
+            val track = currentTrack
+            if (player == null && track != null) {
+                play(track)
             } else {
                 resume()
             }
