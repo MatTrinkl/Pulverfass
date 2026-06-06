@@ -146,6 +146,8 @@ private const val CHEAT_LIGHT_COVERED_LUX = 2f
  *
  * @param controller gemeinsamer LobbyController, der Lobby-, Netzwerk- und
  * GameState verwaltet
+ * @param musicManager optionaler Audio-Manager für SFX, Musik und Cheat-Sound.
+ * @param onNavigateToMain Navigation zurück ins Hauptmenü nach "Spiel verlassen".
  */
 @Composable
 fun GameScreen(
@@ -209,6 +211,23 @@ fun GameScreen(
     )
 }
 
+/**
+ * Gebündelter Anzeigezustand des Spielscreens.
+ *
+ * Die Bündelung trennt Compose-Rendering vom [LobbyController] und hält Tests
+ * stabil: Screens bekommen nur bereits berechnete Werte, keine direkte
+ * Controller-Instanz.
+ *
+ * @param players Spielerleiste im bereits UI-fertigen Format.
+ * @param localPlayerId eigene PlayerId für aktionsabhängige Freigaben.
+ * @param uiState aktueller serverbasierter Spielzustand.
+ * @param isConnected aktueller WebSocket-Status.
+ * @param pendingCommandKeys ausstehende Commands, die Buttons sperren.
+ * @param mapPainter sichtbare Weltkarte.
+ * @param character eigener Charakter für den Header.
+ * @param playerName lokaler Anzeigename.
+ * @param autoPhaseNoticeText aktuell sichtbare Auto-Phasenmeldung.
+ */
 internal data class GameScreenContentState(
     val players: List<GamePlayerUi>,
     val localPlayerId: PlayerId?,
@@ -221,6 +240,30 @@ internal data class GameScreenContentState(
     val autoPhaseNoticeText: String? = null,
 )
 
+/**
+ * Controller-Callbacks, die vom Spielscreen ausgelöst werden dürfen.
+ *
+ * Alle Callbacks bleiben hier zusammen, damit UI-Tests einzelne Aktionen
+ * ersetzen können und der Screen selbst keine Netzwerkdetails kennt.
+ *
+ * @param onRegionSelected Kartenregion aus der technischen Hitdetection.
+ * @param onToggleCards blendet die private Kartenhand ein oder aus.
+ * @param onAdvanceTurn generischer Phasenwechsel für nicht spezialisierten Flow.
+ * @param onAdjustReinforcementPlacementAmount ändert den Verstärkungs-Slider.
+ * @param onPlaceReinforcements sendet eine Verstärkungsplatzierung.
+ * @param onClaimCheatReinforcementBonus fordert den Lichtsensor-Cheatbonus an.
+ * @param onConfirmReinforcementsDone bestätigt das Ende der Verstärkungsphase.
+ * @param onToggleTradeInCard markiert oder demarkiert eine private Karte.
+ * @param onTradeInCards sendet den Kartentausch.
+ * @param onAdjustAttackTroops ändert die Angriffstruppen.
+ * @param onAdjustMoveAfterCapture ändert die Besetzung nach Capture.
+ * @param onAttack sendet den Angriff.
+ * @param onConfirmAttackDone bestätigt das Ende der Angriffsphase.
+ * @param onAdjustFortifyTroops ändert die Fortify-Truppen.
+ * @param onFortifyMove sendet die einmalige Truppenverschiebung.
+ * @param onRefreshGameState fordert einen Catch-up-Snapshot an.
+ * @param onClearAutoPhaseNotice schließt die sichtbare Auto-Phasenmeldung.
+ */
 internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
     val onToggleCards: () -> Unit,
@@ -246,6 +289,15 @@ internal data class GameScreenActions(
  *
  * Die Gruppierung hält die Panel-Schnittstelle stabil, wenn weitere
  * kartenspezifische Eigenschaften aus dem privaten Snapshot hinzukommen.
+ *
+ * @param playerName eigener Anzeigename für die Kartenüberschrift.
+ * @param handCards ältere reine Textkarten aus Legacy-Antworten.
+ * @param privateHandCards aktuelle Karten mit ID und Typ.
+ * @param selectedTradeInCardIds lokal markierte Karten für einen Trade-in.
+ * @param showTradeControls ob Trade-in-Steuerung in der aktuellen Phase sichtbar ist.
+ * @param canSelectTradeCards ob einzelne Karten auswählbar sind.
+ * @param canTradeInCards ob genau drei gültige Karten gesendet werden dürfen.
+ * @param isTradePending `true`, solange der Serverrequest aussteht.
  */
 internal data class PrivateHandPanelState(
     val playerName: String,
@@ -476,7 +528,12 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        // Game content group — blurred when the delayed disconnect feedback becomes visible.
+        /*
+         * Der eigentliche Spielinhalt bleibt zunächst sichtbar, auch wenn ein
+         * sehr kurzer Reconnect- oder Catch-up-Zustand auftritt. Erst nach der
+         * Verzögerung wird weich geblurt, damit Attack-Responses nicht als
+         * flackernder Disconnect-Screen wahrgenommen werden.
+         */
         Box(
             modifier =
                 if (showDisconnectOverlay) {
@@ -682,7 +739,7 @@ internal fun GameScreenContent(
                 musicManager = musicManager,
                 onCountdownComplete = {},
             )
-        } // end blurred game content group
+        }
 
         if (showDisconnectOverlay) {
             DisconnectOverlay(
@@ -732,6 +789,16 @@ private fun GameScreenOverlayContainer(
     }
 }
 
+/**
+ * Zeigt eine automatische Phasenmeldung ohne Bestätigung durch den Spieler.
+ *
+ * Der Controller queued diese Meldungen, wenn eine Phase serverseitig oder
+ * lokal automatisch beendet wurde. Das Overlay blockiert in dieser kurzen Zeit
+ * Eingaben, damit keine Karte bewegt oder ein zweiter Request ausgelöst wird.
+ *
+ * @param message sichtbarer Meldungstext oder `null`, wenn kein Overlay aktiv ist.
+ * @param onDismiss Callback nach Ablauf der Anzeigezeit.
+ */
 @Composable
 private fun AutoPhaseNoticeOverlay(
     message: String?,
@@ -766,6 +833,21 @@ private fun AutoPhaseNoticeOverlay(
     }
 }
 
+/**
+ * Ingame-Optionsmenü über der Karte.
+ *
+ * Der gemeinsame [GameScreenOverlayContainer] konsumiert Pointer-Events im
+ * Hintergrund. Dadurch kann während des Menüs nur im Menü gescrollt und auf
+ * Buttons geklickt werden, nicht versehentlich die Karte darunter gepannt werden.
+ *
+ * @param show `true`, wenn das Menü sichtbar sein soll.
+ * @param isMusicEnabled aktueller Musik-Schalterzustand.
+ * @param isSfxEnabled aktueller SFX-Schalterzustand.
+ * @param onMusicToggle setzt Musik sofort an oder aus.
+ * @param onSfxToggle setzt SFX sofort an oder aus.
+ * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü.
+ * @param onClose schließt nur das Optionsmenü.
+ */
 @Composable
 private fun OptionsOverlay(
     show: Boolean,
@@ -813,6 +895,16 @@ private fun OptionsOverlay(
     }
 }
 
+/**
+ * Zählt den Spielstart sichtbar herunter.
+ *
+ * Die Null ist absichtlich kürzer sichtbar als die übrigen Zahlen, weil sie
+ * nur als Abschluss-Frame für den Fade dient und nicht wie eine weitere volle
+ * Sekunde wirken soll.
+ *
+ * @param musicManager optionaler Audio-Manager für Countdown-SFX.
+ * @return Paar aus Sichtbarkeit und aktuellem Zahlenwert.
+ */
 @Composable
 private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<Boolean, Int> {
     var show by remember { mutableStateOf(true) }
@@ -831,6 +923,16 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
     return show to value
 }
 
+/**
+ * Blockierendes Start-Overlay vor der ersten Spielinteraktion.
+ *
+ * @param show `true`, solange der Countdown sichtbar ist.
+ * @param value aktuelle Countdown-Zahl.
+ * @param character eigener Charakter für die filmische Variante.
+ * @param playerName Anzeigename unter der Charakter-Coin.
+ * @param musicManager optionaler Audio-Manager für SFX.
+ * @param onCountdownComplete Callback nach dem finalen Fade.
+ */
 @Composable
 private fun CountdownOverlay(
     show: Boolean,
@@ -1016,6 +1118,15 @@ private fun buildDisconnectMessage(
         else -> ""
     }
 
+/**
+ * Hört auf den Lichtsensor und löst den Debug-/Cheatbonus einmalig aus.
+ *
+ * Die Geste verlangt einen hellen Ausgangswert und danach ein deutliches
+ * Abdunkeln, damit normale Raumlichtschwankungen keinen Bonus triggern.
+ *
+ * @param enabled `true`, wenn die Verstärkungsphase den Cheat aktuell zulässt.
+ * @param onTriggered Callback für den Bonusrequest.
+ */
 @Composable
 private fun LightSensorCheatTrigger(
     enabled: Boolean,
@@ -1087,6 +1198,16 @@ private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
     return showCatchUpFeedback
 }
 
+/**
+ * Verzögert harte Disconnect-/Desync-Overlays um kurze Netzwerkwackler.
+ *
+ * Besonders nach Angriffen können Serverantworten und Folgephasen sehr dicht
+ * eintreffen. Ohne diese Verzögerung würde die Oberfläche kurz den
+ * Disconnect-Zustand zeigen, obwohl die Verbindung weiterhin nutzbar ist.
+ *
+ * @param isDisconnectState `true`, wenn Verbindung oder Sync gerade problematisch sind.
+ * @return `true`, wenn der Zustand lange genug anhält und sichtbar werden soll.
+ */
 @Composable
 private fun rememberDelayedDisconnectFeedback(isDisconnectState: Boolean): Boolean {
     var showDisconnectFeedback by remember { mutableStateOf(false) }
@@ -1111,6 +1232,15 @@ private fun CatchUpProgressOverlay(
     }
 }
 
+/**
+ * Blockiert die Karte, solange ein Angriff auf die Serverauflösung wartet.
+ *
+ * Das Overlay ist absichtlich leichtgewichtig: es überbrückt nur die Latenz
+ * zwischen AttackRequest und AttackResolvedBroadcastEvent. Die spätere
+ * Ergebnisanzeige kommt weiterhin aus dem autoritativen Serverevent.
+ *
+ * @param state sichtbarer Angriffsstatus oder `null`, wenn kein Angriff aussteht.
+ */
 @Composable
 private fun BoxScope.AttackResolutionOverlay(state: AttackResolutionOverlayState?) {
     if (state == null) {
@@ -1203,6 +1333,17 @@ private fun BoxScope.AttackResolutionOverlay(state: AttackResolutionOverlayState
     }
 }
 
+/**
+ * Übersetzt den privaten Kartenstate in die Props der Kartenhand.
+ *
+ * @param player eigener UI-Spieler für Überschrift und Avatar-Kontext.
+ * @param uiState aktueller GameState mit privaten Karten.
+ * @param localPlayerId eigene PlayerId für Zugberechtigungen.
+ * @param isConnected aktueller Verbindungsstatus.
+ * @param isReinforcementCommandPending `true`, wenn ein Verstärkungsrequest läuft.
+ * @param pendingCommandKeys alle aktuell offenen Commands.
+ * @return UI-fertiger Panel-State für die Kartenhand.
+ */
 private fun privateHandPanelState(
     player: GamePlayerUi,
     uiState: GameUiState,
@@ -1226,6 +1367,12 @@ private fun privateHandPanelState(
         isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
     )
 
+/**
+ * Rendert das Verstärkungspanel nur, wenn ein gültiges Zielgebiet sichtbar ist.
+ *
+ * @param state lokale und serverbasierte Verstärkungsdaten.
+ * @param actions Callbacks für Slider, Platzierung und Abwahl.
+ */
 @Composable
 private fun BoxScope.ReinforcementPanelHost(
     state: ReinforcementPanelHostState,
@@ -1259,6 +1406,12 @@ private fun BoxScope.ReinforcementPanelHost(
     )
 }
 
+/**
+ * Rendert Auswahlpanel oder letztes Ergebnis der Angriffsphase.
+ *
+ * @param state lokaler Angriffsstatus inklusive Auswahl und Pending-Status.
+ * @param actions Callbacks für Slider, Angriff und Abwahl.
+ */
 @Composable
 private fun BoxScope.AttackPanelHost(
     state: AttackPanelHostState,
@@ -1298,6 +1451,12 @@ private fun BoxScope.AttackPanelHost(
     )
 }
 
+/**
+ * Rendert das Fortify-Panel für genau eine verbundene Truppenverschiebung.
+ *
+ * @param state lokaler Fortify-Status inklusive Source-/Target-Auswahl.
+ * @param actions Callbacks für Slider, Move und Abwahl.
+ */
 @Composable
 private fun BoxScope.FortifyPanelHost(
     state: FortifyPanelHostState,
@@ -1447,6 +1606,16 @@ private fun visibleAttackSelection(
     return fromRegionId to toRegionId
 }
 
+/**
+ * Erstellt die kurze "Angriff wird ausgewertet"-Meldung während eines Pending Requests.
+ *
+ * @param selection aktuelle Quelle-Ziel-Auswahl.
+ * @param uiState GameState mit ausgewählter Truppenanzahl.
+ * @param players Spielerleiste zur Auflösung des Angreifernamens.
+ * @param fallbackPlayerName Name, falls der lokale Spieler noch nicht in [players] steht.
+ * @param isAttackRequestPending `true`, solange der AttackRequest offen ist.
+ * @return Overlay-State oder `null`, wenn keine Pending-Anzeige nötig ist.
+ */
 internal fun createAttackResolutionOverlayState(
     selection: Pair<String, String>?,
     uiState: GameUiState,

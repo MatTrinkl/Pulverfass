@@ -9,12 +9,12 @@ import java.util.concurrent.CopyOnWriteArraySet
 /**
  * Verwaltet Hintergrundmusik + One-Shot SFX-Wiedergabe.
  *
- * Lifecycle wird vom Caller (MainActivity) gemanagt:
- *  - [play] / [stop] / [pause] / [resume] für die Loop-Music
- *  - [playSfx] für einmalige Sound-Effects (auto-released onCompletion)
- *  - [release] beim onDestroy gibt alles frei (inkl. aktiver SFX)
+ * Der Activity-Lifecycle steuert [pause], [resume] und [release]. Die Screens
+ * wählen nur über [play] den passenden Track oder lösen über [playSfx]
+ * kurze Effekte aus. Mute-Werte werden getrennt gespeichert, damit Musik und
+ * SFX unabhängig voneinander sofort reagieren.
  *
- * Music- und SFX-Mute getrennt persistiert via SharedPreferences.
+ * @param context Android-Kontext für Ressourcen und private SharedPreferences.
  */
 class BackgroundMusicManager(context: Context) {
     private val appContext = context.applicationContext
@@ -37,6 +37,17 @@ class BackgroundMusicManager(context: Context) {
     val isSfxMuted: Boolean
         get() = prefs.getBoolean(KEY_SFX_MUTED, false)
 
+    /**
+     * Spielt einen neuen Hintergrundtrack oder lässt den aktuellen Track weiterlaufen.
+     *
+     * Die Vorbereitung läuft asynchron, damit Navigation und Animationen auf dem
+     * UI-Thread nicht blockieren. [currentTrack] wird auch bei stummgeschalteter
+     * Musik gesetzt, damit ein späteres Entstummen denselben Track wieder aufnehmen
+     * kann.
+     *
+     * @param resId Raw-Resource des Musiktracks.
+     * @param loop `true`, wenn der Track endlos wiederholt werden soll.
+     */
     @Synchronized
     fun play(
         @RawRes resId: Int,
@@ -47,7 +58,11 @@ class BackgroundMusicManager(context: Context) {
         currentTrack = resId
         currentLoop = loop
         if (isMusicMuted) return
-        // Prepare asynchronously to avoid blocking UI thread and to ensure proper start timing
+        /*
+         * MediaPlayer.prepareAsync verhindert kurze UI-Hänger beim Route-Wechsel,
+         * besonders wenn direkt danach ein Compose-Screen mit Video oder Karte
+         * aufgebaut wird.
+         */
         val afd = appContext.resources.openRawResourceFd(resId)
         afd?.use { fileDesc ->
             player =
@@ -90,6 +105,11 @@ class BackgroundMusicManager(context: Context) {
         player?.takeIf { !it.isPlaying }?.start()
     }
 
+    /**
+     * Aktiviert oder deaktiviert Musik und merkt die Entscheidung dauerhaft.
+     *
+     * @param muted `true`, wenn Musik sofort pausiert und künftig stumm bleiben soll.
+     */
     fun setMusicMuted(muted: Boolean) {
         prefs.edit().putBoolean(KEY_MUSIC_MUTED, muted).apply()
         if (muted) {
@@ -104,6 +124,11 @@ class BackgroundMusicManager(context: Context) {
         }
     }
 
+    /**
+     * Aktiviert oder deaktiviert SFX und stoppt laufende Effekte sofort.
+     *
+     * @param muted `true`, wenn SFX sofort beendet und künftig ignoriert werden sollen.
+     */
     @Synchronized
     fun setSfxMuted(muted: Boolean) {
         prefs.edit().putBoolean(KEY_SFX_MUTED, muted).apply()
@@ -112,6 +137,8 @@ class BackgroundMusicManager(context: Context) {
 
     /**
      * Spielt einen Sound-Effect einmalig ab.
+     *
+     * @param resId Raw-Resource des Effekts.
      */
     @Synchronized
     fun playSfx(

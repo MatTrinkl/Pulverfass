@@ -65,6 +65,14 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Übernimmt einen vollständigen öffentlichen Snapshot aus einem Broadcast.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response autoritativer Broadcast-Snapshot des Servers.
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen.
+     * @return aktualisierter UI-State oder unveränderter State bei veralteter Version.
+     */
     fun applySnapshotBroadcast(
         current: GameUiState,
         response: GameStateSnapshotBroadcast,
@@ -80,6 +88,17 @@ object ClientGameStateReducer {
             players = players,
         )
 
+    /**
+     * Übernimmt einen nachgeforderten Catch-up-Snapshot.
+     *
+     * Dieser Pfad wird nach Reconnects oder erkannten Delta-Lücken genutzt und
+     * stellt den lokalen Zustand vollständig serverautoritativ wieder her.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response vollständige Catch-up-Antwort des Servers.
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen.
+     * @return aktualisierter UI-State.
+     */
     fun applyCatchUpResponse(
         current: GameUiState,
         response: GameStateCatchUpResponse,
@@ -202,6 +221,17 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Übernimmt einen separat angeforderten Turn-State.
+     *
+     * Map- und Turn-State können unabhängig geladen werden. Diese Methode
+     * aktualisiert nur Phasen-, Pausen- und Fortify-Verbrauchsdaten und lässt
+     * Territory-Zustand sowie Kartenhand unangetastet.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response autoritative Turn-State-Antwort des Servers.
+     * @return State mit aktualisierter Phase und bereinigter Auswahl.
+     */
     fun applyTurnStateGetResponse(
         current: GameUiState,
         response: TurnStateGetResponse,

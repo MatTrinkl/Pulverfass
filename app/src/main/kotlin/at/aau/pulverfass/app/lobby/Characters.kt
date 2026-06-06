@@ -4,6 +4,21 @@ import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.R
 
+/**
+ * Beschreibt einen auswählbaren Lobby-Charakter inklusive UI-Assets.
+ *
+ * Die [id] ist bewusst unabhängig vom Dateinamen. Sie wird im Lobby-Protokoll
+ * übertragen und lokal persistiert, weshalb sie stabil bleiben muss, auch wenn
+ * Portraits oder Wallpaper später ausgetauscht werden.
+ *
+ * @param id stabile fachliche Charakter-ID für Server, Persistenz und Tests.
+ * @param drawableRes rundes Portrait für Lobby, Playerliste und Spielscreen.
+ * @param color Akzentfarbe des Charakters, nicht die Spielerfarbe auf der Karte.
+ * @param displayName lesbarer Name für ContentDescription und Debugging.
+ * @param wallpaperResId Bild- oder Video-Asset für den Character-Picker.
+ * @param isVideoWallpaper `true`, wenn [wallpaperResId] auf eine Raw-Videoressource zeigt.
+ * @param fallbackImageResId optionales Standbild, falls ein Video nicht gerendert werden kann.
+ */
 data class CharacterDefinition(
     val id: String,
     @param:DrawableRes val drawableRes: Int,
@@ -14,6 +29,13 @@ data class CharacterDefinition(
     @param:DrawableRes val fallbackImageResId: Int? = null,
 )
 
+/**
+ * Zentrale Character-Liste für Lobby und Spielscreen.
+ *
+ * Die Reihenfolge ist Teil der UI: sie bestimmt die Carousel-Reihenfolge und
+ * den Fallback, falls ein gespeicherter Charakter bereits von einem anderen
+ * Spieler belegt ist.
+ */
 object Characters {
     val all: List<CharacterDefinition> =
         listOf(

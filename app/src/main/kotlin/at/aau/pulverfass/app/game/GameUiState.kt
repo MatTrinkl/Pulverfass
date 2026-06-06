@@ -211,6 +211,12 @@ data class GameUiState(
         }
     }
 
+    /**
+     * Revalidiert die ausgewählte Angriffsabsicht gegen den aktuellen GameState.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext.
+     * @return `true`, wenn Quelle, Ziel, Nachbarschaft und Truppenanzahl passen.
+     */
     private fun hasValidAttackSelection(localPlayerId: PlayerId?): Boolean {
         if (localPlayerId == null) {
             return false
@@ -301,6 +307,16 @@ data class GameUiState(
         canManageFortify(localPlayerId, isConnected) &&
             hasValidFortifySelection(localPlayerId)
 
+    /**
+     * Revalidiert die ausgewählte Fortify-Absicht gegen den aktuellen GameState.
+     *
+     * Die Prüfung ist absichtlich strenger als reine UI-Auswahl: ein altes
+     * Source-/Target-Paar kann durch Serverdeltas Besitz, Pfad oder Truppenlimit
+     * verloren haben.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext.
+     * @return `true`, wenn die Auswahl noch serverseitig plausibel sendbar ist.
+     */
     private fun hasValidFortifySelection(localPlayerId: PlayerId?): Boolean {
         if (localPlayerId == null) {
             return false
@@ -324,6 +340,14 @@ data class GameUiState(
             hasOwnedPath(localPlayerId, fromTerritoryId, toTerritoryId)
     }
 
+    /**
+     * Prüft per Breitensuche, ob zwei eigene Gebiete verbunden sind.
+     *
+     * @param playerId Besitzer, über dessen Territorien der Pfad laufen muss.
+     * @param sourceTerritoryId Startgebiet.
+     * @param targetTerritoryId Zielgebiet.
+     * @return `true`, wenn Start und Ziel über eigene Nachbarn erreichbar sind.
+     */
     private fun hasOwnedPath(
         playerId: PlayerId,
         sourceTerritoryId: TerritoryId,

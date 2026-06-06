@@ -84,6 +84,20 @@ import kotlinx.coroutines.launch
 
 private const val CHARACTER_COIN_TARGET_SCALE = 1f
 
+/**
+ * Zeigt den gemeinsamen Warteraum nach Create oder Join.
+ *
+ * Der Screen verwendet die Navigation-Argumente nur als Fallback. Autoritativ
+ * sind die Werte aus [LobbyController.state], weil Hostwechsel, Spielerbeitritte
+ * und Charakterauswahlen live über den Server nachlaufen.
+ *
+ * @param navController Navigation für Spielstart und Verlassen der Lobby.
+ * @param controller geteilte Lobby- und Netzwerk-Schicht.
+ * @param lobbyCode Code aus der Navigation als Fallback während der ersten Frames.
+ * @param isHost Host-Flag aus der Navigation als Fallback bis der Serverzustand vorliegt.
+ * @param playerName Name aus der Navigation als Fallback bis der Controller synchron ist.
+ * @param musicManager optionaler Audio-Manager für Warteraum- und Picker-Musik.
+ */
 @Composable
 fun WaitingRoomScreen(
     navController: NavController,
@@ -229,6 +243,11 @@ private fun SubmitInitialCharacterEffect(
     onSubmittedInitialCharacterIdChange: (String) -> Unit,
     onSyncCharacter: (String) -> Unit,
 ) {
+    /*
+     * Nach einem Join kennt der Client die eigene PlayerId erst, wenn der
+     * PlayerJoined-Broadcast zurückkommt. Erst dann kann sicher entschieden
+     * werden, welcher Charakter frei ist und an den Server gesendet werden muss.
+     */
     LaunchedEffect(
         activeLobbyCode,
         ownPlayerId,
@@ -492,6 +511,19 @@ private fun buildWaitingRoomPlayers(
         }
     }
 
+/**
+ * Bestimmt den ersten Charakter, der nach einem Lobby-Join an den Server gesendet wird.
+ *
+ * Ein lokal gespeicherter Charakter wird bevorzugt, aber nur wenn er noch frei
+ * ist. So kann ein neu beitretender Spieler nie denselben Charakter wie ein
+ * vorhandener Lobby-Spieler übernehmen.
+ *
+ * @param players aktuell bekannte Server-Spielerliste.
+ * @param ownPlayerId eigene PlayerId, sobald der Join-Broadcast bestätigt wurde.
+ * @param currentCharacterId lokal gespeicherter oder gerade ausgewählter Charakter.
+ * @param submittedInitialCharacterId bereits gesendete Initial-ID innerhalb dieser Lobby.
+ * @return freie Charakter-ID oder `null`, wenn noch keine Synchronisierung möglich ist.
+ */
 internal fun initialCharacterIdForLobby(
     players: List<LobbyPlayerUi>,
     ownPlayerId: PlayerId?,
@@ -520,6 +552,18 @@ internal fun initialCharacterIdForLobby(
     return currentCharacter ?: Characters.all.firstOrNull { it.id !in takenCharacterIds }?.id
 }
 
+/**
+ * Sucht den nächsten verfügbaren Carousel-Eintrag um ein Zentrum herum.
+ *
+ * Beim Wischen oder Tippen darf das Carousel nicht auf einem belegten Charakter
+ * stehen bleiben. Die Suche prüft erst den gewünschten Index, dann abwechselnd
+ * rechts und links davon, damit die Auswahl visuell möglichst nah am Nutzerinput
+ * bleibt.
+ *
+ * @param centerIndex gewünschter Mittelpunkt des Character-Carousels.
+ * @param takenCharacterIds von anderen Spielern belegte Charakter-IDs.
+ * @return Index eines freien Charakters oder `null`, wenn alle belegt sind.
+ */
 internal fun availableCharacterIndexNear(
     centerIndex: Int,
     takenCharacterIds: Set<String>,
@@ -831,6 +875,20 @@ private fun CharacterSelectErrorDialog(
     }
 }
 
+/**
+ * Vollbild-Overlay für die Charakterauswahl.
+ *
+ * Das Carousel unterstützt Wischen und Tippen. Belegte Charaktere werden nur
+ * ausgegraut angezeigt, bleiben aber nicht auswählbar und werden beim Snapping
+ * automatisch übersprungen.
+ *
+ * @param currentCharacterId aktuell lokal ausgewählter Charakter.
+ * @param takenCharacterIds durch andere Spieler belegte Charakter-IDs.
+ * @param playerCount sichtbare Spieleranzahl im Warteraum.
+ * @param onDismiss schließt das Overlay ohne Serverrequest.
+ * @param onSave bestätigt die aktuelle freie Auswahl und startet die Coin-Animation.
+ * @param onSelect spiegelt Carousel-Auswahl sofort lokal in den Preview-Slot.
+ */
 @Composable
 private fun CharacterPickerOverlay(
     currentCharacterId: String,
@@ -860,6 +918,11 @@ private fun CharacterPickerOverlay(
     val selectedCharacterTaken = selectedCharacterId in takenCharacterIds
 
     LaunchedEffect(centerIndex, takenCharacterIds) {
+        /*
+         * Während ein Klick-Scroll läuft, darf die automatische Korrektur nicht
+         * zwischendurch zu einem anderen freien Eintrag springen. Nach Abschluss
+         * wird die Auswahl normal validiert und an den Controller gespiegelt.
+         */
         val targetIndex = clickedTargetIndex
         if (targetIndex != null && centerIndex != targetIndex) {
             return@LaunchedEffect

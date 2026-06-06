@@ -283,6 +283,11 @@ class LobbyController(
         _state.update { it.copy(characterSelectError = null) }
     }
 
+    /**
+     * Schließt die aktuelle Auto-Phasenmeldung und zeigt ggf. die nächste Queue-Meldung.
+     *
+     * @see enqueueAutoPhaseNotice
+     */
     fun clearAutoPhaseNotice() {
         var shouldCheckNextPhase = false
         _state.update { current ->
@@ -305,6 +310,15 @@ class LobbyController(
         }
     }
 
+    /**
+     * Fügt eine Auto-Phasenmeldung dedupliziert in die UI-Queue ein.
+     *
+     * Mehrere Phasen können direkt hintereinander automatisch übersprungen
+     * werden. Die Queue sorgt dafür, dass jede fachlich relevante Meldung
+     * einzeln sichtbar wird, statt die vorherige Anzeige zu überschreiben.
+     *
+     * @param message sichtbarer Text der Auto-Phasenmeldung.
+     */
     private fun enqueueAutoPhaseNotice(message: String) {
         _state.update { current -> current.withQueuedAutoPhaseNotice(message) }
     }
@@ -1988,6 +2002,15 @@ class LobbyController(
         selectCharacter(characterId)
     }
 
+    /**
+     * Markiert einen Lobby-Spieler als getrennt, ohne ihn aus der Liste zu entfernen.
+     *
+     * Verlassene Spieler können im laufenden Spiel weiterhin Territorien besitzen.
+     * Die UI braucht daher die Spieler-ID weiter für Farben, Anzeige und
+     * Angriffslogik gegen zurückgelassene Gebiete.
+     *
+     * @param payload Serverevent zum verlorenen Spieler.
+     */
     private fun handlePlayerConnectionLost(payload: PlayerConnectionLostEvent) {
         val existingPlayer = playersById[payload.playerId.value] ?: return
         playersById[payload.playerId.value] =
@@ -1995,6 +2018,11 @@ class LobbyController(
         publishPlayers()
     }
 
+    /**
+     * Spiegelt den autoritativen Host in die lokale Playerliste.
+     *
+     * @param newHost neuer Host aus Serverevent oder `null`, wenn keiner gesetzt ist.
+     */
     private fun markLobbyHost(newHost: PlayerId?) {
         if (newHost == null) {
             return
@@ -2431,6 +2459,13 @@ class LobbyController(
         _state.update { it.copy(pendingCommandKeys = emptySet()) }
     }
 
+    /**
+     * Veröffentlicht die interne Player-Map in den Compose-State.
+     *
+     * Hostrechte werden aus den autoritativen Playerdaten neu berechnet. Dadurch
+     * bekommt ein neuer Host nach einem Leave-Event sofort die passenden Buttons,
+     * auch wenn das alte lokale Host-Flag noch auf dem vorherigen Wert stand.
+     */
     private fun publishPlayers() {
         val players = playersById.values.toList()
         _state.update {

@@ -29,10 +29,19 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
- * Vollbild-Overlay-Dialog mit Parchment-BG (ui_lobby_roster_panel.png).
+ * Vollbild-Overlay-Dialog mit Pergamenthintergrund.
  *
- * Zeigt eine Bestätigungsfrage mit JA/NEIN MainButtons.
- * Klick auf den dunklen Overlay-Hintergrund = dismiss.
+ * Der dunkle Hintergrund kann den Dialog schließen. Klicks auf die
+ * Pergamentfläche werden abgefangen, damit keine Dismiss-Aktion durch die
+ * Dialogkarte hindurch ausgelöst wird.
+ *
+ * @param title Überschrift der Bestätigung.
+ * @param message erklärender Dialogtext.
+ * @param confirmText Text des bestätigenden Buttons.
+ * @param dismissText Text des abbrechenden Buttons.
+ * @param onConfirm Callback für die bestätigte Aktion.
+ * @param onDismiss Callback für Abbruch oder Klick auf den Hintergrund.
+ * @param modifier Modifier für Tests und Einbettung.
  */
 @Composable
 fun ExitConfirmationDialog(
@@ -56,7 +65,7 @@ fun ExitConfirmationDialog(
                 ),
         contentAlignment = Alignment.Center,
     ) {
-        // Parchment Card — clickable consumed to prevent dismiss-through
+        // Die Pergamentkarte konsumiert Klicks, damit sie den Dialog nicht schließt.
         Box(
             modifier =
                 Modifier
@@ -69,14 +78,14 @@ fun ExitConfirmationDialog(
                     ),
             contentAlignment = Alignment.Center,
         ) {
-            // Parchment background image
+            // Pergamentbild als flexible Dialogfläche.
             Image(
                 painter = painterResource(R.drawable.ui_lobby_roster_panel),
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.fillMaxSize(),
             )
-            // Dialog content
+            // Dialoginhalt mit einheitlichen Hauptbuttons.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(32.dp),

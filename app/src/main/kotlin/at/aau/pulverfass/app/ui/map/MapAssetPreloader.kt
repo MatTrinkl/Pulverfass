@@ -31,6 +31,9 @@ object MapAssetPreloader {
      *
      * [onProgressChanged] wird nach jedem erfolgreich dekodierten Asset auf dem
      * Main-Dispatcher aufgerufen, damit Ladebildschirme ihren Fortschritt anzeigen können.
+     *
+     * @param resources Android-Ressourcen des aktuellen App-Kontexts.
+     * @param onProgressChanged Callback mit geladenen und insgesamt erwarteten Assets.
      */
     suspend fun preload(
         resources: Resources,
@@ -48,6 +51,9 @@ object MapAssetPreloader {
 
     /**
      * Liest nur die Bitmap-Abmessungen eines Drawables, ohne Pixel-Daten zu allokieren.
+     *
+     * @param resources Android-Ressourcen des aktuellen App-Kontexts.
+     * @param assetId Drawable-Resource, die als Bitmap dekodierbar sein muss.
      */
     private fun readImageBounds(
         resources: Resources,
