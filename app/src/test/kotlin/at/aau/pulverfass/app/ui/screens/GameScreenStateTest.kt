@@ -9,6 +9,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+/**
+ * Prüft die reine Zustandslogik des GameScreens ohne Compose-Rendering.
+ *
+ * Im Fokus steht das Angriffs-Overlay, weil es nur während einer laufenden
+ * Angriffsanfrage sichtbar sein darf und seine Daten aus Auswahl, UI-State und
+ * Spieleranzeige zusammensetzt.
+ */
 class GameScreenStateTest {
     @Test
     fun `createAttackResolutionOverlayState returns null when no attack request is pending`() {

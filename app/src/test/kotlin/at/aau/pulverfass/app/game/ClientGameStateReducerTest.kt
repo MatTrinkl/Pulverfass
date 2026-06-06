@@ -35,6 +35,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/**
+ * Prüft den zentralen Reducer, der Backend-Events in den lokalen Game-UI-State überführt.
+ *
+ * Die Tests bilden Snapshots, Deltas, Phasenwechsel, private Karten, Verstärkungen,
+ * Angriffe und Verschiebungen ab. Dadurch bleibt sichtbar, welche Serverdaten der
+ * Client direkt übernimmt und welche lokalen UI-Auswahlen bewusst erhalten bleiben.
+ */
 class ClientGameStateReducerTest {
     @Test
     fun `catch up snapshot replaces public map and turn state`() {
@@ -1351,6 +1358,11 @@ class ClientGameStateReducerTest {
         assertEquals("1", restoredState.regionStates.getValue("brazil").ownerPlayerId)
     }
 
+    /**
+     * Erstellt eine schlanke Map-Definition für Reducer-Tests.
+     *
+     * @param territoryIds Backend-Territory-IDs, die im Snapshot enthalten sein sollen.
+     */
     private fun mapDefinition(vararg territoryIds: String): MapDefinitionSnapshot =
         MapDefinitionSnapshot(
             territories =

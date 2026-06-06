@@ -8,6 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Prüft die gemerkten Mute-Zustände für Musik und Soundeffekte.
+ *
+ * Der Manager nutzt den Android-Kontext und wird deshalb als Instrumentation-
+ * naher Test ausgeführt, ohne echte Audioausgabe bewerten zu müssen.
+ */
 @RunWith(AndroidJUnit4::class)
 class BackgroundMusicManagerTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -15,7 +21,7 @@ class BackgroundMusicManagerTest {
 
     @After
     fun tearDown() {
-        manager.setMusicMuted(false) // reset state for next test
+        manager.setMusicMuted(false)
         manager.setSfxMuted(false)
         manager.release()
     }

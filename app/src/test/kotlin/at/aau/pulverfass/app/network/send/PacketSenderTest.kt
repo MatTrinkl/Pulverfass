@@ -11,6 +11,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
+/**
+ * Prüft den Android-PacketSender als dünne Schicht über dem WebSocket-Transport.
+ *
+ * Die Tests sichern ab, dass nur die bekannte Client-Connection verwendet wird
+ * und Sendefehler ohne aktive Session nicht verschluckt werden.
+ */
 class PacketSenderTest {
     @Test
     fun `send should reject unknown connection id`() {
@@ -59,6 +65,9 @@ class PacketSenderTest {
         }
     }
 
+    /**
+     * Erstellt den Scope für kurzlebige Transport-Instanzen in Sender-Tests.
+     */
     private fun createScope(): CoroutineScope =
         CoroutineScope(
             SupervisorJob() + Dispatchers.Unconfined,

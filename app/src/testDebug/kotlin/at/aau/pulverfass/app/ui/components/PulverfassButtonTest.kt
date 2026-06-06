@@ -14,15 +14,16 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-// testet die drei Pulverfass-Button-Varianten (Primary, Secondary, Danger)
+/**
+ * Sichert die gemeinsamen Erwartungen der Pulverfass-Buttonvarianten ab.
+ *
+ * Die Tests prüfen Textnormalisierung, Klickbarkeit, ausgewählte Zustände und
+ * deaktivierte Zustände für Primary-, Secondary- und Danger-Buttons.
+ */
 @RunWith(AndroidJUnit4::class)
 class PulverfassButtonTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
-
-    // ============================================
-    // PRIMARY BUTTON
-    // ============================================
 
     @Test
     fun primary_button_zeigt_text_in_uppercase() {
@@ -31,7 +32,7 @@ class PulverfassButtonTest {
                 PulverfassButtonPrimary(text = "Würfeln", onClick = {})
             }
         }
-        // text sollte automatisch uppercase dargestellt werden
+
         composeTestRule.onNodeWithText("WÜRFELN").assertIsDisplayed()
     }
 
@@ -70,10 +71,6 @@ class PulverfassButtonTest {
         }
         composeTestRule.onNodeWithText("WÜRFELN").assertIsNotEnabled()
     }
-
-    // ============================================
-    // SECONDARY BUTTON
-    // ============================================
 
     @Test
     fun secondary_button_zeigt_text() {
@@ -125,10 +122,6 @@ class PulverfassButtonTest {
         }
         composeTestRule.onNodeWithText("VERSTÄRKEN").assertIsNotEnabled()
     }
-
-    // ============================================
-    // DANGER BUTTON
-    // ============================================
 
     @Test
     fun danger_button_zeigt_text() {

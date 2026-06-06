@@ -11,15 +11,17 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-// testet beide Pulverfass-Card-Varianten (Standard + Parchment)
+/**
+ * Prüft die beiden wiederverwendbaren Card-Container der App.
+ *
+ * Die Tests stellen sicher, dass Standard- und Pergament-Card ihre Kinder
+ * zuverlässig rendern, weil viele Screens diese Container als Layout-Grundlage
+ * verwenden.
+ */
 @RunWith(AndroidJUnit4::class)
 class PulverfassCardTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
-
-    // ============================================
-    // STANDARD CARD
-    // ============================================
 
     @Test
     fun standard_card_rendert_einfachen_content() {
@@ -46,10 +48,6 @@ class PulverfassCardTest {
         composeTestRule.onNodeWithText("Erster Text").assertIsDisplayed()
         composeTestRule.onNodeWithText("Zweiter Text").assertIsDisplayed()
     }
-
-    // ============================================
-    // PARCHMENT CARD
-    // ============================================
 
     @Test
     fun parchment_card_rendert_einfachen_content() {

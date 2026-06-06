@@ -21,6 +21,12 @@ import org.junit.runner.RunWith
 
 private const val MAIN_MENU_MARKER = "MainMenuMarker"
 
+/**
+ * Prüft Ladebildschirm, Textrotation, Preload-Fehler und Navigation.
+ *
+ * Die Compose-Uhr wird in den meisten Tests manuell gesteuert, damit
+ * Zeitbedingungen reproduzierbar bleiben und keine realen Wartezeiten entstehen.
+ */
 @RunWith(AndroidJUnit4::class)
 class LoadScreenTest {
     @get:Rule
@@ -28,6 +34,14 @@ class LoadScreenTest {
 
     private var capturedNav: NavHostController? = null
 
+    /**
+     * Rendert den LoadScreen in einem minimalen NavHost.
+     *
+     * @param preloadAssets austauschbarer Asset-Preload für Erfolg, Delay oder Fehler.
+     * @param minDisplayTimeMs minimale sichtbare Dauer des Screens.
+     * @param loadingTextIntervalMs Intervall der Loading-Textrotation.
+     * @param loadingTexts Testtexte für deterministische Rotation.
+     */
     private fun setupScreen(
         preloadAssets: suspend (Resources, (Int, Int) -> Unit) -> Unit =
             { _, cb -> cb(1, 1) },
@@ -91,7 +105,7 @@ class LoadScreenTest {
             preloadAssets = { _, _ -> delay(Long.MAX_VALUE) },
             loadingTextIntervalMs = 500L,
         )
-        // (size + 1) ticks → wraps once → index = (size+1) % size = 1
+        // Nach einem kompletten Umlauf plus einem Tick muss wieder Index 1 sichtbar sein.
         val ticks = LoadingTexts.size + 1
         composeTestRule.mainClock.advanceTimeBy(ticks * 500L + 50L)
         composeTestRule.onNodeWithText(LoadingTexts[1]).assertIsDisplayed()

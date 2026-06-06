@@ -47,6 +47,13 @@ import org.junit.runner.RunWith
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Deckt die wichtigsten Compose-Screens als UI-Smoke- und Interaktionstests ab.
+ *
+ * Die Tests rendern echte Composables mit ersetzten Netzwerk-/Assetpfaden. Damit
+ * wird geprüft, ob Navigation, Panels, Buttons und sichtbare Texte gemeinsam
+ * funktionieren, ohne einen echten Server oder Emulator-Sensoren zu benötigen.
+ */
 @RunWith(AndroidJUnit4::class)
 class ScreenComposableTest {
     @get:Rule
@@ -81,7 +88,7 @@ class ScreenComposableTest {
             }
         }
 
-        // Fast-forward past the 1,000ms delay in preloadAssets
+        // Simuliert den kompletten Fake-Preload, ohne eine reale Sekunde zu warten.
         composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
 
@@ -181,13 +188,12 @@ class ScreenComposableTest {
                 }
             }
         }
-/*
-* assertIsDisplayed() prüft "im visible viewport bounds" →
-* schlägt fehl wenn Layout für landscape designed ist und Test im portrait läuft.
-* assertExists() prüft nur "im Semantik-Baum vorhanden" —
-* was zählt für funktionale Korrektheit.
-*
-* */
+        /*
+         * Der Warteraum ist auf Landscape-Breite ausgelegt. Im Test-Viewport
+         * reicht Semantik-Sichtbarkeit, weil funktional zählt, dass die Daten im
+         * Baum vorhanden sind und nicht, ob jedes Element im aktuellen Ausschnitt
+         * liegt.
+         */
         composeTestRule.onNodeWithText("LOBBY: AB12").assertExists()
         composeTestRule.onNodeWithText("DU BIST DER HOST").assertExists()
         composeTestRule.onNodeWithText("CAROL").assertExists()

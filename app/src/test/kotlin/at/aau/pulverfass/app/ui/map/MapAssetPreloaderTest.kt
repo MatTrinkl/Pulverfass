@@ -13,6 +13,12 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Prüft den echten Asset-Preload der Karte unter Robolectric.
+ *
+ * Der Test verarbeitet den Main-Looper manuell weiter, damit Bitmap-Decodes und
+ * Fortschrittscallbacks deterministisch abgeschlossen werden können.
+ */
 @RunWith(RobolectricTestRunner::class)
 class MapAssetPreloaderTest {
     @Test

@@ -12,6 +12,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
 
+/**
+ * Prüft die kompakte Serverstatus-Anzeige im UI.
+ *
+ * Die Tests sichern den Poll-Intervall und die Accessibility-Beschreibungen für
+ * erreichbaren, fehlerhaften und nicht erreichbaren Serverzustand ab.
+ */
 @RunWith(AndroidJUnit4::class)
 class ServerStatusIndicatorTest {
     @get:Rule

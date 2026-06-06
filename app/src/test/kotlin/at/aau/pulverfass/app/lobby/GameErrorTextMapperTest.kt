@@ -28,6 +28,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die Übersetzung von Backend-Fehlercodes in verständliche deutsche UI-Texte.
+ *
+ * Die Tests decken Kartenabruf, Snapshots, private Daten, Phasenwechsel,
+ * Verstärkungen, Angriff, Verschieben, Kartentausch und Cheat-Verstärkungen ab.
+ */
 class GameErrorTextMapperTest {
     @Test
     fun `map get errors are translated for UI`() {

@@ -104,6 +104,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft den LobbyController als Schnittstelle zwischen UI-State, Netzwerk und Persistenz.
+ *
+ * Die Tests decken Verbindungsaufbau, Reconnect, Lobbybeitritt, Hostwechsel,
+ * Charakterwahl, Spielstart, Map-Sync, Phasenkommandos, Fehlertexte und lokale
+ * Stores ab. So bleibt sichtbar, welche Backend-Nachrichten im Frontend welchen
+ * Zustand oder welches Kommando auslösen.
+ */
 class LobbyControllerTest {
     @Test
     fun `default state should match lobby defaults`() {
@@ -3504,6 +3512,13 @@ class LobbyControllerTest {
         }
     }
 
+    /**
+     * Erstellt einen LobbyController mit Test-Scope und austauschbaren Stores.
+     *
+     * @param config Controller-Konfiguration, vor allem Server-URL und Retry-Verhalten.
+     * @param sessionStore Reconnect-Store für gespeicherte Sessiondaten.
+     * @param playerNameStore Store für Spielername und Charakter-ID.
+     */
     private fun createController(
         config: LobbyControllerConfig = LobbyControllerConfig(),
         sessionStore: ReconnectSessionStore = InMemoryReconnectSessionStore(),
@@ -3518,6 +3533,11 @@ class LobbyControllerTest {
         )
     }
 
+    /**
+     * Wartet auf asynchrone Controller-Zustände aus WebSocket-Callbacks.
+     *
+     * @param condition Bedingung, die innerhalb des Test-Timeouts wahr werden muss.
+     */
     private suspend fun waitUntil(condition: () -> Boolean) {
         withTimeout(5_000) {
             while (!condition()) {
@@ -3526,6 +3546,13 @@ class LobbyControllerTest {
         }
     }
 
+    /**
+     * Startet einen lokalen WebSocket-Protokollserver für Controller-Tests.
+     *
+     * @param onOpenPayload Optionale erste Nachricht, die direkt nach Verbindungsaufbau
+     *     an den Client gesendet wird.
+     * @param onPayload Callback für jede vom Client empfangene Payload.
+     */
     private fun startProtocolServer(
         onOpenPayload: NetworkMessagePayload? = null,
         onPayload: suspend (Any, DefaultWebSocketServerSession) -> Unit,
@@ -3582,6 +3609,14 @@ class LobbyControllerTest {
         )
     }
 
+    /**
+     * Hält den lokalen Testserver und seine aktiven Sessions zusammen.
+     *
+     * @param engine Laufende Ktor-Engine.
+     * @param port Dynamisch gewählter lokaler Port.
+     * @param url WebSocket-URL, die der Controller verwenden kann.
+     * @param activeSessions Aktuelle WebSocket-Sessions für simulierte Disconnects.
+     */
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
         val port: Int,
@@ -3602,6 +3637,13 @@ class LobbyControllerTest {
         }
     }
 
+    /**
+     * Kleiner Reconnect-Store ohne Android-SharedPreferences für Controller-Tests.
+     *
+     * @param token Vorbelegter Session-Token für Reconnect-Szenarien.
+     * @param serverUrl Vorbelegte Server-URL für Wiederverbindungen.
+     * @param wasGameStarted Gespeicherter Spielstartstatus.
+     */
     private class InMemoryReconnectSessionStore(
         private var token: String? = null,
         private var serverUrl: String? = null,
@@ -3635,6 +3677,11 @@ class LobbyControllerTest {
         }
     }
 
+    /**
+     * Hält Spielername und Charakter-ID rein im Speicher.
+     *
+     * @param playerName Vorbelegter Spielername für Controller-Initialisierung.
+     */
     private class InMemoryPlayerNameStore(
         private var playerName: String? = null,
     ) : PlayerNameStore {

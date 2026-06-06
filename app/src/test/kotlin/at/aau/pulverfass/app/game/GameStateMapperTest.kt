@@ -8,6 +8,12 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/**
+ * Prüft die Projektion von Lobby-Spielern und Territory-State in den Game-UI-State.
+ *
+ * Die Tests sichern stabile Spielerfarben, Charakterzuordnung und die Darstellung
+ * verlassener Spieler ab, damit Karte und Spielerleiste dieselbe Quelle verwenden.
+ */
 class GameStateMapperTest {
     @Test
     fun `lobbyPlayersToGamePlayers uses palette color when no ownPlayerId given`() {

@@ -6,6 +6,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+/**
+ * Prüft die reine Charakterauswahl-Logik des Warteraums.
+ *
+ * Die Tests sichern ab, dass neue Spieler automatisch ein freies Icon erhalten
+ * und belegte Charaktere beim Zentrieren oder Initialisieren übersprungen werden.
+ */
 class WaitingRoomScreenStateTest {
     @Test
     fun `initialCharacterIdForLobby keeps current character when it is available`() {
