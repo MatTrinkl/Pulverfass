@@ -25,6 +25,8 @@
     <string name="game_round_label">Runde</string>
     <string name="game_round_value">Runde %1$d</string>
     <string name="game_host_indicator">Host</string>
+    <string name="game_connection_connected">Verbunden</string>
+    <string name="game_connection_disconnected">Verbindung getrennt</string>
     <string name="game_action_reinforce">Verstärken</string>
     <string name="game_action_attack">Angriff</string>
     <string name="game_action_move">Verschieben</string>
