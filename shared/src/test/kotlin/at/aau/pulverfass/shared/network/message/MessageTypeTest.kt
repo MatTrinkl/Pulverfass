@@ -62,6 +62,9 @@ class MessageTypeTest {
         assertTrue(
             MessageType.entries.contains(MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST),
         )
+        assertTrue(
+            MessageType.entries.contains(MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST),
+        )
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_REQUEST))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_RESPONSE))
         assertTrue(MessageType.entries.contains(MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE))

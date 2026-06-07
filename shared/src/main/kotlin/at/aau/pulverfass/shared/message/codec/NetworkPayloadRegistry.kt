@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -130,6 +131,8 @@ internal object NetworkPayloadRegistry {
             PlayerJoinedLobbyEvent::class.java to MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
             PlayerConnectionLostEvent::class.java to
                 MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
+            ConnectionStatusUpdateEvent::class.java to
+                MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST,
             LobbyPlayerCountRequest::class.java to MessageType.LOBBY_PLAYER_COUNT_REQUEST,
             LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
             PlayerCountUpdateEvent::class.java to MessageType.LOBBY_PLAYER_COUNT_UPDATE_BROADCAST,
@@ -253,6 +256,8 @@ internal object NetworkPayloadRegistry {
             PlayerJoinedLobbyEvent::class.java to encodeWith(PlayerJoinedLobbyEvent.serializer()),
             PlayerConnectionLostEvent::class.java to
                 encodeWith(PlayerConnectionLostEvent.serializer()),
+            ConnectionStatusUpdateEvent::class.java to
+                encodeWith(ConnectionStatusUpdateEvent.serializer()),
             LobbyPlayerCountRequest::class.java to
                 encodeWith(LobbyPlayerCountRequest.serializer()),
             LobbyPlayerCountResponse::class.java to
@@ -384,6 +389,8 @@ internal object NetworkPayloadRegistry {
                 decodeWith(PlayerJoinedLobbyEvent.serializer()),
             MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST to
                 decodeWith(PlayerConnectionLostEvent.serializer()),
+            MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST to
+                decodeWith(ConnectionStatusUpdateEvent.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_REQUEST to
                 decodeWith(LobbyPlayerCountRequest.serializer()),
             MessageType.LOBBY_PLAYER_COUNT_RESPONSE to
