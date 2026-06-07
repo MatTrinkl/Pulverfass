@@ -44,9 +44,11 @@ import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -347,6 +349,11 @@ class MainServerLobbyRoutingService(
             playerId = playerId,
             reason = connectionLostReason(reason),
         )
+        broadcastConnectionStatusUpdate(
+            lobbyCode = lobbyCode,
+            playerId = playerId,
+            status = ConnectionStatus.DISCONNECTED,
+        )
 
         // broadcast updated player count to lobby members (disconnect may affect displayed online count)
         broadcastPlayerCount(lobbyCode)
@@ -389,6 +396,11 @@ class MainServerLobbyRoutingService(
         resumeWaitingTurnForPlayer(playerId)
         val lobbyCode = lobbyManager.findLobbyCodeByPlayer(playerId)
         if (lobbyCode != null) {
+            broadcastConnectionStatusUpdate(
+                lobbyCode = lobbyCode,
+                playerId = playerId,
+                status = ConnectionStatus.CONNECTED,
+            )
             broadcastPlayerCount(lobbyCode)
         }
         broadcastGlobalPlayerCount()
@@ -1148,7 +1160,12 @@ class MainServerLobbyRoutingService(
             context = "reconnect character roster replay",
         )
 
-        resumeWaitingTurnForPlayer(reconnectingPlayerId)
+        onPlayerConnected(reconnectingPlayerId)
+        replayConnectionStatuses(
+            connectionId = connectionId,
+            lobbyCode = lobbyCode,
+            excludedPlayerId = reconnectingPlayerId,
+        )
     }
 
     private suspend fun dispatchCreateErrorResponse(
@@ -1215,6 +1232,11 @@ class MainServerLobbyRoutingService(
                     context = "join lobby broadcast",
                 )
             }
+        replayConnectionStatuses(
+            connectionId = request.connectionId,
+            lobbyCode = payload.lobbyCode,
+            excludedPlayerId = playerId,
+        )
 
         // broadcast updated player count to lobby members
         val count = lobbyState.players.size
@@ -2952,6 +2974,77 @@ class MainServerLobbyRoutingService(
                 )
             }
     }
+
+    /**
+     * Sendet dem beitretenden oder reconnectenden Client den aktuellen Status
+     * der bereits bekannten Lobby-Spieler.
+     */
+    private suspend fun replayConnectionStatuses(
+        connectionId: ConnectionId,
+        lobbyCode: LobbyCode,
+        excludedPlayerId: PlayerId,
+    ) {
+        val members = lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
+        members
+            .filter { playerId -> playerId != excludedPlayerId }
+            .map { playerId -> playerId to connectionStatusFor(playerId) }
+            .filter { (_, status) -> status == ConnectionStatus.DISCONNECTED }
+            .forEach { (playerId, status) ->
+                sendBestEffortPayload(
+                    connectionId = connectionId,
+                    payload =
+                        ConnectionStatusUpdateEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerId,
+                            status = status,
+                        ),
+                    context = "connection status replay",
+                )
+            }
+    }
+
+    /**
+     * Broadcastet eine Statusänderung an alle aktuell erreichbaren Lobby-Mitglieder.
+     */
+    private suspend fun broadcastConnectionStatusUpdate(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        status: ConnectionStatus,
+    ) {
+        val members = lobbyManager.getLobby(lobbyCode)?.currentState()?.players.orEmpty()
+        val event =
+            ConnectionStatusUpdateEvent(
+                lobbyCode = lobbyCode,
+                playerId = playerId,
+                status = status,
+            )
+
+        logger.info(
+            "Broadcasting messageType={} lobbyCode={} playerId={} status={}",
+            MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST.name,
+            lobbyCode.value,
+            playerId.value,
+            status.name,
+        )
+
+        members
+            .mapNotNull(connectionIdResolver)
+            .distinct()
+            .forEach { connectionId ->
+                sendBestEffortPayload(
+                    connectionId = connectionId,
+                    payload = event,
+                    context = "connection status update broadcast",
+                )
+            }
+    }
+
+    private fun connectionStatusFor(playerId: PlayerId): ConnectionStatus =
+        if (isPlayerConnected(playerId)) {
+            ConnectionStatus.CONNECTED
+        } else {
+            ConnectionStatus.DISCONNECTED
+        }
 
     private fun connectionLostReason(reason: String?): PlayerConnectionLostReason {
         val normalizedReason = reason?.lowercase().orEmpty()
