@@ -65,6 +65,7 @@ object GameErrorTextMapper {
         when (error.code) {
             TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> "Du bist gerade nicht am Zug."
             TurnAdvanceErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            TurnAdvanceErrorCode.GAME_FINISHED -> "Das Spiel ist bereits beendet."
             TurnAdvanceErrorCode.PHASE_MISMATCH ->
                 "Die Phase hat sich geändert. Lade den Spielstand neu."
             TurnAdvanceErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT

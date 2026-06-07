@@ -17,6 +17,8 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -36,6 +38,7 @@ import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.DeckState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -791,6 +794,42 @@ class DefaultLobbyEventReducerTest {
             reducer.apply(
                 drawReadyState,
                 CardDrawnEvent(lobbyCode, playerTwo, firstCard.cardId),
+            )
+        }
+    }
+
+    @Test
+    fun `match ended event finishes running game with reason`() {
+        val lobbyCode = LobbyCode("ME11")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val runningState =
+            runningAttackState(lobbyCode, playerOne, playerTwo).copy(
+                pendingReinforcements = PendingReinforcements(playerOne, 3),
+                territoryCapturedThisTurn = true,
+            )
+
+        val updatedState =
+            reducer.apply(
+                runningState,
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
+            )
+
+        assertEquals(GameStatus.FINISHED, updatedState.status)
+        assertEquals(MatchEndReason.DECK_EMPTY.name, updatedState.closedReason)
+        assertEquals(null, updatedState.pendingReinforcements)
+        assertEquals(false, updatedState.territoryCapturedThisTurn)
+    }
+
+    @Test
+    fun `match ended event rejects non running game`() {
+        val lobbyCode = LobbyCode("ME12")
+        val state = GameState.initial(lobbyCode)
+
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(
+                state,
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
             )
         }
     }

@@ -16,6 +16,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -303,6 +304,12 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 type = "lobby_closed",
                 "lobbyCode" to lobbyCode.value,
                 "reason" to reason,
+            )
+        is MatchEndedEvent ->
+            persistedPayload(
+                type = "match_ended",
+                "lobbyCode" to lobbyCode.value,
+                "reason" to reason.name,
             )
         is PlayerJoined ->
             persistedPayload(

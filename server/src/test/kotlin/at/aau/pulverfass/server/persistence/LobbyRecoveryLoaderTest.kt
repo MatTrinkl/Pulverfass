@@ -14,6 +14,8 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
@@ -326,6 +328,14 @@ class LobbyRecoveryLoaderTest {
             record(
                 eventType = "lobby_closed",
                 eventJson = """{"lobbyCode":"LR11","reason":"done"}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
+            record(
+                eventType = "match_ended",
+                eventJson = """{"lobbyCode":"LR11","reason":"DECK_EMPTY"}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )

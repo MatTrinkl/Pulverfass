@@ -26,6 +26,8 @@ import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -528,13 +530,20 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val turnStateUpdate = buildTurnAdvanceEvent(request, payload)
-            val cardDrawnEvent = buildCardDrawnEventIfNeeded(payload.lobbyCode, payload.playerId)
+            val drawPhaseEvent = buildDrawPhaseEventIfNeeded(payload.lobbyCode, payload.playerId)
+            val matchEnded = drawPhaseEvent is MatchEndedEvent
+            val eventsToSubmit =
+                if (drawPhaseEvent is MatchEndedEvent) {
+                    listOf(drawPhaseEvent)
+                } else {
+                    listOfNotNull(drawPhaseEvent, turnStateUpdate)
+                }
             lobbyManager.submitAll(
                 payload.lobbyCode,
-                listOfNotNull(cardDrawnEvent, turnStateUpdate),
+                eventsToSubmit,
                 request.context,
             )
-            if (cardDrawnEvent != null) {
+            if (drawPhaseEvent is CardDrawnEvent) {
                 val updatedState =
                     lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                         ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -543,16 +552,20 @@ class MainServerLobbyRoutingService(
                     PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
                 )
             }
-            grantBaseReinforcementsOnPhaseStart(
-                lobbyCode = payload.lobbyCode,
-                previousTurnState = previousTurnState,
-                context = request.context,
-            )
+            if (!matchEnded) {
+                grantBaseReinforcementsOnPhaseStart(
+                    lobbyCode = payload.lobbyCode,
+                    previousTurnState = previousTurnState,
+                    context = request.context,
+                )
+            }
             network.send(request.connectionId, TurnAdvanceResponse(payload.lobbyCode))
-            broadcastPhaseBoundaryIfChanged(payload.lobbyCode, previousTurnState)
-            broadcastTurnStateIfChanged(payload.lobbyCode, previousTurnState)
-            broadcastFullSnapshotOnTurnChangeIfNeeded(payload.lobbyCode, previousTurnState)
-            autoAdvanceAttackPhaseIfNoValidAttacks(request, payload.lobbyCode, payload.playerId)
+            if (!matchEnded) {
+                broadcastPhaseBoundaryIfChanged(payload.lobbyCode, previousTurnState)
+                broadcastTurnStateIfChanged(payload.lobbyCode, previousTurnState)
+                broadcastFullSnapshotOnTurnChangeIfNeeded(payload.lobbyCode, previousTurnState)
+                autoAdvanceAttackPhaseIfNoValidAttacks(request, payload.lobbyCode, payload.playerId)
+            }
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = turnAdvanceErrorResponse(request, payload, cause)
@@ -1407,6 +1420,7 @@ class MainServerLobbyRoutingService(
             state.resolvedTurnState
                 ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
+        check(state.status != GameStatus.FINISHED) { "GAME_FINISHED" }
         require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
             "NOT_ACTIVE_PLAYER"
         }
@@ -1440,10 +1454,10 @@ class MainServerLobbyRoutingService(
         return pausedOrAdvancedTurnState.toUpdatedEvent(payload.lobbyCode)
     }
 
-    private fun buildCardDrawnEventIfNeeded(
+    private fun buildDrawPhaseEventIfNeeded(
         lobbyCode: LobbyCode,
         playerId: PlayerId,
-    ): CardDrawnEvent? {
+    ): LobbyEvent? {
         val state =
             lobbyManager.getLobby(lobbyCode)?.currentState()
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1458,7 +1472,10 @@ class MainServerLobbyRoutingService(
 
         val drawnCard =
             state.deckState.topCard()
-                ?: throw IllegalStateException("CARD_DECK_EMPTY")
+                ?: return MatchEndedEvent(
+                    lobbyCode = lobbyCode,
+                    reason = MatchEndReason.DECK_EMPTY,
+                )
         return CardDrawnEvent(
             lobbyCode = lobbyCode,
             playerId = playerId,
@@ -1917,6 +1934,7 @@ class MainServerLobbyRoutingService(
             when (cause.message) {
                 "GAME_NOT_FOUND" -> TurnAdvanceErrorCode.GAME_NOT_FOUND
                 "GAME_PAUSED" -> TurnAdvanceErrorCode.GAME_PAUSED
+                "GAME_FINISHED" -> TurnAdvanceErrorCode.GAME_FINISHED
                 "PHASE_MISMATCH" -> TurnAdvanceErrorCode.PHASE_MISMATCH
                 else -> TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER
             }
@@ -1928,6 +1946,8 @@ class MainServerLobbyRoutingService(
                 TurnAdvanceErrorCode.GAME_PAUSED ->
                     "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
                         "Turn-Wechsel ist aktuell nicht erlaubt."
+                TurnAdvanceErrorCode.GAME_FINISHED ->
+                    "Spiel für Lobby '${payload.lobbyCode.value}' ist bereits beendet."
                 TurnAdvanceErrorCode.PHASE_MISMATCH -> {
                     val expectedPhase = payload.expectedPhase
                     val currentPhase =

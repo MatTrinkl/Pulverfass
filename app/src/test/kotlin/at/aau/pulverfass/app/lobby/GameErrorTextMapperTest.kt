@@ -119,6 +119,12 @@ class GameErrorTextMapperTest {
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_PAUSED, "raw"),
             ),
         )
+        assertEquals(
+            "Das Spiel ist bereits beendet.",
+            GameErrorTextMapper.map(
+                TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_FINISHED, "raw"),
+            ),
+        )
         assertTrue(
             GameErrorTextMapper.map(
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.PHASE_MISMATCH, "raw"),

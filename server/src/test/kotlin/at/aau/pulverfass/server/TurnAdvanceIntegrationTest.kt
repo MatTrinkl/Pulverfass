@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.CardType
@@ -734,6 +735,114 @@ class TurnAdvanceIntegrationTest {
 
                     playerOneSession.first.close()
                     playerTwoSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `draw card phase ends game when deck is empty and draw is required`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("TA12")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                    ).copy(
+                        deckState = DeckState(),
+                        territoryCapturedThisTurn = true,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    val request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.DRAW_CARD)
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(request),
+                        ),
+                    )
+
+                    assertEquals(
+                        TurnAdvanceResponse(lobbyCode),
+                        receivePayload(playerOneSession.first),
+                    )
+                    assertNull(receivePayloadOrNull(playerOneSession.first))
+
+                    val finishedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("current state missing")
+                    assertEquals(GameStatus.FINISHED, finishedState.status)
+                    assertEquals(MatchEndReason.DECK_EMPTY.name, finishedState.closedReason)
+                    assertEquals(TurnPhase.DRAW_CARD, finishedState.activeTurnPhase)
+                    assertEquals(playerOne, finishedState.activePlayer)
+                    assertEquals(emptyList<CardState>(), finishedState.handOf(playerOne))
+                    assertEquals(emptyList<CardState>(), finishedState.deckState.cards)
+                    assertEquals(false, finishedState.territoryCapturedThisTurn)
+
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(request),
+                        ),
+                    )
+                    val error =
+                        assertIs<TurnAdvanceErrorResponse>(
+                            receivePayload(playerOneSession.first),
+                        )
+                    assertEquals(TurnAdvanceErrorCode.GAME_FINISHED, error.code)
+                    assertNull(receivePayloadOrNull(playerOneSession.first))
+
+                    playerOneSession.first.close()
                 }
             } finally {
                 routingService.stop()

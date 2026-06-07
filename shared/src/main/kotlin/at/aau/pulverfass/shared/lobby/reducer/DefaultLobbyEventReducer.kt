@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -85,6 +86,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 is AttackResolvedEvent -> onAttackResolved(state, event)
                 is CardDrawnEvent -> onCardDrawn(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
+                is MatchEndedEvent -> onMatchEnded(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
                 is PendingReinforcementsSetEvent -> onPendingReinforcementsSet(state, event)
@@ -479,16 +481,45 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         requireKnownTerritory(state, event.fromTerritoryId)
         requireKnownTerritory(state, event.toTerritoryId)
 
-        val currentRngSeed =
-            state.gameRandomSeed
-                ?: throw InvalidLobbyEventException(
-                    "AttackResolvedEvent benötigt initialisierten gameRandomSeed.",
-                )
-        val currentRngState =
-            state.gameRandomState
-                ?: throw InvalidLobbyEventException(
-                    "AttackResolvedEvent benötigt initialisierten gameRandomState.",
-                )
+        val currentRngSeed = requireAttackRandomSeed(state)
+        val currentRngState = requireAttackRandomState(state)
+        validateAttackResolvedPreconditions(state, event, currentRngState)
+
+        val stateAfterLosses =
+            state
+                .withTerritoryTroops(event.fromTerritoryId, event.attackerRemaining)
+                .withTerritoryTroops(event.toTerritoryId, event.defenderRemaining)
+
+        val updatedState = applyAttackOccupationIfNeeded(stateAfterLosses, event)
+
+        check(currentRngSeed == state.gameRandomSeed)
+        val stateWithCaptureFlag =
+            if (event.capture) {
+                updatedState.withTerritoryCapturedThisTurn(true)
+            } else {
+                updatedState
+            }
+
+        return stateWithCaptureFlag.withGameRandomState(event.rngStateAfter)
+    }
+
+    private fun requireAttackRandomSeed(state: GameState): Long =
+        state.gameRandomSeed
+            ?: throw InvalidLobbyEventException(
+                "AttackResolvedEvent benötigt initialisierten gameRandomSeed.",
+            )
+
+    private fun requireAttackRandomState(state: GameState): Long =
+        state.gameRandomState
+            ?: throw InvalidLobbyEventException(
+                "AttackResolvedEvent benötigt initialisierten gameRandomState.",
+            )
+
+    private fun validateAttackResolvedPreconditions(
+        state: GameState,
+        event: AttackResolvedEvent,
+        currentRngState: Long,
+    ) {
         if (currentRngState != event.rngStateBefore) {
             throw InvalidLobbyEventException(
                 "AttackResolvedEvent.rngStateBefore passt nicht zum aktuellen GameState: " +
@@ -517,63 +548,74 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "AttackResolvedEvent.targetTroopsBefore passt nicht zum aktuellen GameState.",
             )
         }
+    }
 
-        val stateAfterLosses =
-            state
-                .withTerritoryTroops(event.fromTerritoryId, event.attackerRemaining)
-                .withTerritoryTroops(event.toTerritoryId, event.defenderRemaining)
+    private fun applyAttackOccupationIfNeeded(
+        stateAfterLosses: GameState,
+        event: AttackResolvedEvent,
+    ): GameState =
+        if (event.capture) {
+            applyCapturedAttackOccupation(stateAfterLosses, event)
+        } else {
+            validateNonCaptureHasNoOccupationData(event)
+            stateAfterLosses
+        }
 
-        val updatedState =
-            if (event.capture) {
-                val occupyingTroopCount =
-                    event.occupyingTroopCount
-                        ?: throw InvalidLobbyEventException(
-                            "Capture-AttackResolvedEvent benötigt occupyingTroopCount.",
-                        )
-                val minOccupyingTroops =
-                    event.minOccupyingTroops
-                        ?: throw InvalidLobbyEventException(
-                            "Capture-AttackResolvedEvent benötigt minOccupyingTroops.",
-                        )
-                if (occupyingTroopCount < minOccupyingTroops) {
-                    throw InvalidLobbyEventException(
-                        "AttackResolvedEvent.occupyingTroopCount unterschreitet " +
-                            "minOccupyingTroops: minimum=$minOccupyingTroops, " +
-                            "war=$occupyingTroopCount.",
-                    )
-                }
-                if (occupyingTroopCount >= event.attackerRemaining) {
-                    throw InvalidLobbyEventException(
-                        "AttackResolvedEvent muss mindestens eine Truppe im " +
-                            "Ursprungsterritorium lassen.",
-                    )
-                }
+    private fun applyCapturedAttackOccupation(
+        stateAfterLosses: GameState,
+        event: AttackResolvedEvent,
+    ): GameState {
+        val occupyingTroopCount = requireOccupyingTroopCount(event)
+        val minOccupyingTroops = requireMinOccupyingTroops(event)
+        validateCapturedOccupation(event, occupyingTroopCount, minOccupyingTroops)
 
-                stateAfterLosses
-                    .withTerritoryTroops(
-                        event.fromTerritoryId,
-                        event.attackerRemaining - occupyingTroopCount,
-                    )
-                    .withTerritoryOwner(event.toTerritoryId, event.attackerPlayerId)
-                    .withTerritoryTroops(event.toTerritoryId, occupyingTroopCount)
-            } else {
-                if (event.occupyingTroopCount != null || event.minOccupyingTroops != null) {
-                    throw InvalidLobbyEventException(
-                        "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
-                    )
-                }
-                stateAfterLosses
-            }
+        return stateAfterLosses
+            .withTerritoryTroops(
+                event.fromTerritoryId,
+                event.attackerRemaining - occupyingTroopCount,
+            )
+            .withTerritoryOwner(event.toTerritoryId, event.attackerPlayerId)
+            .withTerritoryTroops(event.toTerritoryId, occupyingTroopCount)
+    }
 
-        check(currentRngSeed == state.gameRandomSeed)
-        val stateWithCaptureFlag =
-            if (event.capture) {
-                updatedState.withTerritoryCapturedThisTurn(true)
-            } else {
-                updatedState
-            }
+    private fun requireOccupyingTroopCount(event: AttackResolvedEvent): Int =
+        event.occupyingTroopCount
+            ?: throw InvalidLobbyEventException(
+                "Capture-AttackResolvedEvent benötigt occupyingTroopCount.",
+            )
 
-        return stateWithCaptureFlag.withGameRandomState(event.rngStateAfter)
+    private fun requireMinOccupyingTroops(event: AttackResolvedEvent): Int =
+        event.minOccupyingTroops
+            ?: throw InvalidLobbyEventException(
+                "Capture-AttackResolvedEvent benötigt minOccupyingTroops.",
+            )
+
+    private fun validateCapturedOccupation(
+        event: AttackResolvedEvent,
+        occupyingTroopCount: Int,
+        minOccupyingTroops: Int,
+    ) {
+        if (occupyingTroopCount < minOccupyingTroops) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.occupyingTroopCount unterschreitet " +
+                    "minOccupyingTroops: minimum=$minOccupyingTroops, " +
+                    "war=$occupyingTroopCount.",
+            )
+        }
+        if (occupyingTroopCount >= event.attackerRemaining) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent muss mindestens eine Truppe im " +
+                    "Ursprungsterritorium lassen.",
+            )
+        }
+    }
+
+    private fun validateNonCaptureHasNoOccupationData(event: AttackResolvedEvent) {
+        if (event.occupyingTroopCount != null || event.minOccupyingTroops != null) {
+            throw InvalidLobbyEventException(
+                "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
+            )
+        }
     }
 
     private fun onPendingReinforcementsSet(
@@ -736,6 +778,25 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         return state
             .withCardDrawnFromDeck(event.playerId, event.cardId)
             .withTerritoryCapturedThisTurn(false)
+    }
+
+    private fun onMatchEnded(
+        state: GameState,
+        event: MatchEndedEvent,
+    ): GameState {
+        if (state.status != GameStatus.RUNNING) {
+            throw InvalidLobbyEventException(
+                "MatchEndedEvent kann nur im Status RUNNING verarbeitet werden, " +
+                    "war aber '${state.status}'.",
+            )
+        }
+
+        return state.copy(
+            status = GameStatus.FINISHED,
+            closedReason = event.reason.name,
+            pendingReinforcements = null,
+            territoryCapturedThisTurn = false,
+        )
     }
 
     private fun onPlayerCardsRemoved(

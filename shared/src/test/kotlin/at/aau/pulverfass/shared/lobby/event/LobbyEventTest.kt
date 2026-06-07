@@ -32,6 +32,7 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode, "finished"),
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
                 CardSetTradedInEvent(
                     lobbyCode = lobbyCode,
                     playerId = playerId,
@@ -94,7 +95,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(21, events.size)
+        assertEquals(22, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
@@ -138,6 +139,7 @@ class LobbyEventTest {
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
+                is MatchEndedEvent -> event.reason.name
                 is PendingReinforcementsChangedEvent -> event.delta.toString()
                 is PendingReinforcementsSetEvent -> event.amount.toString()
                 is PlayerEliminatedEvent -> event.eliminatedByPlayerId.value.toString()
@@ -175,6 +177,7 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode),
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
                 CardSetTradedInEvent(
                     lobbyCode = lobbyCode,
                     playerId = playerId,

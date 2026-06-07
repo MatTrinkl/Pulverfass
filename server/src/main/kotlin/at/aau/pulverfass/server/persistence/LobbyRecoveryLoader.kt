@@ -16,6 +16,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -421,6 +423,11 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 cardIds = jsonObject.stringList("cardIds").map(::CardId),
             )
         "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
+        "match_ended" ->
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.valueOf(jsonObject.string("reason")),
+            )
         "player_joined" ->
             PlayerJoined(
                 lobbyCode = lobbyCode,
