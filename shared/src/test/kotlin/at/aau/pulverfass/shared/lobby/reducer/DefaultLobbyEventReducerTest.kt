@@ -1423,8 +1423,21 @@ class DefaultLobbyEventReducerTest {
         assertEquals(34, started.setupTroopsToPlaceFor(owner))
         assertEquals(34, started.setupTroopsToPlaceFor(player2))
         assertEquals(34, started.setupTroopsToPlaceFor(player3))
-        assertEquals(sampleMapDefinition().territories.size + 2, started.deckState.cards.size)
-        assertEquals(2, started.deckState.cards.count { card -> card.type == CardType.JOKER })
+        val territoryCount = sampleMapDefinition().territories.size
+        assertEquals(territoryCount * 3 + 4, started.deckState.cards.size)
+        assertEquals(
+            territoryCount,
+            started.deckState.cards.count { card -> card.type == CardType.A },
+        )
+        assertEquals(
+            territoryCount,
+            started.deckState.cards.count { card -> card.type == CardType.B },
+        )
+        assertEquals(
+            territoryCount,
+            started.deckState.cards.count { card -> card.type == CardType.C },
+        )
+        assertEquals(4, started.deckState.cards.count { card -> card.type == CardType.JOKER })
         assertEquals(
             started.deckState.cards.size,
             started.deckState.cards.map { card -> card.cardId }.distinct().size,

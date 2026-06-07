@@ -6,20 +6,31 @@ import at.aau.pulverfass.shared.map.config.ContinentDefinition
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class CardDeckFactoryTest {
     @Test
-    fun `creates one territory card per territory plus two jokers`() {
+    fun `creates one card of each configured symbol per territory plus jokers`() {
         val deck = CardDeckFactory.createShuffledDeck(sampleMapDefinition(), randomSeed = 42L)
 
-        assertEquals(6, deck.cards.size)
-        assertEquals(2, deck.cards.count { card -> card.type == CardType.JOKER })
-        assertEquals(
-            setOf(CardType.A, CardType.B, CardType.C, CardType.JOKER),
-            deck.cards.map { card -> card.type }.toSet(),
-        )
+        assertEquals(16, deck.cards.size)
+        assertEquals(4, deck.cards.count { card -> card.type == CardType.A })
+        assertEquals(4, deck.cards.count { card -> card.type == CardType.B })
+        assertEquals(4, deck.cards.count { card -> card.type == CardType.C })
+        assertEquals(4, deck.cards.count { card -> card.type == CardType.JOKER })
         assertEquals(deck.cards.size, deck.cards.map { card -> card.cardId }.distinct().size)
+        assertEquals(
+            setOf(
+                "territory:alpha:a",
+                "territory:alpha:b",
+                "territory:alpha:c",
+            ),
+            deck.cards
+                .filter { card -> card.cardId.value.startsWith("territory:alpha:") }
+                .map { card -> card.cardId.value }
+                .toSet(),
+        )
     }
 
     @Test
@@ -34,6 +45,36 @@ class CardDeckFactoryTest {
 
         assertEquals(firstDeck, secondDeck)
         assertEquals(false, firstDeck == differentDeck)
+    }
+
+    @Test
+    fun `supports explicit deck configuration`() {
+        val deck =
+            CardDeckFactory.createShuffledDeck(
+                sampleMapDefinition(),
+                randomSeed = 11L,
+                config = CardDeckConfig(symbolsPerTerritory = listOf(CardType.A), jokerCount = 1),
+            )
+
+        assertEquals(5, deck.cards.size)
+        assertEquals(4, deck.cards.count { card -> card.type == CardType.A })
+        assertEquals(1, deck.cards.count { card -> card.type == CardType.JOKER })
+    }
+
+    @Test
+    fun `rejects invalid deck configuration`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            CardDeckConfig(symbolsPerTerritory = emptyList())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CardDeckConfig(symbolsPerTerritory = listOf(CardType.JOKER))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CardDeckConfig(symbolsPerTerritory = listOf(CardType.A, CardType.A))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CardDeckConfig(jokerCount = -1)
+        }
     }
 
     private fun sampleMapDefinition(): MapDefinition =
