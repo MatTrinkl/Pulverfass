@@ -15,12 +15,14 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -1743,6 +1745,7 @@ class LobbyController(
                 }
             }
             is PlayerJoinedLobbyEvent -> handlePlayerJoined(payload)
+            is ConnectionStatusUpdateEvent -> handleConnectionStatusUpdate(payload)
             is PlayerConnectionLostEvent -> handlePlayerConnectionLost(payload)
             is PlayerLeftLobbyEvent -> {
                 playersById.remove(payload.playerId.value)
@@ -1956,7 +1959,7 @@ class LobbyController(
                 playerId = payload.playerId,
                 displayName = payload.playerDisplayName,
                 isHost = payload.isHost,
-                isDisconnected = existingPlayer?.isDisconnected ?: false,
+                connectionStatus = ConnectionStatus.CONNECTED,
                 characterId = existingPlayer?.characterId,
             )
 
@@ -2014,7 +2017,19 @@ class LobbyController(
     private fun handlePlayerConnectionLost(payload: PlayerConnectionLostEvent) {
         val existingPlayer = playersById[payload.playerId.value] ?: return
         playersById[payload.playerId.value] =
-            existingPlayer.copy(isDisconnected = true)
+            existingPlayer.copy(connectionStatus = ConnectionStatus.DISCONNECTED)
+        publishPlayers()
+    }
+
+    /**
+     * Übernimmt den autoritativen Verbindungsstatus eines bekannten Lobby-Spielers.
+     *
+     * @param payload Serverevent mit dem aktuellen Status.
+     */
+    private fun handleConnectionStatusUpdate(payload: ConnectionStatusUpdateEvent) {
+        val existingPlayer = playersById[payload.playerId.value] ?: return
+        playersById[payload.playerId.value] =
+            existingPlayer.copy(connectionStatus = payload.status)
         publishPlayers()
     }
 

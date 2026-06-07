@@ -2,6 +2,7 @@ package at.aau.pulverfass.app.game
 
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 
 /**
  * Darstellungsmodell eines Spielers im GameScreen.
@@ -18,4 +19,5 @@ data class GamePlayerUi(
     val characterId: String? = null,
     val color: Color,
     val isHost: Boolean = false,
+    val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTED,
 )

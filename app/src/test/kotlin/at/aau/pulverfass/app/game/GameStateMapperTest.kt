@@ -5,6 +5,7 @@ import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -48,6 +49,28 @@ class GameStateMapperTest {
         assertEquals(PulverfassColors.playerColors[0], result[0].color)
         assertEquals(PulverfassColors.playerColors[1], result[1].color)
         assertEquals("character_04", result[1].characterId)
+    }
+
+    @Test
+    fun `lobbyPlayersToGamePlayers keeps each connection status`() {
+        val players =
+            listOf(
+                LobbyPlayerUi(
+                    playerId = PlayerId(1),
+                    displayName = "Alice",
+                    connectionStatus = ConnectionStatus.CONNECTED,
+                ),
+                LobbyPlayerUi(
+                    playerId = PlayerId(2),
+                    displayName = "Bob",
+                    connectionStatus = ConnectionStatus.DISCONNECTED,
+                ),
+            )
+
+        val result = lobbyPlayersToGamePlayers(players)
+
+        assertEquals(ConnectionStatus.CONNECTED, result[0].connectionStatus)
+        assertEquals(ConnectionStatus.DISCONNECTED, result[1].connectionStatus)
     }
 
     @Test

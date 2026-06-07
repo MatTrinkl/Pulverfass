@@ -86,6 +86,7 @@ fun lobbyPlayersToGamePlayers(
                 characterId = player.gameCharacterId(ownPlayerId, ownCharacterId),
                 color = colorsByPlayerId.getValue(player.playerId),
                 isHost = player.isHost,
+                connectionStatus = player.connectionStatus,
             )
         }
     }
