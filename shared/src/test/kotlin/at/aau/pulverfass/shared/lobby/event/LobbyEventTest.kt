@@ -45,6 +45,7 @@ class LobbyEventTest {
                     playerId = playerId,
                     cardId = CardId("drawn-card"),
                 ),
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerId),
                 AttackResolvedEvent(
                     lobbyCode = lobbyCode,
                     attackerPlayerId = playerId,
@@ -95,7 +96,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(22, events.size)
+        assertEquals(23, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
@@ -135,6 +136,7 @@ class LobbyEventTest {
                 is AttackResolvedEvent -> event.rngTrace.size.toString()
                 is CardDrawnEvent -> event.cardId.value
                 is CardSetTradedInEvent -> event.value.toString()
+                is CheatReinforcementBonusUsedEvent -> event.playerId.value.toString()
                 is FortifyUsedSetEvent -> event.used.toString()
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
@@ -190,6 +192,7 @@ class LobbyEventTest {
                     playerId = playerId,
                     cardId = CardId("drawn-card"),
                 ),
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerId),
                 AttackResolvedEvent(
                     lobbyCode = lobbyCode,
                     attackerPlayerId = playerId,

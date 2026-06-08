@@ -18,4 +18,5 @@ data class LobbyPlayerUi(
     val displayName: String,
     val isHost: Boolean = false,
     val isDisconnected: Boolean = false,
+    val characterId: String? = null,
 )

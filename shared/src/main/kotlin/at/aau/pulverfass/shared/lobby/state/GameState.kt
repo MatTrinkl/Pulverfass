@@ -37,6 +37,8 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
  * @property territoryCapturedThisTurn signalisiert, ob im aktuellen Zug mindestens ein Gebiet erobert wurde
+ * @property usedCheatReinforcementBonusByPlayer Spieler, die ihren einmaligen
+ * Schummel-Verstärkungsbonus bereits verwendet haben
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
@@ -67,6 +69,7 @@ data class GameState(
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
     val territoryCapturedThisTurn: Boolean = false,
+    val usedCheatReinforcementBonusByPlayer: Set<PlayerId> = emptySet(),
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
     val setupTroopsToPlaceByPlayer: Map<PlayerId, Int> = players.associateWith { 0 },
@@ -124,6 +127,9 @@ data class GameState(
         }
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
+        }
+        require(usedCheatReinforcementBonusByPlayer.all(players::contains)) {
+            "GameState.usedCheatReinforcementBonusByPlayer darf nur bekannte Spieler enthalten."
         }
         require(configuredStartPlayerId == null || players.contains(configuredStartPlayerId)) {
             "GameState.configuredStartPlayerId muss Teil der Spielerliste sein oder null."
@@ -401,6 +407,10 @@ data class GameState(
 
     /**
      * Liefert alle legalen Angriffsziele eines Territoriums in stabiler Map-Reihenfolge.
+     *
+     * Ein Ziel mit fremdem Besitzer, aber null Truppen, ist kein kampffähiges
+     * Ziel mehr. Solche Zustände können während Cleanup-/Reconnect-Flows
+     * sichtbar sein und dürfen die leere Angriffsphase nicht blockieren.
      */
     fun validAttackTargets(
         fromTerritoryId: TerritoryId,
@@ -420,7 +430,9 @@ data class GameState(
 
         return adjacentTerritories(fromTerritoryId)
             .filter { adjacent ->
-                adjacent.ownerId != null && adjacent.ownerId != playerId
+                adjacent.ownerId != null &&
+                    adjacent.ownerId != playerId &&
+                    adjacent.troopCount > 0
             }.map(TerritoryState::territoryId)
     }
 

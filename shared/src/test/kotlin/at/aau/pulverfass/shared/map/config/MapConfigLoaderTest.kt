@@ -62,6 +62,18 @@ class MapConfigLoaderTest {
                 .edges
                 .none { it.targetId == TerritoryId("japan") },
         )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("russland"))
+                .edges
+                .none { it.targetId == TerritoryId("china") },
+        )
+        assertTrue(
+            definition.territoriesById
+                .getValue(TerritoryId("china"))
+                .edges
+                .none { it.targetId == TerritoryId("russland") },
+        )
         assertNotNull(definition.territoriesById[TerritoryId("argentinien")])
         assertTrue(
             definition.territoriesById
@@ -69,6 +81,16 @@ class MapConfigLoaderTest {
                 .edges
                 .any { it.targetId == TerritoryId("sahara") },
         )
+    }
+
+    @Test
+    fun `invalid utf8 input führt zu parse fail`() {
+        val exception =
+            assertThrows<MapConfigLoadException> {
+                MapConfigLoader.load(ByteArrayInputStream(byteArrayOf(0xC3.toByte(), 0x28)))
+            }
+
+        assertTrue(exception.message.orEmpty().contains("UTF-8"))
     }
 
     @Test

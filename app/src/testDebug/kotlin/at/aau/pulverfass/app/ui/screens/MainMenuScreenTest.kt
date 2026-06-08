@@ -12,6 +12,12 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Prüft die sichtbaren Hauptmenü-Aktionen ohne echten Video-Hintergrund.
+ *
+ * Der Hintergrundslot wird leer ersetzt, damit die Tests nur Button-Semantik,
+ * Dialogverhalten und Callback-Zuordnung testen.
+ */
 @RunWith(AndroidJUnit4::class)
 class MainMenuScreenTest {
     @get:Rule
@@ -28,11 +34,6 @@ class MainMenuScreenTest {
             )
         }
         composeTestRule.onNodeWithTag("MainMenuScreen").assertIsDisplayed()
-
-        // Commented out because the old title/logo components were removed or updated
-        // composeTestRule.onNodeWithTag("GameLogo").assertIsDisplayed()
-        // composeTestRule.onNodeWithTag("MenuTitle").assertExists()
-
         composeTestRule.onNodeWithTag("MenuButton_Start").assertIsDisplayed()
         composeTestRule.onNodeWithTag("MenuButton_Options").assertIsDisplayed()
         composeTestRule.onNodeWithTag("MenuButton_Exit").assertIsDisplayed()
@@ -48,10 +49,9 @@ class MainMenuScreenTest {
                 background = {},
             )
         }
-        // composeTestRule.onNodeWithText("PULVERFASS").assertExists()
         composeTestRule.onNodeWithText("START").assertIsDisplayed()
-        composeTestRule.onNodeWithText("OPTIONS").assertIsDisplayed()
-        composeTestRule.onNodeWithText("EXIT").assertIsDisplayed()
+        composeTestRule.onNodeWithText("OPTIONEN").assertIsDisplayed()
+        composeTestRule.onNodeWithText("BEENDEN").assertIsDisplayed()
     }
 
     @Test
@@ -96,7 +96,8 @@ class MainMenuScreenTest {
             )
         }
         composeTestRule.onNodeWithTag("MenuButton_Exit").performClick()
-        composeTestRule.onNodeWithText("JA").performClick() // Dialog bestätigen
+        // Der echte Exit-Callback läuft erst nach Bestätigung im Dialog.
+        composeTestRule.onNodeWithText("JA").performClick()
         assertEquals(true, clicked)
     }
 

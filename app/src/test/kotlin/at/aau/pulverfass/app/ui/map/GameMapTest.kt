@@ -10,6 +10,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die reinen Geometrie- und Hit-Test-Helfer der Spielkarte.
+ *
+ * Die Tests sichern Viewport-Größen, Zoom-/Pan-Grenzen, Pixelprojektion,
+ * Region-Farbtreffer und Maskenmittelpunkte unabhängig vom Compose-Rendering ab.
+ */
 class GameMapTest {
     private val mapAspectRatio = PulverfassMapDefaults.aspectRatio
 
@@ -317,6 +323,13 @@ class GameMapTest {
     }
 }
 
+/**
+ * Vergleicht Float-Werte mit fester Toleranz für Layout- und Projektionsrechnungen.
+ *
+ * @param expected Erwarteter Referenzwert aus der jeweiligen Kartenrechnung.
+ * @param actual Tatsächlich berechneter Wert.
+ * @param tolerance Maximal erlaubte Abweichung, um Rundungsfehler auszugleichen.
+ */
 private fun assertFloatEquals(
     expected: Float,
     actual: Float,

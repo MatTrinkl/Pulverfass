@@ -17,14 +17,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Wiederverwendbarer Video-Player für lokale res/raw Videos.
+ * Wiederverwendbarer Videoplayer für lokale `res/raw`-Videos.
  *
- * @param videoResId Resource-ID aus res/raw
- * @param onCompleted Wird gerufen wenn Video zu Ende (nur ohne loop)
- * @param loop true → Endlos-Schleife
- * @param cover true → Video füllt Container (CSS object-fit: cover), overflow geclippt
- * @param muted true → Video-Audio stummgeschaltet (für BG-Videos unter Music)
- * @param modifier Compose-Modifier für Parent-Layout
+ * @param videoResId Resource-ID aus `res/raw`.
+ * @param onCompleted Callback nach Videoende, nur wenn [loop] deaktiviert ist.
+ * @param loop `true`, wenn das Video endlos laufen soll.
+ * @param cover `true`, wenn das Video den Container füllen und Überstand clippen soll.
+ * @param muted `true`, wenn die Videotonspur stummgeschaltet wird.
+ * @param modifier Compose-Modifier für das Parent-Layout.
  */
 @Composable
 fun VideoPlayer(

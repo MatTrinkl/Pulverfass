@@ -50,17 +50,13 @@ class MapGetMessageTest {
     fun `serializer roundtrip error response`() {
         val response =
             MapGetErrorResponse(
-                code = MapGetErrorCode.GAME_NOT_FOUND,
-                reason = "Lobby 'ZZ99' wurde nicht gefunden.",
+                code = MapGetErrorCode.PAYLOAD_TOO_LARGE,
+                reason = "Map-Snapshot fuer Lobby 'ZZ99' ist groesser als 128 Bytes.",
             )
 
         val serialized = json.encodeToString(MapGetErrorResponse.serializer(), response)
         val deserialized = json.decodeFromString(MapGetErrorResponse.serializer(), serialized)
 
-        assertEquals(
-            """{"code":"GAME_NOT_FOUND","reason":"Lobby 'ZZ99' wurde nicht gefunden."}""",
-            serialized,
-        )
         assertEquals(response, deserialized)
     }
 

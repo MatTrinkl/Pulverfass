@@ -10,6 +10,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die lokale Reconnect-Session, die nach App-Neustart wiederhergestellt wird.
+ *
+ * Der Server-URL-Eintrag bleibt beim Session-Clear erhalten, damit spätere
+ * Verbindungen denselben Zielserver verwenden können.
+ */
 @RunWith(RobolectricTestRunner::class)
 class ReconnectSessionStoreTest {
     @Test

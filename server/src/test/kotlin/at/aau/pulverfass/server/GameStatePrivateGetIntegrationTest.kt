@@ -5,10 +5,14 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.CardState
+import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -205,10 +209,98 @@ class GameStatePrivateGetIntegrationTest {
             }
         }
 
+    @Test
+    fun `private snapshot request returns payload too large error`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    privateStatePayloadMaxBytes = 128,
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("PG03")
+            val playerOne = PlayerId(1)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    privateSnapshotGameState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne),
+                        stateVersion = 8,
+                        handState =
+                            HandState(
+                                mapOf(
+                                    playerOne to
+                                        (1..16).map { index ->
+                                            CardState(CardId("card-$index"), CardType.A)
+                                        },
+                                ),
+                            ),
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithPlayer(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                        )
+
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    GameStatePrivateGetRequest(lobbyCode, playerOne),
+                                ),
+                        ),
+                    )
+
+                    val error =
+                        receivePayload(playerOneSession.first) as GameStatePrivateGetErrorResponse
+                    assertEquals(GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE, error.code)
+                    assertEquals(true, error.reason.contains("128 Bytes"))
+
+                    playerOneSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
     private fun privateSnapshotGameState(
         lobbyCode: LobbyCode,
         players: List<PlayerId>,
         stateVersion: Long,
+        handState: HandState = HandState(),
     ): GameState =
         GameState(
             lobbyCode = lobbyCode,
@@ -217,6 +309,7 @@ class GameStatePrivateGetIntegrationTest {
             playerDisplayNames = players.associateWith { "Player ${it.value}" },
             turnOrder = players,
             stateVersion = stateVersion,
+            handState = handState,
         )
 
     private suspend fun connectSessionWithPlayer(

@@ -7,6 +7,12 @@ import java.sql.Connection
 import java.time.Instant
 import javax.sql.DataSource
 
+/**
+ * Aufbewahrungsregeln für event-sourced Lobby-Daten in PostgreSQL.
+ *
+ * @property eventRoundsToKeep Anzahl der letzten Runden, deren Einzelereignisse aufbewahrt werden
+ * @property snapshotsToKeep Anzahl der neuesten Snapshots pro Lobby
+ */
 data class LobbyPersistenceRetentionPolicy(
     val eventRoundsToKeep: Int = 2,
     val snapshotsToKeep: Int = 4,
@@ -20,6 +26,13 @@ data class LobbyPersistenceRetentionPolicy(
         }
     }
 
+    /**
+     * Berechnet die kleinste Runde, deren Events noch erhalten bleiben sollen.
+     *
+     * @param currentRound aktuell persistierte Runde
+     * @return untere inklusive Rundengrenze für Event-Aufbewahrung
+     * @throws IllegalArgumentException wenn [currentRound] negativ ist
+     */
     fun minimumRoundToKeep(currentRound: Int): Int {
         require(currentRound >= 0) {
             "LobbyPersistenceRetentionPolicy erwartet currentRound >= 0, war aber $currentRound."
@@ -28,6 +41,17 @@ data class LobbyPersistenceRetentionPolicy(
     }
 }
 
+/**
+ * Gelesener Datensatz aus `lobby_events`.
+ *
+ * @property id technische Datenbank-ID
+ * @property lobbyCode referenzierte Lobby
+ * @property stateVersion autoritative State-Version nach Anwendung des Events
+ * @property turnCount Rundenzähler zum Zeitpunkt der Persistierung
+ * @property eventType stabiler Persistenztyp des Domain-Events
+ * @property eventJson serialisierte Event-Nutzlast
+ * @property createdAt Datenbankzeitpunkt der Speicherung
+ */
 data class PersistedLobbyEventRecord(
     val id: Long,
     val lobbyCode: LobbyCode,
@@ -38,6 +62,16 @@ data class PersistedLobbyEventRecord(
     val createdAt: Instant,
 )
 
+/**
+ * Gelesener Datensatz aus `lobby_snapshots`.
+ *
+ * @property id technische Datenbank-ID
+ * @property lobbyCode referenzierte Lobby
+ * @property stateVersion Zustandsversion des Snapshots
+ * @property turnCount Rundenzähler des Snapshots
+ * @property snapshotJson serialisierte Snapshot-Nutzlast
+ * @property createdAt Datenbankzeitpunkt der Speicherung
+ */
 data class PersistedLobbySnapshotRecord(
     val id: Long,
     val lobbyCode: LobbyCode,
@@ -47,11 +81,63 @@ data class PersistedLobbySnapshotRecord(
     val createdAt: Instant,
 )
 
+/**
+ * Minimale Leseschnittstelle für Lobby-Recovery.
+ *
+ * Das Interface trennt den Start-Replay von der konkreten JDBC-Implementierung. Dadurch kann der
+ * Recovery-Pfad gezielt gegen beschädigte Persistenzdaten getestet werden, ohne eine echte
+ * Datenbankverbindung aufzubauen.
+ */
+interface LobbyPersistenceReader {
+    /**
+     * Lädt den neuesten Snapshot einer Lobby.
+     *
+     * @param lobbyCode wiederherzustellende Lobby
+     * @return letzter Snapshot oder `null`, wenn nur Events vorhanden sind
+     */
+    fun loadLatestSnapshot(lobbyCode: LobbyCode): PersistedLobbySnapshotRecord?
+
+    /**
+     * Lädt alle Events nach einer bereits bekannten State-Version.
+     *
+     * @param lobbyCode wiederherzustellende Lobby
+     * @param stateVersionExclusive letzte bereits angewandte State-Version
+     * @return nachfolgende Events in Replay-Reihenfolge
+     */
+    fun loadEventsAfter(
+        lobbyCode: LobbyCode,
+        stateVersionExclusive: Long,
+    ): List<PersistedLobbyEventRecord>
+
+    /**
+     * Ermittelt alle Lobbies mit gespeicherten Events oder Snapshots.
+     */
+    fun findLobbyCodesWithPersistedState(): Set<LobbyCode>
+}
+
+/**
+ * JDBC-basierter Event- und Snapshot-Store für Lobby-Recovery.
+ *
+ * Der Store persistiert Domain-Events und periodische Vollsnapshots getrennt, damit beim
+ * Server-Neustart nur der jüngste Snapshot plus nachfolgende Events geladen werden müssen.
+ *
+ * @param dataSource Datenquelle für PostgreSQL-Zugriffe
+ * @param retentionPolicy Regeln zur Bereinigung alter Persistenzdaten
+ */
 class JdbcLobbyPersistenceStore(
     private val dataSource: DataSource,
     private val retentionPolicy: LobbyPersistenceRetentionPolicy =
         LobbyPersistenceRetentionPolicy(),
-) {
+) : LobbyPersistenceReader {
+    /**
+     * Hängt ein einzelnes Domain-Event an den Persistenzstrom einer Lobby an.
+     *
+     * Nach erfolgreicher Speicherung werden veraltete Event-Runden derselben Lobby entsprechend
+     * [retentionPolicy] bereinigt.
+     *
+     * @throws IllegalArgumentException bei negativen Versions- oder Rundenzählern sowie leerem
+     * `eventType`
+     */
     fun appendEvent(
         lobbyCode: LobbyCode,
         stateVersion: Long,
@@ -95,6 +181,14 @@ class JdbcLobbyPersistenceStore(
         }
     }
 
+    /**
+     * Persistiert einen vollständigen Snapshot des aktuellen Lobby-Zustands.
+     *
+     * Nach erfolgreicher Speicherung werden ältere Snapshots derselben Lobby auf die in
+     * [retentionPolicy] konfigurierte Anzahl reduziert.
+     *
+     * @throws IllegalArgumentException bei negativen Versions- oder Rundenzählern
+     */
     fun appendSnapshot(
         lobbyCode: LobbyCode,
         stateVersion: Long,
@@ -132,6 +226,11 @@ class JdbcLobbyPersistenceStore(
         }
     }
 
+    /**
+     * Führt die Event-Bereinigung für genau eine Lobby explizit aus.
+     *
+     * @return Anzahl gelöschter Event-Zeilen
+     */
     fun cleanupEventsForLobby(
         lobbyCode: LobbyCode,
         currentRound: Int,
@@ -142,6 +241,11 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
+    /**
+     * Führt die Snapshot-Bereinigung für genau eine Lobby explizit aus.
+     *
+     * @return Anzahl gelöschter Snapshot-Zeilen
+     */
     fun cleanupSnapshotsForLobby(lobbyCode: LobbyCode): Int =
         dataSource.connection.use { connection ->
             connection.inTransaction {
@@ -149,6 +253,9 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
+    /**
+     * Listet alle persistierten Events einer Lobby in deterministischer Reihenfolge.
+     */
     fun listEvents(lobbyCode: LobbyCode): List<PersistedLobbyEventRecord> =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -180,6 +287,9 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
+    /**
+     * Listet alle persistierten Snapshots einer Lobby in aufsteigender Versionsreihenfolge.
+     */
     fun listSnapshots(lobbyCode: LobbyCode): List<PersistedLobbySnapshotRecord> =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
@@ -210,7 +320,12 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
-    fun loadLatestSnapshot(lobbyCode: LobbyCode): PersistedLobbySnapshotRecord? =
+    /**
+     * Lädt den neuesten verfügbaren Snapshot einer Lobby.
+     *
+     * @return aktuellster Snapshot oder `null`, wenn noch keiner persistiert wurde
+     */
+    override fun loadLatestSnapshot(lobbyCode: LobbyCode): PersistedLobbySnapshotRecord? =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
                 """
@@ -238,7 +353,13 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
-    fun loadEventsAfter(
+    /**
+     * Lädt alle Events strikt nach einer bekannten State-Version.
+     *
+     * @param stateVersionExclusive letzte bereits angewandte State-Version
+     * @return nachfolgende Events in Anwendungsreihenfolge
+     */
+    override fun loadEventsAfter(
         lobbyCode: LobbyCode,
         stateVersionExclusive: Long,
     ): List<PersistedLobbyEventRecord> =
@@ -274,7 +395,10 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
-    fun findLobbyCodesWithPersistedState(): Set<LobbyCode> =
+    /**
+     * Ermittelt alle Lobbies, für die noch Events oder Snapshots vorhanden sind.
+     */
+    override fun findLobbyCodesWithPersistedState(): Set<LobbyCode> =
         dataSource.connection.use { connection ->
             connection.prepareStatement(
                 """
@@ -293,6 +417,12 @@ class JdbcLobbyPersistenceStore(
             }
         }
 
+    /**
+     * Entfernt alle persistierten Events und Snapshots einer Lobby.
+     *
+     * Die beiden Tabellen werden in einer gemeinsamen Transaktion gelöscht, damit kein halb
+     * entfernter Recovery-Zustand zurückbleibt.
+     */
     fun deleteLobbyState(lobbyCode: LobbyCode) {
         dataSource.connection.use { connection ->
             connection.inTransaction {
@@ -363,6 +493,9 @@ class JdbcLobbyPersistenceStore(
         }
 }
 
+/**
+ * Führt mehrere JDBC-Schreibschritte als gemeinsame Transaktion aus.
+ */
 private fun Connection.inTransaction(block: () -> Int): Int {
     val previousAutoCommit = autoCommit
     autoCommit = false
@@ -378,6 +511,9 @@ private fun Connection.inTransaction(block: () -> Int): Int {
     }
 }
 
+/**
+ * Wandelt ein JSON-Element in ein PostgreSQL-`jsonb`-Objekt um.
+ */
 private fun JsonElement.toJsonb(): PGobject =
     PGobject().apply {
         type = "jsonb"

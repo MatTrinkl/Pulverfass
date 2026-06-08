@@ -477,6 +477,10 @@ class PhaseTwoE2EIntegrationTest {
                         AttackResponse(lobbyCode = lobbyCode, requestId = "phase2-auto-end"),
                         receiveRelevantTestPayload(actorSession.first),
                     )
+                    receiveRelevantTestPayload(watcherSession.first)
+                    assertNull(receiveRelevantTestPayloadOrNull(actorSession.first))
+                    assertNull(receiveRelevantTestPayloadOrNull(watcherSession.first))
+
                     receiveRelevantTestPayload(actorSession.first)
                     assertEquals(
                         PhaseBoundaryEvent(
@@ -500,7 +504,6 @@ class PhaseTwoE2EIntegrationTest {
                         receiveRelevantTestPayload(actorSession.first),
                     )
 
-                    receiveRelevantTestPayload(watcherSession.first)
                     receiveRelevantTestPayload(watcherSession.first)
                     assertEquals(
                         PhaseBoundaryEvent(

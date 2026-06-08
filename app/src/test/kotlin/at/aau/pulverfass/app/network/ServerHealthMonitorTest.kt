@@ -3,6 +3,12 @@ package at.aau.pulverfass.app.network
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/**
+ * Prüft die Umwandlung der HTTP-Health-Response in den UI-nahen Serverstatus.
+ *
+ * Dadurch bleibt klar, wann die App den Server als erreichbar oder fehlerhaft
+ * anzeigen darf.
+ */
 class ServerHealthMonitorTest {
     @Test
     fun health_url_points_to_requested_endpoint() {

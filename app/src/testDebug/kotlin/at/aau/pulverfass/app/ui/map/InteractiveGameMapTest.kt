@@ -15,6 +15,12 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Smoke-Tests für die interaktive Compose-Karte.
+ *
+ * Die Tests prüfen, dass Canvas, Region-Buttons und grundlegende Gesten zusammen
+ * komponierbar bleiben, ohne echte Bitmap-Assets laden zu müssen.
+ */
 @RunWith(AndroidJUnit4::class)
 class InteractiveGameMapTest {
     @get:Rule

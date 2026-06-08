@@ -8,6 +8,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+/**
+ * Prüft persistierte Spielereinstellungen im Android-SharedPreferences-Store.
+ *
+ * Name und Charakter-ID müssen App-Neustarts überleben, während der No-Op-Store
+ * für Tests und Vorschauen bewusst keine Werte dauerhaft speichert.
+ */
 @RunWith(RobolectricTestRunner::class)
 class PlayerNameStoreTest {
     @Test
@@ -29,5 +35,45 @@ class PlayerNameStoreTest {
         NoOpPlayerNameStore.savePlayerName("Anne Bonny")
 
         assertNull(NoOpPlayerNameStore.readPlayerName())
+    }
+
+    @Test
+    fun `shared preferences store should persist character id across instances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = SharedPreferencesPlayerNameStore(context)
+
+        store.saveCharacterId("character_03")
+
+        val restoredStore = SharedPreferencesPlayerNameStore(context)
+        assertEquals("character_03", restoredStore.readCharacterId())
+    }
+
+    @Test
+    fun `shared preferences store should return null when no character id saved`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = SharedPreferencesPlayerNameStore(context)
+        store.saveCharacterId("")
+        assertNull(store.readCharacterId())
+    }
+
+    @Test
+    fun `no op store should never persist character id`() {
+        NoOpPlayerNameStore.saveCharacterId("character_03")
+
+        assertNull(NoOpPlayerNameStore.readCharacterId())
+    }
+
+    @Test
+    fun `shared preferences store should return null for character id when key is absent`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs =
+            context.applicationContext.getSharedPreferences(
+                "pulverfass_player_settings",
+                Context.MODE_PRIVATE,
+            )
+        prefs.edit().remove("character_id").commit()
+        val store = SharedPreferencesPlayerNameStore(context)
+
+        assertNull(store.readCharacterId())
     }
 }

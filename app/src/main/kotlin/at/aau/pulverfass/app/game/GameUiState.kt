@@ -43,6 +43,7 @@ data class GameUiState(
     val reinforcementState: ReinforcementUiState = ReinforcementUiState(),
     val reinforcementPlacementAmount: Int = 1,
     val attackState: AttackUiState = AttackUiState(),
+    val fortifyState: FortifyUiState = FortifyUiState(),
     val lastSyncError: String? = null,
 ) {
     /**
@@ -156,16 +157,16 @@ data class GameUiState(
     /**
      * Prüft die vollständig ausgewählte lokale Angriffsabsicht vor dem Request.
      *
-     * Eigentum und Nachbarschaft werden beim Auswählen im Reducer geprüft.
-     * Würfelresultat und endgültige Capture-Verschiebung bleiben serverautoritativ.
+     * Zusätzlich zur Auswahl wird die aktuelle Truppenobergrenze nochmals
+     * geprüft. Dadurch kann ein veralteter Sliderwert nach einem Serverdelta
+     * keinen Request mehr erzeugen, der serverseitig sicher scheitern würde.
      */
     fun canSubmitAttack(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
     ): Boolean =
         canManageAttacks(localPlayerId, isConnected) &&
-            selectionFromRegionId != null &&
-            selectionToRegionId != null &&
+            hasValidAttackSelection(localPlayerId) &&
             attackState.attackTroops >= MIN_ATTACK_TROOPS &&
             attackState.moveAfterCapture in
             minimumOccupyingTroopsForAttack(attackState.attackTroops)..attackState.attackTroops
@@ -177,6 +178,210 @@ data class GameUiState(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
     ): Boolean = canManageAttacks(localPlayerId, isConnected)
+
+    /**
+     * Prüft, ob der aktive Spieler aktuell mindestens einen sinnvollen Angriff
+     * auswählen kann.
+     *
+     * Die UI nutzt diese Information, um eine leere Angriffsphase direkt zu
+     * bestätigen. Ein Gebiet braucht mehr als zwei Truppen, weil mindestens
+     * zwei Angreifer eingesetzt werden und eine Truppe im Ausgangsgebiet bleiben
+     * muss. Zielgebiete verlassener Spieler bleiben angreifbar, solange der
+     * serverseitige Territory-State noch eine fremde Owner-ID und mindestens
+     * eine verteidigende Truppe trägt.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @return `true`, wenn mindestens ein eigenes Gebiet ein fremdes Nachbarziel
+     * angreifen kann
+     */
+    fun hasAvailableAttack(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        return territoryStates.values.any { source ->
+            source.ownerId == localPlayerId &&
+                source.troopCount > MIN_ATTACK_TROOPS &&
+                adjacentTerritoryIds[source.territoryId].orEmpty().any { targetId ->
+                    val target = territoryStates[targetId]
+                    target?.ownerId != null &&
+                        target.ownerId != localPlayerId &&
+                        target.troopCount > 0
+                }
+        }
+    }
+
+    /**
+     * Revalidiert die ausgewählte Angriffsabsicht gegen den aktuellen GameState.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext.
+     * @return `true`, wenn Quelle, Ziel, Nachbarschaft und Truppenanzahl passen.
+     */
+    private fun hasValidAttackSelection(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        val fromTerritoryId =
+            selectionFromRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val toTerritoryId =
+            selectionToRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val source = territoryStates[fromTerritoryId] ?: return false
+        val target = territoryStates[toTerritoryId] ?: return false
+        val targetOwnerId = target.ownerId ?: return false
+        val maxAttackTroops = source.troopCount - 1
+
+        return source.ownerId == localPlayerId &&
+            source.troopCount > MIN_ATTACK_TROOPS &&
+            attackState.attackTroops in MIN_ATTACK_TROOPS..maxAttackTroops &&
+            targetOwnerId != localPlayerId &&
+            target.troopCount > 0 &&
+            toTerritoryId in adjacentTerritoryIds[fromTerritoryId].orEmpty()
+    }
+
+    /**
+     * Prüft, ob eine Truppenverschiebung in der Fortify-Phase vorbereitet werden kann.
+     *
+     * Fortify darf nur einmal pro Zug ausgeführt werden. Der öffentliche
+     * Snapshot und die Turn-State-Antwort liefern den serverautoritativen
+     * Verbrauchsstatus. `hasMoved` spiegelt diesen Status lokal und blockiert
+     * nach einem bestätigten Move weitere Fortify-Requests bis zum nächsten
+     * autoritativen Update.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn Quelle und Ziel für Fortify gewählt werden dürfen
+     */
+    fun canManageFortify(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
+            turnPhase == TurnPhase.FORTIFY &&
+            !fortifyState.hasMoved
+
+    /**
+     * Prüft, ob der aktive Spieler mindestens eine gültige Fortify-Option besitzt.
+     *
+     * Ein gültiger Move braucht ein eigenes Quellgebiet mit mindestens zwei
+     * Truppen und ein anderes eigenes Zielgebiet, das über durchgehend eigene
+     * Territorien erreichbar ist. Damit spiegelt die Auto-Skip-Logik dieselbe
+     * Verbindungsvoraussetzung wie die manuelle Gebietsauswahl.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @return `true`, wenn mindestens eine Verschiebung möglich ist
+     */
+    fun hasAvailableFortify(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null || fortifyState.hasMoved) {
+            return false
+        }
+
+        val ownTerritories = territoryStates.values.filter { it.ownerId == localPlayerId }
+        val sources = ownTerritories.filter { it.troopCount > MIN_FORTIFY_TROOPS }
+        return sources.any { source ->
+            ownTerritories.any { target ->
+                source.territoryId != target.territoryId &&
+                    hasOwnedPath(localPlayerId, source.territoryId, target.territoryId)
+            }
+        }
+    }
+
+    /**
+     * Prüft eine vollständig ausgewählte Fortify-Absicht vor dem Request.
+     *
+     * Die Auswahl kann nach Deltas, Reconnects oder einem verspäteten Snapshot
+     * veraltet sein. Deshalb prüft diese Methode Quelle, Ziel, Eigentum,
+     * eigenen Verbindungspfad und die aktuelle Truppenobergrenze direkt vor dem
+     * Senden erneut.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn der Fortify-Request lokal sendbar ist
+     */
+    fun canSubmitFortifyMove(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canManageFortify(localPlayerId, isConnected) &&
+            hasValidFortifySelection(localPlayerId)
+
+    /**
+     * Revalidiert die ausgewählte Fortify-Absicht gegen den aktuellen GameState.
+     *
+     * Die Prüfung ist absichtlich strenger als reine UI-Auswahl: ein altes
+     * Source-/Target-Paar kann durch Serverdeltas Besitz, Pfad oder Truppenlimit
+     * verloren haben.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext.
+     * @return `true`, wenn die Auswahl noch serverseitig plausibel sendbar ist.
+     */
+    private fun hasValidFortifySelection(localPlayerId: PlayerId?): Boolean {
+        if (localPlayerId == null) {
+            return false
+        }
+
+        val fromTerritoryId =
+            selectionFromRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val toTerritoryId =
+            selectionToRegionId?.let(GameMapTerritoryMapper::toTerritoryId)
+                ?: return false
+        val source = territoryStates[fromTerritoryId] ?: return false
+        val target = territoryStates[toTerritoryId] ?: return false
+        val maxFortifyTroops = source.troopCount - 1
+
+        return fromTerritoryId != toTerritoryId &&
+            source.ownerId == localPlayerId &&
+            target.ownerId == localPlayerId &&
+            source.troopCount > MIN_FORTIFY_TROOPS &&
+            fortifyState.troopCount in MIN_FORTIFY_TROOPS..maxFortifyTroops &&
+            hasOwnedPath(localPlayerId, fromTerritoryId, toTerritoryId)
+    }
+
+    /**
+     * Prüft per Breitensuche, ob zwei eigene Gebiete verbunden sind.
+     *
+     * @param playerId Besitzer, über dessen Territorien der Pfad laufen muss.
+     * @param sourceTerritoryId Startgebiet.
+     * @param targetTerritoryId Zielgebiet.
+     * @return `true`, wenn Start und Ziel über eigene Nachbarn erreichbar sind.
+     */
+    private fun hasOwnedPath(
+        playerId: PlayerId,
+        sourceTerritoryId: TerritoryId,
+        targetTerritoryId: TerritoryId,
+    ): Boolean {
+        if (
+            territoryStates[sourceTerritoryId]?.ownerId != playerId ||
+            territoryStates[targetTerritoryId]?.ownerId != playerId
+        ) {
+            return false
+        }
+
+        val visited = linkedSetOf(sourceTerritoryId)
+        val queue = ArrayDeque<TerritoryId>()
+        queue.add(sourceTerritoryId)
+
+        while (queue.isNotEmpty()) {
+            val currentTerritoryId = queue.removeFirst()
+            adjacentTerritoryIds[currentTerritoryId].orEmpty().forEach { neighborId ->
+                if (
+                    neighborId !in visited &&
+                    territoryStates[neighborId]?.ownerId == playerId
+                ) {
+                    if (neighborId == targetTerritoryId) {
+                        return true
+                    }
+                    visited.add(neighborId)
+                    queue.add(neighborId)
+                }
+            }
+        }
+
+        return false
+    }
 }
 
 /**
@@ -219,6 +424,22 @@ data class AttackUiState(
 )
 
 /**
+ * Lokale Eingabe der einmaligen Truppenverschiebung in der Fortify-Phase.
+ *
+ * Truppen werden nicht optimistisch bewegt; sichtbare Änderungen kommen über
+ * die nachgelagerten serverseitigen Territory-Troop-Deltas. `hasMoved` schützt
+ * nur die Bedienoberfläche vor einem zweiten Request im gleichen Zug.
+ *
+ * @property troopCount lokal ausgewählte Anzahl der zu verschiebenden Truppen
+ * @property hasMoved Marker, ob der einmalige Fortify-Move laut lokalem oder
+ * serverseitigem Status bereits verbraucht ist
+ */
+data class FortifyUiState(
+    val troopCount: Int = MIN_FORTIFY_TROOPS,
+    val hasMoved: Boolean = false,
+)
+
+/**
  * Präsentationsmodell eines einzelnen serverseitig ausgewürfelten Kampfes.
  */
 data class AttackResultUiState(
@@ -246,6 +467,7 @@ data class PrivateHandCardUi(
 
 internal const val MIN_ATTACK_TROOPS = 2
 internal const val MAX_ATTACK_DICE = 3
+internal const val MIN_FORTIFY_TROOPS = 1
 
 /**
  * Liefert die serverseitig verlangte Mindestbesetzung nach einer Eroberung.

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -31,9 +34,17 @@ import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
- * Main-Menu Screen mit gamelogo.png groß über den Buttons.
- * Video-Background (menuvid.mp4).
- * EXIT zeigt Bestätigungsdialog via ExitConfirmationDialog (lobbylist.png Parchment).
+ * Hauptmenü mit Video-Hintergrund, Logo und den primären Einstiegsaktionen.
+ *
+ * Der Exit-Button beendet die App nicht direkt, sondern öffnet zuerst den
+ * Bestätigungsdialog. [background] ist injizierbar, damit UI-Tests keinen
+ * echten Videoplayer starten müssen.
+ *
+ * @param onStartClick Navigation in den Lobby-Einstieg.
+ * @param onOptionsClick Navigation in die globalen Optionen.
+ * @param onExitClick finale Exit-Aktion nach Bestätigung.
+ * @param modifier äußerer Modifier für Einbettung und Tests.
+ * @param background austauschbarer Hintergrundslot für Tests und Preview.
  */
 @Composable
 fun MainMenuScreen(
@@ -43,7 +54,7 @@ fun MainMenuScreen(
     modifier: Modifier = Modifier,
     background: @Composable () -> Unit = {
         VideoPlayer(
-            videoResId = R.raw.menuvid,
+            videoResId = R.raw.video_main_menu_background,
             loop = true,
             cover = true,
             muted = true,
@@ -61,63 +72,73 @@ fun MainMenuScreen(
                 .background(PulverfassColors.SurfaceVoid)
                 .testTag("MainMenuScreen"),
     ) {
-        // Video Background
+        // Bewegter Hintergrund; in Tests kann stattdessen ein statisches Box-Stub genutzt werden.
         background()
 
-        // Dark overlay für Kontrast zwischen Logo und Video
+        // Lesbarkeitsverlauf: links bleibt das Video sichtbar, rechts tragen Logo und Buttons.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.4f)),
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                PulverfassColors.SurfaceVoid.copy(alpha = 0.85f),
+                            ),
+                        ),
+                    ),
         )
 
-        // Main Content: Logo groß über Buttons
-        Column(
+        // Logo und Buttons bleiben rechts, damit der Videohintergrund links als Motiv wirkt.
+        Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 48.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 64.dp),
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.gamelogo),
-                contentDescription = "Pulverfass Logo",
-                contentScale = ContentScale.Fit,
-                modifier =
-                    Modifier
-                        .fillMaxWidth(0.5f)
-                        .height(120.dp)
-                        .testTag("GameLogo"),
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.width(280.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
-                MainButton(
-                    text = "START",
-                    onClick = onStartClick,
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Start"),
+                Image(
+                    painter = painterResource(id = R.drawable.brand_pulverfass_logo),
+                    contentDescription = "Pulverfass Logo",
+                    contentScale = ContentScale.Fit,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(120.dp)
+                            .testTag("GameLogo"),
                 )
-                MainButton(
-                    text = "OPTIONS",
-                    onClick = onOptionsClick,
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Options"),
-                )
-                MainButton(
-                    text = "EXIT",
-                    onClick = { showExitDialog = true },
-                    modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
-                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.width(IntrinsicSize.Max),
+                ) {
+                    MainButton(
+                        text = "START",
+                        onClick = onStartClick,
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Start"),
+                    )
+                    MainButton(
+                        text = "OPTIONEN",
+                        onClick = onOptionsClick,
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Options"),
+                    )
+                    MainButton(
+                        text = "BEENDEN",
+                        onClick = { showExitDialog = true },
+                        modifier = Modifier.fillMaxWidth().testTag("MenuButton_Exit"),
+                    )
+                }
             }
         }
 
-        // Exit Confirmation Overlay
+        // Exit benötigt Bestätigung, weil der Activity-Finish nicht rückgängig gemacht werden kann.
         if (showExitDialog) {
             ExitConfirmationDialog(
                 onConfirm = onExitClick,

@@ -1,6 +1,7 @@
 package at.aau.pulverfass.server.persistence
 
 import at.aau.pulverfass.server.lobby.runtime.LobbyManager
+import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.map.MapDefinitionRepository
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -9,6 +10,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -65,9 +67,23 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
+private val recoveryLogger = ServerLoggers.technical("LobbyRecoveryLoader")
+
+/**
+ * Rekonstruiert Lobbies aus persistierten Snapshots und Event-Folgen.
+ *
+ * Der Loader ist ein architekturrelevanter Bestandteil des Backends: Beim Serverstart erzeugt er
+ * aus PostgreSQL-Daten wieder autoritative [GameState]-Instanzen, die anschließend in
+ * [LobbyManager] registriert werden.
+ *
+ * @param store Event- und Snapshot-Store
+ * @param mapDefinitionRepository Quelle für die Default-Map, falls nur Events vorliegen
+ * @param reducer Domain-Reducer für die erneute Anwendung persistierter Events
+ * @param json JSON-Konfiguration für Snapshot-Decodierung
+ */
 @OptIn(ExperimentalSerializationApi::class)
 class LobbyRecoveryLoader(
-    private val store: JdbcLobbyPersistenceStore,
+    private val store: LobbyPersistenceReader,
     private val mapDefinitionRepository: MapDefinitionRepository,
     private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
     private val json: Json =
@@ -76,6 +92,15 @@ class LobbyRecoveryLoader(
             explicitNulls = false
         },
 ) {
+    /**
+     * Rekonstruiert eine einzelne Lobby aus Snapshot und nachfolgenden Events.
+     *
+     * Falls noch kein Snapshot existiert, startet die Wiederherstellung von einem initialen
+     * [GameState] und replayt alle verfügbaren Events.
+     *
+     * @return rekonstruierter Zustand oder `null`, wenn keinerlei Persistenzdaten existieren
+     * @throws IllegalStateException wenn Snapshot und Event-Folge inkonsistent sind
+     */
     fun restoreLobby(lobbyCode: LobbyCode): GameState? {
         val snapshotRecord = store.loadLatestSnapshot(lobbyCode)
         val baseState =
@@ -104,6 +129,9 @@ class LobbyRecoveryLoader(
         return events.fold(baseState) { state, persistedEvent ->
             val event = persistedEvent.toLobbyEvent()
             val updatedState = reducer.apply(state, event, context = null)
+            // Die Persistenz verwendet stateVersion als lückenlosen Integritätsanker. Ein Replay,
+            // das hiervon abweicht, würde auf beschädigte Daten oder eine geänderte Reducerlogik
+            // hinweisen und muss deshalb den Startup abbrechen.
             check(updatedState.stateVersion == persistedEvent.stateVersion) {
                 "Recovered stateVersion ${updatedState.stateVersion} stimmt nicht " +
                     "mit persistiertem Event ${persistedEvent.stateVersion} " +
@@ -113,16 +141,47 @@ class LobbyRecoveryLoader(
         }
     }
 
+    /**
+     * Rekonstruiert alle bekannten Lobbies und registriert sie im angegebenen [LobbyManager].
+     */
     fun restoreAllInto(lobbyManager: LobbyManager) {
         restoreAll().forEach { state ->
             lobbyManager.createLobby(lobbyCode = state.lobbyCode, initialState = state)
         }
     }
 
+    /**
+     * Rekonstruiert alle Lobbies mit persistiertem Zustand.
+     *
+     * Die Reihenfolge ist über [LobbyCode.value] stabilisiert, damit Startup-Verhalten reproduzierbar
+     * bleibt.
+     */
     fun restoreAll(): List<GameState> =
         store.findLobbyCodesWithPersistedState()
             .sortedBy(LobbyCode::value)
-            .mapNotNull(::restoreLobby)
+            .mapNotNull(::restoreLobbySafely)
+
+    /**
+     * Rekonstruiert eine Lobby für den Serverstart.
+     *
+     * Einzelne beschädigte Persistenzströme dürfen den kompletten Serverstart nicht blockieren.
+     * [restoreLobby] bleibt bewusst streng, damit gezielte Recovery-Checks weiterhin Datenfehler
+     * sichtbar machen.
+     *
+     * @param lobbyCode zu ladende Lobby
+     * @return rekonstruierter Zustand oder `null`, wenn diese Lobby übersprungen werden musste
+     */
+    private fun restoreLobbySafely(lobbyCode: LobbyCode): GameState? =
+        try {
+            restoreLobby(lobbyCode)
+        } catch (exception: RuntimeException) {
+            recoveryLogger.warn(
+                "Skipping persisted lobby '{}' during startup recovery because replay failed.",
+                lobbyCode.value,
+                exception,
+            )
+            null
+        }
 
     private fun validateSequence(
         lobbyCode: LobbyCode,
@@ -141,6 +200,40 @@ class LobbyRecoveryLoader(
     }
 }
 
+/**
+ * Serialisierbarer Vollsnapshot eines wiederherstellbaren Lobby-Zustands.
+ *
+ * Die Struktur ist absichtlich transportnah gehalten und enthält nur Daten, die für Recovery
+ * oder Audit des Backends erforderlich sind.
+ *
+ * @property lobbyCode eindeutige Lobby-Kennung
+ * @property stateVersion autoritative Versionsnummer des Zustands
+ * @property processedEventCount Anzahl bereits angewandter Domain-Events
+ * @property gameRandomSeed initialer Seed des deterministischen Spiels
+ * @property gameRandomState letzter RNG-Zustand zum Snapshot-Zeitpunkt
+ * @property lobbyOwner optionaler Owner der Lobby
+ * @property players alle Spieler der Lobby in autoritativer Reihenfolge
+ * @property playerDisplayNames persistierte Anzeigenamen
+ * @property activePlayer aktuell aktiver Spieler, falls vorhanden
+ * @property configuredStartPlayerId manuell gewählter Startspieler vor Spielstart
+ * @property turnOrder persistierte Zugreihenfolge
+ * @property turnNumber globaler Rundenzähler
+ * @property turnState optionaler Turn-Snapshot
+ * @property gameStarted Kennzeichen, ob die Partie gestartet wurde
+ * @property status serialisierter [GameStatus]-Name
+ * @property closedReason optionaler Schließgrund einer beendeten Lobby
+ * @property lastInvalidActionReason letzte fachliche Fehlermeldung
+ * @property fortifyUsedThisTurn Marker für bereits verbrauchte Fortify-Aktion
+ * @property determinism determinismusrelevante Metadaten der Karte
+ * @property definition serialisierte Kartenbeschreibung
+ * @property territoryStates alle Territoriumszustände
+ * @property setupTroopsToPlaceByPlayer verbleibende Setup-Truppen pro Spieler
+ * @property pendingReinforcements noch nicht platzierte Verstärkungen
+ * @property handState privater Kartenbesitz aller Spieler
+ * @property deckState verbleibendes Kartendeck
+ * @property discardPileState Ablagestapel des Kartendecks
+ * @property tradedInSetCount Anzahl bisher eingetauschter Kartensätze
+ */
 @Serializable
 data class PersistedLobbyRecoverySnapshot(
     val lobbyCode: LobbyCode,
@@ -173,6 +266,11 @@ data class PersistedLobbyRecoverySnapshot(
     val tradedInSetCount: Int = 0,
 ) {
     companion object {
+        /**
+         * Baut einen persistierbaren Snapshot aus einem laufenden [GameState].
+         *
+         * @throws IllegalStateException wenn der Zustand noch keine [MapDefinition] enthält
+         */
         fun fromGameState(gameState: GameState): PersistedLobbyRecoverySnapshot =
             PersistedLobbyRecoverySnapshot(
                 lobbyCode = gameState.lobbyCode,
@@ -226,11 +324,19 @@ data class PersistedLobbyRecoverySnapshot(
             )
     }
 
+    /**
+     * Rekonstruiert daraus wieder einen vollständigen [GameState].
+     *
+     * @throws IllegalStateException wenn Snapshot und Map-Metadaten nicht zusammenpassen
+     */
     fun toGameState(): GameState {
         val restoredDefinition =
             definition.toMapDefinition(
                 schemaVersion = determinism.schemaVersion,
             )
+        // Der Hash schützt davor, versehentlich Snapshots mit einer zwischenzeitlich geänderten
+        // Kartenbeschreibung zu laden. Ohne diese Prüfung könnten Recovery und laufende Regeln
+        // divergieren.
         check(restoredDefinition.mapHash == determinism.mapHash) {
             "Snapshot mapHash ${determinism.mapHash} passt nicht zur " +
                 "rekonstruierten MapDefinition ${restoredDefinition.mapHash}."
@@ -278,18 +384,41 @@ data class PersistedLobbyRecoverySnapshot(
     }
 }
 
+/**
+ * Persistierter Anzeigename eines Spielers innerhalb eines Recovery-Snapshots.
+ *
+ * @property playerId referenzierter Spieler
+ * @property displayName letzter autoritativer Anzeigename
+ */
 @Serializable
 data class PersistedPlayerDisplayName(
     val playerId: PlayerId,
     val displayName: String,
 )
 
+/**
+ * Persistierte Restanzahl noch zu platzierender Setup-Truppen eines Spielers.
+ *
+ * @property playerId referenzierter Spieler
+ * @property troopCount verbleibende Anzahl zu platzierender Truppen
+ */
 @Serializable
 data class PersistedSetupTroopsSnapshot(
     val playerId: PlayerId,
     val troopCount: Int,
 )
 
+/**
+ * Serialisierbarer Snapshot des öffentlichen Turn-Zustands.
+ *
+ * @property activePlayerId aktuell aktiver Spieler
+ * @property turnPhase aktuelle Spielphase
+ * @property turnCount Rundenzähler innerhalb der Partie
+ * @property startPlayerId Referenzspieler für den Rundenwechsel
+ * @property isPaused signalisiert einen pausierten Turn
+ * @property pauseReason optionale fachliche Begründung für die Pause
+ * @property pausedPlayerId optionaler Spieler, auf dessen Rückkehr gewartet wird
+ */
 @Serializable
 data class PersistedTurnStateSnapshot(
     val activePlayerId: PlayerId,
@@ -301,6 +430,9 @@ data class PersistedTurnStateSnapshot(
     val pausedPlayerId: PlayerId? = null,
 ) {
     companion object {
+        /**
+         * Erzeugt einen persistierbaren Snapshot aus einem laufenden [TurnState].
+         */
         fun fromTurnState(turnState: TurnState): PersistedTurnStateSnapshot =
             PersistedTurnStateSnapshot(
                 activePlayerId = turnState.activePlayerId,
@@ -313,6 +445,9 @@ data class PersistedTurnStateSnapshot(
             )
     }
 
+    /**
+     * Wandelt den Snapshot zurück in ein Domain-Modell für Recovery.
+     */
     fun toTurnState(): TurnState =
         TurnState(
             activePlayerId = activePlayerId,
@@ -415,6 +550,11 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
                 delta = jsonObject.int("delta"),
+            )
+        "cheat_reinforcement_bonus_used" ->
+            CheatReinforcementBonusUsedEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
             )
         "player_cards_removed" ->
             PlayerCardsRemovedEvent(

@@ -22,6 +22,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die Umwandlung von Transportereignissen in empfangene Netzwerkpakete.
+ *
+ * Die Tests decken gültige Binärframes, fehlerhafte Frames und ignorierte
+ * Nicht-Binärereignisse ab.
+ */
 class PacketReceiverTest {
     @Test
     fun `should decode valid binary transport event to received packet`() =
@@ -71,7 +77,8 @@ class PacketReceiverTest {
                 val error = errorDeferred.await()
 
                 assertEquals(connectionId, error.connectionId)
-                assertTrue(error.message!!.contains("Failed to decode received packet"))
+                val message = assertNotNull(error.message)
+                assertTrue(message.contains("Failed to decode received packet"))
             }
         }
 
@@ -125,6 +132,12 @@ class PacketReceiverTest {
         assertContentEquals(byteArrayOf(9), packet.packet.payloadBytes)
     }
 
+    /**
+     * Kodiert Header und Payload in dasselbe Binärformat, das der Shared-Codec erwartet.
+     *
+     * @param header MessageHeader des Testpakets.
+     * @param payloadBytes Nutzdaten, die nach dem Header unverändert erhalten bleiben sollen.
+     */
     private fun encodePacket(
         header: MessageHeader,
         payloadBytes: ByteArray,

@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.ui.screens
 
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.ui.components.VideoPlayer
@@ -29,16 +31,16 @@ private const val MAX_INTRO_DURATION_MS = 10_000L
  * gehalten: Würde dieser Screen beim Verlassen Systembars wieder einblenden,
  * wären sie während des direkt folgenden LoadScreens sichtbar.
  *
- * - Click anywhere → sofort skip
- * - Video-Ende → auto-navigate zu Load
- * - Safety-Fallback: nach 10s erzwingt der Screen die Navigation,
- *   falls das Video hängt oder fehlt
+ * Ein Tap überspringt das Intro sofort. Video-Ende und Sicherheits-Timeout
+ * führen in denselben idempotenten Navigationspfad, damit kein doppelter
+ * Backstack-Eintrag entstehen kann.
  *
- * @param navController Navigation Controller für die Weiterleitung
+ * @param navController Navigation Controller für die Weiterleitung.
  */
 @Composable
 fun StudioIntroScreen(navController: NavController) {
     var hasNavigated by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     /*
      * navigateNext ist idempotent — egal wie oft sie aufgerufen wird
@@ -53,7 +55,15 @@ fun StudioIntroScreen(navController: NavController) {
         }
     }
 
-    // safety fallback falls video hängt oder nicht geladen wird
+    LaunchedEffect(Unit) {
+        try {
+            val mp = MediaPlayer.create(context, R.raw.music_studio_intro)
+            mp?.start()
+        } catch (_: Exception) {
+        }
+    }
+
+    // Sicherheits-Fallback, falls das Video hängt oder nicht geladen wird.
     LaunchedEffect(Unit) {
         delay(MAX_INTRO_DURATION_MS)
         navigateNext()
@@ -71,7 +81,7 @@ fun StudioIntroScreen(navController: NavController) {
                 ),
     ) {
         VideoPlayer(
-            videoResId = R.raw.gabumon_intro,
+            videoResId = R.raw.video_studio_intro,
             onCompleted = { navigateNext() },
             loop = false,
             cover = true,

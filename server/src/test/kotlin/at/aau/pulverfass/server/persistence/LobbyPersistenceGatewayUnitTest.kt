@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
@@ -80,6 +81,8 @@ class LobbyPersistenceGatewayUnitTest {
                     "pending_reinforcements_set",
                 PendingReinforcementsChangedEvent(lobbyCode, hostId, delta = -2) to
                     "pending_reinforcements_changed",
+                CheatReinforcementBonusUsedEvent(lobbyCode, hostId) to
+                    "cheat_reinforcement_bonus_used",
                 PlayerCardsRemovedEvent(
                     lobbyCode = lobbyCode,
                     playerId = hostId,

@@ -380,6 +380,51 @@ class DefaultMapCommandRuleServiceTest {
     }
 
     @Test
+    fun `attack can capture territory owned by player who already left`() {
+        val attacker = PlayerId(1)
+        val departedDefender = PlayerId(99)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("CM12"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(attacker),
+            ).copy(
+                gameStarted = true,
+                activePlayer = attacker,
+                turnOrder = listOf(attacker),
+                gameRandomSeed = 1L,
+                gameRandomState = 2L,
+            )
+        val state =
+            baseState.withTerritories(
+                TerritoryId("alpha") to TerritoryState(TerritoryId("alpha"), attacker, 6),
+                TerritoryId("beta") to TerritoryState(TerritoryId("beta"), departedDefender, 1),
+            )
+
+        val events =
+            ruleService.createEvents(
+                state = state,
+                command =
+                    AttackCommand(
+                        lobbyCode = state.lobbyCode,
+                        playerId = attacker,
+                        fromTerritoryId = TerritoryId("alpha"),
+                        toTerritoryId = TerritoryId("beta"),
+                        requestedAttackDice = 3,
+                        committedTroopCount = 5,
+                        occupyingTroopCount = 5,
+                    ),
+            )
+
+        val event = events.single() as AttackResolvedEvent
+        assertEquals(departedDefender, event.defenderPlayerId)
+        assertEquals(0, event.defenderRemaining)
+        assertEquals(5, event.attackTroops)
+        assertEquals(1, event.targetTroopsBefore)
+        assertEquals(5, event.occupyingTroopCount)
+    }
+
+    @Test
     fun `command validation rejects state and actor mismatches`() {
         val playerOne = PlayerId(1)
         val command =

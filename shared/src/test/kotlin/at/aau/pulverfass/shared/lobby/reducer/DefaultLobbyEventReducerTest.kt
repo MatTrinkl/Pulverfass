@@ -11,6 +11,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -44,6 +45,7 @@ import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
 import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
@@ -1422,16 +1424,9 @@ class DefaultLobbyEventReducerTest {
         val player2 = PlayerId(2)
         val player3 = PlayerId(3)
         val seed = 123L
+        val mapDefinition = defaultMapDefinition()
         val random = Random(seed)
         val expectedTurnOrder = listOf(owner, player2, player3).shuffled(random)
-        val expectedTerritoryOwners =
-            sampleMapDefinition()
-                .territories
-                .map { territory -> territory.territoryId }
-                .shuffled(random)
-                .mapIndexed { index, territoryId ->
-                    territoryId to expectedTurnOrder[index % expectedTurnOrder.size]
-                }.toMap()
         val stateWithOwner =
             GameState(
                 lobbyCode = lobbyCode,
@@ -1439,9 +1434,9 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(owner, player2, player3),
                 turnOrder = listOf(owner, player2, player3),
                 activePlayer = owner,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = mapDefinition,
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    mapDefinition.territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 status = GameStatus.WAITING_FOR_PLAYERS,
@@ -1459,10 +1454,7 @@ class DefaultLobbyEventReducerTest {
         assertEquals(expectedTurnOrder.first(), started.turnState?.startPlayerId)
         assertEquals(false, started.turnState?.isPaused)
         assertEquals(null, started.turnState?.pauseReason)
-        assertEquals(34, started.setupTroopsToPlaceFor(owner))
-        assertEquals(34, started.setupTroopsToPlaceFor(player2))
-        assertEquals(34, started.setupTroopsToPlaceFor(player3))
-        val territoryCount = sampleMapDefinition().territories.size
+        val territoryCount = mapDefinition.territories.size
         assertEquals(territoryCount * 3 + 4, started.deckState.cards.size)
         assertEquals(
             territoryCount,
@@ -1481,13 +1473,48 @@ class DefaultLobbyEventReducerTest {
             started.deckState.cards.size,
             started.deckState.cards.map { card -> card.cardId }.distinct().size,
         )
-        started.allTerritoryStates().forEach { territoryState ->
-            assertEquals(
-                expectedTerritoryOwners[territoryState.territoryId],
-                territoryState.ownerId,
-            )
-            assertEquals(1, territoryState.troopCount)
-        }
+        assertEquals(0, started.setupTroopsToPlaceFor(owner))
+        assertEquals(0, started.setupTroopsToPlaceFor(player2))
+        assertEquals(0, started.setupTroopsToPlaceFor(player3))
+        assertEquals(
+            60,
+            started.allTerritoryStates().sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == owner }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == player2 }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            20,
+            started.allTerritoryStates()
+                .filter { territoryState -> territoryState.ownerId == player3 }
+                .sumOf { territoryState -> territoryState.troopCount },
+        )
+        assertEquals(
+            true,
+            started.allTerritoryStates().all { territoryState ->
+                territoryState.ownerId != null && territoryState.troopCount in 1..4
+            },
+        )
+        assertEquals(
+            true,
+            mapDefinition.continents
+                .filter { continent -> continent.territoryIds.size >= 2 }
+                .all { continent ->
+                    continent.territoryIds
+                        .map { territoryId -> started.requireTerritoryState(territoryId).ownerId }
+                        .distinct()
+                        .size >= 2
+                },
+        )
     }
 
     @Test
@@ -1502,9 +1529,9 @@ class DefaultLobbyEventReducerTest {
                 players = listOf(owner, player2),
                 turnOrder = listOf(owner, player2),
                 activePlayer = owner,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = defaultMapDefinition(),
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    defaultMapDefinition().territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 status = GameStatus.WAITING_FOR_PLAYERS,
@@ -1644,9 +1671,9 @@ class DefaultLobbyEventReducerTest {
                 configuredStartPlayerId = player2,
                 turnOrder = listOf(owner, player2, player3),
                 activePlayer = player2,
-                mapDefinition = sampleMapDefinition(),
+                mapDefinition = defaultMapDefinition(),
                 territoryStates =
-                    sampleMapDefinition().territories.associate { territory ->
+                    defaultMapDefinition().territories.associate { territory ->
                         territory.territoryId to TerritoryState(territory.territoryId)
                     },
                 turnState =
@@ -1704,6 +1731,60 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(7, updated.troopCountOf(TerritoryId("alpha")))
+    }
+
+    @Test
+    fun `cheat reinforcement bonus used marks player`() {
+        val lobbyCode = LobbyCode("CH01")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val updated =
+            reducer.apply(
+                initialState,
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+            )
+
+        assertEquals(
+            setOf(playerOne),
+            updated.usedCheatReinforcementBonusByPlayer,
+        )
+    }
+
+    @Test
+    fun `cheat reinforcement bonus cannot be used twice by same player`() {
+        val lobbyCode = LobbyCode("CH02")
+        val playerOne = PlayerId(1)
+        val initialState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne),
+            )
+
+        val withUsedBonus =
+            reducer.apply(
+                initialState,
+                CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+            )
+
+        val exception =
+            assertThrows(InvalidLobbyEventException::class.java) {
+                reducer.apply(
+                    withUsedBonus,
+                    CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
+                )
+            }
+
+        assertEquals(
+            "Spieler '1' hat den Schummel-Verstärkungsbonus bereits verwendet.",
+            exception.message,
+        )
     }
 
     @Test
@@ -2320,4 +2401,6 @@ class DefaultLobbyEventReducerTest {
                     ),
                 ),
         )
+
+    private fun defaultMapDefinition(): MapDefinition = MapConfigLoader.loadDefault()
 }

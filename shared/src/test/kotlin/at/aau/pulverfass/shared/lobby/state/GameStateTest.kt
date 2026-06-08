@@ -355,28 +355,60 @@ class GameStateTest {
                     reducer.apply(
                         reducer.apply(
                             reducer.apply(
-                                GameState.initial(
-                                    lobbyCode = lobbyCode,
-                                    mapDefinition = sampleMapDefinition(),
-                                    players = listOf(playerOne, playerTwo, playerThree),
+                                reducer.apply(
+                                    GameState.initial(
+                                        lobbyCode = lobbyCode,
+                                        mapDefinition = sampleMapDefinition(),
+                                        players = listOf(playerOne, playerTwo, playerThree),
+                                    ),
+                                    TerritoryOwnerChangedEvent(
+                                        lobbyCode,
+                                        TerritoryId("alpha"),
+                                        playerOne,
+                                    ),
                                 ),
-                                TerritoryOwnerChangedEvent(
-                                    lobbyCode,
-                                    TerritoryId("alpha"),
-                                    playerOne,
-                                ),
+                                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
                             ),
-                            TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
+                            TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerTwo),
                         ),
-                        TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerTwo),
+                        TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("gamma"), playerThree),
                     ),
-                    TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("gamma"), playerThree),
+                    TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
                 ),
-                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("beta"), 1),
+                TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("gamma"), 1),
             )
 
         assertEquals(
             listOf(TerritoryId("beta"), TerritoryId("gamma")),
+            state.validAttackTargets(TerritoryId("alpha"), playerOne),
+        )
+    }
+
+    @Test
+    fun `should ignore foreign attack targets without defending troops`() {
+        val playerOne = PlayerId(54)
+        val playerTwo = PlayerId(55)
+        val reducer = DefaultLobbyEventReducer()
+        val lobbyCode = LobbyCode("ATQ4")
+        val state =
+            reducer.apply(
+                reducer.apply(
+                    reducer.apply(
+                        GameState.initial(
+                            lobbyCode = lobbyCode,
+                            mapDefinition = sampleMapDefinition(),
+                            players = listOf(playerOne, playerTwo),
+                        ),
+                        TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), playerOne),
+                    ),
+                    TerritoryTroopsChangedEvent(lobbyCode, TerritoryId("alpha"), 4),
+                ),
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("beta"), playerTwo),
+            )
+
+        assertFalse(state.canAttackFrom(TerritoryId("alpha"), playerOne))
+        assertEquals(
+            emptyList<TerritoryId>(),
             state.validAttackTargets(TerritoryId("alpha"), playerOne),
         )
     }

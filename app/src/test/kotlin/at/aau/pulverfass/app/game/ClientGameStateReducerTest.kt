@@ -35,6 +35,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/**
+ * Prüft den zentralen Reducer, der Backend-Events in den lokalen Game-UI-State überführt.
+ *
+ * Die Tests bilden Snapshots, Deltas, Phasenwechsel, private Karten, Verstärkungen,
+ * Angriffe und Verschiebungen ab. Dadurch bleibt sichtbar, welche Serverdaten der
+ * Client direkt übernimmt und welche lokalen UI-Auswahlen bewusst erhalten bleiben.
+ */
 class ClientGameStateReducerTest {
     @Test
     fun `catch up snapshot replaces public map and turn state`() {
@@ -153,6 +160,7 @@ class ClientGameStateReducerTest {
                                 isPaused = true,
                                 pauseReason = "waiting",
                                 pausedPlayerId = bobId,
+                                fortifyUsedThisTurn = true,
                             ),
                         definition = mapDefinition("brasilien"),
                         territoryStates =
@@ -171,6 +179,8 @@ class ClientGameStateReducerTest {
         assertEquals(bobId, state.activePlayerId)
         assertEquals(TurnPhase.FORTIFY, state.turnPhase)
         assertTrue(state.isPaused)
+        assertTrue(state.fortifyState.hasMoved)
+        assertFalse(state.canManageFortify(bobId))
         assertEquals(null, state.selectedRegionId)
         assertEquals("Bob", state.regionStates.getValue("brazil").ownerName)
     }
@@ -426,6 +436,335 @@ class ClientGameStateReducerTest {
         assertEquals(3, increasedAttack.attackState.moveAfterCapture)
         assertEquals(4, increasedOccupation.attackState.moveAfterCapture)
         assertEquals(null, dismissed.selectionFromRegionId)
+    }
+
+    @Test
+    fun `attack availability ignores weak sources and allows departed owners`() {
+        val departedPlayer = PlayerId(99)
+        val weakSourceState =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                adjacentTerritoryIds =
+                    mapOf(
+                        TerritoryId("brasilien") to setOf(TerritoryId("argentinien")),
+                    ),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 2),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(TerritoryId("argentinien"), departedPlayer, 3),
+                    ),
+            )
+        val abandonedTargetState =
+            weakSourceState.copy(
+                territoryStates =
+                    weakSourceState.territoryStates +
+                        (
+                            TerritoryId("brasilien") to
+                                GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 3)
+                        ),
+            )
+        val emptyDepartedTargetState =
+            abandonedTargetState.copy(
+                territoryStates =
+                    abandonedTargetState.territoryStates +
+                        (
+                            TerritoryId("argentinien") to
+                                GameTerritoryUiState(TerritoryId("argentinien"), departedPlayer, 0)
+                        ),
+            )
+
+        assertFalse(weakSourceState.hasAvailableAttack(aliceId))
+        assertTrue(abandonedTargetState.hasAvailableAttack(aliceId))
+        assertFalse(emptyDepartedTargetState.hasAvailableAttack(aliceId))
+    }
+
+    @Test
+    fun `attack selection rejects neutral targets but allows departed owners`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 3),
+                        targetId to GameTerritoryUiState(targetId, null, 3),
+                    ),
+            )
+
+        val selectedSource = ClientGameStateReducer.selectRegion(base, "brazil", aliceId)
+        val rejectedNeutralTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "argentina", aliceId)
+        val departedTarget =
+            selectedSource.copy(
+                territoryStates =
+                    selectedSource.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, PlayerId(99), 3)),
+            )
+        val acceptedDepartedTarget =
+            ClientGameStateReducer.selectRegion(departedTarget, "argentina", aliceId)
+        val emptyDepartedTarget =
+            selectedSource.copy(
+                territoryStates =
+                    selectedSource.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, PlayerId(99), 0)),
+            )
+        val rejectedEmptyDepartedTarget =
+            ClientGameStateReducer.selectRegion(emptyDepartedTarget, "argentina", aliceId)
+
+        assertEquals(null, rejectedNeutralTarget.selectionToRegionId)
+        assertFalse(rejectedNeutralTarget.canSubmitAttack(aliceId))
+        assertEquals("argentina", acceptedDepartedTarget.selectionToRegionId)
+        assertTrue(acceptedDepartedTarget.canSubmitAttack(aliceId))
+        assertEquals(null, rejectedEmptyDepartedTarget.selectionToRegionId)
+        assertFalse(rejectedEmptyDepartedTarget.canSubmitAttack(aliceId))
+    }
+
+    @Test
+    fun `attack submission rejects troop count above current source limit`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val selectedAttack =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                selectedRegionId = "argentina",
+                selectionFromRegionId = "brazil",
+                selectionToRegionId = "argentina",
+                adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                        targetId to GameTerritoryUiState(targetId, PlayerId(99), 1),
+                    ),
+                attackState =
+                    AttackUiState(
+                        attackTroops = 5,
+                        moveAfterCapture = 3,
+                    ),
+            )
+
+        assertFalse(selectedAttack.canSubmitAttack(aliceId))
+        assertTrue(
+            selectedAttack
+                .copy(attackState = AttackUiState(attackTroops = 4, moveAfterCapture = 3))
+                .canSubmitAttack(aliceId),
+        )
+    }
+
+    @Test
+    fun `fortify selection accepts only owned connected targets and marks move as consumed`() {
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                adjacentTerritoryIds =
+                    mapOf(
+                        TerritoryId("brasilien") to setOf(TerritoryId("kanada")),
+                        TerritoryId("kanada") to
+                            setOf(
+                                TerritoryId("brasilien"),
+                                TerritoryId("groenland"),
+                            ),
+                        TerritoryId("groenland") to setOf(TerritoryId("kanada")),
+                    ),
+                territoryStates =
+                    mapOf(
+                        TerritoryId("brasilien") to
+                            GameTerritoryUiState(TerritoryId("brasilien"), aliceId, 5),
+                        TerritoryId("kanada") to
+                            GameTerritoryUiState(TerritoryId("kanada"), aliceId, 2),
+                        TerritoryId("groenland") to
+                            GameTerritoryUiState(TerritoryId("groenland"), aliceId, 1),
+                        TerritoryId("mittelamerika") to
+                            GameTerritoryUiState(TerritoryId("mittelamerika"), aliceId, 2),
+                        TerritoryId("argentinien") to
+                            GameTerritoryUiState(TerritoryId("argentinien"), bobId, 2),
+                        TerritoryId("usa") to
+                            GameTerritoryUiState(TerritoryId("usa"), aliceId, 1),
+                    ),
+            )
+
+        val weakSource =
+            ClientGameStateReducer.selectRegion(base, "america", aliceId)
+        val selectedSource =
+            ClientGameStateReducer.selectRegion(base, "brazil", aliceId)
+        val ignoredEnemyTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "argentina", aliceId)
+        val ignoredDisconnectedTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "mexico", aliceId)
+        val selectedTarget =
+            ClientGameStateReducer.selectRegion(selectedSource, "greenland", aliceId)
+        val increasedMove =
+            ClientGameStateReducer.adjustFortifyTroops(selectedTarget, 20)
+        val acceptedMove =
+            ClientGameStateReducer.applyFortifyMoveAccepted(increasedMove)
+        val retainedFortifyState =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = acceptedMove,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                        fortifyUsedThisTurn = true,
+                    ),
+            )
+        val serverConsumedSelection =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = selectedTarget,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.FORTIFY,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                        fortifyUsedThisTurn = true,
+                    ),
+            )
+        val resetFortifyState =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = acceptedMove,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                    ),
+            )
+        val ignoredAfterMove =
+            ClientGameStateReducer.selectRegion(retainedFortifyState, "brazil", aliceId)
+
+        assertEquals(null, weakSource.selectionFromRegionId)
+        assertEquals("brazil", selectedSource.selectionFromRegionId)
+        assertEquals(null, ignoredEnemyTarget.selectionToRegionId)
+        assertEquals(null, ignoredDisconnectedTarget.selectionToRegionId)
+        assertEquals("greenland", selectedTarget.selectionToRegionId)
+        assertTrue(selectedTarget.canSubmitFortifyMove(aliceId))
+        assertTrue(selectedTarget.canRequestTurnAdvance(aliceId))
+        assertEquals(4, increasedMove.fortifyState.troopCount)
+        assertEquals(null, acceptedMove.selectionFromRegionId)
+        assertTrue(acceptedMove.fortifyState.hasMoved)
+        assertTrue(retainedFortifyState.fortifyState.hasMoved)
+        assertTrue(serverConsumedSelection.fortifyState.hasMoved)
+        assertEquals(null, serverConsumedSelection.selectedRegionId)
+        assertEquals(null, serverConsumedSelection.selectionFromRegionId)
+        assertEquals(null, serverConsumedSelection.selectionToRegionId)
+        assertFalse(serverConsumedSelection.canSubmitFortifyMove(aliceId))
+        assertFalse(resetFortifyState.fortifyState.hasMoved)
+        assertEquals(null, ignoredAfterMove.selectionFromRegionId)
+    }
+
+    @Test
+    fun `fortify submission rejects stale invalid selections before sending`() {
+        val sourceId = TerritoryId("brasilien")
+        val middleId = TerritoryId("kanada")
+        val targetId = TerritoryId("groenland")
+        val selectedMove =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                selectedRegionId = "greenland",
+                selectionFromRegionId = "brazil",
+                selectionToRegionId = "greenland",
+                adjacentTerritoryIds =
+                    mapOf(
+                        sourceId to setOf(middleId),
+                        middleId to setOf(sourceId, targetId),
+                        targetId to setOf(middleId),
+                    ),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 4),
+                        middleId to GameTerritoryUiState(middleId, aliceId, 1),
+                        targetId to GameTerritoryUiState(targetId, aliceId, 1),
+                    ),
+                fortifyState = FortifyUiState(troopCount = 3),
+            )
+        val targetChangedOwner =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (targetId to GameTerritoryUiState(targetId, bobId, 1)),
+            )
+        val pathBecameBlocked =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (middleId to GameTerritoryUiState(middleId, bobId, 1)),
+            )
+        val sourceTroopsReduced =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 3)),
+            )
+        val noMovableSourceTroops =
+            selectedMove.copy(
+                territoryStates =
+                    selectedMove.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 1)),
+            )
+
+        assertTrue(selectedMove.canSubmitFortifyMove(aliceId))
+        assertFalse(targetChangedOwner.canSubmitFortifyMove(aliceId))
+        assertFalse(pathBecameBlocked.canSubmitFortifyMove(aliceId))
+        assertFalse(sourceTroopsReduced.canSubmitFortifyMove(aliceId))
+        assertFalse(noMovableSourceTroops.canSubmitFortifyMove(aliceId))
+    }
+
+    @Test
+    fun `fortify availability requires movable own troops and owned path`() {
+        val sourceId = TerritoryId("brasilien")
+        val middleId = TerritoryId("kanada")
+        val targetId = TerritoryId("groenland")
+        val base =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.FORTIFY,
+                adjacentTerritoryIds =
+                    mapOf(
+                        sourceId to setOf(middleId),
+                        middleId to setOf(sourceId, targetId),
+                        targetId to setOf(middleId),
+                    ),
+                territoryStates =
+                    mapOf(
+                        sourceId to GameTerritoryUiState(sourceId, aliceId, 1),
+                        middleId to GameTerritoryUiState(middleId, aliceId, 1),
+                        targetId to GameTerritoryUiState(targetId, aliceId, 1),
+                    ),
+            )
+        val movableSource =
+            base.copy(
+                territoryStates =
+                    base.territoryStates +
+                        (sourceId to GameTerritoryUiState(sourceId, aliceId, 2)),
+            )
+        val blockedPath =
+            movableSource.copy(
+                territoryStates =
+                    movableSource.territoryStates +
+                        (middleId to GameTerritoryUiState(middleId, bobId, 1)),
+            )
+
+        assertFalse(base.hasAvailableFortify(aliceId))
+        assertTrue(movableSource.hasAvailableFortify(aliceId))
+        assertFalse(blockedPath.hasAvailableFortify(aliceId))
+        assertFalse(
+            movableSource.copy(fortifyState = FortifyUiState(hasMoved = true))
+                .hasAvailableFortify(aliceId),
+        )
     }
 
     @Test
@@ -935,6 +1274,25 @@ class ClientGameStateReducerTest {
                         pausedPlayerId = aliceId,
                     ),
             )
+        val turnPhaseRefresh =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current =
+                    GameUiState(
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                        selectionMessage = "Zielgebiet ausgewählt.",
+                    ),
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 3,
+                        startPlayerId = aliceId,
+                    ),
+            )
         val private =
             ClientGameStateReducer.applyPrivateGetResponse(
                 current = GameUiState(lastSyncError = "old"),
@@ -954,6 +1312,10 @@ class ClientGameStateReducerTest {
         assertEquals(bobId, phase.activePlayerId)
         assertEquals(TurnPhase.DRAW_CARD, turn.turnPhase)
         assertTrue(turn.isPaused)
+        assertEquals(null, turnPhaseRefresh.selectedRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionFromRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionToRegionId)
+        assertEquals(null, turnPhaseRefresh.selectionMessage)
         assertEquals(listOf("card-a"), private.handCards)
         assertEquals(listOf("objective-a"), private.secretObjectives)
         assertEquals(null, private.lastSyncError)
@@ -988,11 +1350,19 @@ class ClientGameStateReducerTest {
                 players = players,
             )
 
-        assertEquals("Neutral", stateWithoutPlayers.regionStates.getValue("brazil").ownerName)
+        assertEquals(
+            "Verlassener Spieler",
+            stateWithoutPlayers.regionStates.getValue("brazil").ownerName,
+        )
         assertEquals("Alice", restoredState.regionStates.getValue("brazil").ownerName)
         assertEquals("1", restoredState.regionStates.getValue("brazil").ownerPlayerId)
     }
 
+    /**
+     * Erstellt eine schlanke Map-Definition für Reducer-Tests.
+     *
+     * @param territoryIds Backend-Territory-IDs, die im Snapshot enthalten sein sollen.
+     */
     private fun mapDefinition(vararg territoryIds: String): MapDefinitionSnapshot =
         MapDefinitionSnapshot(
             territories =

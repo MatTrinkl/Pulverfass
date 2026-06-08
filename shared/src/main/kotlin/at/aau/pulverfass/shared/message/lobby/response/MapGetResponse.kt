@@ -1,16 +1,10 @@
 package at.aau.pulverfass.shared.message.lobby.response
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.message.lobby.MapStateWireSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameStatePayload
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.descriptors.element
-import kotlinx.serialization.encoding.CompositeDecoder
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
  * Erfolgsantwort des Servers mit vollständigem Map-Snapshot.
@@ -47,106 +41,28 @@ data class MapGetResponse(
 /**
  * Technischer Serializer für [MapGetResponse].
  */
-object MapGetResponseSerializer : KSerializer<MapGetResponse> {
-    override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("at.aau.pulverfass.shared.network.message.MapGetResponse") {
-            element("lobbyCode", LobbyCode.serializer().descriptor)
-            element<Int>("schemaVersion")
-            element<String>("mapHash")
-            element<Long>("stateVersion")
-            element("definition", MapDefinitionSnapshot.serializer().descriptor)
-            element(
-                "territoryStates",
-                kotlinx.serialization.builtins.ListSerializer(
-                    MapTerritoryStateSnapshot.serializer(),
-                ).descriptor,
+object MapGetResponseSerializer :
+    KSerializer<MapGetResponse> by
+    at.aau.pulverfass.shared.message.codec.LegacyTransformingSerializer(
+        MapStateWireSnapshot.serializer(),
+        toWire = { value ->
+            MapStateWireSnapshot(
+                lobbyCode = value.lobbyCode,
+                schemaVersion = value.schemaVersion,
+                mapHash = value.mapHash,
+                stateVersion = value.stateVersion,
+                definition = value.definition,
+                territoryStates = value.territoryStates,
             )
-        }
-
-    override fun serialize(
-        encoder: Encoder,
-        value: MapGetResponse,
-    ) {
-        val composite = encoder.beginStructure(descriptor)
-        composite.encodeSerializableElement(descriptor, 0, LobbyCode.serializer(), value.lobbyCode)
-        composite.encodeIntElement(descriptor, 1, value.schemaVersion)
-        composite.encodeStringElement(descriptor, 2, value.mapHash)
-        composite.encodeLongElement(descriptor, 3, value.stateVersion)
-        composite.encodeSerializableElement(
-            descriptor,
-            4,
-            MapDefinitionSnapshot.serializer(),
-            value.definition,
-        )
-        composite.encodeSerializableElement(
-            descriptor,
-            5,
-            kotlinx.serialization.builtins.ListSerializer(MapTerritoryStateSnapshot.serializer()),
-            value.territoryStates,
-        )
-        composite.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): MapGetResponse {
-        val composite = decoder.beginStructure(descriptor)
-        var lobbyCode: LobbyCode? = null
-        var schemaVersion: Int? = null
-        var mapHash: String? = null
-        var stateVersion: Long? = null
-        var definition: MapDefinitionSnapshot? = null
-        var territoryStates: List<MapTerritoryStateSnapshot>? = null
-
-        loop@ while (true) {
-            when (val index = composite.decodeElementIndex(descriptor)) {
-                0 ->
-                    lobbyCode =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            0,
-                            LobbyCode.serializer(),
-                        )
-                1 -> schemaVersion = composite.decodeIntElement(descriptor, 1)
-                2 -> mapHash = composite.decodeStringElement(descriptor, 2)
-                3 -> stateVersion = composite.decodeLongElement(descriptor, 3)
-                4 ->
-                    definition =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            4,
-                            MapDefinitionSnapshot.serializer(),
-                        )
-                5 ->
-                    territoryStates =
-                        composite.decodeSerializableElement(
-                            descriptor,
-                            5,
-                            kotlinx.serialization.builtins.ListSerializer(
-                                MapTerritoryStateSnapshot.serializer(),
-                            ),
-                        )
-                CompositeDecoder.DECODE_DONE -> break@loop
-                else -> throw IllegalArgumentException("Unexpected index $index")
-            }
-        }
-
-        composite.endStructure(descriptor)
-        return MapGetResponse(
-            lobbyCode =
-                lobbyCode
-                    ?: throw MissingFieldException("lobbyCode", descriptor.serialName),
-            schemaVersion =
-                schemaVersion
-                    ?: throw MissingFieldException("schemaVersion", descriptor.serialName),
-            mapHash = mapHash ?: throw MissingFieldException("mapHash", descriptor.serialName),
-            stateVersion =
-                stateVersion
-                    ?: throw MissingFieldException("stateVersion", descriptor.serialName),
-            definition =
-                definition
-                    ?: throw MissingFieldException("definition", descriptor.serialName),
-            territoryStates =
-                territoryStates
-                    ?: throw MissingFieldException("territoryStates", descriptor.serialName),
-        )
-    }
-}
+        },
+        fromWire = { wire ->
+            MapGetResponse(
+                lobbyCode = wire.lobbyCode,
+                schemaVersion = wire.schemaVersion,
+                mapHash = wire.mapHash,
+                stateVersion = wire.stateVersion,
+                definition = wire.definition,
+                territoryStates = wire.territoryStates,
+            )
+        },
+    )

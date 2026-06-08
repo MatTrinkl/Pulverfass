@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -34,9 +36,16 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
- * Options-Screen — Username ändern, Music/SFX Toggles.
+ * Globaler Options-Screen für Anzeigename und Audio.
  *
- * Video-BG: options_vid.mp4, Musik: settings.mp3 (via MainActivity route-based playback).
+ * Der Anzeigename wird über den Controller persistiert. Musik und SFX werden
+ * direkt auf dem [BackgroundMusicManager] geändert, damit der Schalter sofort
+ * hörbar wirkt und nicht erst nach einem Screenwechsel.
+ *
+ * @param navController Navigation zurück zum vorherigen Screen.
+ * @param playerName aktuell gespeicherter Anzeigename.
+ * @param onPlayerNameChange Callback für persistente Namensänderungen.
+ * @param musicManager gemeinsamer Audio-Manager der Activity.
  */
 @Composable
 fun OptionsScreen(
@@ -54,15 +63,15 @@ fun OptionsScreen(
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        // Video Background
+        // Video-Hintergrund ohne eigene Tonspur; Musik kommt routenbasiert aus der Activity.
         VideoPlayer(
-            videoResId = R.raw.options_vid,
+            videoResId = R.raw.video_options_background,
             loop = true,
             cover = true,
             muted = true,
             modifier = Modifier.fillMaxSize(),
         )
-        // Dark overlay für Lesbarkeit
+        // Dunkles Overlay hält Formular und Titel vor wechselnden Videoframes lesbar.
         Box(
             modifier =
                 Modifier
@@ -70,16 +79,16 @@ fun OptionsScreen(
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.6f)),
         )
 
-        // Content
+        // Scrollbarer Inhalt, damit kleine Displays nicht von Systemleisten verdeckt werden.
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 48.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 48.dp, vertical = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // Title
             Text(
                 text = "OPTIONEN",
                 color = PulverfassColors.GoldBright,
@@ -90,16 +99,15 @@ fun OptionsScreen(
             )
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Username
             MainInputField(
                 value = playerName,
-                onValueChange = onPlayerNameChange,
+                onValueChange = { if (it.length <= 20) onPlayerNameChange(it) },
                 placeholder = "SPIELERNAME",
                 modifier = Modifier.fillMaxWidth(0.5f),
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Audio Controls Card
+            // Gemeinsame Audiokarte für Musik und SFX mit sofortiger Persistenz.
             Column(
                 modifier =
                     Modifier
@@ -130,7 +138,6 @@ fun OptionsScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Back
             MainButton(
                 text = "ZURÜCK",
                 onClick = { navController.popBackStack() },

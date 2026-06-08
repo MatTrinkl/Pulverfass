@@ -5,6 +5,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -87,6 +88,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 is CardDrawnEvent -> onCardDrawn(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
                 is MatchEndedEvent -> onMatchEnded(state, event)
+                is CheatReinforcementBonusUsedEvent -> onCheatReinforcementBonusUsed(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
                 is PendingReinforcementsSetEvent -> onPendingReinforcementsSet(state, event)
@@ -198,6 +200,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
                 tradeRequiredOnNextReinforcementPhaseByPlayer =
                     state.tradeRequiredOnNextReinforcementPhaseByPlayer - playerId,
+                usedCheatReinforcementBonusByPlayer =
+                    state.usedCheatReinforcementBonusByPlayer - playerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -256,6 +260,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
                 tradeRequiredOnNextReinforcementPhaseByPlayer =
                     state.tradeRequiredOnNextReinforcementPhaseByPlayer - targetPlayerId,
+                usedCheatReinforcementBonusByPlayer =
+                    state.usedCheatReinforcementBonusByPlayer - targetPlayerId,
                 configuredStartPlayerId = updatedTurnState?.startPlayerId,
                 turnOrder = updatedTurnOrder,
                 turnState =
@@ -477,7 +483,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
     ): GameState {
         requireMapLoaded(state)
         requireKnownPlayer(state, event.attackerPlayerId)
-        requireKnownPlayer(state, event.defenderPlayerId)
         requireKnownTerritory(state, event.fromTerritoryId)
         requireKnownTerritory(state, event.toTerritoryId)
 
@@ -616,6 +621,24 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
             )
         }
+    }
+
+    private fun onCheatReinforcementBonusUsed(
+        state: GameState,
+        event: CheatReinforcementBonusUsedEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+        if (event.playerId in state.usedCheatReinforcementBonusByPlayer) {
+            throw InvalidLobbyEventException(
+                "Spieler '${event.playerId.value}' hat den " +
+                    "Schummel-Verstärkungsbonus bereits verwendet.",
+            )
+        }
+
+        return state.copy(
+            usedCheatReinforcementBonusByPlayer =
+                state.usedCheatReinforcementBonusByPlayer + event.playerId,
+        )
     }
 
     private fun onPendingReinforcementsSet(

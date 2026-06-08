@@ -2,10 +2,14 @@ package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -28,6 +32,8 @@ object GameErrorTextMapper {
     internal const val GAME_NOT_FOUND_TEXT = "Das Spiel wurde nicht gefunden."
     internal const val NOT_IN_GAME_TEXT = "Du bist diesem Spiel noch nicht zugeordnet."
     internal const val GAME_PAUSED_TEXT = "Das Spiel ist aktuell pausiert."
+    internal const val PAYLOAD_TOO_LARGE_TEXT =
+        "Der angeforderte Spielstand ist zu groß für die aktuelle Übertragung."
     internal const val REQUESTER_MISMATCH_TEXT =
         "Die Spielerzuordnung stimmt nicht mehr. Lade den Spielstand neu."
 
@@ -36,6 +42,7 @@ object GameErrorTextMapper {
             MapGetErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
             MapGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             MapGetErrorCode.MAP_NOT_READY -> "Die Karte ist noch nicht bereit."
+            MapGetErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: GameStateCatchUpErrorResponse): String =
@@ -44,6 +51,7 @@ object GameErrorTextMapper {
             GameStateCatchUpErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStateCatchUpErrorCode.SNAPSHOT_NOT_READY ->
                 "Der Spielstand ist noch nicht bereit."
+            GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: GameStatePrivateGetErrorResponse): String =
@@ -52,6 +60,7 @@ object GameErrorTextMapper {
             GameStatePrivateGetErrorCode.NOT_IN_GAME -> NOT_IN_GAME_TEXT
             GameStatePrivateGetErrorCode.REQUESTER_MISMATCH ->
                 "Private Spielerdaten können nur für dich selbst geladen werden."
+            GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE -> PAYLOAD_TOO_LARGE_TEXT
         }
 
     fun map(error: TurnStateGetErrorResponse): String =
@@ -150,5 +159,39 @@ object GameErrorTextMapper {
             ConfirmAttackDoneErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
             ConfirmAttackDoneErrorCode.PHASE_MISMATCH -> "Die Angriffsphase ist bereits beendet."
             ConfirmAttackDoneErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+        }
+
+    fun map(error: FortifyMoveErrorResponse): String =
+        when (error.code) {
+            FortifyMoveErrorCode.REQUESTER_MISMATCH -> REQUESTER_MISMATCH_TEXT
+            FortifyMoveErrorCode.NOT_ACTIVE_PLAYER ->
+                "Truppen können nur im eigenen Zug verschoben werden."
+            FortifyMoveErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            FortifyMoveErrorCode.WRONG_PHASE ->
+                "Truppen können nur in der Verschiebephase bewegt werden."
+            FortifyMoveErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            FortifyMoveErrorCode.TERRITORY_NOT_OWNED ->
+                "Truppen können nur zwischen eigenen Gebieten verschoben werden."
+            FortifyMoveErrorCode.NO_PATH ->
+                "Zwischen diesen eigenen Gebieten besteht keine Verbindung."
+            FortifyMoveErrorCode.INSUFFICIENT_TROOPS ->
+                "Im Ausgangsgebiet sind nicht genügend Truppen verfügbar."
+            FortifyMoveErrorCode.FORTIFY_ALREADY_USED ->
+                "In diesem Zug wurde bereits eine Truppenverschiebung genutzt."
+        }
+
+    fun map(error: ClaimCheatReinforcementBonusErrorResponse): String =
+        when (error.code) {
+            ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH -> REQUESTER_MISMATCH_TEXT
+            ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER ->
+                "Der Schummelbonus kann nur im eigenen Zug verwendet werden."
+            ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED -> GAME_PAUSED_TEXT
+            ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH ->
+                "Der Schummelbonus ist nur während der Verstärkungsphase möglich."
+            ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            ClaimCheatReinforcementBonusErrorCode.ALREADY_USED ->
+                "Der Schummelbonus wurde bereits verwendet."
+            ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED ->
+                "Vor dem Schummelbonus muss ein Kartenset eingetauscht werden."
         }
 }
