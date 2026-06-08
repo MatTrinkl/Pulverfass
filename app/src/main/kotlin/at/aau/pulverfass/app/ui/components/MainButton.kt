@@ -25,7 +25,7 @@ import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
  * Pulverfass-Standard-Button mit Wood-Skin Background.
- * Verwendet `main_button_design.png` als stretchable BG.
+ * Verwendet `ui_button_wood.png` als stretchable BG.
  */
 @Composable
 fun MainButton(
@@ -50,7 +50,7 @@ fun MainButton(
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            painter = painterResource(id = R.drawable.main_button_design),
+            painter = painterResource(id = R.drawable.ui_button_wood),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.matchParentSize(),

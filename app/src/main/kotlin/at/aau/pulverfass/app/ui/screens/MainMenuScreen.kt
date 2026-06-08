@@ -34,9 +34,17 @@ import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 /**
- * Main-Menu Screen mit gamelogo.png groß über den Buttons.
- * Video-Background (menuvid.mp4).
- * EXIT zeigt Bestätigungsdialog via ExitConfirmationDialog (lobbylist.png Parchment).
+ * Hauptmenü mit Video-Hintergrund, Logo und den primären Einstiegsaktionen.
+ *
+ * Der Exit-Button beendet die App nicht direkt, sondern öffnet zuerst den
+ * Bestätigungsdialog. [background] ist injizierbar, damit UI-Tests keinen
+ * echten Videoplayer starten müssen.
+ *
+ * @param onStartClick Navigation in den Lobby-Einstieg.
+ * @param onOptionsClick Navigation in die globalen Optionen.
+ * @param onExitClick finale Exit-Aktion nach Bestätigung.
+ * @param modifier äußerer Modifier für Einbettung und Tests.
+ * @param background austauschbarer Hintergrundslot für Tests und Preview.
  */
 @Composable
 fun MainMenuScreen(
@@ -46,7 +54,7 @@ fun MainMenuScreen(
     modifier: Modifier = Modifier,
     background: @Composable () -> Unit = {
         VideoPlayer(
-            videoResId = R.raw.menuvid,
+            videoResId = R.raw.video_main_menu_background,
             loop = true,
             cover = true,
             muted = true,
@@ -64,10 +72,10 @@ fun MainMenuScreen(
                 .background(PulverfassColors.SurfaceVoid)
                 .testTag("MainMenuScreen"),
     ) {
-        // Video Background
+        // Bewegter Hintergrund; in Tests kann stattdessen ein statisches Box-Stub genutzt werden.
         background()
 
-        // Horizontal gradient overlay: transparent left → dark right
+        // Lesbarkeitsverlauf: links bleibt das Video sichtbar, rechts tragen Logo und Buttons.
         Box(
             modifier =
                 Modifier
@@ -82,7 +90,7 @@ fun MainMenuScreen(
                     ),
         )
 
-        // Logo + Buttons auf der rechten Seite
+        // Logo und Buttons bleiben rechts, damit der Videohintergrund links als Motiv wirkt.
         Box(
             modifier =
                 Modifier
@@ -94,7 +102,7 @@ fun MainMenuScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.gamelogo),
+                    painter = painterResource(id = R.drawable.brand_pulverfass_logo),
                     contentDescription = "Pulverfass Logo",
                     contentScale = ContentScale.Fit,
                     modifier =
@@ -130,7 +138,7 @@ fun MainMenuScreen(
             }
         }
 
-        // Exit Confirmation Overlay
+        // Exit benötigt Bestätigung, weil der Activity-Finish nicht rückgängig gemacht werden kann.
         if (showExitDialog) {
             ExitConfirmationDialog(
                 onConfirm = onExitClick,

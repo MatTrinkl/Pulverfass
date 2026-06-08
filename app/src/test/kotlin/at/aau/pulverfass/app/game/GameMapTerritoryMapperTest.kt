@@ -7,6 +7,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die Übersetzung zwischen Backend-Territories und Android-Regionen.
+ *
+ * Diese Zuordnung ist für Touch-Selektion, Besitz-Overlay und Angriffslogik wichtig,
+ * weil die App mit visuellen Region-IDs arbeitet und der Server Backend-IDs erwartet.
+ */
 class GameMapTerritoryMapperTest {
     @Test
     fun `siberia map regions keep their backend territory identity`() {

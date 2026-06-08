@@ -11,6 +11,13 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * E2E-naher Activity-Test für den echten App-Startpfad.
+ *
+ * Der Test bleibt ignoriert, weil Video-Playback und echte Activity-Lifecycle-
+ * Effekte lokal und in CI instabil sein können. Er dokumentiert trotzdem den
+ * gewünschten Pfad vom Ladebildschirm über das Hauptmenü bis in die Lobby.
+ */
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
     @get:Rule
@@ -19,8 +26,7 @@ class MainActivityTest {
     @Ignore("Requires real device with video playback - E2E test")
     @Test
     fun main_activity_navigates_from_load_through_main_menu_to_lobby() {
-        // 2. Warte bis LoadScreen-Preload und min-display-time durch sind
-        //    und MainMenu mit "START" Button erscheint (15s).
+        // Wartet, bis LoadScreen-Preload und Mindestanzeigezeit durch sind.
         composeTestRule.waitUntil(timeoutMillis = 15_000) {
             try {
                 composeTestRule
@@ -32,13 +38,13 @@ class MainActivityTest {
             }
         }
         composeTestRule.onNodeWithText("START").assertExists()
-        composeTestRule.onNodeWithText("OPTIONS").assertExists()
-        composeTestRule.onNodeWithText("EXIT").assertExists()
+        composeTestRule.onNodeWithText("OPTIONEN").assertExists()
+        composeTestRule.onNodeWithText("BEENDEN").assertExists()
 
-        // 3. Click START → sollte zur Lobby navigieren.
+        // Start muss in den Lobby-Einstieg navigieren.
         composeTestRule.onNodeWithTag("MenuButton_Start").performClick()
 
-// 4. Warte bis Lobby mit "SPIEL-LOBBY" erscheint (10s).
+        // Wartet, bis der Lobby-Screen sichtbar ist.
         composeTestRule.waitUntil(timeoutMillis = 10_000) {
             try {
                 composeTestRule

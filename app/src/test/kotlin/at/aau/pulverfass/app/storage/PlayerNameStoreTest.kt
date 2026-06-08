@@ -8,6 +8,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+/**
+ * Prüft persistierte Spielereinstellungen im Android-SharedPreferences-Store.
+ *
+ * Name und Charakter-ID müssen App-Neustarts überleben, während der No-Op-Store
+ * für Tests und Vorschauen bewusst keine Werte dauerhaft speichert.
+ */
 @RunWith(RobolectricTestRunner::class)
 class PlayerNameStoreTest {
     @Test
@@ -36,10 +42,10 @@ class PlayerNameStoreTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = SharedPreferencesPlayerNameStore(context)
 
-        store.saveCharacterId("doctor")
+        store.saveCharacterId("character_03")
 
         val restoredStore = SharedPreferencesPlayerNameStore(context)
-        assertEquals("doctor", restoredStore.readCharacterId())
+        assertEquals("character_03", restoredStore.readCharacterId())
     }
 
     @Test
@@ -52,7 +58,7 @@ class PlayerNameStoreTest {
 
     @Test
     fun `no op store should never persist character id`() {
-        NoOpPlayerNameStore.saveCharacterId("doctor")
+        NoOpPlayerNameStore.saveCharacterId("character_03")
 
         assertNull(NoOpPlayerNameStore.readCharacterId())
     }

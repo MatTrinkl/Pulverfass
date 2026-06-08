@@ -17,7 +17,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import at.aau.pulverfass.app.lobby.CharacterDef
+import at.aau.pulverfass.app.lobby.CharacterDefinition
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 
 private val CoinGoldLight = Color(0xFFFFF5C2)
@@ -29,7 +29,7 @@ private val CoinGoldDark = Color(0xFF8B6F2A)
  */
 @Composable
 fun CharacterCoin(
-    character: CharacterDef,
+    character: CharacterDefinition,
     size: Dp = 96.dp,
     borderWidth: Dp = 2.dp,
     modifier: Modifier = Modifier,

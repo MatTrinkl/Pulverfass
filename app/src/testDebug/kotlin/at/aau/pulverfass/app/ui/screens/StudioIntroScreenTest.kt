@@ -13,7 +13,13 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-// testet den studio intro screen und seine navigation
+/**
+ * Smoke-Test für das Studio-Intro im minimalen NavHost.
+ *
+ * Der Test prüft bewusst nur, dass Video- und Navigationssetup ohne Crash
+ * komponiert werden. Timing und Videoende sind geräteabhängig und werden hier
+ * nicht künstlich erzwungen.
+ */
 @RunWith(AndroidJUnit4::class)
 class StudioIntroScreenTest {
     @get:Rule
@@ -37,6 +43,5 @@ class StudioIntroScreenTest {
                 }
             }
         }
-        // wenn wir hier ankommen ohne crash ist alles ok
     }
 }

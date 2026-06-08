@@ -1,9 +1,17 @@
 package at.aau.pulverfass.app.ui.screens
 
-import android.media.MediaPlayer
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -51,15 +59,18 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
@@ -82,15 +93,17 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.MIN_ATTACK_TROOPS
+import at.aau.pulverfass.app.game.MIN_FORTIFY_TROOPS
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
 import at.aau.pulverfass.app.game.lobbyPlayersToGamePlayers
 import at.aau.pulverfass.app.game.minimumOccupyingTroopsForAttack
-import at.aau.pulverfass.app.lobby.CharacterDef
+import at.aau.pulverfass.app.lobby.CharacterDefinition
 import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
@@ -121,12 +134,20 @@ private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
+private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
+private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val COUNTDOWN_STEP_MILLIS = 1_000L
+private const val COUNTDOWN_ZERO_MILLIS = 450L
+private const val CHEAT_LIGHT_BASELINE_LUX = 8f
+private const val CHEAT_LIGHT_COVERED_LUX = 2f
 
 /**
  * Einstiegspunkt des Spielbildschirms.
  *
  * @param controller gemeinsamer LobbyController, der Lobby-, Netzwerk- und
  * GameState verwaltet
+ * @param musicManager optionaler Audio-Manager für SFX, Musik und Cheat-Sound.
+ * @param onNavigateToMain Navigation zurück ins Hauptmenü nach "Spiel verlassen".
  */
 @Composable
 fun GameScreen(
@@ -137,14 +158,18 @@ fun GameScreen(
     val lobbyState by controller.state.collectAsState()
     val character = lobbyState.characterId?.let { Characters.byId(it) }
     val players =
-        remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.playerColor) {
+        remember(lobbyState.players, lobbyState.ownPlayerId, lobbyState.characterId) {
             lobbyPlayersToGamePlayers(
-                lobbyState.players,
-                lobbyState.ownPlayerId,
-                lobbyState.playerColor,
+                players = lobbyState.players,
+                ownPlayerId = lobbyState.ownPlayerId,
+                ownCharacterId = lobbyState.characterId,
             )
         }
     val mapPainter = painterResource(id = R.drawable.map_world)
+    val onLeaveGame: () -> Unit = {
+        controller.leaveLobby()
+        onNavigateToMain()
+    }
 
     GameScreenContent(
         contentState =
@@ -157,6 +182,7 @@ fun GameScreen(
                 mapPainter = mapPainter,
                 character = character,
                 playerName = lobbyState.playerName,
+                autoPhaseNoticeText = lobbyState.autoPhaseNoticeText,
             ),
         actions =
             GameScreenActions(
@@ -166,6 +192,7 @@ fun GameScreen(
                 onAdjustReinforcementPlacementAmount =
                     controller::adjustReinforcementPlacementAmount,
                 onPlaceReinforcements = controller::placeReinforcements,
+                onClaimCheatReinforcementBonus = controller::claimCheatReinforcementBonus,
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
@@ -173,14 +200,34 @@ fun GameScreen(
                 onAdjustMoveAfterCapture = controller::adjustMoveAfterCapture,
                 onAttack = controller::attack,
                 onConfirmAttackDone = controller::confirmAttackDone,
+                onAdjustFortifyTroops = controller::adjustFortifyTroops,
+                onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
+                onClearAutoPhaseNotice = controller::clearAutoPhaseNotice,
             ),
         musicManager = musicManager,
-        onNavigateToMain = onNavigateToMain,
+        onNavigateToMain = onLeaveGame,
         onReconnect = controller::connect,
     )
 }
 
+/**
+ * Gebündelter Anzeigezustand des Spielscreens.
+ *
+ * Die Bündelung trennt Compose-Rendering vom [LobbyController] und hält Tests
+ * stabil: Screens bekommen nur bereits berechnete Werte, keine direkte
+ * Controller-Instanz.
+ *
+ * @param players Spielerleiste im bereits UI-fertigen Format.
+ * @param localPlayerId eigene PlayerId für aktionsabhängige Freigaben.
+ * @param uiState aktueller serverbasierter Spielzustand.
+ * @param isConnected aktueller WebSocket-Status.
+ * @param pendingCommandKeys ausstehende Commands, die Buttons sperren.
+ * @param mapPainter sichtbare Weltkarte.
+ * @param character eigener Charakter für den Header.
+ * @param playerName lokaler Anzeigename.
+ * @param autoPhaseNoticeText aktuell sichtbare Auto-Phasenmeldung.
+ */
 internal data class GameScreenContentState(
     val players: List<GamePlayerUi>,
     val localPlayerId: PlayerId?,
@@ -188,16 +235,42 @@ internal data class GameScreenContentState(
     val isConnected: Boolean,
     val pendingCommandKeys: Set<LobbyCommandKey>,
     val mapPainter: Painter,
-    val character: CharacterDef? = null,
+    val character: CharacterDefinition? = null,
     val playerName: String = "",
+    val autoPhaseNoticeText: String? = null,
 )
 
+/**
+ * Controller-Callbacks, die vom Spielscreen ausgelöst werden dürfen.
+ *
+ * Alle Callbacks bleiben hier zusammen, damit UI-Tests einzelne Aktionen
+ * ersetzen können und der Screen selbst keine Netzwerkdetails kennt.
+ *
+ * @param onRegionSelected Kartenregion aus der technischen Hitdetection.
+ * @param onToggleCards blendet die private Kartenhand ein oder aus.
+ * @param onAdvanceTurn generischer Phasenwechsel für nicht spezialisierten Flow.
+ * @param onAdjustReinforcementPlacementAmount ändert den Verstärkungs-Slider.
+ * @param onPlaceReinforcements sendet eine Verstärkungsplatzierung.
+ * @param onClaimCheatReinforcementBonus fordert den Lichtsensor-Cheatbonus an.
+ * @param onConfirmReinforcementsDone bestätigt das Ende der Verstärkungsphase.
+ * @param onToggleTradeInCard markiert oder demarkiert eine private Karte.
+ * @param onTradeInCards sendet den Kartentausch.
+ * @param onAdjustAttackTroops ändert die Angriffstruppen.
+ * @param onAdjustMoveAfterCapture ändert die Besetzung nach Capture.
+ * @param onAttack sendet den Angriff.
+ * @param onConfirmAttackDone bestätigt das Ende der Angriffsphase.
+ * @param onAdjustFortifyTroops ändert die Fortify-Truppen.
+ * @param onFortifyMove sendet die einmalige Truppenverschiebung.
+ * @param onRefreshGameState fordert einen Catch-up-Snapshot an.
+ * @param onClearAutoPhaseNotice schließt die sichtbare Auto-Phasenmeldung.
+ */
 internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
     val onToggleCards: () -> Unit,
     val onAdvanceTurn: () -> Unit,
     val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
     val onPlaceReinforcements: () -> Unit = {},
+    val onClaimCheatReinforcementBonus: () -> Unit = {},
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
@@ -205,7 +278,10 @@ internal data class GameScreenActions(
     val onAdjustMoveAfterCapture: (Int) -> Unit = {},
     val onAttack: () -> Unit = {},
     val onConfirmAttackDone: () -> Unit = {},
+    val onAdjustFortifyTroops: (Int) -> Unit = {},
+    val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
+    val onClearAutoPhaseNotice: () -> Unit = {},
 )
 
 /**
@@ -213,6 +289,15 @@ internal data class GameScreenActions(
  *
  * Die Gruppierung hält die Panel-Schnittstelle stabil, wenn weitere
  * kartenspezifische Eigenschaften aus dem privaten Snapshot hinzukommen.
+ *
+ * @param playerName eigener Anzeigename für die Kartenüberschrift.
+ * @param handCards ältere reine Textkarten aus Legacy-Antworten.
+ * @param privateHandCards aktuelle Karten mit ID und Typ.
+ * @param selectedTradeInCardIds lokal markierte Karten für einen Trade-in.
+ * @param showTradeControls ob Trade-in-Steuerung in der aktuellen Phase sichtbar ist.
+ * @param canSelectTradeCards ob einzelne Karten auswählbar sind.
+ * @param canTradeInCards ob genau drei gültige Karten gesendet werden dürfen.
+ * @param isTradePending `true`, solange der Serverrequest aussteht.
  */
 internal data class PrivateHandPanelState(
     val playerName: String,
@@ -284,6 +369,7 @@ private data class AttackPanelHostState(
     val isCommandPending: Boolean,
     val localPlayerId: PlayerId?,
     val isConnected: Boolean,
+    val showResult: Boolean = true,
 )
 
 private data class AttackPanelHostActions(
@@ -291,6 +377,43 @@ private data class AttackPanelHostActions(
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
     val onAttack: () -> Unit,
+)
+
+internal data class AttackResolutionOverlayState(
+    val attackerName: String,
+    val fromRegionId: String,
+    val toRegionId: String,
+    val troopCount: Int,
+)
+
+private data class FortifyPanelState(
+    val fortifyState: FortifyUiState,
+    val fromRegionId: String,
+    val toRegionId: String,
+    val maximumFortifyTroops: Int,
+    val canAdjust: Boolean,
+    val canMove: Boolean,
+)
+
+private data class FortifyPanelActions(
+    val onDismiss: () -> Unit,
+    val onAdjustFortifyTroops: (Int) -> Unit,
+    val onMove: () -> Unit,
+)
+
+private data class FortifyPanelHostState(
+    val selection: Pair<String, String>?,
+    val uiState: GameUiState,
+    val canManageFortify: Boolean,
+    val isCommandPending: Boolean,
+    val localPlayerId: PlayerId?,
+    val isConnected: Boolean,
+)
+
+private data class FortifyPanelHostActions(
+    val onRegionSelected: (String) -> Unit,
+    val onAdjustFortifyTroops: (Int) -> Unit,
+    val onMove: () -> Unit,
 )
 
 /**
@@ -326,6 +449,7 @@ internal fun GameScreenContent(
     val onAdvanceTurn = actions.onAdvanceTurn
     val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
     val onPlaceReinforcements = actions.onPlaceReinforcements
+    val onClaimCheatReinforcementBonus = actions.onClaimCheatReinforcementBonus
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
@@ -333,20 +457,38 @@ internal fun GameScreenContent(
     val onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture
     val onAttack = actions.onAttack
     val onConfirmAttackDone = actions.onConfirmAttackDone
+    val onAdjustFortifyTroops = actions.onAdjustFortifyTroops
+    val onFortifyMove = actions.onFortifyMove
     val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
 
     val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
     val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
+    val isAttackRequestPending = LobbyCommandKey.ATTACK in pendingCommandKeys
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
+    val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
+    val canManageFortify = uiState.canManageFortify(localPlayerId, isConnected)
     val remainingReinforcementAmount = uiState.reinforcementState.pendingAmount ?: 0
+    val canClaimCheatReinforcementBonus =
+        uiState.canManageReinforcements(localPlayerId, isConnected) &&
+            !isReinforcementCommandPending
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
     val attackPanelSelection = visibleAttackSelection(uiState, canManageAttacks)
+    val attackResolutionState =
+        createAttackResolutionOverlayState(
+            selection = attackPanelSelection,
+            uiState = uiState,
+            players = players,
+            fallbackPlayerName = personalPlayer.name,
+            isAttackRequestPending = isAttackRequestPending,
+        )
+    val isActionResolutionPending = attackResolutionState != null
+    val fortifyPanelSelection = visibleFortifySelection(uiState, canManageFortify)
     val canEndCurrentPhase =
         canEndCurrentPhase(
             uiState = uiState,
@@ -354,6 +496,7 @@ internal fun GameScreenContent(
             isConnected = isConnected,
             isReinforcementCommandPending = isReinforcementCommandPending,
             isAttackCommandPending = isAttackCommandPending,
+            isFortifyCommandPending = isFortifyCommandPending,
             pendingCommandKeys = pendingCommandKeys,
         )
     val onEndCurrentPhase =
@@ -371,6 +514,7 @@ internal fun GameScreenContent(
 
     val desyncedText = stringResource(id = R.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
+    val showDisconnectOverlay = rememberDelayedDisconnectFeedback(isDisconnectState)
     val disconnectMessage = buildDisconnectMessage(isConnected, uiState, desyncedText)
 
     var showOptionsOverlay by remember { mutableStateOf(false) }
@@ -384,10 +528,15 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        // Game content group — blurred when disconnected so the sharp overlay reads clearly
+        /*
+         * Der eigentliche Spielinhalt bleibt zunächst sichtbar, auch wenn ein
+         * sehr kurzer Reconnect- oder Catch-up-Zustand auftritt. Erst nach der
+         * Verzögerung wird weich geblurt, damit Attack-Responses nicht als
+         * flackernder Disconnect-Screen wahrgenommen werden.
+         */
         Box(
             modifier =
-                if (isDisconnectState) {
+                if (showDisconnectOverlay) {
                     Modifier.fillMaxSize().blur(20.dp)
                 } else {
                     Modifier.fillMaxSize()
@@ -403,7 +552,7 @@ internal fun GameScreenContent(
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
                  * handeln darf und der Client synchron verbunden ist.
                  */
-                    if (canUseGameActions) {
+                    if (canUseGameActions && !isActionResolutionPending) {
                         onRegionSelected(region.id)
                     }
                 },
@@ -415,6 +564,7 @@ internal fun GameScreenContent(
                 personalPlayer = personalPlayer,
                 phase = uiState.turnPhase,
                 round = uiState.turnCount.coerceAtLeast(1),
+                onOptionsClick = { showOptionsOverlay = true },
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
@@ -461,7 +611,11 @@ internal fun GameScreenContent(
                         .padding(top = TopBarHeight, bottom = BottomBarHeight)
                         .requiredWidth(CardsSidebarWidth)
                         .fillMaxHeight(),
-                musicManager = musicManager,
+            )
+
+            LightSensorCheatTrigger(
+                enabled = canClaimCheatReinforcementBonus,
+                onTriggered = onClaimCheatReinforcementBonus,
             )
 
             PlayerSidebar(
@@ -503,6 +657,7 @@ internal fun GameScreenContent(
                         isCommandPending = isAttackCommandPending,
                         localPlayerId = localPlayerId,
                         isConnected = isConnected,
+                        showResult = fortifyPanelSelection == null,
                     ),
                 actions =
                     AttackPanelHostActions(
@@ -513,6 +668,24 @@ internal fun GameScreenContent(
                     ),
             )
 
+            FortifyPanelHost(
+                state =
+                    FortifyPanelHostState(
+                        selection = fortifyPanelSelection,
+                        uiState = uiState,
+                        canManageFortify = canManageFortify,
+                        isCommandPending = isFortifyCommandPending,
+                        localPlayerId = localPlayerId,
+                        isConnected = isConnected,
+                    ),
+                actions =
+                    FortifyPanelHostActions(
+                        onRegionSelected = onRegionSelected,
+                        onAdjustFortifyTroops = onAdjustFortifyTroops,
+                        onMove = onFortifyMove,
+                    ),
+            )
+
             BottomActionClusters(
                 state =
                     BottomBarState(
@@ -520,7 +693,8 @@ internal fun GameScreenContent(
                         canUseLocalInput =
                             isConnected &&
                                 !uiState.isCatchingUp &&
-                                !uiState.isDesynced,
+                                !uiState.isDesynced &&
+                                !isActionResolutionPending,
                         canEndPhase = canEndCurrentPhase,
                         cardsVisible = uiState.cardsVisible,
                     ),
@@ -533,27 +707,6 @@ internal fun GameScreenContent(
                         .navigationBarsPadding(),
                 musicManager = musicManager,
             )
-
-            FilledTonalButton(
-                onClick = { showOptionsOverlay = true },
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = TopBarHeight + 8.dp),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                colors =
-                    ButtonDefaults.filledTonalButtonColors(
-                        containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                        contentColor = PulverfassColors.TextOnDark,
-                    ),
-            ) {
-                Text(
-                    text = "⚙ OPTIONEN",
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 1.sp,
-                )
-            }
 
             OptionsOverlay(
                 show = showOptionsOverlay,
@@ -571,16 +724,24 @@ internal fun GameScreenContent(
                 onClose = { showOptionsOverlay = false },
             )
 
+            AttackResolutionOverlay(state = attackResolutionState)
+
+            AutoPhaseNoticeOverlay(
+                message = contentState.autoPhaseNoticeText,
+                onDismiss = actions.onClearAutoPhaseNotice,
+            )
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
                 character = contentState.character,
                 playerName = contentState.playerName,
+                musicManager = musicManager,
                 onCountdownComplete = {},
             )
-        } // end blurred game content group
+        }
 
-        if (isDisconnectState) {
+        if (showDisconnectOverlay) {
             DisconnectOverlay(
                 message = disconnectMessage,
                 onReconnect = onReconnect,
@@ -605,6 +766,20 @@ private fun GameScreenOverlayContainer(
                 .background(PulverfassColors.SurfaceVoid.copy(alpha = overlayAlpha)),
         contentAlignment = Alignment.Center,
     ) {
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes
+                                    .forEach { it.consume() }
+                            }
+                        }
+                    },
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = arrangement,
@@ -614,6 +789,65 @@ private fun GameScreenOverlayContainer(
     }
 }
 
+/**
+ * Zeigt eine automatische Phasenmeldung ohne Bestätigung durch den Spieler.
+ *
+ * Der Controller queued diese Meldungen, wenn eine Phase serverseitig oder
+ * lokal automatisch beendet wurde. Das Overlay blockiert in dieser kurzen Zeit
+ * Eingaben, damit keine Karte bewegt oder ein zweiter Request ausgelöst wird.
+ *
+ * @param message sichtbarer Meldungstext oder `null`, wenn kein Overlay aktiv ist.
+ * @param onDismiss Callback nach Ablauf der Anzeigezeit.
+ */
+@Composable
+private fun AutoPhaseNoticeOverlay(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    if (message == null) return
+
+    LaunchedEffect(message) {
+        delay(AUTO_PHASE_NOTICE_DURATION_MILLIS)
+        onDismiss()
+    }
+
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.72f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .widthIn(max = 440.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.82f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+                .testTag("auto_phase_notice_popup"),
+    ) {
+        PulverfassTitleText(text = "PHASE GEWECHSELT", fontSize = 28.sp, letterSpacing = 2.sp)
+        Text(
+            text = message,
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
+/**
+ * Ingame-Optionsmenü über der Karte.
+ *
+ * Der gemeinsame [GameScreenOverlayContainer] konsumiert Pointer-Events im
+ * Hintergrund. Dadurch kann während des Menüs nur im Menü gescrollt und auf
+ * Buttons geklickt werden, nicht versehentlich die Karte darunter gepannt werden.
+ *
+ * @param show `true`, wenn das Menü sichtbar sein soll.
+ * @param isMusicEnabled aktueller Musik-Schalterzustand.
+ * @param isSfxEnabled aktueller SFX-Schalterzustand.
+ * @param onMusicToggle setzt Musik sofort an oder aus.
+ * @param onSfxToggle setzt SFX sofort an oder aus.
+ * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü.
+ * @param onClose schließt nur das Optionsmenü.
+ */
 @Composable
 private fun OptionsOverlay(
     show: Boolean,
@@ -648,33 +882,64 @@ private fun OptionsOverlay(
             onToggle = onSfxToggle,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        MainButton(text = "ZURÜCK ZUM HAUPTMENÜ", onClick = onNavigateToMain)
-        MainButton(text = "SCHLIESSEN", onClick = onClose)
+        MainButton(
+            text = "SCHLIESSEN",
+            onClick = onClose,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        MainButton(
+            text = "SPIEL VERLASSEN",
+            onClick = onNavigateToMain,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
+/**
+ * Zählt den Spielstart sichtbar herunter.
+ *
+ * Die Null ist absichtlich kürzer sichtbar als die übrigen Zahlen, weil sie
+ * nur als Abschluss-Frame für den Fade dient und nicht wie eine weitere volle
+ * Sekunde wirken soll.
+ *
+ * @param musicManager optionaler Audio-Manager für Countdown-SFX.
+ * @return Paar aus Sichtbarkeit und aktuellem Zahlenwert.
+ */
 @Composable
 private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<Boolean, Int> {
     var show by remember { mutableStateOf(true) }
     var value by remember { mutableStateOf(3) }
     LaunchedEffect(Unit) {
-        for (i in 3 downTo 0) {
+        for (i in 3 downTo 1) {
             value = i
-            musicManager?.playSfx(R.raw.sfx_ingame)
-            delay(1000L)
+            musicManager?.playSfx(R.raw.sfx_ui_click)
+            delay(COUNTDOWN_STEP_MILLIS)
         }
-        delay(2000L)
+        value = 0
+        musicManager?.playSfx(R.raw.sfx_ui_click)
+        delay(COUNTDOWN_ZERO_MILLIS)
         show = false
     }
     return show to value
 }
 
+/**
+ * Blockierendes Start-Overlay vor der ersten Spielinteraktion.
+ *
+ * @param show `true`, solange der Countdown sichtbar ist.
+ * @param value aktuelle Countdown-Zahl.
+ * @param character eigener Charakter für die filmische Variante.
+ * @param playerName Anzeigename unter der Charakter-Coin.
+ * @param musicManager optionaler Audio-Manager für SFX.
+ * @param onCountdownComplete Callback nach dem finalen Fade.
+ */
 @Composable
 private fun CountdownOverlay(
     show: Boolean,
     value: Int,
-    character: CharacterDef?,
+    character: CharacterDefinition?,
     playerName: String = "",
+    musicManager: BackgroundMusicManager? = null,
     onCountdownComplete: () -> Unit = {},
 ) {
     if (!show) return
@@ -691,6 +956,7 @@ private fun CountdownOverlay(
             value = value,
             character = character,
             playerName = playerName,
+            musicManager = musicManager,
             modifier = inputBlocker,
             onCountdownComplete = onCountdownComplete,
         )
@@ -710,24 +976,20 @@ private fun CountdownOverlay(
 @Composable
 private fun CinematicCountdown(
     value: Int,
-    character: CharacterDef,
+    character: CharacterDefinition,
     playerName: String = "",
+    musicManager: BackgroundMusicManager? = null,
     modifier: Modifier = Modifier,
     onCountdownComplete: () -> Unit = {},
 ) {
-    val isZooming = value <= 0
-    val zoomScale by animateFloatAsState(
-        targetValue = if (isZooming) 15f else 1f,
-        animationSpec = tween(800, easing = FastOutSlowInEasing),
-        label = "zoomScale",
-    )
+    val isFinishing = value <= 0
     val blackOverlayAlpha by animateFloatAsState(
-        targetValue = if (isZooming) 1f else 0f,
+        targetValue = if (isFinishing) 1f else 0f,
         animationSpec = tween(900, delayMillis = 600),
         label = "blackOverlay",
     )
-    LaunchedEffect(isZooming) {
-        if (isZooming) {
+    LaunchedEffect(isFinishing) {
+        if (isFinishing) {
             delay(1500)
             onCountdownComplete()
         }
@@ -756,18 +1018,10 @@ private fun CinematicCountdown(
                     .fillMaxSize()
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.05f)),
         )
-        val context = LocalContext.current
         val headerAlpha = remember { Animatable(0f) }
-        LaunchedEffect(Unit) {
+        LaunchedEffect(musicManager) {
             headerAlpha.animateTo(1f, tween(600))
-            try {
-                val mp = MediaPlayer.create(context, R.raw.sfx_schlacht_att)
-                mp?.start()
-                delay(3_000)
-                mp?.stop()
-                mp?.release()
-            } catch (_: Exception) {
-            }
+            musicManager?.playSfx(R.raw.sfx_attack_confirm)
         }
 
         Column(
@@ -803,11 +1057,6 @@ private fun CinematicCountdown(
             )
             Box(
                 contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier.graphicsLayer {
-                        scaleX = zoomScale
-                        scaleY = zoomScale
-                    },
             ) {
                 CharacterCoin(character = character, size = 130.dp)
             }
@@ -869,6 +1118,73 @@ private fun buildDisconnectMessage(
         else -> ""
     }
 
+/**
+ * Hört auf den Lichtsensor und löst den Debug-/Cheatbonus einmalig aus.
+ *
+ * Die Geste verlangt einen hellen Ausgangswert und danach ein deutliches
+ * Abdunkeln, damit normale Raumlichtschwankungen keinen Bonus triggern.
+ *
+ * @param enabled `true`, wenn die Verstärkungsphase den Cheat aktuell zulässt.
+ * @param onTriggered Callback für den Bonusrequest.
+ */
+@Composable
+private fun LightSensorCheatTrigger(
+    enabled: Boolean,
+    onTriggered: () -> Unit,
+) {
+    val context = LocalContext.current
+    val currentOnTriggered = rememberUpdatedState(onTriggered)
+    var previousLux by remember { mutableStateOf<Float?>(null) }
+
+    DisposableEffect(context, enabled) {
+        if (!enabled) {
+            return@DisposableEffect onDispose {}
+        }
+
+        previousLux = null
+        var triggered = false
+
+        val sensorManager =
+            context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+
+        if (lightSensor == null) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val listener =
+            object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    val lux = event.values.firstOrNull() ?: return
+                    val wasBright = previousLux?.let { it >= CHEAT_LIGHT_BASELINE_LUX } ?: false
+                    val isCovered = lux <= CHEAT_LIGHT_COVERED_LUX
+
+                    if (wasBright && isCovered && !triggered) {
+                        triggered = true
+                        currentOnTriggered.value()
+                    }
+
+                    previousLux = lux
+                }
+
+                override fun onAccuracyChanged(
+                    sensor: Sensor?,
+                    accuracy: Int,
+                ) = Unit
+            }
+
+        sensorManager.registerListener(
+            listener,
+            lightSensor,
+            SensorManager.SENSOR_DELAY_NORMAL,
+        )
+
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
+}
+
 @Composable
 private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
     var showCatchUpFeedback by remember { mutableStateOf(false) }
@@ -882,6 +1198,29 @@ private fun rememberDelayedCatchUpFeedback(isCatchingUp: Boolean): Boolean {
     return showCatchUpFeedback
 }
 
+/**
+ * Verzögert harte Disconnect-/Desync-Overlays um kurze Netzwerkwackler.
+ *
+ * Besonders nach Angriffen können Serverantworten und Folgephasen sehr dicht
+ * eintreffen. Ohne diese Verzögerung würde die Oberfläche kurz den
+ * Disconnect-Zustand zeigen, obwohl die Verbindung weiterhin nutzbar ist.
+ *
+ * @param isDisconnectState `true`, wenn Verbindung oder Sync gerade problematisch sind.
+ * @return `true`, wenn der Zustand lange genug anhält und sichtbar werden soll.
+ */
+@Composable
+private fun rememberDelayedDisconnectFeedback(isDisconnectState: Boolean): Boolean {
+    var showDisconnectFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(isDisconnectState) {
+        showDisconnectFeedback = false
+        if (isDisconnectState) {
+            delay(DISCONNECT_FEEDBACK_DELAY_MILLIS)
+            showDisconnectFeedback = true
+        }
+    }
+    return showDisconnectFeedback
+}
+
 @Composable
 private fun CatchUpProgressOverlay(
     isCatchingUp: Boolean,
@@ -893,6 +1232,118 @@ private fun CatchUpProgressOverlay(
     }
 }
 
+/**
+ * Blockiert die Karte, solange ein Angriff auf die Serverauflösung wartet.
+ *
+ * Das Overlay ist absichtlich leichtgewichtig: es überbrückt nur die Latenz
+ * zwischen AttackRequest und AttackResolvedBroadcastEvent. Die spätere
+ * Ergebnisanzeige kommt weiterhin aus dem autoritativen Serverevent.
+ *
+ * @param state sichtbarer Angriffsstatus oder `null`, wenn kein Angriff aussteht.
+ */
+@Composable
+private fun BoxScope.AttackResolutionOverlay(state: AttackResolutionOverlayState?) {
+    if (state == null) {
+        return
+    }
+
+    val inputBlocker =
+        Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                }
+            }
+        }
+    val pulseTransition = rememberInfiniteTransition(label = "attack_resolution_pulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(520, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "attack_resolution_pulse_alpha",
+    )
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(inputBlocker)
+                .background(Color.Black.copy(alpha = 0.18f))
+                .testTag("attack_resolution_overlay"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 460.dp),
+            shape = RoundedCornerShape(6.dp),
+            color = HudSurfaceColor,
+            contentColor = HudContentColor,
+            border = BorderStroke(1.dp, HudBorderColor),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(16.dp)
+                            .background(
+                                PulverfassColors.DangerBright.copy(alpha = pulseAlpha),
+                                CircleShape,
+                            ),
+                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.game_attack_resolving_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = HudContentColor,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.game_attack_resolving_route,
+                                state.attackerName,
+                                state.fromRegionId,
+                                state.toRegionId,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HudContentColor,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                id = R.string.game_attack_resolving_troops,
+                                state.troopCount,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HudContentColor,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Übersetzt den privaten Kartenstate in die Props der Kartenhand.
+ *
+ * @param player eigener UI-Spieler für Überschrift und Avatar-Kontext.
+ * @param uiState aktueller GameState mit privaten Karten.
+ * @param localPlayerId eigene PlayerId für Zugberechtigungen.
+ * @param isConnected aktueller Verbindungsstatus.
+ * @param isReinforcementCommandPending `true`, wenn ein Verstärkungsrequest läuft.
+ * @param pendingCommandKeys alle aktuell offenen Commands.
+ * @return UI-fertiger Panel-State für die Kartenhand.
+ */
 private fun privateHandPanelState(
     player: GamePlayerUi,
     uiState: GameUiState,
@@ -916,6 +1367,12 @@ private fun privateHandPanelState(
         isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
     )
 
+/**
+ * Rendert das Verstärkungspanel nur, wenn ein gültiges Zielgebiet sichtbar ist.
+ *
+ * @param state lokale und serverbasierte Verstärkungsdaten.
+ * @param actions Callbacks für Slider, Platzierung und Abwahl.
+ */
 @Composable
 private fun BoxScope.ReinforcementPanelHost(
     state: ReinforcementPanelHostState,
@@ -949,13 +1406,21 @@ private fun BoxScope.ReinforcementPanelHost(
     )
 }
 
+/**
+ * Rendert Auswahlpanel oder letztes Ergebnis der Angriffsphase.
+ *
+ * @param state lokaler Angriffsstatus inklusive Auswahl und Pending-Status.
+ * @param actions Callbacks für Slider, Angriff und Abwahl.
+ */
 @Composable
 private fun BoxScope.AttackPanelHost(
     state: AttackPanelHostState,
     actions: AttackPanelHostActions,
 ) {
     if (state.selection == null) {
-        AttackResultHost(result = state.uiState.attackState.latestResult)
+        if (state.showResult) {
+            AttackResultHost(result = state.uiState.attackState.latestResult)
+        }
         return
     }
 
@@ -986,6 +1451,46 @@ private fun BoxScope.AttackPanelHost(
     )
 }
 
+/**
+ * Rendert das Fortify-Panel für genau eine verbundene Truppenverschiebung.
+ *
+ * @param state lokaler Fortify-Status inklusive Source-/Target-Auswahl.
+ * @param actions Callbacks für Slider, Move und Abwahl.
+ */
+@Composable
+private fun BoxScope.FortifyPanelHost(
+    state: FortifyPanelHostState,
+    actions: FortifyPanelHostActions,
+) {
+    val selection = state.selection ?: return
+    val (fromRegionId, toRegionId) = selection
+    FortifyPanel(
+        state =
+            FortifyPanelState(
+                fortifyState = state.uiState.fortifyState,
+                fromRegionId = fromRegionId,
+                toRegionId = toRegionId,
+                maximumFortifyTroops = maximumFortifyTroops(state.uiState, fromRegionId),
+                canAdjust = state.canManageFortify && !state.isCommandPending,
+                canMove =
+                    state.uiState.canSubmitFortifyMove(
+                        state.localPlayerId,
+                        state.isConnected,
+                    ) && !state.isCommandPending,
+            ),
+        actions =
+            FortifyPanelActions(
+                onDismiss = { actions.onRegionSelected(fromRegionId) },
+                onAdjustFortifyTroops = actions.onAdjustFortifyTroops,
+                onMove = actions.onMove,
+            ),
+        modifier =
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = BottomBarHeight + 8.dp),
+    )
+}
+
 @Composable
 private fun BoxScope.AttackResultHost(result: AttackResultUiState?) {
     if (result == null) {
@@ -1007,6 +1512,14 @@ private fun maximumAttackTroops(
     uiState.territoryStates[
         GameMapTerritoryMapper.toTerritoryId(fromRegionId),
     ]?.troopCount?.minus(1) ?: uiState.attackState.attackTroops
+
+private fun maximumFortifyTroops(
+    uiState: GameUiState,
+    fromRegionId: String,
+): Int =
+    uiState.territoryStates[
+        GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+    ]?.troopCount?.minus(1) ?: uiState.fortifyState.troopCount
 
 /**
  * Rendert den Statusbereich nur dann, wenn eine synchronisationsrelevante Meldung vorliegt.
@@ -1053,6 +1566,9 @@ private fun Set<LobbyCommandKey>.hasAttackRequest(): Boolean =
             it == LobbyCommandKey.CONFIRM_ATTACK_DONE
     }
 
+private fun Set<LobbyCommandKey>.hasFortifyRequest(): Boolean =
+    any { it == LobbyCommandKey.FORTIFY_MOVE }
+
 /**
  * Das Platzierungs-Panel erscheint nur mit einem ausgewählten Ziel und Restpool.
  * Andernfalls bleibt die Karte frei; ein leerer Pool wird in der Aktionsleiste beendet.
@@ -1090,12 +1606,64 @@ private fun visibleAttackSelection(
     return fromRegionId to toRegionId
 }
 
+/**
+ * Erstellt die kurze "Angriff wird ausgewertet"-Meldung während eines Pending Requests.
+ *
+ * @param selection aktuelle Quelle-Ziel-Auswahl.
+ * @param uiState GameState mit ausgewählter Truppenanzahl.
+ * @param players Spielerleiste zur Auflösung des Angreifernamens.
+ * @param fallbackPlayerName Name, falls der lokale Spieler noch nicht in [players] steht.
+ * @param isAttackRequestPending `true`, solange der AttackRequest offen ist.
+ * @return Overlay-State oder `null`, wenn keine Pending-Anzeige nötig ist.
+ */
+internal fun createAttackResolutionOverlayState(
+    selection: Pair<String, String>?,
+    uiState: GameUiState,
+    players: List<GamePlayerUi>,
+    fallbackPlayerName: String,
+    isAttackRequestPending: Boolean,
+): AttackResolutionOverlayState? {
+    if (!isAttackRequestPending) {
+        return null
+    }
+    val (fromRegionId, toRegionId) = selection ?: return null
+    val attackerName =
+        players.firstOrNull { it.playerId == uiState.activePlayerId }?.name
+            ?: fallbackPlayerName
+
+    return AttackResolutionOverlayState(
+        attackerName = attackerName,
+        fromRegionId = fromRegionId,
+        toRegionId = toRegionId,
+        troopCount = uiState.attackState.attackTroops,
+    )
+}
+
+/**
+ * Ein Fortify-Panel benötigt zwei bereits validierte eigene verbundene Gebiete.
+ *
+ * Bis zur vollständigen Auswahl bleibt die Karte bedienbar, damit Quelle und
+ * Ziel direkt über die Hitmap gewählt oder gewechselt werden können.
+ */
+private fun visibleFortifySelection(
+    uiState: GameUiState,
+    canManageFortify: Boolean,
+): Pair<String, String>? {
+    if (uiState.turnPhase != TurnPhase.FORTIFY || !canManageFortify) {
+        return null
+    }
+    val fromRegionId = uiState.selectionFromRegionId ?: return null
+    val toRegionId = uiState.selectionToRegionId ?: return null
+    return fromRegionId to toRegionId
+}
+
 private fun canEndCurrentPhase(
     uiState: GameUiState,
     localPlayerId: PlayerId?,
     isConnected: Boolean,
     isReinforcementCommandPending: Boolean,
     isAttackCommandPending: Boolean,
+    isFortifyCommandPending: Boolean,
     pendingCommandKeys: Set<LobbyCommandKey>,
 ): Boolean =
     when (uiState.turnPhase) {
@@ -1105,6 +1673,10 @@ private fun canEndCurrentPhase(
         TurnPhase.ATTACK ->
             uiState.canConfirmAttackDone(localPlayerId, isConnected) &&
                 !isAttackCommandPending
+        TurnPhase.FORTIFY ->
+            uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
+                !isFortifyCommandPending &&
+                !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
         else ->
             uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
                 !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
@@ -1220,6 +1792,7 @@ private fun GameTopBar(
     personalPlayer: GamePlayerUi,
     phase: TurnPhase?,
     round: Int,
+    onOptionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1243,10 +1816,32 @@ private fun GameTopBar(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(horizontal = 20.dp),
+                        .padding(start = 12.dp, end = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val optionsDescription = "Optionen"
+                FilledTonalButton(
+                    onClick = onOptionsClick,
+                    modifier =
+                        Modifier
+                            .size(36.dp)
+                            .semantics { contentDescription = optionsDescription }
+                            .testTag("game_options_button"),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.65f),
+                            contentColor = PulverfassColors.TextOnDark,
+                        ),
+                ) {
+                    Text(
+                        text = "⚙",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = PulverfassColors.TextOnDark,
+                    )
+                }
                 PlayerAvatar(player = personalPlayer, size = 28.dp)
                 Column {
                     Text(
@@ -1316,7 +1911,6 @@ private fun CardsSidebar(
     actions: PrivateHandPanelActions,
     isVisible: Boolean,
     modifier: Modifier = Modifier,
-    musicManager: BackgroundMusicManager? = null,
 ) {
     if (isVisible) {
         Surface(
@@ -1334,7 +1928,6 @@ private fun CardsSidebar(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp, vertical = 10.dp),
-                musicManager = musicManager,
             )
         }
     }
@@ -1493,22 +2086,36 @@ private fun PlayerAvatar(
     player: GamePlayerUi,
     size: Dp,
 ) {
+    val character = player.characterId?.let(Characters::byId)
     Surface(
         modifier = Modifier.size(size),
         shape = CircleShape,
-        color = HudSurfaceColor,
+        color = player.color.copy(alpha = 0.18f),
         border = BorderStroke(2.dp, player.color),
         shadowElevation = 0.dp,
     ) {
         Box(
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = player.avatarText,
-                style = MaterialTheme.typography.labelMedium,
-                color = HudContentColor,
-                fontWeight = FontWeight.Bold,
-            )
+            if (character != null) {
+                Image(
+                    painter = painterResource(id = character.drawableRes),
+                    contentDescription = character.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                )
+            } else {
+                Text(
+                    text = player.avatarText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = HudContentColor,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }
@@ -1597,7 +2204,7 @@ internal fun PrivateHandPanel(
             if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = {
-                        musicManager?.playSfx(R.raw.sfx_karten)
+                        musicManager?.playSfx(R.raw.sfx_card_select)
                         actions.onTradeInCards()
                     },
                     enabled = state.canTradeInCards,
@@ -1874,6 +2481,82 @@ private fun AttackPanel(
     }
 }
 
+/**
+ * Steuerung der einmaligen Truppenverschiebung in der Fortify-Phase.
+ *
+ * Das Panel verwendet denselben Slider wie Angriff und Verstärkung. Die Karte
+ * bleibt darunter frei, damit Quelle und Ziel durch erneute Gebietsauswahl
+ * schnell korrigiert werden können.
+ */
+@Composable
+private fun FortifyPanel(
+    state: FortifyPanelState,
+    actions: FortifyPanelActions,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier =
+            modifier
+                .widthIn(max = 560.dp)
+                .testTag("fortify_panel"),
+        shape = RoundedCornerShape(6.dp),
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.game_fortify_route,
+                            state.fromRegionId,
+                            state.toRegionId,
+                        ),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                val closePanelDescription = stringResource(id = R.string.game_fortify_close)
+                BlockActionButton(
+                    label = "X",
+                    onClick = actions.onDismiss,
+                    selected = false,
+                    enabled = true,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .semantics { contentDescription = closePanelDescription }
+                            .testTag("close_fortify_panel"),
+                )
+            }
+            TroopAmountSliderRow(
+                label = stringResource(id = R.string.game_fortify_troops),
+                amount = state.fortifyState.troopCount,
+                minAmount = MIN_FORTIFY_TROOPS,
+                maxAmount = state.maximumFortifyTroops,
+                canAdjust = state.canAdjust,
+                onAdjust = actions.onAdjustFortifyTroops,
+                tagPrefix = "fortify_troops",
+            )
+            BlockActionButton(
+                label = stringResource(id = R.string.game_fortify_submit),
+                onClick = actions.onMove,
+                selected = true,
+                enabled = state.canMove,
+                modifier = Modifier.fillMaxWidth().testTag("fortify_submit_button"),
+            )
+        }
+    }
+}
+
 @Composable
 private fun TroopAmountSliderRow(
     label: String,
@@ -2095,7 +2778,7 @@ private fun BottomActionClusters(
                     enabled = state.canEndPhase,
                     modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
                     musicManager = musicManager,
-                    sfxResId = R.raw.sfx_schlacht_att,
+                    sfxResId = R.raw.sfx_attack_confirm,
                 )
             }
         }
@@ -2126,7 +2809,7 @@ private fun BlockActionButton(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
-    sfxResId: Int = R.raw.sfx_ingame,
+    sfxResId: Int = R.raw.sfx_ui_click,
 ) {
     val contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
     val wrappedOnClick: () -> Unit =

@@ -52,7 +52,7 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should resolve message type and serialization via registry`() {
-        val broadcast = CharacterSelectedBroadcast(LobbyCode("CD34"), PlayerId(7), "ice")
+        val broadcast = CharacterSelectedBroadcast(LobbyCode("CD34"), PlayerId(7), "character_04")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(broadcast)
         val serialized = NetworkPayloadRegistry.serializePayload(broadcast)
@@ -64,9 +64,9 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should satisfy equals and hashCode contract`() {
-        val a = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "doctor")
-        val b = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "doctor")
-        val c = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "ice")
+        val a = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_03")
+        val b = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_03")
+        val c = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_04")
 
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())

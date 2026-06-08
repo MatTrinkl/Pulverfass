@@ -3,9 +3,9 @@ package at.aau.pulverfass.app.storage
 import android.content.Context
 
 /**
- * Lokale Benutzereinstellung für den zuletzt gewählten Spielernamen.
+ * Lokale Benutzereinstellungen für Name und Charakter.
  *
- * Der Anzeigename ist unabhängig von einer laufenden Lobby- oder
+ * Anzeigename und Charakter-ID sind unabhängig von einer laufenden Lobby- oder
  * Reconnect-Session. Dadurch kann er nach einem App-Neustart bereits im
  * Options- und Lobby-Screen wieder angezeigt werden.
  */
@@ -23,10 +23,16 @@ interface PlayerNameStore {
      */
     fun savePlayerName(playerName: String)
 
-    /** Liefert die zuletzt gewählte Charakter-ID oder `null`. */
+    /**
+     * Liefert die zuletzt gewählte Charakter-ID oder `null`.
+     */
     fun readCharacterId(): String?
 
-    /** Speichert die gewählte Charakter-ID. */
+    /**
+     * Speichert die gewählte Charakter-ID.
+     *
+     * @param characterId stabile ID aus `Characters`.
+     */
     fun saveCharacterId(characterId: String)
 }
 
@@ -44,10 +50,10 @@ object NoOpPlayerNameStore : PlayerNameStore {
 }
 
 /**
- * Persistiert den Spielernamen im privaten App-Speicher.
+ * Persistiert Spielernamen und Charakter-ID im privaten App-Speicher.
  *
- * Der Name ist eine kleine lokale Einstellung und kein autoritativer
- * Lobby-Zustand. Der Server erhält ihn weiterhin erst mit dem Join-Request.
+ * Diese Werte sind lokale Einstellungen und kein autoritativer Lobby-Zustand.
+ * Der Server erhält sie weiterhin erst über Join- und CharacterSelect-Requests.
  *
  * @param context Android-Kontext für den privaten App-Speicher
  */

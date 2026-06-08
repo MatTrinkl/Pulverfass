@@ -8,11 +8,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Smoke-Tests für @Preview-Functions.
+ * Smoke-Tests für `@Preview`-Funktionen.
  *
- * Previews werden nicht von normalen Unit-Tests aufgerufen aber zählen für
- * Sonar-Coverage. Diese Tests rendern jede Preview einmal um die Lines als
- * "executed" zu markieren.
+ * Previews werden von normalen Unit-Tests nicht automatisch aufgerufen. Diese
+ * Tests rendern jede Preview einmal, damit Preview-Code in Coverage und Compose-
+ * Smoke-Tests sichtbar bleibt.
  */
 @RunWith(AndroidJUnit4::class)
 class ComponentPreviewsSmokeTest {

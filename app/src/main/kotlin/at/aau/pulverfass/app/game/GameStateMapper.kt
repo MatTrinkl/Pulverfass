@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
 private val NeutralTerritoryColor = Color(0xFF8F8F8F)
+private val DepartedTerritoryColor = Color(0xFF5E6268)
 
 /**
  * Abbildung zwischen Backend-Territories und vorhandenen Android-Kartenmasken.
@@ -67,27 +68,26 @@ object GameMapTerritoryMapper {
  * Erzeugt die Spielerprojektion für HUD, Sidebar und Kartenfarben.
  *
  * @param players Lobby-Spieler aus dem Controller
+ * @param ownPlayerId lokale Spieler-ID für noch nicht synchronisierte Charakterwechsel
+ * @param ownCharacterId lokal gewählter Charakter, solange Server-Events noch nachlaufen
  * @return UI-Spieler mit stabiler Farbe und Avatar-Kürzel
  */
 fun lobbyPlayersToGamePlayers(
     players: List<LobbyPlayerUi>,
     ownPlayerId: PlayerId? = null,
-    ownPlayerColor: Color? = null,
+    ownCharacterId: String? = null,
 ): List<GamePlayerUi> =
-    players.mapIndexed { index, player ->
-        val color =
-            if (player.playerId == ownPlayerId && ownPlayerColor != null) {
-                ownPlayerColor
-            } else {
-                PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-            }
-        GamePlayerUi(
-            playerId = player.playerId,
-            name = player.displayName,
-            avatarText = player.displayName.toAvatarText(),
-            color = color,
-            isHost = player.isHost,
-        )
+    players.stablePlayerColors().let { colorsByPlayerId ->
+        players.map { player ->
+            GamePlayerUi(
+                playerId = player.playerId,
+                name = player.displayName,
+                avatarText = player.displayName.toAvatarText(),
+                characterId = player.gameCharacterId(ownPlayerId, ownCharacterId),
+                color = colorsByPlayerId.getValue(player.playerId),
+                isHost = player.isHost,
+            )
+        }
     }
 
 fun territorySnapshotsToUiStates(
@@ -117,12 +117,21 @@ fun buildRegionStates(
             GameMapTerritoryMapper.toAndroidRegionId(territory.territoryId)
                 ?: return@mapNotNull null
         val owner = territory.ownerId?.let(playersById::get)
+        val isDepartedOwner = territory.ownerId != null && owner == null
         regionId to
             GameMapRegionState(
-                ownerPlayerId = owner?.playerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
-                ownerName = owner?.name ?: NEUTRAL_OWNER_NAME,
+                ownerPlayerId = territory.ownerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
+                ownerName =
+                    owner?.name
+                        ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
+                        ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                accentColor = owner?.color ?: NeutralTerritoryColor,
+                accentColor =
+                    when {
+                        owner != null -> owner.color
+                        isDepartedOwner -> DepartedTerritoryColor
+                        else -> NeutralTerritoryColor
+                    },
             )
     }.toMap()
 }
@@ -135,5 +144,24 @@ internal fun String.toAvatarText(): String =
         .joinToString("") { it.first().uppercaseChar().toString() }
         .ifBlank { "?" }
 
+private fun LobbyPlayerUi.gameCharacterId(
+    ownPlayerId: PlayerId?,
+    ownCharacterId: String?,
+): String? =
+    if (playerId == ownPlayerId && ownCharacterId != null) {
+        ownCharacterId
+    } else {
+        characterId
+    }
+
+private fun fallbackPlayerColor(index: Int): Color =
+    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
+
+private fun List<LobbyPlayerUi>.stablePlayerColors(): Map<PlayerId, Color> =
+    sortedBy { it.playerId.value }
+        .mapIndexed { index, player -> player.playerId to fallbackPlayerColor(index) }
+        .toMap()
+
+private const val DEPARTED_OWNER_NAME = "Verlassener Spieler"
 private const val NEUTRAL_OWNER_ID = "neutral"
 private const val NEUTRAL_OWNER_NAME = "Neutral"

@@ -25,7 +25,9 @@ import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
+import at.aau.pulverfass.app.game.GameTerritoryUiState
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.app.game.PrivateHandCardUi
 import at.aau.pulverfass.app.game.ReinforcementUiState
@@ -45,6 +47,13 @@ import org.junit.runner.RunWith
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Deckt die wichtigsten Compose-Screens als UI-Smoke- und Interaktionstests ab.
+ *
+ * Die Tests rendern echte Composables mit ersetzten Netzwerk-/Assetpfaden. Damit
+ * wird geprüft, ob Navigation, Panels, Buttons und sichtbare Texte gemeinsam
+ * funktionieren, ohne einen echten Server oder Emulator-Sensoren zu benötigen.
+ */
 @RunWith(AndroidJUnit4::class)
 class ScreenComposableTest {
     @get:Rule
@@ -79,7 +88,7 @@ class ScreenComposableTest {
             }
         }
 
-        // Fast-forward past the 1,000ms delay in preloadAssets
+        // Simuliert den kompletten Fake-Preload, ohne eine reale Sekunde zu warten.
         composeTestRule.mainClock.advanceTimeBy(1_100)
         composeTestRule.waitForIdle()
 
@@ -125,6 +134,7 @@ class ScreenComposableTest {
                                 delay(1_000)
                                 onProgressChanged(1, 1)
                             },
+                            minDisplayTimeMillis = 0L,
                         )
                     }
                     composable(Screen.Game.route) {
@@ -178,13 +188,12 @@ class ScreenComposableTest {
                 }
             }
         }
-/*
-* assertIsDisplayed() prüft "im visible viewport bounds" →
-* schlägt fehl wenn Layout für landscape designed ist und Test im portrait läuft.
-* assertExists() prüft nur "im Semantik-Baum vorhanden" —
-* was zählt für funktionale Korrektheit.
-*
-* */
+        /*
+         * Der Warteraum ist auf Landscape-Breite ausgelegt. Im Test-Viewport
+         * reicht Semantik-Sichtbarkeit, weil funktional zählt, dass die Daten im
+         * Baum vorhanden sind und nicht, ob jedes Element im aktuellen Ausschnitt
+         * liegt.
+         */
         composeTestRule.onNodeWithText("LOBBY: AB12").assertExists()
         composeTestRule.onNodeWithText("DU BIST DER HOST").assertExists()
         composeTestRule.onNodeWithText("CAROL").assertExists()
@@ -284,7 +293,7 @@ class ScreenComposableTest {
             composeTestRule.onNodeWithTag("game_map_canvas").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_top_bar").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_player_panel").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Dein Spieler").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("game_options_button").assertIsDisplayed()
             composeTestRule.onNodeWithTag("game_phase_value").assertTextEquals("Warten")
             composeTestRule.onNodeWithTag("game_round_value").assertTextEquals("Runde 1")
             composeTestRule.onNodeWithTag("game_sync_banner").assertIsDisplayed()
@@ -292,6 +301,54 @@ class ScreenComposableTest {
                 .assertIsDisplayed()
         } finally {
             controller.close()
+        }
+    }
+
+    @Test
+    fun game_screen_shows_auto_phase_notice_temporarily() {
+        composeTestRule.mainClock.autoAdvance = false
+        var dismissed = false
+        val noticeText =
+            "Keine Angriffe mehr möglich. Die Angriffsphase wird " +
+                "automatisch beendet."
+
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreenContent(
+                        contentState =
+                            GameScreenContentState(
+                                players = emptyList(),
+                                localPlayerId = PlayerId(1),
+                                uiState = GameUiState(),
+                                isConnected = true,
+                                pendingCommandKeys = emptySet(),
+                                mapPainter = ColorPainter(Color.White),
+                                autoPhaseNoticeText = noticeText,
+                            ),
+                        actions =
+                            GameScreenActions(
+                                onRegionSelected = {},
+                                onToggleCards = {},
+                                onAdvanceTurn = {},
+                                onRefreshGameState = {},
+                                onClearAutoPhaseNotice = { dismissed = true },
+                            ),
+                        countdownState = false to 0,
+                    )
+                }
+            }
+
+            composeTestRule.onNodeWithTag("auto_phase_notice_popup").assertIsDisplayed()
+            composeTestRule.onNodeWithText("PHASE GEWECHSELT").assertIsDisplayed()
+            composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
+            assertTrue(!dismissed)
+            composeTestRule.mainClock.advanceTimeBy(2_100)
+            composeTestRule.waitForIdle()
+
+            assertTrue(dismissed)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
         }
     }
 
@@ -601,6 +658,11 @@ class ScreenComposableTest {
                                             attackTroops = 4,
                                             moveAfterCapture = 3,
                                         ),
+                                    adjacentTerritoryIds =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                setOf(TerritoryId("argentinien")),
+                                        ),
                                     territoryStates =
                                         mapOf(
                                             TerritoryId("brasilien") to
@@ -608,6 +670,12 @@ class ScreenComposableTest {
                                                     TerritoryId("brasilien"),
                                                     playerId,
                                                     6,
+                                                ),
+                                            TerritoryId("argentinien") to
+                                                at.aau.pulverfass.app.game.GameTerritoryUiState(
+                                                    TerritoryId("argentinien"),
+                                                    PlayerId(2),
+                                                    3,
                                                 ),
                                         ),
                                 ),
@@ -650,6 +718,86 @@ class ScreenComposableTest {
         assertEquals(1, moveAdjustment)
         assertTrue(attacked)
         assertTrue(finished)
+    }
+
+    @Test
+    fun fortify_panel_submits_move_and_phase_button_advances() {
+        val playerId = PlayerId(1)
+        var fortifyAdjustment = 0
+        var moved = false
+        var advanced = false
+        var closedRegion: String? = null
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.FORTIFY,
+                                    selectionFromRegionId = "brazil",
+                                    selectionToRegionId = "argentina",
+                                    fortifyState = FortifyUiState(troopCount = 2),
+                                    adjacentTerritoryIds =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                setOf(TerritoryId("argentinien")),
+                                            TerritoryId("argentinien") to
+                                                setOf(TerritoryId("brasilien")),
+                                        ),
+                                    territoryStates =
+                                        mapOf(
+                                            TerritoryId("brasilien") to
+                                                GameTerritoryUiState(
+                                                    TerritoryId("brasilien"),
+                                                    playerId,
+                                                    5,
+                                                ),
+                                            TerritoryId("argentinien") to
+                                                GameTerritoryUiState(
+                                                    TerritoryId("argentinien"),
+                                                    playerId,
+                                                    1,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = { closedRegion = it },
+                            onToggleCards = {},
+                            onAdvanceTurn = { advanced = true },
+                            onAdjustFortifyTroops = { fortifyAdjustment = it },
+                            onFortifyMove = { moved = true },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("fortify_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verschieben: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("fortify_troops_slider").performSemanticsAction(
+            SemanticsActions.SetProgress,
+        ) { setProgress ->
+            setProgress(3f)
+        }
+        composeTestRule.onNodeWithTag("fortify_submit_button").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("close_fortify_panel").performClick()
+
+        assertEquals(1, fortifyAdjustment)
+        assertTrue(moved)
+        assertTrue(advanced)
+        assertEquals("brazil", closedRegion)
     }
 
     @Test

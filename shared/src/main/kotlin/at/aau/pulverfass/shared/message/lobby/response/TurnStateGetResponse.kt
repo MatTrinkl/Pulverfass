@@ -20,6 +20,7 @@ import kotlinx.serialization.Serializable
  * @property isPaused signalisiert pausierten Turn-State
  * @property pauseReason optionale Begründung für Pause
  * @property pausedPlayerId optionaler Spieler, auf dessen Verbindung gewartet wird
+ * @property fortifyUsedThisTurn signalisiert, ob die Verschiebung dieser Runde bereits verbraucht ist
  */
 @Serializable
 data class TurnStateGetResponse(
@@ -32,6 +33,7 @@ data class TurnStateGetResponse(
     val isPaused: Boolean = false,
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
+    val fortifyUsedThisTurn: Boolean = false,
 ) : PublicGameStatePayload {
     companion object {
         fun fromGameState(gameState: GameState): TurnStateGetResponse {
@@ -50,6 +52,7 @@ data class TurnStateGetResponse(
                 isPaused = resolvedTurnState.isPaused,
                 pauseReason = resolvedTurnState.pauseReason,
                 pausedPlayerId = resolvedTurnState.pausedPlayerId,
+                fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
             )
         }
     }

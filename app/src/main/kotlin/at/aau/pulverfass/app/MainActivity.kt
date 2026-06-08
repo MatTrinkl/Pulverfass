@@ -64,7 +64,12 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Background-Music-Manager als Field, damit onPause/onResume drauf zugreifen können
+        /*
+         * Der Audio-Manager bleibt als Activity-Field erhalten, weil Compose den
+         * Inhalt bei Konfigurations- und Navigationsänderungen neu aufbauen darf,
+         * die Android-Lifecycle-Callbacks aber dieselbe Instanz pausieren und
+         * freigeben müssen.
+         */
         musicManager = BackgroundMusicManager(applicationContext)
 
         /*
@@ -107,21 +112,26 @@ class MainActivity : AppCompatActivity() {
                     hideSystemBars()
                 }
 
-                // Audio: route-based playback
+                /*
+                 * Musik ist routenbasiert, damit einzelne Screens keine eigenen
+                 * globalen Audio-Entscheidungen treffen müssen. Der Warteraum
+                 * darf diese Route später temporär überschreiben, wenn der
+                 * Character-Picker offen ist.
+                 */
                 LaunchedEffect(currentBackStackEntry) {
                     val route = currentBackStackEntry?.destination?.route
                     when {
                         route == Screen.MainMenu.route ||
                             route == Screen.LoadGame.route ->
-                            musicManager.play(R.raw.mainmusic)
+                            musicManager.play(R.raw.music_main_menu)
                         route == Screen.Lobby.route ->
-                            musicManager.play(R.raw.lobbyneu)
+                            musicManager.play(R.raw.music_lobby_menu)
                         route?.startsWith(Screen.WaitingRoom.route) == true ->
-                            musicManager.play(R.raw.lobbywaiting)
+                            musicManager.play(R.raw.music_lobby_waiting)
                         route == Screen.Options.route ->
-                            musicManager.play(R.raw.settings)
+                            musicManager.play(R.raw.music_options_menu)
                         route == Screen.Game.route ->
-                            musicManager.play(R.raw.maingame, loop = true)
+                            musicManager.play(R.raw.music_gameplay_loop, loop = true)
                     }
                 }
 
