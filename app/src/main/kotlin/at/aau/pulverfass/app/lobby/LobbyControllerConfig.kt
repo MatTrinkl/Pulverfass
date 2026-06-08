@@ -49,6 +49,10 @@ data class LobbyControllerConfig(
         "Wähle ein eigenes und ein benachbartes fremdes Gebiet",
     val errorAttackFailed: String = "Angriff fehlgeschlagen",
     val errorConfirmAttackFailed: String = "Angriffsphase konnte nicht beendet werden",
+    val errorFortifyNotAllowed: String = "Truppen können gerade nicht verschoben werden",
+    val errorFortifySelectionMissing: String =
+        "Wähle zwei verbundene eigene Gebiete für die Verschiebung",
+    val errorFortifyFailed: String = "Truppenverschiebung fehlgeschlagen",
     val errorDisconnectedDuringGame: String =
         "Verbindung getrennt. Reconnect wird vorbereitet.",
     val errorReconnectFailed: String = "Session konnte nicht wiederhergestellt werden",

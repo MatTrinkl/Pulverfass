@@ -9,6 +9,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
+/**
+ * Prüft die öffentliche ClientNetwork-Fassade gegen Transportfehler und Ressourcenfreigabe.
+ *
+ * Die Tests laufen ohne echten Spielserver und sichern ab, dass ungültige URLs,
+ * fehlende Sessions und mehrfaches Schließen kontrolliert behandelt werden.
+ */
 class ClientNetworkTest {
     @Test
     fun `connect should propagate transport failure for invalid server url`() {
@@ -59,6 +65,9 @@ class ClientNetworkTest {
         network.close()
     }
 
+    /**
+     * Erstellt ein kurzlebiges ClientNetwork mit unconfined Test-Scope.
+     */
     private fun createNetwork(): ClientNetwork {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         return ClientNetwork(scope = scope)

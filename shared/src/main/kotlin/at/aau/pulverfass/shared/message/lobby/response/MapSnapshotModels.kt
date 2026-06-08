@@ -110,11 +110,13 @@ data class PublicTurnStateSnapshot(
     val pauseReason: String? = null,
     val pausedPlayerId: PlayerId? = null,
     val pendingReinforcements: Int = 0,
+    val fortifyUsedThisTurn: Boolean = false,
 ) {
     companion object {
         fun from(
             turnState: TurnState,
             pendingReinforcements: Int = 0,
+            fortifyUsedThisTurn: Boolean = false,
         ): PublicTurnStateSnapshot =
             PublicTurnStateSnapshot(
                 activePlayerId = turnState.activePlayerId,
@@ -125,6 +127,7 @@ data class PublicTurnStateSnapshot(
                 pauseReason = turnState.pauseReason,
                 pausedPlayerId = turnState.pausedPlayerId,
                 pendingReinforcements = pendingReinforcements,
+                fortifyUsedThisTurn = fortifyUsedThisTurn,
             )
     }
 }

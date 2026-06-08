@@ -30,8 +30,15 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft den echten Android-WebSocket-Transport gegen einen lokalen Ktor-Testserver.
+ *
+ * Die Tests sichern Verbindungsereignisse, Binärweiterleitung, Textframe-Fehler,
+ * Disconnect-Gründe und idempotentes Schließen ab.
+ */
 class AndroidWebSocketTransportTest {
     @Test
     fun `send should fail without active websocket session`() {
@@ -116,7 +123,8 @@ class AndroidWebSocketTransportTest {
 
                 val error = errorDeferred.await()
                 assertEquals(CLIENT_CONNECTION_ID, error.connectionId)
-                assertTrue(error.cause.message!!.contains("Text frames are not supported"))
+                val message = assertNotNull(error.cause.message)
+                assertTrue(message.contains("Text frames are not supported"))
             } finally {
                 transport.close()
                 server.close()
@@ -223,11 +231,20 @@ class AndroidWebSocketTransportTest {
         transport.close()
     }
 
+    /**
+     * Erstellt einen Transport mit IO-Scope, damit lokale Server-IO realistisch läuft.
+     */
     private fun createTransport(): AndroidWebSocketTransport =
         AndroidWebSocketTransport(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         )
 
+    /**
+     * Startet einen lokalen WebSocket-Server für Transporttests.
+     *
+     * @param sessionBlock Serverlogik pro WebSocket-Session, die empfangene Binärdaten
+     *     und Close-Reasons über Channels an den Test zurückmelden kann.
+     */
     private fun startWebSocketServer(
         sessionBlock: suspend io.ktor.server.websocket.DefaultWebSocketServerSession.(
             Channel<ByteArray>,
@@ -269,6 +286,14 @@ class AndroidWebSocketTransportTest {
         )
     }
 
+    /**
+     * Hält URL und Testkanäle des lokalen WebSocket-Servers zusammen.
+     *
+     * @param engine Laufende Ktor-Engine, die nach dem Test gestoppt wird.
+     * @param url WebSocket-URL für den AndroidWebSocketTransport.
+     * @param receivedBinary Binäre Frames, die der Server vom Client empfangen hat.
+     * @param closeReasons Close-Reasons, die der Client beim Disconnect übermittelt hat.
+     */
     private class TestWebSocketServer(
         private val engine: ApplicationEngine,
         val url: String,

@@ -2,10 +2,14 @@ package at.aau.pulverfass.app.lobby
 
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorCode
@@ -24,6 +28,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die Übersetzung von Backend-Fehlercodes in verständliche deutsche UI-Texte.
+ *
+ * Die Tests decken Kartenabruf, Snapshots, private Daten, Phasenwechsel,
+ * Verstärkungen, Angriff, Verschieben, Kartentausch und Cheat-Verstärkungen ab.
+ */
 class GameErrorTextMapperTest {
     @Test
     fun `map get errors are translated for UI`() {
@@ -325,6 +335,78 @@ class GameErrorTextMapperTest {
         assertEquals(
             GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
             messages.getValue(ConfirmAttackDoneErrorCode.GAME_NOT_FOUND),
+        )
+    }
+
+    @Test
+    fun `fortify move errors are translated for UI`() {
+        val messages =
+            FortifyMoveErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(FortifyMoveErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(FortifyMoveErrorCode.REQUESTER_MISMATCH)
+                .contains("Spielerzuordnung"),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.NOT_ACTIVE_PLAYER).contains("eigenen"))
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(FortifyMoveErrorCode.GAME_PAUSED),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.WRONG_PHASE).contains("Verschiebephase"))
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(FortifyMoveErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(messages.getValue(FortifyMoveErrorCode.TERRITORY_NOT_OWNED).contains("eigenen"))
+        assertTrue(messages.getValue(FortifyMoveErrorCode.NO_PATH).contains("Verbindung"))
+        assertTrue(messages.getValue(FortifyMoveErrorCode.INSUFFICIENT_TROOPS).contains("genügend"))
+        assertTrue(
+            messages.getValue(FortifyMoveErrorCode.FORTIFY_ALREADY_USED)
+                .contains("bereits"),
+        )
+    }
+
+    @Test
+    fun `cheat reinforcement bonus errors are translated for UI`() {
+        val messages =
+            ClaimCheatReinforcementBonusErrorCode.entries.associateWith { code ->
+                GameErrorTextMapper.map(ClaimCheatReinforcementBonusErrorResponse(code, "raw"))
+            }
+
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.REQUESTER_MISMATCH,
+            ).contains("Spielerzuordnung"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.NOT_ACTIVE_PLAYER,
+            ).contains("eigenen Zug"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_PAUSED_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_PAUSED),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.PHASE_MISMATCH,
+            ).contains("Verstärkungsphase"),
+        )
+        assertEquals(
+            GameErrorTextMapper.GAME_NOT_FOUND_TEXT,
+            messages.getValue(ClaimCheatReinforcementBonusErrorCode.GAME_NOT_FOUND),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
+            ).contains("bereits verwendet"),
+        )
+        assertTrue(
+            messages.getValue(
+                ClaimCheatReinforcementBonusErrorCode.FORCED_TRADE_REQUIRED,
+            ).contains("Kartenset"),
         )
     }
 }

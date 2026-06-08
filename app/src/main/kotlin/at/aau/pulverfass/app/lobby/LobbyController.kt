@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.lobby
 
+import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.game.ClientGameStateReducer
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GameUiState
@@ -12,10 +13,14 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
@@ -27,9 +32,12 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmAttackDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpReason
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
@@ -43,9 +51,12 @@ import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmAttackDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
@@ -56,9 +67,12 @@ import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmAttackDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStateCatchUpErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
@@ -115,14 +129,18 @@ class LobbyController(
 
     private val _state =
         MutableStateFlow(
-            LobbyUiState(
-                serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
-                playerName = playerNameStore.readPlayerName().orEmpty(),
-                statusText = config.statusNotConnected,
-                sessionToken = reconnectSessionStore.readSessionToken(),
-                gameStarted = wasGameStartedOnLastAppRun,
-                gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
-            ),
+            run {
+                val savedCharacterId = playerNameStore.readCharacterId()
+                LobbyUiState(
+                    serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
+                    playerName = playerNameStore.readPlayerName().orEmpty(),
+                    statusText = config.statusNotConnected,
+                    sessionToken = reconnectSessionStore.readSessionToken(),
+                    gameStarted = wasGameStartedOnLastAppRun,
+                    gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
+                    characterId = savedCharacterId,
+                )
+            },
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
@@ -133,6 +151,7 @@ class LobbyController(
      */
     private val playersById = linkedMapOf<Long, LobbyPlayerUi>()
     private val commandDispatcher = LobbyCommandDispatcher(network::sendPayload)
+    private var clearCheatErrorJob: Job? = null
     private var pendingCreateCallback: ((String) -> Unit)? = null
     private var pendingJoinCallback: ((String) -> Unit)? = null
     private var pendingLobbyAction: PendingLobbyAction? = null
@@ -146,6 +165,12 @@ class LobbyController(
     private var reconnectSessionToken: SessionToken? = null
     private var awaitingReconnectResponse = false
     private var manualDisconnectRequested = false
+    private var suppressNextAttackBoundaryNotice = false
+    private var delayedAutoPhaseAdvanceJob: Job? = null
+    private var delayedAutoPhaseAdvanceDeadlineMillis: Long? = null
+    private var deferredOwnAttackPhaseState: GameUiState? = null
+    private var deferredOwnAttackPhaseBoundary: PhaseBoundaryEvent? = null
+    private var manuallyConsumedAttackBoundaryStateVersion: Long? = null
 
     init {
         scope.launch {
@@ -224,6 +249,91 @@ class LobbyController(
         playerNameStore.savePlayerName(playerName)
         _state.update { it.copy(playerName = playerName) }
     }
+
+    fun updatePlayerColor(color: Color) {
+        _state.update { it.copy(playerColor = color) }
+    }
+
+    fun updateCharacter(id: String) {
+        playerNameStore.saveCharacterId(id)
+        _state.update { it.copy(characterId = id) }
+    }
+
+    fun selectCharacter(characterId: String) {
+        val lobbyCode = state.value.activeLobbyCode ?: return
+        val playerId = state.value.ownPlayerId ?: return
+        scope.launch {
+            runCatching {
+                commandDispatcher.send(
+                    LobbyCommand(
+                        key = LobbyCommandKey.CHARACTER_SELECT,
+                        payload =
+                            CharacterSelectRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                characterId = characterId,
+                            ),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun clearCharacterSelectError() {
+        _state.update { it.copy(characterSelectError = null) }
+    }
+
+    /**
+     * Schließt die aktuelle Auto-Phasenmeldung und zeigt ggf. die nächste Queue-Meldung.
+     *
+     * @see enqueueAutoPhaseNotice
+     */
+    fun clearAutoPhaseNotice() {
+        var shouldCheckNextPhase = false
+        _state.update { current ->
+            val nextNotice = current.autoPhaseNoticeQueue.firstOrNull()
+            if (nextNotice == null) {
+                shouldCheckNextPhase = true
+                current.copy(
+                    autoPhaseNoticeText = null,
+                    autoPhaseNoticeQueue = emptyList(),
+                )
+            } else {
+                current.copy(
+                    autoPhaseNoticeText = nextNotice,
+                    autoPhaseNoticeQueue = current.autoPhaseNoticeQueue.drop(1),
+                )
+            }
+        }
+        if (shouldCheckNextPhase) {
+            maybeAdvanceCurrentPhaseAutomatically()
+        }
+    }
+
+    /**
+     * Fügt eine Auto-Phasenmeldung dedupliziert in die UI-Queue ein.
+     *
+     * Mehrere Phasen können direkt hintereinander automatisch übersprungen
+     * werden. Die Queue sorgt dafür, dass jede fachlich relevante Meldung
+     * einzeln sichtbar wird, statt die vorherige Anzeige zu überschreiben.
+     *
+     * @param message sichtbarer Text der Auto-Phasenmeldung.
+     */
+    private fun enqueueAutoPhaseNotice(message: String) {
+        _state.update { current -> current.withQueuedAutoPhaseNotice(message) }
+    }
+
+    private fun LobbyUiState.withQueuedAutoPhaseNotice(message: String): LobbyUiState =
+        if (
+            autoPhaseNoticeText == message ||
+            message in autoPhaseNoticeQueue
+        ) {
+            this
+        } else if (autoPhaseNoticeText == null) {
+            copy(autoPhaseNoticeText = message)
+        } else {
+            copy(autoPhaseNoticeQueue = autoPhaseNoticeQueue + message)
+        }
 
     fun updateLobbyCode(lobbyCode: String) {
         _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
@@ -327,22 +437,27 @@ class LobbyController(
 
     fun close() {
         cancelReconnect()
+        cancelDelayedAutoPhaseAdvance()
         network.close()
     }
 
     fun leaveLobby() {
-        val lobbyCode = state.value.activeLobbyCode ?: return
-        scope.launch {
-            runCatching {
-                sendCommand(
-                    LobbyCommand(
-                        key = LobbyCommandKey.LEAVE_LOBBY,
-                        payload =
-                            LeaveLobbyRequest(
-                                lobbyCode = parseLobbyCode(lobbyCode),
-                            ),
-                    ),
-                )
+        val lobbyCode = state.value.activeLobbyCode
+        suppressNextAttackBoundaryNotice = false
+        cancelDelayedAutoPhaseAdvance()
+        if (lobbyCode != null) {
+            scope.launch {
+                runCatching {
+                    sendCommand(
+                        LobbyCommand(
+                            key = LobbyCommandKey.LEAVE_LOBBY,
+                            payload =
+                                LeaveLobbyRequest(
+                                    lobbyCode = parseLobbyCode(lobbyCode),
+                                ),
+                        ),
+                    )
+                }
             }
         }
         _state.update {
@@ -356,6 +471,8 @@ class LobbyController(
                 sessionToken = null,
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
+                autoPhaseNoticeText = null,
+                autoPhaseNoticeQueue = emptyList(),
             )
         }
         reconnectSessionStore.clearSession()
@@ -559,6 +676,193 @@ class LobbyController(
     }
 
     /**
+     * Beendet Phasen automatisch, wenn lokal keine sinnvolle Aktion mehr möglich ist.
+     *
+     * Das betrifft drei UX-Fälle:
+     * - Reinforcement wird verzögert bestätigt, wenn der aktive Spieler keine
+     *   offenen Verstärkungen mehr besitzt.
+     * - Attack wartet auf den autoritativen Serverwechsel, weil der Server nach
+     *   einem Kampf selbst verzögert prüft, ob noch Angriffe möglich sind.
+     * - Fortify wird nach einem bestätigten Move oder ohne gültigen
+     *   Verbindungspfad verzögert weitergeschaltet, weil die Phase fachlich nur
+     *   eine Verschiebung erlaubt.
+     *
+     * Reinforcement und Fortify nutzen dieselben Requests wie die sichtbaren
+     * Buttons. Pending Keys verhindern doppelte Requests, falls Server-Response
+     * und öffentliche Deltas sehr eng hintereinander eintreffen.
+     *
+     * @param delayBeforeAdvance ob vor Notice und Request zuerst ein visuelles
+     * Delay geplant werden soll
+     */
+    private fun maybeAdvanceCurrentPhaseAutomatically(delayBeforeAdvance: Boolean = true) {
+        val snapshot = state.value
+        if (
+            snapshot.autoPhaseNoticeText != null ||
+            delayedAutoPhaseAdvanceJob != null
+        ) {
+            return
+        }
+        val playerId = snapshot.ownPlayerId ?: return
+        if (!snapshot.gameState.canUseGameActions(playerId, snapshot.isConnected)) {
+            return
+        }
+
+        when (snapshot.gameState.turnPhase) {
+            TurnPhase.REINFORCEMENTS ->
+                maybeAutoConfirmReinforcements(snapshot, playerId, delayBeforeAdvance)
+            TurnPhase.ATTACK ->
+                maybeAutoConfirmAttack(snapshot, playerId)
+            TurnPhase.FORTIFY ->
+                maybeAutoAdvanceFortify(snapshot, playerId, delayBeforeAdvance)
+            else -> Unit
+        }
+    }
+
+    private fun maybeAutoConfirmReinforcements(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
+    ) {
+        if (
+            LobbyCommandKey.PLACE_REINFORCEMENTS in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.CONFIRM_REINFORCEMENTS_DONE in snapshot.pendingCommandKeys ||
+            !snapshot.gameState.canConfirmReinforcementsDone(playerId, snapshot.isConnected)
+        ) {
+            return
+        }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
+            return
+        }
+        enqueueAutoPhaseNotice(AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE)
+        confirmReinforcementsDone()
+    }
+
+    private fun maybeAutoConfirmAttack(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+    ) {
+        if (
+            LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.CONFIRM_ATTACK_DONE in snapshot.pendingCommandKeys ||
+            snapshot.gameState.territoryStates.isEmpty() ||
+            snapshot.gameState.adjacentTerritoryIds.isEmpty() ||
+            snapshot.gameState.hasAvailableAttack(playerId)
+        ) {
+            return
+        }
+        /*
+         * Der Server beendet leere Angriffsphasen autoritativ mit eigenem Delay.
+         * Ein zusätzlicher Client-Confirm würde gegen diesen Timer rennen und
+         * kann nach dem serverseitigen Wechsel nur noch ein Fehler-Popup erzeugen.
+         */
+    }
+
+    private fun maybeAutoAdvanceFortify(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
+    ) {
+        if (
+            LobbyCommandKey.FORTIFY_MOVE in snapshot.pendingCommandKeys ||
+            LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
+            !snapshot.gameState.canRequestTurnAdvance(playerId, snapshot.isConnected) ||
+            snapshot.gameState.territoryStates.isEmpty() ||
+            snapshot.gameState.adjacentTerritoryIds.isEmpty()
+        ) {
+            return
+        }
+        val noticeText =
+            when {
+                snapshot.gameState.fortifyState.hasMoved -> AUTO_PHASE_FORTIFY_MOVED_NOTICE
+                !snapshot.gameState.hasAvailableFortify(playerId) -> AUTO_PHASE_FORTIFY_EMPTY_NOTICE
+                else -> return
+            }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
+            return
+        }
+        enqueueAutoPhaseNotice(noticeText)
+        advanceTurn()
+    }
+
+    /**
+     * Wartet vor jedem automatischen Phasenabschluss auf ein sichtbares
+     * Zeitfenster, damit Kartenänderungen nachvollziehbar bleiben.
+     *
+     * @param delayMillis Dauer, für die die aktuelle Kartenlage stehen bleibt.
+     */
+    private fun scheduleAutoPhaseAdvanceAfterVisualDelay(
+        delayMillis: Long = AUTO_PHASE_ADVANCE_DELAY_MILLIS,
+    ) {
+        val deadlineMillis = System.currentTimeMillis() + delayMillis
+        delayedAutoPhaseAdvanceJob?.cancel()
+        delayedAutoPhaseAdvanceDeadlineMillis = deadlineMillis
+        delayedAutoPhaseAdvanceJob =
+            scope.launch {
+                delay(delayMillis)
+                val deferredPhaseState = deferredOwnAttackPhaseState
+                clearDelayedAutoPhaseAdvance()
+                deferredOwnAttackPhaseState = null
+                if (deferredPhaseState != null) {
+                    applyDeferredOwnAttackPhaseState(deferredPhaseState)
+                } else {
+                    maybeAdvanceCurrentPhaseAutomatically(delayBeforeAdvance = false)
+                }
+            }
+    }
+
+    /**
+     * Wartet den restlichen Result-Delay ab, bevor eine vom Server bereits
+     * gelieferte Attack-Boundary angewendet wird.
+     *
+     * @param payload serverseitiger Phasenwechsel nach dem Angriff
+     * @param remainingDelayMillis noch offene Zeit des sichtbaren Kampfergebnisses
+     */
+    private fun scheduleAttackBoundaryAfterVisualDelay(
+        payload: PhaseBoundaryEvent,
+        remainingDelayMillis: Long,
+    ) {
+        deferredOwnAttackPhaseBoundary = payload
+        deferredOwnAttackPhaseState = null
+        delayedAutoPhaseAdvanceJob?.cancel()
+        delayedAutoPhaseAdvanceJob =
+            scope.launch {
+                delay(remainingDelayMillis)
+                clearDelayedAutoPhaseAdvance()
+                deferredOwnAttackPhaseBoundary = null
+                applyPhaseBoundaryWithOptionalAttackNotice(
+                    payload = payload,
+                    showServerAttackAutoNotice = true,
+                )
+            }
+    }
+
+    /**
+     * Berechnet, wie lange das sichtbare Kampfergebnis noch stehen bleiben soll.
+     *
+     * @param nowMillis aktueller Zeitstempel in Millisekunden
+     */
+    private fun remainingAutoPhaseAdvanceDelayMillis(
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Long? {
+        val deadlineMillis = delayedAutoPhaseAdvanceDeadlineMillis ?: return null
+        return (deadlineMillis - nowMillis).coerceAtLeast(0L)
+    }
+
+    private fun cancelDelayedAutoPhaseAdvance() {
+        delayedAutoPhaseAdvanceJob?.cancel()
+        clearDelayedAutoPhaseAdvance()
+        deferredOwnAttackPhaseState = null
+        deferredOwnAttackPhaseBoundary = null
+    }
+
+    private fun clearDelayedAutoPhaseAdvance() {
+        delayedAutoPhaseAdvanceJob = null
+        delayedAutoPhaseAdvanceDeadlineMillis = null
+    }
+
+    /**
      * Ändert die lokal vorbereitete Anzahl der nächsten Verstärkungsplatzierung.
      *
      * Dabei wird noch kein Request gesendet. Erst der Klick auf "Platzieren"
@@ -630,6 +934,39 @@ class LobbyController(
             ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorPlaceReinforcementsFailed)
+                }
+            }
+        }
+    }
+
+    fun claimCheatReinforcementBonus() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (!snapshot.gameState.canManageReinforcements(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorReinforcementsNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS,
+                        payload =
+                            ClaimCheatReinforcementBonusRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorReinforcementsNotAllowed)
                 }
             }
         }
@@ -754,6 +1091,10 @@ class LobbyController(
 
     /** Beendet die Angriffsphase über den dafür vorgesehenen Serverrequest. */
     fun confirmAttackDone() {
+        confirmAttackDone(suppressAutoBoundaryNotice = true)
+    }
+
+    private fun confirmAttackDone(suppressAutoBoundaryNotice: Boolean) {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
         val playerId = snapshot.ownPlayerId
@@ -766,6 +1107,16 @@ class LobbyController(
             return
         }
 
+        if (
+            suppressAutoBoundaryNotice &&
+            applyDeferredOwnAttackPhaseStateForManualConfirm()
+        ) {
+            return
+        }
+
+        if (suppressAutoBoundaryNotice) {
+            suppressNextAttackBoundaryNotice = true
+        }
         scope.launch {
             sendCommand(
                 command =
@@ -779,8 +1130,114 @@ class LobbyController(
                     ),
                 keepPendingUntilResponse = true,
             ).onFailure { error ->
+                if (suppressAutoBoundaryNotice) {
+                    suppressNextAttackBoundaryNotice = false
+                }
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorConfirmAttackFailed)
+                }
+            }
+        }
+    }
+
+    /**
+     * Übernimmt einen bereits empfangenen, aber wegen Result-Delay noch
+     * zurückgehaltenen Attack-Phasenwechsel bei manuellem Abschluss.
+     *
+     * Der Serverzustand ist in diesem Fall schon autoritativ weiter als die
+     * sichtbare Topbar. Ein zusätzlicher Confirm wäre veraltet und könnte nur
+     * eine Fehlerantwort erzeugen.
+     *
+     * @return `true`, wenn ein zurückgehaltener Serverzustand übernommen wurde
+     */
+    private fun applyDeferredOwnAttackPhaseStateForManualConfirm(): Boolean {
+        val deferredBoundary = deferredOwnAttackPhaseBoundary
+        if (deferredBoundary != null) {
+            delayedAutoPhaseAdvanceJob?.cancel()
+            clearDelayedAutoPhaseAdvance()
+            deferredOwnAttackPhaseBoundary = null
+            deferredOwnAttackPhaseState = null
+            manuallyConsumedAttackBoundaryStateVersion = deferredBoundary.stateVersion
+            applyPhaseBoundaryWithOptionalAttackNotice(
+                payload = deferredBoundary,
+                showServerAttackAutoNotice = false,
+            )
+            return true
+        }
+
+        val deferredPhaseState = deferredOwnAttackPhaseState ?: return false
+        delayedAutoPhaseAdvanceJob?.cancel()
+        clearDelayedAutoPhaseAdvance()
+        deferredOwnAttackPhaseState = null
+        manuallyConsumedAttackBoundaryStateVersion = deferredPhaseState.stateVersion
+        _state.update { current -> current.copy(gameState = deferredPhaseState) }
+        maybeAdvanceCurrentPhaseAutomatically()
+        return true
+    }
+
+    /**
+     * Ändert lokal die Truppenanzahl für die einmalige Fortify-Bewegung.
+     *
+     * @param delta relative Änderung aus dem Fortify-Slider
+     */
+    fun adjustFortifyTroops(delta: Int) {
+        _state.update {
+            it.copy(
+                gameState =
+                    ClientGameStateReducer.adjustFortifyTroops(
+                        current = it.gameState,
+                        delta = delta,
+                    ),
+            )
+        }
+    }
+
+    /**
+     * Sendet eine Fortify-Bewegung zwischen zwei verbundenen eigenen Gebieten.
+     *
+     * Die lokale Auswahl prüft bereits Eigentum und Verbindungspfad über die
+     * Map-Definition. Der Server bleibt dennoch die autoritative Quelle und
+     * liefert die tatsächlichen Truppenänderungen anschließend als öffentliche
+     * Deltas zurück.
+     */
+    fun fortifyMove() {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val playerId = snapshot.ownPlayerId
+        if (lobbyCode == null || playerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        val fromRegionId = snapshot.gameState.selectionFromRegionId
+        val toRegionId = snapshot.gameState.selectionToRegionId
+        if (fromRegionId == null || toRegionId == null) {
+            _state.update { it.copy(errorText = config.errorFortifySelectionMissing) }
+            return
+        }
+        if (!snapshot.gameState.canSubmitFortifyMove(playerId, snapshot.isConnected)) {
+            _state.update { it.copy(errorText = config.errorFortifyNotAllowed) }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.FORTIFY_MOVE,
+                        payload =
+                            FortifyMoveRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                playerId = playerId,
+                                fromTerritoryId =
+                                    GameMapTerritoryMapper.toTerritoryId(fromRegionId),
+                                toTerritoryId = GameMapTerritoryMapper.toTerritoryId(toRegionId),
+                                troopCount = snapshot.gameState.fortifyState.troopCount,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(errorText = error.message ?: config.errorFortifyFailed)
                 }
             }
         }
@@ -1253,6 +1710,9 @@ class LobbyController(
         if (handleAttackPayload(payload)) {
             return
         }
+        if (handleFortifyPayload(payload)) {
+            return
+        }
         when (payload) {
             is ConnectionResponse -> handleConnectionResponse(payload)
             is ReconnectResponse -> handleReconnectResponse(payload)
@@ -1286,6 +1746,7 @@ class LobbyController(
             is PlayerConnectionLostEvent -> handlePlayerConnectionLost(payload)
             is PlayerLeftLobbyEvent -> {
                 playersById.remove(payload.playerId.value)
+                markLobbyHost(payload.newHost)
                 publishPlayers()
             }
             is PlayerKickedLobbyEvent -> {
@@ -1297,6 +1758,18 @@ class LobbyController(
             }
             is GlobalPlayerCountEvent -> {
                 _state.update { it.copy(globalPlayerCount = payload.playerCount) }
+            }
+            is CharacterSelectResponse -> updateCharacter(payload.characterId)
+            is CharacterSelectErrorResponse -> {
+                _state.update { it.copy(characterSelectError = payload.reason) }
+            }
+            is CharacterSelectedBroadcast -> {
+                val existing = playersById[payload.playerId.value]
+                if (existing != null) {
+                    playersById[payload.playerId.value] =
+                        existing.copy(characterId = payload.characterId)
+                    publishPlayers()
+                }
             }
             is StartGameResponse -> {
                 clearPendingCommand(LobbyCommandKey.START_GAME)
@@ -1333,10 +1806,7 @@ class LobbyController(
                     ClientGameStateReducer.applySnapshotBroadcast(current, payload, players)
                 }
             is GameStateDeltaEvent -> handleGameStateDelta(payload)
-            is PhaseBoundaryEvent ->
-                applyGameState { current, _ ->
-                    ClientGameStateReducer.applyPhaseBoundary(current, payload)
-                }
+            is PhaseBoundaryEvent -> handlePhaseBoundary(payload)
             is TurnStateGetResponse -> {
                 clearPendingCommand(LobbyCommandKey.TURN_STATE_GET)
                 applyGameState { current, _ ->
@@ -1384,6 +1854,17 @@ class LobbyController(
             is PlaceReinforcementsResponse -> {
                 clearPendingCommand(LobbyCommandKey.PLACE_REINFORCEMENTS)
                 _state.update { it.copy(errorText = null) }
+                maybeAdvanceCurrentPhaseAutomatically()
+                true
+            }
+            is ClaimCheatReinforcementBonusResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is ClaimCheatReinforcementBonusErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.CLAIM_CHEAT_REINFORCEMENT_BONUS)
+                updateTemporaryCheatError(GameErrorTextMapper.map(payload))
                 true
             }
             is PlaceReinforcementsErrorResponse -> {
@@ -1437,6 +1918,31 @@ class LobbyController(
             }
             is ConfirmAttackDoneErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.CONFIRM_ATTACK_DONE)
+                suppressNextAttackBoundaryNotice = false
+                updateGameError(GameErrorTextMapper.map(payload))
+                true
+            }
+            else -> false
+        }
+
+    /**
+     * Verarbeitet Antworten der Fortify-Phase.
+     *
+     * Der Success-Payload bestätigt nur die Annahme des Moves. Die Truppenstände
+     * werden über nachfolgende öffentliche Territory-Deltas aktualisiert.
+     */
+    private fun handleFortifyPayload(payload: NetworkMessagePayload): Boolean =
+        when (payload) {
+            is FortifyMoveResponse -> {
+                clearPendingCommand(LobbyCommandKey.FORTIFY_MOVE)
+                applyGameState { current, _ ->
+                    ClientGameStateReducer.applyFortifyMoveAccepted(current)
+                }
+                _state.update { it.copy(errorText = null) }
+                true
+            }
+            is FortifyMoveErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.FORTIFY_MOVE)
                 updateGameError(GameErrorTextMapper.map(payload))
                 true
             }
@@ -1451,22 +1957,80 @@ class LobbyController(
                 displayName = payload.playerDisplayName,
                 isHost = payload.isHost,
                 isDisconnected = existingPlayer?.isDisconnected ?: false,
+                characterId = existingPlayer?.characterId,
             )
 
+        var shouldSelectSavedCharacter = false
         _state.update { current ->
             val ownPlayerId =
                 current.ownPlayerId
                     ?: payload.playerId.takeIf { payload.playerDisplayName == current.playerName }
+            shouldSelectSavedCharacter = current.ownPlayerId == null && ownPlayerId != null
             current.copy(ownPlayerId = ownPlayerId)
         }
         publishPlayers()
+        if (shouldSelectSavedCharacter) {
+            selectSavedCharacterForLobbyIfPossible()
+        }
     }
 
+    /**
+     * Meldet den lokal gespeicherten Charakter automatisch an die Lobby.
+     *
+     * Der eigene PlayerId-Wert ist erst nach dem Join-Broadcast bekannt. Ohne
+     * diesen Nachlauf sehen andere Clients den initial gespeicherten Charakter
+     * erst nach einem manuellen erneuten Speichern.
+     */
+    private fun selectSavedCharacterForLobbyIfPossible() {
+        val snapshot = state.value
+        val ownPlayerId = snapshot.ownPlayerId ?: return
+        val takenCharacterIds =
+            snapshot.players
+                .filter { it.playerId != ownPlayerId }
+                .mapNotNull { it.characterId }
+                .toSet()
+        val preferredCharacterId =
+            snapshot.characterId?.takeIf { characterId ->
+                characterId.isNotBlank() &&
+                    Characters.byId(characterId) != null &&
+                    characterId !in takenCharacterIds
+            }
+        val characterId =
+            preferredCharacterId
+                ?: Characters.all.firstOrNull { it.id !in takenCharacterIds }?.id
+                ?: return
+        selectCharacter(characterId)
+    }
+
+    /**
+     * Markiert einen Lobby-Spieler als getrennt, ohne ihn aus der Liste zu entfernen.
+     *
+     * Verlassene Spieler können im laufenden Spiel weiterhin Territorien besitzen.
+     * Die UI braucht daher die Spieler-ID weiter für Farben, Anzeige und
+     * Angriffslogik gegen zurückgelassene Gebiete.
+     *
+     * @param payload Serverevent zum verlorenen Spieler.
+     */
     private fun handlePlayerConnectionLost(payload: PlayerConnectionLostEvent) {
         val existingPlayer = playersById[payload.playerId.value] ?: return
         playersById[payload.playerId.value] =
             existingPlayer.copy(isDisconnected = true)
         publishPlayers()
+    }
+
+    /**
+     * Spiegelt den autoritativen Host in die lokale Playerliste.
+     *
+     * @param newHost neuer Host aus Serverevent oder `null`, wenn keiner gesetzt ist.
+     */
+    private fun markLobbyHost(newHost: PlayerId?) {
+        if (newHost == null) {
+            return
+        }
+
+        playersById.replaceAll { _, player ->
+            player.copy(isHost = player.playerId == newHost)
+        }
     }
 
     private fun handleStartGameResponse(payload: StartGameResponse) {
@@ -1494,14 +2058,65 @@ class LobbyController(
     }
 
     private fun handleGameStateDelta(payload: GameStateDeltaEvent) {
+        val snapshot = state.value
+        val ownPlayerId = snapshot.ownPlayerId
+        val containsOwnAttackResult =
+            payload.events
+                .filterIsInstance<AttackResolvedBroadcastEvent>()
+                .any { it.attackerPlayerId == ownPlayerId }
         val result =
             ClientGameStateReducer.applyDelta(
-                current = state.value.gameState,
+                current = snapshot.gameState,
                 delta = payload,
-                players = state.value.players,
+                players = snapshot.players,
             )
+        val isOwnAttackAutoBoundary =
+            isOwnAttackAutoBoundaryDelta(
+                snapshot = snapshot,
+                payload = payload,
+                nextState = result.state,
+            )
+        /*
+         * Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
+         * TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
+         * geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
+         * Fortify umstellen.
+         */
+        val shouldKeepDelayedAttackBoundary =
+            isOwnAttackAutoBoundary &&
+                deferredOwnAttackPhaseBoundary != null &&
+                delayedAutoPhaseAdvanceJob != null
+        val shouldDelayOwnAttackPhaseState =
+            (containsOwnAttackResult && isOwnAttackAutoBoundary) ||
+                shouldKeepDelayedAttackBoundary
+        val shouldShowOwnAttackAutoNotice =
+            isOwnAttackAutoBoundary &&
+                !shouldDelayOwnAttackPhaseState
+        val visibleGameState =
+            if (shouldDelayOwnAttackPhaseState) {
+                deferredOwnAttackPhaseState = result.state
+                result.state.copy(turnPhase = TurnPhase.ATTACK)
+            } else {
+                result.state
+            }
 
-        _state.update { it.copy(gameState = result.state) }
+        if (shouldShowOwnAttackAutoNotice) {
+            cancelDelayedAutoPhaseAdvance()
+        }
+        _state.update { current ->
+            val updated = current.copy(gameState = visibleGameState)
+            if (shouldShowOwnAttackAutoNotice) {
+                updated.withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+            } else {
+                updated
+            }
+        }
+        when {
+            containsOwnAttackResult -> scheduleAutoPhaseAdvanceAfterVisualDelay()
+            shouldKeepDelayedAttackBoundary -> Unit
+            shouldShowOwnAttackAutoNotice -> Unit
+            else -> maybeAdvanceCurrentPhaseAutomatically()
+        }
         if (result.needsCatchUp) {
             requestGameCatchUp(
                 reason = GameStateCatchUpReason.MISSING_DELTA,
@@ -1510,11 +2125,158 @@ class LobbyController(
         }
     }
 
+    /**
+     * Erkennt den serverseitigen Auto-Wechsel von Attack nach Fortify im Delta.
+     *
+     * Der Server broadcastet bei einem automatischen Attack-Ende zuerst ein
+     * `GameStateDeltaEvent` mit [TurnStateUpdatedEvent] und danach zusätzlich
+     * das erklärende [PhaseBoundaryEvent]. Ohne diese Sonderbehandlung würde die
+     * Topbar beim aktiven Angreifer bereits auf Fortify springen, bevor die
+     * lokale Auto-Skip-Notice sichtbar wird.
+     *
+     * Manuelle Bestätigungen werden bewusst ausgeschlossen, weil der Spieler in
+     * diesem Fall selbst auf "Phase beenden" geklickt hat und kein Auto-Popup
+     * erwartet.
+     *
+     * @param snapshot lokaler Zustand vor Anwendung des Deltas
+     * @param payload empfangenes öffentliches Delta
+     * @param nextState bereits reduzierter Zielzustand aus dem Delta
+     * @return `true`, wenn das Delta den eigenen automatischen Attack-Skip beschreibt
+     */
+    private fun isOwnAttackAutoBoundaryDelta(
+        snapshot: LobbyUiState,
+        payload: GameStateDeltaEvent,
+        nextState: GameUiState,
+    ): Boolean {
+        val playerId = snapshot.ownPlayerId ?: return false
+        if (
+            suppressNextAttackBoundaryNotice ||
+            snapshot.gameState.turnPhase != TurnPhase.ATTACK ||
+            nextState.turnPhase != TurnPhase.FORTIFY ||
+            nextState.activePlayerId != playerId
+        ) {
+            return false
+        }
+
+        return payload.events
+            .filterIsInstance<TurnStateUpdatedEvent>()
+            .any { event ->
+                event.activePlayerId == playerId &&
+                    event.turnPhase == TurnPhase.FORTIFY
+            }
+    }
+
+    /**
+     * Übernimmt einen im Attack-Delta bewusst zurückgehaltenen Phasenwechsel.
+     *
+     * Der Server kann das Kampfergebnis und den Wechsel auf Fortify im selben
+     * Delta liefern. Für den angreifenden Client bleibt die sichtbare Phase
+     * während des Result-Delays auf Angriff, damit die Topbar nicht vor dem
+     * erklärenden Popup springt.
+     *
+     * @param gameState bereits reduzierter Zielzustand aus dem Serverdelta
+     */
+    private fun applyDeferredOwnAttackPhaseState(gameState: GameUiState) {
+        _state.update { current ->
+            current
+                .copy(gameState = gameState)
+                .withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+        }
+    }
+
+    private fun handlePhaseBoundary(payload: PhaseBoundaryEvent) {
+        val snapshot = state.value
+        if (payload.stateVersion < snapshot.gameState.stateVersion) {
+            return
+        }
+        manuallyConsumedAttackBoundaryStateVersion
+            ?.takeIf { consumedVersion -> payload.stateVersion > consumedVersion }
+            ?.let { manuallyConsumedAttackBoundaryStateVersion = null }
+        val isAttackBoundary =
+            payload.previousPhase == TurnPhase.ATTACK &&
+                payload.nextPhase == TurnPhase.FORTIFY
+        val wasManuallyConsumedAttackBoundary =
+            isAttackBoundary &&
+                manuallyConsumedAttackBoundaryStateVersion == payload.stateVersion
+        val shouldSuppressAttackBoundaryNotice =
+            isAttackBoundary &&
+                (suppressNextAttackBoundaryNotice || wasManuallyConsumedAttackBoundary)
+        val isOwnAttackBoundary =
+            isAttackBoundary && snapshot.ownPlayerId == payload.activePlayerId
+        if (isOwnAttackBoundary && !shouldSuppressAttackBoundaryNotice) {
+            val remainingDelayMillis = remainingAutoPhaseAdvanceDelayMillis()
+            if (remainingDelayMillis != null && remainingDelayMillis > 0L) {
+                scheduleAttackBoundaryAfterVisualDelay(
+                    payload = payload,
+                    remainingDelayMillis = remainingDelayMillis,
+                )
+                return
+            }
+        }
+        cancelDelayedAutoPhaseAdvance()
+        if (shouldSuppressAttackBoundaryNotice) {
+            suppressNextAttackBoundaryNotice = false
+            if (wasManuallyConsumedAttackBoundary) {
+                manuallyConsumedAttackBoundaryStateVersion = null
+            }
+        }
+        val shouldShowServerAttackAutoNotice =
+            isOwnAttackBoundary &&
+                !shouldSuppressAttackBoundaryNotice
+
+        applyPhaseBoundaryWithOptionalAttackNotice(
+            payload = payload,
+            showServerAttackAutoNotice = shouldShowServerAttackAutoNotice,
+        )
+    }
+
+    /**
+     * Wendet einen Phasenwechsel an und zeigt nur bei eigenen Attack-Auto-Skips
+     * die lokale UX-Notice.
+     *
+     * Notice und GameState werden atomar gesetzt. Dadurch kann die Topbar nicht
+     * einen Frame früher die nächste Phase zeigen, während das erklärende Popup
+     * noch fehlt.
+     *
+     * @param payload autoritativer Phasenwechsel vom Server
+     * @param showServerAttackAutoNotice ob der eigene Client die Attack-Notice sehen soll
+     */
+    private fun applyPhaseBoundaryWithOptionalAttackNotice(
+        payload: PhaseBoundaryEvent,
+        showServerAttackAutoNotice: Boolean,
+    ) {
+        deferredOwnAttackPhaseState = null
+        deferredOwnAttackPhaseBoundary = null
+        _state.update { current ->
+            val updated =
+                current.copy(
+                    gameState =
+                        ClientGameStateReducer.applyPhaseBoundary(
+                            current = current.gameState,
+                            event = payload,
+                        ),
+                )
+            if (showServerAttackAutoNotice) {
+                updated.withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
+            } else {
+                updated
+            }
+        }
+
+        if (!showServerAttackAutoNotice) {
+            maybeAdvanceCurrentPhaseAutomatically()
+        }
+    }
+
     private fun applyGameState(
+        runAutoAdvance: Boolean = true,
         reducer: (current: GameUiState, players: List<LobbyPlayerUi>) -> GameUiState,
     ) {
         _state.update { current ->
             current.copy(gameState = reducer(current.gameState, current.players))
+        }
+        if (runAutoAdvance) {
+            maybeAdvanceCurrentPhaseAutomatically()
         }
     }
 
@@ -1529,6 +2291,23 @@ class LobbyController(
                     ),
             )
         }
+    }
+
+    // Cheat-Fehlermeldungen sollen nur 3 Sekunden sichtbar bleiben.
+    private fun updateTemporaryCheatError(reason: String) {
+        updateGameError(reason)
+        clearCheatErrorJob?.cancel()
+        clearCheatErrorJob =
+            scope.launch {
+                delay(3_000)
+                _state.update { current ->
+                    if (current.errorText == reason) {
+                        current.copy(errorText = null)
+                    } else {
+                        current
+                    }
+                }
+            }
     }
 
     private fun executePendingLobbyActionIfAny() {
@@ -1655,6 +2434,9 @@ class LobbyController(
 
     private fun resetLobbyMembers() {
         playersById.clear()
+        suppressNextAttackBoundaryNotice = false
+        manuallyConsumedAttackBoundaryStateVersion = null
+        cancelDelayedAutoPhaseAdvance()
         reconnectSessionStore.saveWasGameStarted(false)
         _state.update {
             it.copy(
@@ -1664,6 +2446,8 @@ class LobbyController(
                 gameStarted = false,
                 gameState = GameUiState(),
                 pendingCommandKeys = emptySet(),
+                autoPhaseNoticeText = null,
+                autoPhaseNoticeQueue = emptyList(),
             )
         }
     }
@@ -1675,10 +2459,28 @@ class LobbyController(
         _state.update { it.copy(pendingCommandKeys = emptySet()) }
     }
 
+    /**
+     * Veröffentlicht die interne Player-Map in den Compose-State.
+     *
+     * Hostrechte werden aus den autoritativen Playerdaten neu berechnet. Dadurch
+     * bekommt ein neuer Host nach einem Leave-Event sofort die passenden Buttons,
+     * auch wenn das alte lokale Host-Flag noch auf dem vorherigen Wert stand.
+     */
     private fun publishPlayers() {
         val players = playersById.values.toList()
         _state.update {
+            val hasAuthoritativeHost = players.any(LobbyPlayerUi::isHost)
+            val isOwnHost =
+                if (hasAuthoritativeHost) {
+                    it.ownPlayerId != null &&
+                        players.any { player ->
+                            player.playerId == it.ownPlayerId && player.isHost
+                        }
+                } else {
+                    it.isHost
+                }
             it.copy(
+                isHost = isOwnHost,
                 players = players,
                 playerNames = players.map(LobbyPlayerUi::displayName),
                 gameState = ClientGameStateReducer.applyPlayers(it.gameState, players),
@@ -1699,3 +2501,15 @@ class LobbyController(
         return currentNames + ownName
     }
 }
+
+private const val AUTO_PHASE_REINFORCEMENTS_DONE_NOTICE =
+    "Keine Verstärkungen mehr verfügbar. Die Verstärkungsphase wird " +
+        "automatisch beendet."
+private const val AUTO_PHASE_ATTACK_DONE_NOTICE =
+    "Keine Angriffe mehr möglich. Die Angriffsphase wird automatisch beendet."
+private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
+    "Truppen wurden verschoben. Die Verschiebephase wird automatisch beendet."
+private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
+    "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
+        "automatisch beendet."
+private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L

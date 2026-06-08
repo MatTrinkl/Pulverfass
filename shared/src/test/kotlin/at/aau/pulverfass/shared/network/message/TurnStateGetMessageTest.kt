@@ -39,6 +39,7 @@ class TurnStateGetMessageTest {
                 isPaused = true,
                 pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
                 pausedPlayerId = PlayerId(2),
+                fortifyUsedThisTurn = true,
             )
 
         val serialized = json.encodeToString(TurnStateGetResponse.serializer(), response)
@@ -47,6 +48,7 @@ class TurnStateGetMessageTest {
         assertTrue(serialized.contains("turnCount"))
         assertTrue(serialized.contains("pauseReason"))
         assertTrue(serialized.contains("pausedPlayerId"))
+        assertTrue(serialized.contains("fortifyUsedThisTurn"))
         assertEquals(response, deserialized)
     }
 

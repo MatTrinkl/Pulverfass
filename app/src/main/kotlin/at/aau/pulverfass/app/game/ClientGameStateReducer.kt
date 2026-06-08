@@ -65,6 +65,14 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Übernimmt einen vollständigen öffentlichen Snapshot aus einem Broadcast.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response autoritativer Broadcast-Snapshot des Servers.
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen.
+     * @return aktualisierter UI-State oder unveränderter State bei veralteter Version.
+     */
     fun applySnapshotBroadcast(
         current: GameUiState,
         response: GameStateSnapshotBroadcast,
@@ -80,6 +88,17 @@ object ClientGameStateReducer {
             players = players,
         )
 
+    /**
+     * Übernimmt einen nachgeforderten Catch-up-Snapshot.
+     *
+     * Dieser Pfad wird nach Reconnects oder erkannten Delta-Lücken genutzt und
+     * stellt den lokalen Zustand vollständig serverautoritativ wieder her.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response vollständige Catch-up-Antwort des Servers.
+     * @param players aktuelle Lobby-Spielerliste für Owner-Farben und Namen.
+     * @return aktualisierter UI-State.
+     */
     fun applyCatchUpResponse(
         current: GameUiState,
         response: GameStateCatchUpResponse,
@@ -191,6 +210,7 @@ object ClientGameStateReducer {
                 } else {
                     AttackUiState()
                 },
+            fortifyState = FortifyUiState(),
             selectedTradeInCardIds =
                 if (event.nextPhase == TurnPhase.REINFORCEMENTS) {
                     current.selectedTradeInCardIds
@@ -201,11 +221,22 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Übernimmt einen separat angeforderten Turn-State.
+     *
+     * Map- und Turn-State können unabhängig geladen werden. Diese Methode
+     * aktualisiert nur Phasen-, Pausen- und Fortify-Verbrauchsdaten und lässt
+     * Territory-Zustand sowie Kartenhand unangetastet.
+     *
+     * @param current bisheriger lokaler GameState.
+     * @param response autoritative Turn-State-Antwort des Servers.
+     * @return State mit aktualisierter Phase und bereinigter Auswahl.
+     */
     fun applyTurnStateGetResponse(
         current: GameUiState,
         response: TurnStateGetResponse,
-    ): GameUiState =
-        current.copy(
+    ): GameUiState {
+        return current.copy(
             activePlayerId = response.activePlayerId,
             turnPhase = response.turnPhase,
             turnCount = response.turnCount,
@@ -213,27 +244,58 @@ object ClientGameStateReducer {
             isPaused = response.isPaused,
             pauseReason = response.pauseReason,
             pausedPlayerId = response.pausedPlayerId,
-            reinforcementState =
-                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
-                    current.reinforcementState
-                } else {
-                    ReinforcementUiState()
-                },
-            attackState =
-                if (response.turnPhase == TurnPhase.ATTACK) {
-                    current.attackState
-                } else {
-                    AttackUiState()
-                },
-            selectedTradeInCardIds =
-                if (response.turnPhase == TurnPhase.REINFORCEMENTS) {
-                    current.selectedTradeInCardIds
-                } else {
-                    emptySet()
-                },
+            reinforcementState = current.reinforcementStateFor(response.turnPhase),
+            attackState = current.attackStateFor(response.turnPhase),
+            fortifyState = current.fortifyStateFor(response),
+            selectedTradeInCardIds = current.selectedTradeInCardsFor(response.turnPhase),
             isCatchingUp = false,
             lastSyncError = null,
-        )
+        ).clearSelectionIf(current.shouldClearSelectionAfter(response))
+    }
+
+    private fun GameUiState.shouldClearSelectionAfter(response: TurnStateGetResponse): Boolean =
+        response.turnPhase != turnPhase ||
+            (response.turnPhase == TurnPhase.FORTIFY && response.fortifyUsedThisTurn)
+
+    private fun GameUiState.reinforcementStateFor(turnPhase: TurnPhase): ReinforcementUiState =
+        if (turnPhase == TurnPhase.REINFORCEMENTS) {
+            reinforcementState
+        } else {
+            ReinforcementUiState()
+        }
+
+    private fun GameUiState.attackStateFor(turnPhase: TurnPhase): AttackUiState =
+        if (turnPhase == TurnPhase.ATTACK) {
+            attackState
+        } else {
+            AttackUiState()
+        }
+
+    private fun GameUiState.fortifyStateFor(response: TurnStateGetResponse): FortifyUiState =
+        if (response.turnPhase == TurnPhase.FORTIFY) {
+            fortifyState.copy(hasMoved = response.fortifyUsedThisTurn)
+        } else {
+            FortifyUiState()
+        }
+
+    private fun GameUiState.selectedTradeInCardsFor(turnPhase: TurnPhase): Set<CardId> =
+        if (turnPhase == TurnPhase.REINFORCEMENTS) {
+            selectedTradeInCardIds
+        } else {
+            emptySet()
+        }
+
+    private fun GameUiState.clearSelectionIf(shouldClearSelection: Boolean): GameUiState =
+        if (shouldClearSelection) {
+            copy(
+                selectedRegionId = null,
+                selectionFromRegionId = null,
+                selectionToRegionId = null,
+                selectionMessage = null,
+            )
+        } else {
+            this
+        }
 
     /**
      * Übernimmt den privaten Snapshot des lokalen Spielers.
@@ -342,6 +404,16 @@ object ClientGameStateReducer {
 
         if (current.turnPhase == TurnPhase.ATTACK) {
             return selectAttackRegion(
+                current = current,
+                regionId = regionId,
+                territoryId = territoryId,
+                territory = territory,
+                localPlayerId = localPlayerId,
+            )
+        }
+
+        if (current.turnPhase == TurnPhase.FORTIFY) {
+            return selectFortifyRegion(
                 current = current,
                 regionId = regionId,
                 territoryId = territoryId,
@@ -482,6 +554,53 @@ object ClientGameStateReducer {
         )
     }
 
+    /**
+     * Ändert die lokal vorbereitete Fortify-Truppenanzahl innerhalb des Ausgangsgebiets.
+     *
+     * @param current bisheriger lokaler GameState mit gewählter Quelle
+     * @param delta relative Änderung aus Slider oder Stepper
+     * @return State mit auf das Ausgangsgebiet begrenzter Truppenanzahl
+     */
+    fun adjustFortifyTroops(
+        current: GameUiState,
+        delta: Int,
+    ): GameUiState {
+        val maxFortifyTroops = current.maximumFortifyTroops() ?: return current
+        return current.copy(
+            fortifyState =
+                current.fortifyState.copy(
+                    troopCount =
+                        (current.fortifyState.troopCount + delta).coerceIn(
+                            MIN_FORTIFY_TROOPS,
+                            maxFortifyTroops,
+                        ),
+                ),
+        )
+    }
+
+    /**
+     * Markiert den erfolgreichen Fortify-Move lokal als verbraucht.
+     *
+     * Die sichtbaren Truppenzahlen folgen danach den öffentlichen Deltas. Der
+     * lokale Marker verhindert nur einen zweiten Move, weil der Server dafür
+     * aktuell kein öffentliches Flag im Turn-Snapshot mitschickt.
+     *
+     * @param current bisheriger lokaler GameState
+     * @return State ohne Fortify-Auswahl und mit verbrauchtem Move
+     */
+    fun applyFortifyMoveAccepted(current: GameUiState): GameUiState =
+        current.copy(
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            fortifyState =
+                current.fortifyState.copy(
+                    troopCount = MIN_FORTIFY_TROOPS,
+                    hasMoved = true,
+                ),
+        )
+
     /** Markiert maximal drei vorhandene private Karten für einen Trade-in. */
     fun toggleTradeInCard(
         current: GameUiState,
@@ -541,6 +660,12 @@ object ClientGameStateReducer {
                         },
                     reinforcementPlacementAmount = 1,
                     attackState = AttackUiState(),
+                    fortifyState =
+                        if (turnState.turnPhase == TurnPhase.FORTIFY) {
+                            FortifyUiState(hasMoved = turnState.fortifyUsedThisTurn)
+                        } else {
+                            FortifyUiState()
+                        },
                     selectedTradeInCardIds =
                         if (turnState.turnPhase == TurnPhase.REINFORCEMENTS) {
                             current.selectedTradeInCardIds
@@ -622,6 +747,12 @@ object ClientGameStateReducer {
                         } else {
                             AttackUiState()
                         },
+                    fortifyState =
+                        if (event.turnPhase == TurnPhase.FORTIFY) {
+                            current.fortifyState
+                        } else {
+                            FortifyUiState()
+                        },
                     selectedTradeInCardIds =
                         if (event.turnPhase == TurnPhase.REINFORCEMENTS) {
                             current.selectedTradeInCardIds
@@ -665,6 +796,111 @@ object ClientGameStateReducer {
             else -> current
         }
 
+    private fun selectFortifyRegion(
+        current: GameUiState,
+        regionId: String,
+        territoryId: TerritoryId,
+        territory: GameTerritoryUiState?,
+        localPlayerId: PlayerId?,
+    ): GameUiState {
+        if (localPlayerId == null || current.fortifyState.hasMoved) {
+            return current.copy(selectionMessage = null)
+        }
+
+        val sourceRegionId = current.selectionFromRegionId
+        return when {
+            sourceRegionId == null ->
+                current.selectFortifySourceIfPossible(regionId, territory, localPlayerId)
+            sourceRegionId == regionId -> current.clearFortifySelection()
+            current.isValidFortifyTarget(localPlayerId, sourceRegionId, territoryId) ->
+                current.copy(
+                    selectedRegionId = regionId,
+                    selectionToRegionId = regionId,
+                    selectionMessage = null,
+                )
+            territory.isFortifySourceFor(localPlayerId) -> current.withFortifySource(regionId)
+            else -> current.copy(selectionMessage = null)
+        }
+    }
+
+    private fun GameUiState.selectFortifySourceIfPossible(
+        regionId: String,
+        territory: GameTerritoryUiState?,
+        localPlayerId: PlayerId,
+    ): GameUiState =
+        if (territory.isFortifySourceFor(localPlayerId)) {
+            withFortifySource(regionId)
+        } else {
+            copy(selectionMessage = null)
+        }
+
+    private fun GameTerritoryUiState?.isFortifySourceFor(playerId: PlayerId): Boolean =
+        this?.ownerId == playerId && troopCount > MIN_FORTIFY_TROOPS
+
+    private fun GameUiState.withFortifySource(regionId: String): GameUiState =
+        copy(
+            selectedRegionId = regionId,
+            selectionFromRegionId = regionId,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            fortifyState = fortifyState.copy(troopCount = MIN_FORTIFY_TROOPS),
+        )
+
+    private fun GameUiState.clearFortifySelection(): GameUiState =
+        copy(
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            fortifyState = fortifyState.copy(troopCount = MIN_FORTIFY_TROOPS),
+        )
+
+    private fun GameUiState.isValidFortifyTarget(
+        playerId: PlayerId,
+        sourceRegionId: String,
+        targetTerritoryId: TerritoryId,
+    ): Boolean {
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
+        return sourceTerritoryId != targetTerritoryId &&
+            territoryStates[targetTerritoryId]?.ownerId == playerId &&
+            hasOwnedPath(playerId, sourceTerritoryId, targetTerritoryId)
+    }
+
+    private fun GameUiState.hasOwnedPath(
+        playerId: PlayerId,
+        sourceTerritoryId: TerritoryId,
+        targetTerritoryId: TerritoryId,
+    ): Boolean {
+        if (
+            territoryStates[sourceTerritoryId]?.ownerId != playerId ||
+            territoryStates[targetTerritoryId]?.ownerId != playerId
+        ) {
+            return false
+        }
+
+        val visited = linkedSetOf(sourceTerritoryId)
+        val queue = ArrayDeque<TerritoryId>()
+        queue.add(sourceTerritoryId)
+
+        while (queue.isNotEmpty()) {
+            val currentTerritoryId = queue.removeFirst()
+            adjacentTerritoryIds[currentTerritoryId].orEmpty().forEach { neighborId ->
+                if (
+                    neighborId !in visited &&
+                    territoryStates[neighborId]?.ownerId == playerId
+                ) {
+                    if (neighborId == targetTerritoryId) {
+                        return true
+                    }
+                    visited.add(neighborId)
+                    queue.add(neighborId)
+                }
+            }
+        }
+
+        return false
+    }
+
     private fun selectAttackRegion(
         current: GameUiState,
         regionId: String,
@@ -695,7 +931,9 @@ object ClientGameStateReducer {
         val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
         val isEnemyNeighbor =
             territory != null &&
+                territory.ownerId != null &&
                 territory.ownerId != localPlayerId &&
+                territory.troopCount > 0 &&
                 territoryId in current.adjacentTerritoryIds[sourceTerritoryId].orEmpty()
         return if (isEnemyNeighbor) {
             current.copy(
@@ -739,6 +977,13 @@ object ClientGameStateReducer {
         val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
         val maximum = territoryStates[sourceTerritoryId]?.troopCount?.minus(1) ?: return null
         return maximum.takeIf { it >= MIN_ATTACK_TROOPS }
+    }
+
+    private fun GameUiState.maximumFortifyTroops(): Int? {
+        val sourceRegionId = selectionFromRegionId ?: return null
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(sourceRegionId)
+        val maximum = territoryStates[sourceTerritoryId]?.troopCount?.minus(1) ?: return null
+        return maximum.takeIf { it >= MIN_FORTIFY_TROOPS }
     }
 
     private fun GameUiState.applyReinforcementsGranted(

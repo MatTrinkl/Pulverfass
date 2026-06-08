@@ -25,7 +25,7 @@ import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
  * Pulverfass-Standard-Input mit Wood-Skin Background.
- * Verwendet `main_input_design.png` als stretchable BG.
+ * Verwendet `ui_input_wood.png` als stretchable BG.
  */
 @Composable
 fun MainInputField(
@@ -42,7 +42,7 @@ fun MainInputField(
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            painter = painterResource(id = R.drawable.main_input_design),
+            painter = painterResource(id = R.drawable.ui_input_wood),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.matchParentSize(),

@@ -8,6 +8,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Prüft die automatische Rückkehr in ein laufendes Spiel nach App-Neustart.
+ *
+ * Die Navigation darf erst starten, wenn Reconnect-Kontext, Lobby-Code,
+ * Spieler-ID und gestartetes Spiel konsistent vorliegen.
+ */
 class RestoredGameNavigationTest {
     @Test
     fun `restored running game should navigate to game loader`() {

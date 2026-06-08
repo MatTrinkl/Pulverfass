@@ -326,7 +326,11 @@ class DefaultMapCommandRuleService(
         defenderId: PlayerId,
         resolvedEvent: AttackResolvedEvent,
     ): PlayerEliminatedEvent? =
-        if (resolvedEvent.capture && state.ownedTerritoryCount(defenderId) == 1) {
+        if (
+            resolvedEvent.capture &&
+            state.turnOrder.contains(defenderId) &&
+            state.ownedTerritoryCount(defenderId) == 1
+        ) {
             PlayerEliminatedEvent(
                 lobbyCode = command.lobbyCode,
                 playerId = defenderId,

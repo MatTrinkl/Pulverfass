@@ -40,21 +40,24 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.lobby.LobbyController
+import at.aau.pulverfass.app.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.MainInputField
-import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 import kotlinx.coroutines.launch
 
 /**
- * Lobby-Einstiegspunkt — maritimer Pulverfass-Style.
+ * Lobby-Einstiegspunkt im maritimen Pulverfass-Stil.
  *
- * Zwei Modi: Standard (Create/Join-Auswahl) und Joining (Code-Eingabe).
- * Logic 1:1 wie vorher, nur visuell neu mit Pulverfass-Theme.
+ * Der Screen hat zwei Modi: Create/Join-Auswahl und Code-Eingabe. Netzwerk-
+ * und Lobbylogik bleiben im [LobbyController]; der Screen sammelt nur
+ * Nutzerinput und navigiert nach erfolgreichem Create oder Join weiter.
+ *
+ * @param navController Navigation in den Warteraum oder zurück ins Hauptmenü.
+ * @param controller gemeinsame Lobby-Schicht für Verbindung, Create und Join.
  */
 @Composable
 fun LobbyScreen(
@@ -72,23 +75,9 @@ fun LobbyScreen(
                 .systemBarsPadding()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        // Video Background
-        VideoPlayer(
-            videoResId = R.raw.lobby,
-            loop = true,
-            cover = true,
-            muted = true,
-            modifier = Modifier.fillMaxSize(),
-        )
-        // Dark overlay für Lesbarkeit
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.5f)),
-        )
+        LobbyVideoBackground()
 
-        // Top-Left: Server-Status-Pill + Online-Count-Pill
+        // Oben links: Verbindungsstatus und globale Online-Zahl.
         Row(
             modifier =
                 Modifier
@@ -101,7 +90,7 @@ fun LobbyScreen(
             OnlinePlayersPill(count = state.globalPlayerCount)
         }
 
-        // Top-Right: Dev-Info-Panel (S-URL, S-Message, MAP-TEST)
+        // Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht und Map-Test.
         DevInfoPanel(
             serverUrl = state.serverUrl,
             lastMessageType = state.lastMessageType,
@@ -112,7 +101,7 @@ fun LobbyScreen(
                     .padding(end = 24.dp, top = 16.dp),
         )
 
-        // Bottom-Right: Dev-Controls (DEV-MOD, CONNECTION TEST)
+        // Unten rechts: einblendbare Dev-Verbindungssteuerung.
         DevControlsPanel(
             controlsState =
                 DevControlsState(
@@ -131,7 +120,7 @@ fun LobbyScreen(
                     .padding(end = 24.dp, bottom = 24.dp),
         )
 
-        // Bottom-Left: Zurück zum MainMenu
+        // Unten links: zurück zum Hauptmenü.
         MainButton(
             text = "ZURÜCK",
             onClick = { navController.popBackStack() },
@@ -141,7 +130,7 @@ fun LobbyScreen(
                     .padding(start = 24.dp, bottom = 24.dp),
         )
 
-        // Center: Main Form
+        // Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
         Box(
             modifier = Modifier.fillMaxSize().padding(horizontal = 48.dp),
             contentAlignment = Alignment.Center,
@@ -422,7 +411,13 @@ private fun DevInfoPanel(
     }
 }
 
-// Groups connection state for DevControlsPanel (keeps param count ≤ 7)
+/**
+ * Gruppiert die Verbindungswerte des DevPanels.
+ *
+ * @param isConnected `true`, wenn die WebSocket-Verbindung aktiv ist.
+ * @param isConnecting `true`, solange ein Connect-Versuch läuft.
+ * @param serverUrl aktuell editierbare Server-URL.
+ */
 private data class DevControlsState(
     val isConnected: Boolean,
     val isConnecting: Boolean,

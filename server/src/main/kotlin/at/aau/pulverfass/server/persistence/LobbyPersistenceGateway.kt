@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
+import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
@@ -333,6 +334,12 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 "lobbyCode" to lobbyCode.value,
                 "playerId" to playerId.value,
                 "delta" to delta,
+            )
+        is CheatReinforcementBonusUsedEvent ->
+            persistedPayload(
+                type = "cheat_reinforcement_bonus_used",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
             )
         is PlayerCardsRemovedEvent ->
             PersistedEventPayload(

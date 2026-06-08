@@ -16,6 +16,7 @@ import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
+import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -25,6 +26,8 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.AttackRequest
+import at.aau.pulverfass.shared.message.lobby.request.CharacterSelectRequest
+import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
 import at.aau.pulverfass.shared.message.lobby.request.ConfirmReinforcementsDoneRequest
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
@@ -38,6 +41,8 @@ import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnStateGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.AttackResponse
+import at.aau.pulverfass.shared.message.lobby.response.CharacterSelectResponse
+import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
 import at.aau.pulverfass.shared.message.lobby.response.ConfirmReinforcementsDoneResponse
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
@@ -57,6 +62,9 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.AttackErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.CharacterSelectErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ConfirmReinforcementsDoneErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.CreateLobbyErrorResponse
@@ -580,6 +588,43 @@ class NetworkPayloadRegistryTest {
     }
 
     @Test
+    fun `should resolve message type and serialization for cheat reinforcement bonus messages`() {
+        val request =
+            ClaimCheatReinforcementBonusRequest(
+                lobbyCode = LobbyCode("CH12"),
+                playerId = PlayerId(3),
+            )
+        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("CH12"))
+        val error =
+            ClaimCheatReinforcementBonusErrorResponse(
+                code = ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
+                reason = "Der Schummel-Verstärkungsbonus wurde bereits verwendet.",
+            )
+
+        val requestType = NetworkPayloadRegistry.messageTypeFor(request)
+        val requestSerialized = NetworkPayloadRegistry.serializePayload(request)
+        val requestDeserialized =
+            NetworkPayloadRegistry.deserializePayload(requestType, requestSerialized)
+
+        val responseType = NetworkPayloadRegistry.messageTypeFor(response)
+        val responseSerialized = NetworkPayloadRegistry.serializePayload(response)
+        val responseDeserialized =
+            NetworkPayloadRegistry.deserializePayload(responseType, responseSerialized)
+
+        val errorType = NetworkPayloadRegistry.messageTypeFor(error)
+        val errorSerialized = NetworkPayloadRegistry.serializePayload(error)
+        val errorDeserialized =
+            NetworkPayloadRegistry.deserializePayload(errorType, errorSerialized)
+
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST, requestType)
+        assertEquals(request, requestDeserialized)
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE, responseType)
+        assertEquals(response, responseDeserialized)
+        assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE, errorType)
+        assertEquals(error, errorDeserialized)
+    }
+
+    @Test
     fun `should resolve message type and serialization for leave lobby request`() {
         val payload = LeaveLobbyRequest(LobbyCode("GH78"))
 
@@ -989,6 +1034,54 @@ class NetworkPayloadRegistryTest {
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for character select request`() {
+        val payload = CharacterSelectRequest(LobbyCode("CS12"), PlayerId(3), "warrior")
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_CHARACTER_SELECT_REQUEST, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for character select response`() {
+        val payload = CharacterSelectResponse(LobbyCode("CS34"), "warrior")
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_CHARACTER_SELECT_RESPONSE, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for character select error response`() {
+        val payload = CharacterSelectErrorResponse("Achtung, dieser Charakter ist schon vergeben")
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_CHARACTER_SELECT_ERROR_RESPONSE, messageType)
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for character selected broadcast`() {
+        val payload = CharacterSelectedBroadcast(LobbyCode("CS56"), PlayerId(5), "character_04")
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST, messageType)
         assertEquals(payload, deserialized)
     }
 

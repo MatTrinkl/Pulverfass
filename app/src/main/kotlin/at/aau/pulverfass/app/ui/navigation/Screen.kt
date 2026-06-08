@@ -10,7 +10,7 @@ sealed class Screen(val route: String) {
     /** Einstiegsscreen der App. */
     object Load : Screen("load")
 
-    /** Hauptmenü mit Video-BG, animiertem Logo und Start/Options/Exit. */
+    /** Hauptmenü mit Video-Hintergrund, Logo und Start-/Options-/Exit-Aktionen. */
     object MainMenu : Screen("main_menu")
 
     /** Lobby-Einstieg für Connect/Create/Join. */
@@ -19,12 +19,12 @@ sealed class Screen(val route: String) {
     /** Warte-/Lobbyraum nach erfolgreichem Join oder Create. */
     object WaitingRoom : Screen("waiting_room")
 
-    /** route für spielvorbereitung */
+    /** Spielvorbereitung mit Countdown und Asset-Übergang vor der Karte. */
     object LoadGame : Screen("load_game")
 
-    /** Platzhalterziel für das eigentliche Spiel. */
+    /** Eigentliches Spiel mit Karte, HUD und Phasensteuerung. */
     object Game : Screen("game")
 
-    /** Options-Screen (Username, Audio-Toggles). */
+    /** Optionsscreen für Anzeigename und Audio-Schalter. */
     object Options : Screen("options")
 }
