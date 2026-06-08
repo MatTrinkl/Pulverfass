@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
@@ -101,6 +102,13 @@ class FortifyMoveIntegrationTest {
                             ),
                     ),
             )
+            var fortifyMoveAppliedSawUsedFlag: Boolean? = null
+            lobbyManager.registerAcceptedEventListener { _, event, _, _ ->
+                if (event is FortifyMoveAppliedEvent) {
+                    fortifyMoveAppliedSawUsedFlag =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.fortifyUsedThisTurn
+                }
+            }
             routingService.start(serverScope)
 
             val client =
@@ -201,6 +209,7 @@ class FortifyMoveIntegrationTest {
                     assertEquals(2, fortifiedState.troopCountOf(TerritoryId("alpha")))
                     assertEquals(3, fortifiedState.troopCountOf(TerritoryId("gamma")))
                     assertTrue(fortifiedState.fortifyUsedThisTurn)
+                    assertEquals(true, fortifyMoveAppliedSawUsedFlag)
                     assertEquals(null, receivePayloadOrNull(playerOneSession.first))
                     assertEquals(null, receivePayloadOrNull(playerTwoSession.first))
 

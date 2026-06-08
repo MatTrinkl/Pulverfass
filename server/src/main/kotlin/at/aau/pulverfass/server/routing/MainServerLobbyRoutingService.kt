@@ -648,12 +648,21 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    /**
+     * Routet eine einmalige Truppenverschiebung in der Fortify-Phase.
+     *
+     * Der Move und das verbrauchte Fortify-Flag werden als Batch submitted,
+     * damit kein anderer Request einen Zwischenzustand nach dem Move, aber vor
+     * dem Used-Flag, beobachten oder verändern kann.
+     *
+     * @param request dekodierter Netzwerkrequest mit Lobby- und Spieler-Kontext
+     */
     private suspend fun routeFortifyMoveRequest(request: DecodedNetworkRequest) {
         val payload = request.payload as FortifyMoveRequest
 
         runCatching {
             val events = buildFortifyMoveEvents(request, payload)
-            events.forEach { event -> lobbyManager.submit(event, request.context) }
+            lobbyManager.submitAll(payload.lobbyCode, events, request.context)
             network.send(request.connectionId, FortifyMoveResponse(payload.lobbyCode))
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
