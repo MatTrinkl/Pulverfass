@@ -565,8 +565,8 @@ private fun Application.installLobbyRuntime(
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
-                    val playerId = ensurePlayerId(session.sessionToken)
-                    routingService.onPlayerConnected(playerId)
+                    ensurePlayerId(session.sessionToken)
+                    routingService.onConnectionOpened()
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {

@@ -385,6 +385,16 @@ class MainServerLobbyRoutingService(
     }
 
     /**
+     * Aktualisiert den globalen Verbindungszähler nach einem technischen Socket-Connect.
+     *
+     * Fachliche Spielerzustände werden erst nach Join oder Reconnect aktualisiert,
+     * damit ein verzögert verarbeitetes Connect-Event keinen Reconnect doppelt meldet.
+     */
+    suspend fun onConnectionOpened() {
+        broadcastGlobalPlayerCount()
+    }
+
+    /**
      * Reagiert auf eine neue oder wiederhergestellte Verbindung eines Spielers.
      *
      * Falls der laufende Zug wegen `WAITING_FOR_PLAYER` pausiert war und genau
