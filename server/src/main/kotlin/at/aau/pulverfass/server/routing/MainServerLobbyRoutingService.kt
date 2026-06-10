@@ -178,6 +178,8 @@ class MainServerLobbyRoutingService(
             "ueberschreitet die konfigurierte Transportgrenze."
         const val PAYLOAD_LIMIT_DETAILS_PREFIX =
             "als die konfigurierte Grenze von "
+        const val REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX =
+            "Die Reinforcements-Phase kann erst beendet werden, wenn "
         const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
             "Reconnect snapshot skipped connectionId={} lobbyCode={} "
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
@@ -2239,7 +2241,7 @@ class MainServerLobbyRoutingService(
                     }
                 }
                 TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
                         "die Pflichtabgabe von Karten erfüllt ist."
                 TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
@@ -2690,10 +2692,10 @@ class MainServerLobbyRoutingService(
                     }
                 }
                 ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
                         "keine ausstehenden Verstärkungen mehr vorhanden sind."
                 ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
                         "die Pflichtabgabe von Karten erfüllt ist."
             }
 
