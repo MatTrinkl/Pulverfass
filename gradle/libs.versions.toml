@@ -12,6 +12,7 @@ material = "1.12.0"
 ktor = "2.3.12"
 kotlinxSerialization = "1.7.3"
 kotlinxCoroutines = "1.10.2"
+atomicfu = "0.27.0"
 logback = "1.4.14"
 dokka = "2.1.0"
 junit = "4.13.2"
@@ -63,6 +64,7 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 # Serialization & logging
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-atomicfu = { group = "org.jetbrains.kotlinx", name = "atomicfu", version.ref = "atomicfu" }
 logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
 hikari-cp = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
 postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }

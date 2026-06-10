@@ -7,8 +7,8 @@ import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
-import java.util.concurrent.locks.ReentrantReadWriteLock
-import kotlin.concurrent.read
+import kotlinx.atomicfu.locks.ReentrantLock
+import kotlinx.atomicfu.locks.withLock
 
 /**
  * Kombiniert kontrollierte Event-Anwendung mit Snapshot-Reads.
@@ -45,8 +45,8 @@ interface LobbyStateProcessor : LobbyStateReader {
 /**
  * Thread-sichere Referenzimplementierung für sequentielle Event-Verarbeitung.
  *
- * - Writes sind exklusiv (Write-Lock).
- * - Reads laufen parallel zueinander (Read-Lock).
+ * - Reads und Writes sind exklusiv über einen multiplatformfähigen
+ *   Reentrant-Lock; Reads sind kurz, da sie nur Snapshot-Kopien ziehen.
  * - Jeder Read liefert eine Snapshot-Kopie.
  */
 class DefaultLobbyStateProcessor(
@@ -54,36 +54,29 @@ class DefaultLobbyStateProcessor(
     private val reducer: LobbyEventReducer = DefaultLobbyEventReducer(),
     private val mapCommandRuleService: MapCommandRuleService = DefaultMapCommandRuleService(),
 ) : LobbyStateProcessor {
-    private val lock = ReentrantReadWriteLock()
+    private val lock = ReentrantLock()
     private var state: GameState = initialState.snapshot()
 
     override fun currentState(): GameState =
-        lock.read {
+        lock.withLock {
             state.snapshot()
         }
 
     override fun apply(
         event: LobbyEvent,
         context: EventContext?,
-    ): GameState {
-        lock.writeLock().lock()
-
-        return try {
+    ): GameState =
+        lock.withLock {
             val updated = reducer.apply(state, event, context)
             state = updated
             updated.snapshot()
-        } finally {
-            lock.writeLock().unlock()
         }
-    }
 
     override fun apply(
         command: MapCommand,
         context: EventContext?,
-    ): GameState {
-        lock.writeLock().lock()
-
-        return try {
+    ): GameState =
+        lock.withLock {
             val resultingEvents = mapCommandRuleService.createEvents(state, command)
             val updated =
                 resultingEvents.fold(state) { currentState, event ->
@@ -91,10 +84,7 @@ class DefaultLobbyStateProcessor(
                 }
             state = updated
             updated.snapshot()
-        } finally {
-            lock.writeLock().unlock()
         }
-    }
 }
 
 /**
