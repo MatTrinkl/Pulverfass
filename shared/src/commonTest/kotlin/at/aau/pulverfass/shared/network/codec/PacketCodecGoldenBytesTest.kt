@@ -1,11 +1,12 @@
 package at.aau.pulverfass.shared.network.codec
 
-import org.junit.jupiter.api.Assertions.assertArrayEquals
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
 
 /**
  * Fixiert das binäre Wire-Format als Golden Bytes, damit Codec-Rewrites
- * (z. B. für Kotlin Multiplatform) byte-identisch bleiben müssen.
+ * byte-identisch bleiben müssen. Läuft als commonTest auf allen Targets
+ * (JVM und iOS), um das Wire-Format plattformübergreifend abzusichern.
  */
 class PacketCodecGoldenBytesTest {
     @Test
@@ -18,7 +19,7 @@ class PacketCodecGoldenBytesTest {
 
         val packed = PacketCodec.pack(packet)
 
-        assertArrayEquals(
+        assertContentEquals(
             byteArrayOf(0x00, 0x00, 0x00, 0x02, 0x7B, 0x7D, 0x01, 0x02, 0x03),
             packed,
         )
@@ -34,7 +35,7 @@ class PacketCodecGoldenBytesTest {
 
         val packed = PacketCodec.pack(packet)
 
-        assertArrayEquals(
+        assertContentEquals(
             byteArrayOf(0x00, 0x00, 0x01, 0x2C),
             packed.copyOfRange(0, 4),
         )
@@ -47,7 +48,7 @@ class PacketCodecGoldenBytesTest {
                 byteArrayOf(0x00, 0x00, 0x00, 0x02, 0x7B, 0x7D, 0x01, 0x02, 0x03),
             )
 
-        assertArrayEquals(byteArrayOf(0x7B, 0x7D), unpacked.headerBytes)
-        assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), unpacked.payloadBytes)
+        assertContentEquals(byteArrayOf(0x7B, 0x7D), unpacked.headerBytes)
+        assertContentEquals(byteArrayOf(0x01, 0x02, 0x03), unpacked.payloadBytes)
     }
 }
