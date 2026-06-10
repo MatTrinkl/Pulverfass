@@ -1,11 +1,11 @@
 package at.aau.pulverfass.shared.map.config
 
+import at.aau.pulverfass.shared.crypto.sha256
 import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.security.MessageDigest
 
 /**
  * Stabiler Identifier einer normalisierten Map-Definition.
@@ -42,10 +42,10 @@ object MapDefinitionHashing {
             CanonicalMapDefinition.from(definition),
         )
 
-    private fun hashCanonicalJson(canonicalJson: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJson.encodeToByteArray())
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
-    }
+    private fun hashCanonicalJson(canonicalJson: String): String =
+        sha256(canonicalJson.encodeToByteArray()).joinToString(separator = "") { byte ->
+            (byte.toInt() and 0xFF).toString(16).padStart(2, '0')
+        }
 }
 
 @Serializable
