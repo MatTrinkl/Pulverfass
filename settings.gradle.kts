@@ -28,4 +28,5 @@ rootProject.name = "Pulverfass"
 include(":shared")
 include(":server")
 include(":app")
+include(":client")
 include(":e2e")
