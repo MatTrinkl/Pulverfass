@@ -16,6 +16,7 @@ import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.DeckState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -744,6 +745,153 @@ class TurnAdvanceIntegrationTest {
         }
 
     @Test
+    fun `draw card keeps success response when private hand update exceeds payload limit`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    privateStatePayloadMaxBytes = 128,
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("TA13")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val drawnCard = CardState(CardId("drawn-card"), CardType.A)
+            val existingHand =
+                (1..16).map { index ->
+                    CardState(CardId("existing-card-$index"), CardType.B)
+                }
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                    ).copy(
+                        deckState = DeckState(listOf(drawnCard)),
+                        handState =
+                            HandState(
+                                cardsByPlayer = mapOf(playerOne to existingHand),
+                            ),
+                        territoryCapturedThisTurn = true,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val expectedUpdate =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerTwo,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                            isPaused = true,
+                            pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                            pausedPlayerId = playerTwo,
+                        )
+                    val expectedReinforcements =
+                        ReinforcementsGrantedEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            amount = 3,
+                            territoryBonus = 3,
+                            continentBonus = 0,
+                            cardBonus = 0,
+                        )
+
+                    playerOneSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    TurnAdvanceRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        expectedPhase = TurnPhase.DRAW_CARD,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        GameStateDeltaEvent(lobbyCode, 2, 2, listOf(expectedUpdate)),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(lobbyCode, 3, 3, listOf(expectedReinforcements)),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        TurnAdvanceResponse(lobbyCode),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        PhaseBoundaryEvent(
+                            lobbyCode = lobbyCode,
+                            stateVersion = 3,
+                            previousPhase = TurnPhase.DRAW_CARD,
+                            nextPhase = TurnPhase.REINFORCEMENTS,
+                            activePlayerId = playerTwo,
+                            turnCount = 1,
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(expectedUpdate, receiveAnyPayload(playerOneSession.first))
+                    assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerOneSession.first))
+                    assertNull(receivePayloadOrNull(playerOneSession.first))
+
+                    val currentState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("current state missing")
+                    assertEquals(existingHand + drawnCard, currentState.handOf(playerOne))
+                    assertEquals(emptyList<CardState>(), currentState.deckState.cards)
+
+                    playerOneSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
     fun `draw card phase ends game when deck is empty and draw is required`() =
         testApplication {
             val network = ServerNetwork()
@@ -930,6 +1078,49 @@ class TurnAdvanceIntegrationTest {
 
             assertEquals(TurnAdvanceErrorCode.PHASE_MISMATCH, result.first.code)
             assertEquals(TurnPhase.DRAW_CARD, result.second.activeTurnPhase)
+        }
+
+    @Test
+    fun `turn advance from reinforcements requires forced card trade in`() =
+        testApplication {
+            val lobbyCode = LobbyCode("TA14")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val handCards =
+                listOf(
+                    CardState(CardId("forced-a-1"), CardType.A),
+                    CardState(CardId("forced-a-2"), CardType.A),
+                    CardState(CardId("forced-a-3"), CardType.A),
+                    CardState(CardId("forced-b-1"), CardType.B),
+                    CardState(CardId("forced-c-1"), CardType.C),
+                )
+            val result =
+                exerciseFailingAdvance(
+                    lobbyCode = lobbyCode,
+                    state =
+                        runningTurnStateGame(
+                            lobbyCode = lobbyCode,
+                            players = listOf(playerOne, playerTwo),
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                        ).copy(
+                            handState =
+                                HandState(
+                                    cardsByPlayer = mapOf(playerOne to handCards),
+                                ),
+                        ),
+                    requesterPlayerId = playerOne,
+                    request =
+                        TurnAdvanceRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerOne,
+                            expectedPhase = TurnPhase.REINFORCEMENTS,
+                        ),
+                )
+
+            assertEquals(TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED, result.first.code)
+            assertEquals(TurnPhase.REINFORCEMENTS, result.second.activeTurnPhase)
+            assertEquals(handCards, result.second.handOf(playerOne))
         }
 
     @Test

@@ -14,6 +14,7 @@ enum class TurnAdvanceErrorCode {
     GAME_FINISHED,
     PHASE_MISMATCH,
     GAME_NOT_FOUND,
+    FORCED_TRADE_REQUIRED,
 }
 
 /**

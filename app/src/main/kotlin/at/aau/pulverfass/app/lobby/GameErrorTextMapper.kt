@@ -78,6 +78,8 @@ object GameErrorTextMapper {
             TurnAdvanceErrorCode.PHASE_MISMATCH ->
                 "Die Phase hat sich geändert. Lade den Spielstand neu."
             TurnAdvanceErrorCode.GAME_NOT_FOUND -> GAME_NOT_FOUND_TEXT
+            TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED ->
+                "Vor dem Phasenwechsel muss ein Kartenset eingetauscht werden."
         }
 
     fun map(error: PlaceReinforcementsErrorResponse): String =

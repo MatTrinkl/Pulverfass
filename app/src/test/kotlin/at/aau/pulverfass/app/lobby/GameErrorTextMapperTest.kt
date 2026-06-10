@@ -170,6 +170,11 @@ class GameErrorTextMapperTest {
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_NOT_FOUND, "raw"),
             ),
         )
+        assertTrue(
+            GameErrorTextMapper.map(
+                TurnAdvanceErrorResponse(TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED, "raw"),
+            ).contains("Kartenset"),
+        )
     }
 
     @Test

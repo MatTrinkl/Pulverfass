@@ -11,6 +11,7 @@ import at.aau.pulverfass.server.session.SessionReconnectContext
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
@@ -99,7 +100,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     }
 
     @Test
-    fun `startup restores open lobbies clears finished lobby context and continues player ids`() =
+    fun `startup restores open and finished lobbies and continues player ids`() =
         testApplication {
             val openLobbyCode = LobbyCode("OP11")
             val finishedLobbyCode = LobbyCode("FN22")
@@ -134,6 +135,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                     lobbyOwner = PlayerId(9),
                     status = GameStatus.FINISHED,
                     gameStarted = true,
+                    closedReason = MatchEndReason.DECK_EMPTY.name,
                 ),
             )
             sessionStore.upsertSession(
@@ -216,9 +218,16 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         .map(PlayerJoinedLobbyEvent::playerId)
 
                 assertEquals(listOf(openHostId, openGuestId, PlayerId(10)), joinedIds)
-                assertEquals(setOf(openLobbyCode), store.findLobbyCodesWithPersistedState())
                 assertEquals(
-                    SessionReconnectContext(playerId = PlayerId(9)),
+                    setOf(openLobbyCode, finishedLobbyCode),
+                    store.findLobbyCodesWithPersistedState(),
+                )
+                assertEquals(
+                    SessionReconnectContext(
+                        playerId = PlayerId(9),
+                        lobbyCode = finishedLobbyCode,
+                        playerDisplayName = "Finished",
+                    ),
                     sessionStore.loadContext(
                         finishedToken,
                     ),

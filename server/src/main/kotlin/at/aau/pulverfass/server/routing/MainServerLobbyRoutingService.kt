@@ -576,9 +576,10 @@ class MainServerLobbyRoutingService(
                 val updatedState =
                     lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                         ?: throw IllegalStateException("GAME_NOT_FOUND")
-                gameStateDelivery.sendPrivateState(
-                    payload.lobbyCode,
-                    PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+                sendPrivateStateUpdateBestEffort(
+                    lobbyCode = payload.lobbyCode,
+                    payload = PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+                    context = "draw-card private hand update",
                 )
             }
             if (!matchEnded) {
@@ -1660,6 +1661,12 @@ class MainServerLobbyRoutingService(
         ) {
             "PHASE_MISMATCH"
         }
+        if (currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) {
+            val hand = state.handOf(payload.playerId)
+            require(!requiresForcedTradeInOnReinforcementPhase(state, payload.playerId, hand)) {
+                "FORCED_TRADE_REQUIRED"
+            }
+        }
 
         val updatedTurnState =
             TurnStateMachine.advance(
@@ -2204,6 +2211,7 @@ class MainServerLobbyRoutingService(
                 "GAME_PAUSED" -> TurnAdvanceErrorCode.GAME_PAUSED
                 "GAME_FINISHED" -> TurnAdvanceErrorCode.GAME_FINISHED
                 "PHASE_MISMATCH" -> TurnAdvanceErrorCode.PHASE_MISMATCH
+                "FORCED_TRADE_REQUIRED" -> TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED
                 else -> TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER
             }
 
@@ -2230,6 +2238,9 @@ class MainServerLobbyRoutingService(
                             "Serverzustand ist '${currentPhase.name}'."
                     }
                 }
+                TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED ->
+                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                        "die Pflichtabgabe von Karten erfüllt ist."
                 TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
