@@ -10,7 +10,6 @@ import at.aau.pulverfass.shared.text.decodeUtf8Strict
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import java.nio.charset.CharacterCodingException
 
 /**
  * Interner Serializer für Header und Payloads des Netzwerkprotokolls.
