@@ -1,6 +1,4 @@
 package at.aau.pulverfass.shared.network.codec
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Kodiert und dekodiert das binäre Transportformat eines [SerializedPacket]s.
@@ -10,7 +8,7 @@ import java.nio.ByteOrder
  * Header- und Payload-Bytes.
  *
  * Das Wire-Format lautet:
- * `[Int32 headerLength][headerBytes][payloadBytes]`
+ * `[Int32 headerLength][headerBytes][payloadBytes]` (Big-Endian)
  */
 object PacketCodec {
     /**
@@ -26,15 +24,12 @@ object PacketCodec {
         require(totalPacketSize <= Int.MAX_VALUE.toLong()) {
             "Packet exceeds the maximum supported size of ${Int.MAX_VALUE} bytes."
         }
-        val buffer =
-            ByteBuffer.allocate(totalPacketSize.toInt())
-                .order(ByteOrder.BIG_ENDIAN)
 
-        buffer.putInt(headerLength)
-        buffer.put(packet.headerBytes)
-        buffer.put(packet.payloadBytes)
-
-        return buffer.array()
+        val result = ByteArray(totalPacketSize.toInt())
+        result.writeIntBigEndian(offset = 0, value = headerLength)
+        packet.headerBytes.copyInto(result, destinationOffset = Int.SIZE_BYTES)
+        packet.payloadBytes.copyInto(result, destinationOffset = Int.SIZE_BYTES + headerLength)
+        return result
     }
 
     /**
@@ -50,9 +45,7 @@ object PacketCodec {
             throw PacketTooShortException()
         }
 
-        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
-        val headerLength = buffer.int
-
+        val headerLength = bytes.readIntBigEndian(offset = 0)
         if (headerLength <= 0) {
             throw InvalidHeaderLengthException(headerLength)
         }
@@ -61,15 +54,26 @@ object PacketCodec {
             throw CorruptPacketException("Packet too short for declared header length.")
         }
 
-        val headerBytes = ByteArray(headerLength)
-        buffer[headerBytes]
-
-        val payloadBytes = ByteArray(buffer.remaining())
-        buffer[payloadBytes]
-
+        val headerEnd = Int.SIZE_BYTES + headerLength
         return SerializedPacket(
-            headerBytes = headerBytes,
-            payloadBytes = payloadBytes,
+            headerBytes = bytes.copyOfRange(Int.SIZE_BYTES, headerEnd),
+            payloadBytes = bytes.copyOfRange(headerEnd, bytes.size),
         )
     }
+
+    private fun ByteArray.writeIntBigEndian(
+        offset: Int,
+        value: Int,
+    ) {
+        this[offset] = (value ushr 24).toByte()
+        this[offset + 1] = (value ushr 16).toByte()
+        this[offset + 2] = (value ushr 8).toByte()
+        this[offset + 3] = value.toByte()
+    }
+
+    private fun ByteArray.readIntBigEndian(offset: Int): Int =
+        ((this[offset].toInt() and 0xFF) shl 24) or
+            ((this[offset + 1].toInt() and 0xFF) shl 16) or
+            ((this[offset + 2].toInt() and 0xFF) shl 8) or
+            (this[offset + 3].toInt() and 0xFF)
 }
