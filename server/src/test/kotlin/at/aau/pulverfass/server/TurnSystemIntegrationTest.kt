@@ -14,6 +14,8 @@ import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -420,6 +422,14 @@ class TurnSystemIntegrationTest {
                         ),
                         receivePayload(connectedWatcherSession),
                     )
+                    val disconnectedStatus =
+                        ConnectionStatusUpdateEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = disconnectedNextPlayer,
+                            status = ConnectionStatus.DISCONNECTED,
+                        )
+                    assertEquals(disconnectedStatus, receivePayload(hostSession.first))
+                    assertEquals(disconnectedStatus, receivePayload(connectedWatcherSession))
 
                     advanceAndAssertBroadcast(
                         actor = hostSession.first,
@@ -526,6 +536,15 @@ class TurnSystemIntegrationTest {
                     assertEquals(resumedEvent, receivePayload(hostSession.first))
                     assertEquals(resumedEvent, receivePayload(connectedWatcherSession))
                     assertEquals(resumedEvent, receivePayload(reconnectedNextPlayer.first))
+                    val connectedStatus =
+                        ConnectionStatusUpdateEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = disconnectedNextPlayer,
+                            status = ConnectionStatus.CONNECTED,
+                        )
+                    assertEquals(connectedStatus, receivePayload(hostSession.first))
+                    assertEquals(connectedStatus, receivePayload(connectedWatcherSession))
+                    assertEquals(connectedStatus, receivePayload(reconnectedNextPlayer.first))
 
                     reconnectedNextPlayer.first.send(
                         Frame.Binary(

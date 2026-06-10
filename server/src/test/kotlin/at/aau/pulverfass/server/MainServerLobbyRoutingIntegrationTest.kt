@@ -25,10 +25,12 @@ import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
@@ -1856,6 +1858,14 @@ class MainServerLobbyRoutingIntegrationTest {
                         PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                         receivePayload(reconnectingSession),
                     )
+                    assertEquals(
+                        ConnectionStatusUpdateEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = PlayerId(1),
+                            status = ConnectionStatus.CONNECTED,
+                        ),
+                        receivePayloadOfType<ConnectionStatusUpdateEvent>(reconnectingSession),
+                    )
 
                     val bobSession = client.webSocketSession("/ws")
                     val bobToken = discardConnectionHandshake(bobSession)
@@ -1987,10 +1997,49 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                     receivePayloadOfType<PlayerConnectionLostEvent>(aliceSession),
                 )
+                assertEquals(
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyA,
+                        playerId = PlayerId(2),
+                        status = ConnectionStatus.DISCONNECTED,
+                    ),
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(aliceSession),
+                )
                 assertNull(receivePayloadOrNull(carolSession))
+
+                val daveSession = client.webSocketSession("/ws")
+                discardConnectionHandshake(daveSession)
+                daveSession.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Dave")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(daveSession))
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    receivePayload(daveSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    receivePayload(daveSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(4), "Dave"),
+                    receivePayloadOfType<PlayerJoinedLobbyEvent>(daveSession),
+                )
+                assertEquals(
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyA,
+                        playerId = PlayerId(2),
+                        status = ConnectionStatus.DISCONNECTED,
+                    ),
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(daveSession),
+                )
 
                 aliceSession.close()
                 carolSession.close()
+                daveSession.close()
             }
         }
 
@@ -2151,6 +2200,20 @@ class MainServerLobbyRoutingIntegrationTest {
                     aliceSession.closeReason.await()
                 }
 
+                val expectedConnectedStatus =
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        status = ConnectionStatus.CONNECTED,
+                    )
+                assertEquals(
+                    expectedConnectedStatus,
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(bobSession),
+                )
+                assertEquals(
+                    expectedConnectedStatus,
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(carolSession),
+                )
                 assertNull(receivePayloadOrNull(bobSession))
                 assertNull(receivePayloadOrNull(carolSession))
 
@@ -2459,6 +2522,14 @@ class MainServerLobbyRoutingIntegrationTest {
                     receivePayloadOfType<PlayerConnectionLostEvent>(bobSession),
                 )
                 assertEquals(
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        status = ConnectionStatus.DISCONNECTED,
+                    ),
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(bobSession),
+                )
+                assertEquals(
                     expectedPause,
                     receivePayloadOfType<TurnStateUpdatedEvent>(bobSession),
                 )
@@ -2469,6 +2540,14 @@ class MainServerLobbyRoutingIntegrationTest {
                         reason = PlayerConnectionLostReason.SOCKET_CLOSED,
                     ),
                     receivePayloadOfType<PlayerConnectionLostEvent>(carolSession),
+                )
+                assertEquals(
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        status = ConnectionStatus.DISCONNECTED,
+                    ),
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(carolSession),
                 )
                 assertEquals(
                     expectedPause,
@@ -2492,7 +2571,6 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                     receivePayload(reconnectingSession),
                 )
-
                 val expectedResume =
                     TurnStateUpdatedEvent(
                         lobbyCode = lobbyCode,
@@ -2516,7 +2594,24 @@ class MainServerLobbyRoutingIntegrationTest {
                     expectedResume,
                     receivePayloadOfType<TurnStateUpdatedEvent>(carolSession),
                 )
-
+                val expectedConnectedStatus =
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(1),
+                        status = ConnectionStatus.CONNECTED,
+                    )
+                assertEquals(
+                    expectedConnectedStatus,
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(reconnectingSession),
+                )
+                assertEquals(
+                    expectedConnectedStatus,
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(bobSession),
+                )
+                assertEquals(
+                    expectedConnectedStatus,
+                    receivePayloadOfType<ConnectionStatusUpdateEvent>(carolSession),
+                )
                 reconnectingSession.send(
                     Frame.Binary(
                         fin = true,

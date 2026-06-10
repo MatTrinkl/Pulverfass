@@ -16,10 +16,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -35,8 +33,6 @@ import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.lobby.LobbyUiState
 import at.aau.pulverfass.app.storage.SharedPreferencesPlayerNameStore
 import at.aau.pulverfass.app.storage.SharedPreferencesReconnectSessionStore
-import at.aau.pulverfass.app.ui.components.ServerStatusIndicator
-import at.aau.pulverfass.app.ui.components.rememberServerHealthStatus
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.navigation.canAutoNavigateToRestoredGame
 import at.aau.pulverfass.app.ui.navigation.restoredGameNavigationTarget
@@ -100,7 +96,6 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 val lobbyState by lobbyController.state.collectAsState()
-                val serverHealthStatus by rememberServerHealthStatus()
 
                 /*
                  * Jede Navigation kann neue Window-Inset-Berechnungen auslösen.
@@ -237,14 +232,6 @@ class MainActivity : AppCompatActivity() {
                                 )
                             }
                         }
-
-                        ServerStatusIndicator(
-                            status = serverHealthStatus,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 12.dp, end = 12.dp),
-                        )
                     }
                 }
             }

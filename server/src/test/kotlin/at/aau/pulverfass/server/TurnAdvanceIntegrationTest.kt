@@ -15,6 +15,8 @@ import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -851,6 +853,14 @@ class TurnAdvanceIntegrationTest {
                             lobbyCode = lobbyCode,
                             playerId = playerTwo,
                             reason = PlayerConnectionLostReason.SOCKET_CLOSED,
+                        ),
+                        receivePayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        ConnectionStatusUpdateEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            status = ConnectionStatus.DISCONNECTED,
                         ),
                         receivePayload(playerOneSession.first),
                     )

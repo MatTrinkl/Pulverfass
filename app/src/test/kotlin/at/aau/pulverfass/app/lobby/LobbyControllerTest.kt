@@ -14,12 +14,14 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -458,6 +460,88 @@ class LobbyControllerTest {
                     controller.state.value.players.first { it.playerId == PlayerId(2) }
                 assertEquals("Bob", disconnectedPlayer.displayName)
                 assertTrue(disconnectedPlayer.isDisconnected)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `connection status updates should synchronize disconnect and reconnect`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CS42")
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174242"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(1),
+                                playerDisplayName = payload.playerDisplayName,
+                                isHost = true,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(2),
+                                playerDisplayName = "Bob",
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            ConnectionStatusUpdateEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(2),
+                                status = ConnectionStatus.DISCONNECTED,
+                            ),
+                        )
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+                waitUntil {
+                    controller.state.value.players.any { player ->
+                        player.playerId == PlayerId(2) &&
+                            player.connectionStatus == ConnectionStatus.DISCONNECTED
+                    }
+                }
+
+                server.broadcast(
+                    ConnectionStatusUpdateEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = PlayerId(2),
+                        status = ConnectionStatus.CONNECTED,
+                    ),
+                )
+                waitUntil {
+                    controller.state.value.players.any { player ->
+                        player.playerId == PlayerId(2) &&
+                            player.connectionStatus == ConnectionStatus.CONNECTED
+                    }
+                }
+
+                val players = controller.state.value.players.associateBy(LobbyPlayerUi::playerId)
+                assertEquals(
+                    ConnectionStatus.CONNECTED,
+                    players.getValue(PlayerId(1)).connectionStatus,
+                )
+                assertEquals(
+                    ConnectionStatus.CONNECTED,
+                    players.getValue(PlayerId(2)).connectionStatus,
+                )
+                assertFalse(players.getValue(PlayerId(2)).isDisconnected)
             } finally {
                 controller.close()
                 server.close()
@@ -3623,6 +3707,19 @@ class LobbyControllerTest {
         val url: String,
         private val activeSessions: CopyOnWriteArrayList<DefaultWebSocketServerSession>,
     ) {
+        fun broadcast(payload: NetworkMessagePayload) {
+            runBlocking {
+                activeSessions.forEach { session ->
+                    session.outgoing.send(
+                        Frame.Binary(
+                            true,
+                            MessageCodec.encode(payload),
+                        ),
+                    )
+                }
+            }
+        }
+
         fun disconnectClients(message: String = "server disconnect") {
             runBlocking {
                 activeSessions.forEach { session ->

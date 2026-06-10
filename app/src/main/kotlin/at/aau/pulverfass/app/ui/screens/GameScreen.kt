@@ -121,6 +121,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -2022,12 +2023,24 @@ private fun PlayerSidebarRow(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = player.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = HudContentColor,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ConnectionStatusIndicator(
+                        status = player.connectionStatus,
+                        modifier =
+                            Modifier.testTag(
+                                "player_connection_status_${player.playerId.value}",
+                            ),
+                    )
+                    Text(
+                        text = player.name,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = HudContentColor,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
                 if (player.isHost) {
                     HostIndicator()
                 }
@@ -2035,6 +2048,39 @@ private fun PlayerSidebarRow(
         }
     }
 }
+
+/**
+ * Zeigt den aktuellen Verbindungsstatus eines Spielers als kleinen Farbpunkt.
+ */
+@Composable
+internal fun ConnectionStatusIndicator(
+    status: ConnectionStatus,
+    modifier: Modifier = Modifier,
+) {
+    val description =
+        stringResource(
+            id =
+                when (status) {
+                    ConnectionStatus.CONNECTED -> R.string.game_connection_connected
+                    ConnectionStatus.DISCONNECTED -> R.string.game_connection_disconnected
+                },
+        )
+
+    Canvas(
+        modifier =
+            modifier
+                .size(10.dp)
+                .semantics { contentDescription = description },
+    ) {
+        drawCircle(color = connectionStatusIndicatorColor(status))
+    }
+}
+
+internal fun connectionStatusIndicatorColor(status: ConnectionStatus): Color =
+    when (status) {
+        ConnectionStatus.CONNECTED -> PulverfassColors.Success
+        ConnectionStatus.DISCONNECTED -> PulverfassColors.DangerBright
+    }
 
 @Composable
 private fun HostIndicator() {

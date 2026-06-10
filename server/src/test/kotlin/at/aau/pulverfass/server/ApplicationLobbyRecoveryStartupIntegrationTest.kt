@@ -296,7 +296,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         lobbyCode = lobbyCode,
                         playerDisplayName = "Alice",
                     ),
-                    receiveRelevantTestPayload(session),
+                    receiveTestPayloadOfType<ReconnectResponse>(session),
                 )
             } finally {
                 session.close()
@@ -371,7 +371,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         lobbyCode = lobbyCode,
                         playerDisplayName = "Alice",
                     ),
-                    receiveRelevantTestPayload(firstSession),
+                    receiveTestPayloadOfType<ReconnectResponse>(firstSession),
                 )
 
                 sessionStore.deleteSession(sessionToken)
@@ -394,7 +394,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                             lobbyCode = lobbyCode,
                             playerDisplayName = "Alice",
                         ),
-                        receiveRelevantTestPayload(reconnectingSession),
+                        receiveTestPayloadOfType<ReconnectResponse>(reconnectingSession),
                     )
                 } finally {
                     reconnectingSession.close()
@@ -526,6 +526,24 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
             }
         }
         error("Expected relevant payload within 20 messages.")
+    }
+
+    /**
+     * Liest Broadcasts reihenfolgeunabhängig, bis die erwartete Payload eintrifft.
+     *
+     * Reconnects dürfen Status- und Roster-Events vor oder nach ihrer Antwort senden.
+     */
+    private suspend inline fun <reified T> receiveTestPayloadOfType(
+        session: DefaultClientWebSocketSession,
+        maxMessages: Int = 20,
+    ): T {
+        repeat(maxMessages) {
+            val payload = receiveRawTestPayload(session)
+            if (payload is T) {
+                return payload
+            }
+        }
+        error("Expected ${T::class.java.simpleName} within $maxMessages messages.")
     }
 
     private suspend fun receiveRawTestPayload(session: DefaultClientWebSocketSession): Any =

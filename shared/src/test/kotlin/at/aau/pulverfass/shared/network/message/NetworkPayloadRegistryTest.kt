@@ -11,12 +11,14 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.codec.NetworkPayloadRegistry
+import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
 import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
@@ -257,6 +259,27 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST, messageType)
         assertEquals(
             """{"lobbyCode":"EF57","playerId":18,"reason":"HEARTBEAT_TIMEOUT"}""",
+            serialized,
+        )
+        assertEquals(payload, deserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for connection status update event`() {
+        val payload =
+            ConnectionStatusUpdateEvent(
+                lobbyCode = LobbyCode("EF58"),
+                playerId = PlayerId(19),
+                status = ConnectionStatus.DISCONNECTED,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST, messageType)
+        assertEquals(
+            """{"lobbyCode":"EF58","playerId":19,"status":"DISCONNECTED"}""",
             serialized,
         )
         assertEquals(payload, deserialized)

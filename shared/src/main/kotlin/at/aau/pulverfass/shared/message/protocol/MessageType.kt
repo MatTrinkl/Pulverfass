@@ -133,6 +133,9 @@ enum class MessageType(val id: Int) {
     /** Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
     LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE(87),
 
+    /** Broadcast des aktuellen Verbindungsstatus eines Lobby-Spielers. */
+    LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST(88),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

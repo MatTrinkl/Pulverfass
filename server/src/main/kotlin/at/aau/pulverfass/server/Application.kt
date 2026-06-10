@@ -201,8 +201,8 @@ fun Application.module(
     databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
 ) {
     install(WebSockets) {
-        pingPeriodMillis = 15_000
-        timeoutMillis = 15_000
+        pingPeriodMillis = WebSocketPolicy.PING_PERIOD_MILLIS
+        timeoutMillis = WebSocketPolicy.TIMEOUT_MILLIS
         maxFrameSize = runtimeConfig.webSocketMaxFrameSizeBytes
         masking = false
     }
@@ -565,8 +565,8 @@ private fun Application.installLobbyRuntime(
             when (event) {
                 is Network.Event.Connected<ConnectionId> -> {
                     val session = network.sessionManager.requireByConnectionId(event.connectionId)
-                    val playerId = ensurePlayerId(session.sessionToken)
-                    routingService.onPlayerConnected(playerId)
+                    ensurePlayerId(session.sessionToken)
+                    routingService.onConnectionOpened()
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {
