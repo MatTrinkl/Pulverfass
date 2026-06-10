@@ -1,5 +1,7 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.dokka)
 }
@@ -9,46 +11,70 @@ version = "1.0.0"
 
 // Use JDK 25 as compiler runtime but target JVM 17 bytecode.
 // The shared module is consumed by Android (via D8/R8), which does not support
-// class file versions above JVM 21. Both Kotlin and Java must target the same
-// version to avoid the "Inconsistent JVM Target Compatibility" error.
+// class file versions above JVM 21.
 kotlin {
     jvmToolchain(25)
-}
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
+    iosArm64()
+    iosSimulatorArm64()
+
+    sourceSets {
+        commonMain.dependencies {
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.atomicfu)
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+        }
+        jvmTest.dependencies {
+            implementation(project.dependencies.platform("org.junit:junit-bom:5.10.2"))
+            implementation("org.junit.jupiter:junit-jupiter")
+            runtimeOnly("org.junit.platform:junit-platform-launcher")
+        }
+    }
+
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         optIn.add("kotlinx.serialization.ExperimentalSerializationApi")
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+/*
+ * Kompatibilitäts-Task: CI und Doku rufen weiterhin `:shared:test` auf.
+ * Im KMP-Modell heißt der JVM-Test-Task `jvmTest`.
+ */
+tasks.register("test") {
+    group = "verification"
+    description = "Alias for jvmTest (KMP compatibility)."
+    dependsOn("jvmTest")
 }
 
-dependencies {
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlinx.atomicfu)
-    testImplementation(platform("org.junit:junit-bom:5.10.2"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     finalizedBy(tasks.named("jacocoTestReport"))
 }
 
-tasks.named<JacocoReport>("jacocoTestReport") {
-    dependsOn(tasks.named("test"))
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("jvmTest"))
 
-    executionData.setFrom(layout.buildDirectory.file("jacoco/test.exec"))
-    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    executionData.setFrom(layout.buildDirectory.file("jacoco/jvmTest.exec"))
+    sourceDirectories.setFrom(files("src/commonMain/kotlin", "src/jvmMain/kotlin"))
     classDirectories.setFrom(
-        files(
-            layout.buildDirectory.dir("classes/kotlin/main"),
-            layout.buildDirectory.dir("classes/java/main"),
-        ),
+        files(layout.buildDirectory.dir("classes/kotlin/jvm/main")),
     )
+
+    reports {
+        // Pfad bleibt stabil, weil CI/Sonar build/reports/jacoco/test/jacocoTestReport.xml erwartet.
+        xml.required.set(true)
+        xml.outputLocation.set(
+            layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml"),
+        )
+        html.required.set(true)
+        csv.required.set(false)
+    }
 }
