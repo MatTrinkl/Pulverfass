@@ -89,6 +89,7 @@ import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassExcepti
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlin.reflect.KClass
 
 /**
  * Verwaltet die zentrale Zuordnung zwischen MessageTypes und ihren konkreten
@@ -96,247 +97,247 @@ import kotlinx.serialization.json.Json
  */
 internal object NetworkPayloadRegistry {
     private val payloadTypeByClass =
-        mapOf<Class<out NetworkMessagePayload>, MessageType>(
-            ConnectionResponse::class.java to MessageType.CONNECTION_RESPONSE,
-            GlobalPlayerCountEvent::class.java to MessageType.GLOBAL_PLAYER_COUNT_BROADCAST,
-            CharacterSelectRequest::class.java to MessageType.LOBBY_CHARACTER_SELECT_REQUEST,
-            CharacterSelectResponse::class.java to MessageType.LOBBY_CHARACTER_SELECT_RESPONSE,
-            CharacterSelectErrorResponse::class.java to
+        mapOf<KClass<out NetworkMessagePayload>, MessageType>(
+            ConnectionResponse::class to MessageType.CONNECTION_RESPONSE,
+            GlobalPlayerCountEvent::class to MessageType.GLOBAL_PLAYER_COUNT_BROADCAST,
+            CharacterSelectRequest::class to MessageType.LOBBY_CHARACTER_SELECT_REQUEST,
+            CharacterSelectResponse::class to MessageType.LOBBY_CHARACTER_SELECT_RESPONSE,
+            CharacterSelectErrorResponse::class to
                 MessageType.LOBBY_CHARACTER_SELECT_ERROR_RESPONSE,
-            CharacterSelectedBroadcast::class.java to
+            CharacterSelectedBroadcast::class to
                 MessageType.LOBBY_CHARACTER_SELECTED_BROADCAST,
-            ReconnectRequest::class.java to MessageType.CONNECTION_RECONNECT_REQUEST,
-            ReconnectResponse::class.java to MessageType.CONNECTION_RECONNECT_RESPONSE,
-            AttackRequest::class.java to MessageType.LOBBY_ATTACK_REQUEST,
-            AttackResponse::class.java to MessageType.LOBBY_ATTACK_RESPONSE,
-            AttackErrorResponse::class.java to MessageType.LOBBY_ATTACK_ERROR_RESPONSE,
-            AttackResolvedBroadcastEvent::class.java to MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST,
-            PlayerEliminatedEvent::class.java to MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST,
-            ConfirmAttackDoneRequest::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST,
-            ConfirmAttackDoneResponse::class.java to MessageType.LOBBY_CONFIRM_ATTACK_DONE_RESPONSE,
-            ConfirmAttackDoneErrorResponse::class.java to
+            ReconnectRequest::class to MessageType.CONNECTION_RECONNECT_REQUEST,
+            ReconnectResponse::class to MessageType.CONNECTION_RECONNECT_RESPONSE,
+            AttackRequest::class to MessageType.LOBBY_ATTACK_REQUEST,
+            AttackResponse::class to MessageType.LOBBY_ATTACK_RESPONSE,
+            AttackErrorResponse::class to MessageType.LOBBY_ATTACK_ERROR_RESPONSE,
+            AttackResolvedBroadcastEvent::class to MessageType.LOBBY_ATTACK_RESOLVED_BROADCAST,
+            PlayerEliminatedEvent::class to MessageType.LOBBY_PLAYER_ELIMINATED_BROADCAST,
+            ConfirmAttackDoneRequest::class to MessageType.LOBBY_CONFIRM_ATTACK_DONE_REQUEST,
+            ConfirmAttackDoneResponse::class to MessageType.LOBBY_CONFIRM_ATTACK_DONE_RESPONSE,
+            ConfirmAttackDoneErrorResponse::class to
                 MessageType.LOBBY_CONFIRM_ATTACK_DONE_ERROR_RESPONSE,
-            ConfirmReinforcementsDoneRequest::class.java to
+            ConfirmReinforcementsDoneRequest::class to
                 MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_REQUEST,
-            ConfirmReinforcementsDoneResponse::class.java to
+            ConfirmReinforcementsDoneResponse::class to
                 MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_RESPONSE,
-            ConfirmReinforcementsDoneErrorResponse::class.java to
+            ConfirmReinforcementsDoneErrorResponse::class to
                 MessageType.LOBBY_CONFIRM_REINFORCEMENTS_DONE_ERROR_RESPONSE,
-            CreateLobbyRequest::class.java to MessageType.LOBBY_CREATE_REQUEST,
-            CreateLobbyErrorResponse::class.java to MessageType.LOBBY_CREATE_ERROR_RESPONSE,
-            CreateLobbyResponse::class.java to MessageType.LOBBY_CREATE_RESPONSE,
-            JoinLobbyRequest::class.java to MessageType.LOBBY_JOIN_REQUEST,
-            JoinLobbyErrorResponse::class.java to MessageType.LOBBY_JOIN_ERROR_RESPONSE,
-            JoinLobbyResponse::class.java to MessageType.LOBBY_JOIN_RESPONSE,
-            PlayerJoinedLobbyEvent::class.java to MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
-            PlayerConnectionLostEvent::class.java to
+            CreateLobbyRequest::class to MessageType.LOBBY_CREATE_REQUEST,
+            CreateLobbyErrorResponse::class to MessageType.LOBBY_CREATE_ERROR_RESPONSE,
+            CreateLobbyResponse::class to MessageType.LOBBY_CREATE_RESPONSE,
+            JoinLobbyRequest::class to MessageType.LOBBY_JOIN_REQUEST,
+            JoinLobbyErrorResponse::class to MessageType.LOBBY_JOIN_ERROR_RESPONSE,
+            JoinLobbyResponse::class to MessageType.LOBBY_JOIN_RESPONSE,
+            PlayerJoinedLobbyEvent::class to MessageType.LOBBY_PLAYER_JOINED_BROADCAST,
+            PlayerConnectionLostEvent::class to
                 MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST,
-            ConnectionStatusUpdateEvent::class.java to
+            ConnectionStatusUpdateEvent::class to
                 MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST,
-            LobbyPlayerCountRequest::class.java to MessageType.LOBBY_PLAYER_COUNT_REQUEST,
-            LobbyPlayerCountResponse::class.java to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
-            PlayerCountUpdateEvent::class.java to MessageType.LOBBY_PLAYER_COUNT_UPDATE_BROADCAST,
-            LobbyPlayerCountErrorResponse::class.java to
+            LobbyPlayerCountRequest::class to MessageType.LOBBY_PLAYER_COUNT_REQUEST,
+            LobbyPlayerCountResponse::class to MessageType.LOBBY_PLAYER_COUNT_RESPONSE,
+            PlayerCountUpdateEvent::class to MessageType.LOBBY_PLAYER_COUNT_UPDATE_BROADCAST,
+            LobbyPlayerCountErrorResponse::class to
                 MessageType.LOBBY_PLAYER_COUNT_ERROR_RESPONSE,
-            FortifyMoveRequest::class.java to MessageType.LOBBY_FORTIFY_MOVE_REQUEST,
-            FortifyMoveResponse::class.java to MessageType.LOBBY_FORTIFY_MOVE_RESPONSE,
-            FortifyMoveErrorResponse::class.java to
+            FortifyMoveRequest::class to MessageType.LOBBY_FORTIFY_MOVE_REQUEST,
+            FortifyMoveResponse::class to MessageType.LOBBY_FORTIFY_MOVE_RESPONSE,
+            FortifyMoveErrorResponse::class to
                 MessageType.LOBBY_FORTIFY_MOVE_ERROR_RESPONSE,
-            ClaimCheatReinforcementBonusRequest::class.java to
+            ClaimCheatReinforcementBonusRequest::class to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST,
-            ClaimCheatReinforcementBonusResponse::class.java to
+            ClaimCheatReinforcementBonusResponse::class to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE,
-            ClaimCheatReinforcementBonusErrorResponse::class.java to
+            ClaimCheatReinforcementBonusErrorResponse::class to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE,
-            PendingReinforcementsChangedEvent::class.java to
+            PendingReinforcementsChangedEvent::class to
                 MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
-            ReinforcementsGrantedEvent::class.java to
+            ReinforcementsGrantedEvent::class to
                 MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST,
-            LeaveLobbyRequest::class.java to MessageType.LOBBY_LEAVE_REQUEST,
-            LeaveLobbyResponse::class.java to MessageType.LOBBY_LEAVE_RESPONSE,
-            PlayerLeftLobbyEvent::class.java to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
-            KickPlayerRequest::class.java to MessageType.LOBBY_KICK_REQUEST,
-            KickPlayerResponse::class.java to MessageType.LOBBY_KICK_RESPONSE,
-            KickPlayerErrorResponse::class.java to MessageType.LOBBY_KICK_ERROR_RESPONSE,
-            PlayerKickedLobbyEvent::class.java to MessageType.LOBBY_PLAYER_KICKED_BROADCAST,
-            StartGameRequest::class.java to MessageType.LOBBY_START_REQUEST,
-            StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
-            StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
-            GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
-            PlayerHandUpdatedEvent::class.java to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
-            GameStateDeltaEvent::class.java to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
-            PhaseBoundaryEvent::class.java to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
-            GameStateSnapshotBroadcast::class.java to
+            LeaveLobbyRequest::class to MessageType.LOBBY_LEAVE_REQUEST,
+            LeaveLobbyResponse::class to MessageType.LOBBY_LEAVE_RESPONSE,
+            PlayerLeftLobbyEvent::class to MessageType.LOBBY_PLAYER_LEFT_BROADCAST,
+            KickPlayerRequest::class to MessageType.LOBBY_KICK_REQUEST,
+            KickPlayerResponse::class to MessageType.LOBBY_KICK_RESPONSE,
+            KickPlayerErrorResponse::class to MessageType.LOBBY_KICK_ERROR_RESPONSE,
+            PlayerKickedLobbyEvent::class to MessageType.LOBBY_PLAYER_KICKED_BROADCAST,
+            StartGameRequest::class to MessageType.LOBBY_START_REQUEST,
+            StartGameResponse::class to MessageType.LOBBY_START_RESPONSE,
+            StartGameErrorResponse::class to MessageType.LOBBY_START_ERROR_RESPONSE,
+            GameStartedEvent::class to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            PlayerHandUpdatedEvent::class to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
+            GameStateDeltaEvent::class to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
+            PhaseBoundaryEvent::class to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
+            GameStateSnapshotBroadcast::class to
                 MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST,
-            GameStateCatchUpRequest::class.java to
+            GameStateCatchUpRequest::class to
                 MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST,
-            GameStateCatchUpResponse::class.java to
+            GameStateCatchUpResponse::class to
                 MessageType.LOBBY_GAME_STATE_CATCH_UP_RESPONSE,
-            GameStateCatchUpErrorResponse::class.java to
+            GameStateCatchUpErrorResponse::class to
                 MessageType.LOBBY_GAME_STATE_CATCH_UP_ERROR_RESPONSE,
-            GameStatePrivateGetRequest::class.java to
+            GameStatePrivateGetRequest::class to
                 MessageType.LOBBY_GAME_STATE_PRIVATE_GET_REQUEST,
-            GameStatePrivateGetResponse::class.java to
+            GameStatePrivateGetResponse::class to
                 MessageType.LOBBY_GAME_STATE_PRIVATE_GET_RESPONSE,
-            GameStatePrivateGetErrorResponse::class.java to
+            GameStatePrivateGetErrorResponse::class to
                 MessageType.LOBBY_GAME_STATE_PRIVATE_GET_ERROR_RESPONSE,
-            MapGetRequest::class.java to MessageType.LOBBY_MAP_GET_REQUEST,
-            MapGetResponse::class.java to MessageType.LOBBY_MAP_GET_RESPONSE,
-            MapGetErrorResponse::class.java to MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
-            PlaceReinforcementsRequest::class.java to
+            MapGetRequest::class to MessageType.LOBBY_MAP_GET_REQUEST,
+            MapGetResponse::class to MessageType.LOBBY_MAP_GET_RESPONSE,
+            MapGetErrorResponse::class to MessageType.LOBBY_MAP_GET_ERROR_RESPONSE,
+            PlaceReinforcementsRequest::class to
                 MessageType.LOBBY_PLACE_REINFORCEMENTS_REQUEST,
-            PlaceReinforcementsResponse::class.java to
+            PlaceReinforcementsResponse::class to
                 MessageType.LOBBY_PLACE_REINFORCEMENTS_RESPONSE,
-            PlaceReinforcementsErrorResponse::class.java to
+            PlaceReinforcementsErrorResponse::class to
                 MessageType.LOBBY_PLACE_REINFORCEMENTS_ERROR_RESPONSE,
-            TradeInCardsRequest::class.java to MessageType.LOBBY_TRADE_IN_CARDS_REQUEST,
-            TradeInCardsResponse::class.java to MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE,
-            TradeInCardsErrorResponse::class.java to
+            TradeInCardsRequest::class to MessageType.LOBBY_TRADE_IN_CARDS_REQUEST,
+            TradeInCardsResponse::class to MessageType.LOBBY_TRADE_IN_CARDS_RESPONSE,
+            TradeInCardsErrorResponse::class to
                 MessageType.LOBBY_TRADE_IN_CARDS_ERROR_RESPONSE,
-            StartPlayerSetRequest::class.java to
+            StartPlayerSetRequest::class to
                 MessageType.LOBBY_START_PLAYER_SET_REQUEST,
-            StartPlayerSetResponse::class.java to
+            StartPlayerSetResponse::class to
                 MessageType.LOBBY_START_PLAYER_SET_RESPONSE,
-            StartPlayerSetErrorResponse::class.java to
+            StartPlayerSetErrorResponse::class to
                 MessageType.LOBBY_START_PLAYER_SET_ERROR_RESPONSE,
-            TerritoryOwnerChangedEvent::class.java to
+            TerritoryOwnerChangedEvent::class to
                 MessageType.LOBBY_TERRITORY_OWNER_CHANGED_BROADCAST,
-            TerritoryTroopsChangedEvent::class.java to
+            TerritoryTroopsChangedEvent::class to
                 MessageType.LOBBY_TERRITORY_TROOPS_CHANGED_BROADCAST,
-            TurnAdvanceRequest::class.java to MessageType.LOBBY_TURN_ADVANCE_REQUEST,
-            TurnAdvanceResponse::class.java to MessageType.LOBBY_TURN_ADVANCE_RESPONSE,
-            TurnAdvanceErrorResponse::class.java to
+            TurnAdvanceRequest::class to MessageType.LOBBY_TURN_ADVANCE_REQUEST,
+            TurnAdvanceResponse::class to MessageType.LOBBY_TURN_ADVANCE_RESPONSE,
+            TurnAdvanceErrorResponse::class to
                 MessageType.LOBBY_TURN_ADVANCE_ERROR_RESPONSE,
-            TurnStateUpdatedEvent::class.java to
+            TurnStateUpdatedEvent::class to
                 MessageType.LOBBY_TURN_STATE_UPDATED_BROADCAST,
-            TurnStateGetRequest::class.java to MessageType.LOBBY_TURN_STATE_GET_REQUEST,
-            TurnStateGetResponse::class.java to MessageType.LOBBY_TURN_STATE_GET_RESPONSE,
-            TurnStateGetErrorResponse::class.java to
+            TurnStateGetRequest::class to MessageType.LOBBY_TURN_STATE_GET_REQUEST,
+            TurnStateGetResponse::class to MessageType.LOBBY_TURN_STATE_GET_RESPONSE,
+            TurnStateGetErrorResponse::class to
                 MessageType.LOBBY_TURN_STATE_GET_ERROR_RESPONSE,
         )
 
     private val payloadSerializerByClass =
-        mapOf<Class<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
-            ConnectionResponse::class.java to encodeWith(ConnectionResponse.serializer()),
-            GlobalPlayerCountEvent::class.java to encodeWith(GlobalPlayerCountEvent.serializer()),
-            CharacterSelectRequest::class.java to encodeWith(CharacterSelectRequest.serializer()),
-            CharacterSelectResponse::class.java to encodeWith(CharacterSelectResponse.serializer()),
-            CharacterSelectErrorResponse::class.java to
+        mapOf<KClass<out NetworkMessagePayload>, (NetworkMessagePayload) -> String>(
+            ConnectionResponse::class to encodeWith(ConnectionResponse.serializer()),
+            GlobalPlayerCountEvent::class to encodeWith(GlobalPlayerCountEvent.serializer()),
+            CharacterSelectRequest::class to encodeWith(CharacterSelectRequest.serializer()),
+            CharacterSelectResponse::class to encodeWith(CharacterSelectResponse.serializer()),
+            CharacterSelectErrorResponse::class to
                 encodeWith(CharacterSelectErrorResponse.serializer()),
-            CharacterSelectedBroadcast::class.java to
+            CharacterSelectedBroadcast::class to
                 encodeWith(CharacterSelectedBroadcast.serializer()),
-            ReconnectRequest::class.java to encodeWith(ReconnectRequest.serializer()),
-            ReconnectResponse::class.java to encodeWith(ReconnectResponse.serializer()),
-            AttackRequest::class.java to encodeWith(AttackRequest.serializer()),
-            AttackResponse::class.java to encodeWith(AttackResponse.serializer()),
-            AttackErrorResponse::class.java to encodeWith(AttackErrorResponse.serializer()),
-            AttackResolvedBroadcastEvent::class.java to
+            ReconnectRequest::class to encodeWith(ReconnectRequest.serializer()),
+            ReconnectResponse::class to encodeWith(ReconnectResponse.serializer()),
+            AttackRequest::class to encodeWith(AttackRequest.serializer()),
+            AttackResponse::class to encodeWith(AttackResponse.serializer()),
+            AttackErrorResponse::class to encodeWith(AttackErrorResponse.serializer()),
+            AttackResolvedBroadcastEvent::class to
                 encodeWith(AttackResolvedBroadcastEvent.serializer()),
-            PlayerEliminatedEvent::class.java to encodeWith(PlayerEliminatedEvent.serializer()),
-            ConfirmAttackDoneRequest::class.java to
+            PlayerEliminatedEvent::class to encodeWith(PlayerEliminatedEvent.serializer()),
+            ConfirmAttackDoneRequest::class to
                 encodeWith(ConfirmAttackDoneRequest.serializer()),
-            ConfirmAttackDoneResponse::class.java to
+            ConfirmAttackDoneResponse::class to
                 encodeWith(ConfirmAttackDoneResponse.serializer()),
-            ConfirmAttackDoneErrorResponse::class.java to
+            ConfirmAttackDoneErrorResponse::class to
                 encodeWith(ConfirmAttackDoneErrorResponse.serializer()),
-            ConfirmReinforcementsDoneRequest::class.java to
+            ConfirmReinforcementsDoneRequest::class to
                 encodeWith(ConfirmReinforcementsDoneRequest.serializer()),
-            ConfirmReinforcementsDoneResponse::class.java to
+            ConfirmReinforcementsDoneResponse::class to
                 encodeWith(ConfirmReinforcementsDoneResponse.serializer()),
-            ConfirmReinforcementsDoneErrorResponse::class.java to
+            ConfirmReinforcementsDoneErrorResponse::class to
                 encodeWith(ConfirmReinforcementsDoneErrorResponse.serializer()),
-            CreateLobbyRequest::class.java to encodeWith(CreateLobbyRequest.serializer()),
-            CreateLobbyErrorResponse::class.java to
+            CreateLobbyRequest::class to encodeWith(CreateLobbyRequest.serializer()),
+            CreateLobbyErrorResponse::class to
                 encodeWith(CreateLobbyErrorResponse.serializer()),
-            CreateLobbyResponse::class.java to encodeWith(CreateLobbyResponse.serializer()),
-            JoinLobbyRequest::class.java to encodeWith(JoinLobbyRequest.serializer()),
-            JoinLobbyErrorResponse::class.java to
+            CreateLobbyResponse::class to encodeWith(CreateLobbyResponse.serializer()),
+            JoinLobbyRequest::class to encodeWith(JoinLobbyRequest.serializer()),
+            JoinLobbyErrorResponse::class to
                 encodeWith(JoinLobbyErrorResponse.serializer()),
-            JoinLobbyResponse::class.java to encodeWith(JoinLobbyResponse.serializer()),
-            PlayerJoinedLobbyEvent::class.java to encodeWith(PlayerJoinedLobbyEvent.serializer()),
-            PlayerConnectionLostEvent::class.java to
+            JoinLobbyResponse::class to encodeWith(JoinLobbyResponse.serializer()),
+            PlayerJoinedLobbyEvent::class to encodeWith(PlayerJoinedLobbyEvent.serializer()),
+            PlayerConnectionLostEvent::class to
                 encodeWith(PlayerConnectionLostEvent.serializer()),
-            ConnectionStatusUpdateEvent::class.java to
+            ConnectionStatusUpdateEvent::class to
                 encodeWith(ConnectionStatusUpdateEvent.serializer()),
-            LobbyPlayerCountRequest::class.java to
+            LobbyPlayerCountRequest::class to
                 encodeWith(LobbyPlayerCountRequest.serializer()),
-            LobbyPlayerCountResponse::class.java to
+            LobbyPlayerCountResponse::class to
                 encodeWith(LobbyPlayerCountResponse.serializer()),
-            PlayerCountUpdateEvent::class.java to
+            PlayerCountUpdateEvent::class to
                 encodeWith<PlayerCountUpdateEvent>(PlayerCountUpdateEventSerializer),
-            LobbyPlayerCountErrorResponse::class.java to
+            LobbyPlayerCountErrorResponse::class to
                 encodeWith(LobbyPlayerCountErrorResponse.serializer()),
-            FortifyMoveRequest::class.java to encodeWith(FortifyMoveRequest.serializer()),
-            FortifyMoveResponse::class.java to encodeWith(FortifyMoveResponse.serializer()),
-            FortifyMoveErrorResponse::class.java to
+            FortifyMoveRequest::class to encodeWith(FortifyMoveRequest.serializer()),
+            FortifyMoveResponse::class to encodeWith(FortifyMoveResponse.serializer()),
+            FortifyMoveErrorResponse::class to
                 encodeWith(FortifyMoveErrorResponse.serializer()),
-            ClaimCheatReinforcementBonusRequest::class.java to
+            ClaimCheatReinforcementBonusRequest::class to
                 encodeWith(ClaimCheatReinforcementBonusRequest.serializer()),
-            ClaimCheatReinforcementBonusResponse::class.java to
+            ClaimCheatReinforcementBonusResponse::class to
                 encodeWith(ClaimCheatReinforcementBonusResponse.serializer()),
-            ClaimCheatReinforcementBonusErrorResponse::class.java to
+            ClaimCheatReinforcementBonusErrorResponse::class to
                 encodeWith(ClaimCheatReinforcementBonusErrorResponse.serializer()),
-            PendingReinforcementsChangedEvent::class.java to
+            PendingReinforcementsChangedEvent::class to
                 encodeWith(PendingReinforcementsChangedEvent.serializer()),
-            ReinforcementsGrantedEvent::class.java to
+            ReinforcementsGrantedEvent::class to
                 encodeWith(ReinforcementsGrantedEvent.serializer()),
-            LeaveLobbyRequest::class.java to encodeWith(LeaveLobbyRequest.serializer()),
-            LeaveLobbyResponse::class.java to encodeWith(LeaveLobbyResponse.serializer()),
-            PlayerLeftLobbyEvent::class.java to encodeWith(PlayerLeftLobbyEvent.serializer()),
-            KickPlayerRequest::class.java to encodeWith(KickPlayerRequest.serializer()),
-            KickPlayerResponse::class.java to encodeWith(KickPlayerResponse.serializer()),
-            KickPlayerErrorResponse::class.java to
+            LeaveLobbyRequest::class to encodeWith(LeaveLobbyRequest.serializer()),
+            LeaveLobbyResponse::class to encodeWith(LeaveLobbyResponse.serializer()),
+            PlayerLeftLobbyEvent::class to encodeWith(PlayerLeftLobbyEvent.serializer()),
+            KickPlayerRequest::class to encodeWith(KickPlayerRequest.serializer()),
+            KickPlayerResponse::class to encodeWith(KickPlayerResponse.serializer()),
+            KickPlayerErrorResponse::class to
                 encodeWith(KickPlayerErrorResponse.serializer()),
-            PlayerKickedLobbyEvent::class.java to encodeWith(PlayerKickedLobbyEvent.serializer()),
-            StartGameRequest::class.java to encodeWith(StartGameRequest.serializer()),
-            StartGameResponse::class.java to encodeWith(StartGameResponse.serializer()),
-            StartGameErrorResponse::class.java to encodeWith(StartGameErrorResponse.serializer()),
-            GameStartedEvent::class.java to encodeWith(GameStartedEvent.serializer()),
-            PlayerHandUpdatedEvent::class.java to encodeWith(PlayerHandUpdatedEvent.serializer()),
-            GameStateDeltaEvent::class.java to encodeWith(GameStateDeltaEvent.serializer()),
-            PhaseBoundaryEvent::class.java to encodeWith(PhaseBoundaryEvent.serializer()),
-            GameStateSnapshotBroadcast::class.java to
+            PlayerKickedLobbyEvent::class to encodeWith(PlayerKickedLobbyEvent.serializer()),
+            StartGameRequest::class to encodeWith(StartGameRequest.serializer()),
+            StartGameResponse::class to encodeWith(StartGameResponse.serializer()),
+            StartGameErrorResponse::class to encodeWith(StartGameErrorResponse.serializer()),
+            GameStartedEvent::class to encodeWith(GameStartedEvent.serializer()),
+            PlayerHandUpdatedEvent::class to encodeWith(PlayerHandUpdatedEvent.serializer()),
+            GameStateDeltaEvent::class to encodeWith(GameStateDeltaEvent.serializer()),
+            PhaseBoundaryEvent::class to encodeWith(PhaseBoundaryEvent.serializer()),
+            GameStateSnapshotBroadcast::class to
                 encodeWith(GameStateSnapshotBroadcast.serializer()),
-            GameStateCatchUpRequest::class.java to encodeWith(GameStateCatchUpRequest.serializer()),
-            GameStateCatchUpResponse::class.java to
+            GameStateCatchUpRequest::class to encodeWith(GameStateCatchUpRequest.serializer()),
+            GameStateCatchUpResponse::class to
                 encodeWith(GameStateCatchUpResponse.serializer()),
-            GameStateCatchUpErrorResponse::class.java to
+            GameStateCatchUpErrorResponse::class to
                 encodeWith(GameStateCatchUpErrorResponse.serializer()),
-            GameStatePrivateGetRequest::class.java to
+            GameStatePrivateGetRequest::class to
                 encodeWith(GameStatePrivateGetRequest.serializer()),
-            GameStatePrivateGetResponse::class.java to
+            GameStatePrivateGetResponse::class to
                 encodeWith(GameStatePrivateGetResponse.serializer()),
-            GameStatePrivateGetErrorResponse::class.java to
+            GameStatePrivateGetErrorResponse::class to
                 encodeWith(GameStatePrivateGetErrorResponse.serializer()),
-            MapGetRequest::class.java to encodeWith(MapGetRequest.serializer()),
-            MapGetResponse::class.java to encodeWith(MapGetResponse.serializer()),
-            MapGetErrorResponse::class.java to encodeWith(MapGetErrorResponse.serializer()),
-            PlaceReinforcementsRequest::class.java to
+            MapGetRequest::class to encodeWith(MapGetRequest.serializer()),
+            MapGetResponse::class to encodeWith(MapGetResponse.serializer()),
+            MapGetErrorResponse::class to encodeWith(MapGetErrorResponse.serializer()),
+            PlaceReinforcementsRequest::class to
                 encodeWith(PlaceReinforcementsRequest.serializer()),
-            PlaceReinforcementsResponse::class.java to
+            PlaceReinforcementsResponse::class to
                 encodeWith(PlaceReinforcementsResponse.serializer()),
-            PlaceReinforcementsErrorResponse::class.java to
+            PlaceReinforcementsErrorResponse::class to
                 encodeWith(PlaceReinforcementsErrorResponse.serializer()),
-            TradeInCardsRequest::class.java to encodeWith(TradeInCardsRequest.serializer()),
-            TradeInCardsResponse::class.java to encodeWith(TradeInCardsResponse.serializer()),
-            TradeInCardsErrorResponse::class.java to
+            TradeInCardsRequest::class to encodeWith(TradeInCardsRequest.serializer()),
+            TradeInCardsResponse::class to encodeWith(TradeInCardsResponse.serializer()),
+            TradeInCardsErrorResponse::class to
                 encodeWith(TradeInCardsErrorResponse.serializer()),
-            StartPlayerSetRequest::class.java to encodeWith(StartPlayerSetRequest.serializer()),
-            StartPlayerSetResponse::class.java to encodeWith(StartPlayerSetResponse.serializer()),
-            StartPlayerSetErrorResponse::class.java to
+            StartPlayerSetRequest::class to encodeWith(StartPlayerSetRequest.serializer()),
+            StartPlayerSetResponse::class to encodeWith(StartPlayerSetResponse.serializer()),
+            StartPlayerSetErrorResponse::class to
                 encodeWith(StartPlayerSetErrorResponse.serializer()),
-            TerritoryOwnerChangedEvent::class.java to
+            TerritoryOwnerChangedEvent::class to
                 encodeWith(TerritoryOwnerChangedEvent.serializer()),
-            TerritoryTroopsChangedEvent::class.java to
+            TerritoryTroopsChangedEvent::class to
                 encodeWith(TerritoryTroopsChangedEvent.serializer()),
-            TurnAdvanceRequest::class.java to encodeWith(TurnAdvanceRequest.serializer()),
-            TurnAdvanceResponse::class.java to encodeWith(TurnAdvanceResponse.serializer()),
-            TurnAdvanceErrorResponse::class.java to
+            TurnAdvanceRequest::class to encodeWith(TurnAdvanceRequest.serializer()),
+            TurnAdvanceResponse::class to encodeWith(TurnAdvanceResponse.serializer()),
+            TurnAdvanceErrorResponse::class to
                 encodeWith(TurnAdvanceErrorResponse.serializer()),
-            TurnStateUpdatedEvent::class.java to encodeWith(TurnStateUpdatedEvent.serializer()),
-            TurnStateGetRequest::class.java to encodeWith(TurnStateGetRequest.serializer()),
-            TurnStateGetResponse::class.java to encodeWith(TurnStateGetResponse.serializer()),
-            TurnStateGetErrorResponse::class.java to
+            TurnStateUpdatedEvent::class to encodeWith(TurnStateUpdatedEvent.serializer()),
+            TurnStateGetRequest::class to encodeWith(TurnStateGetRequest.serializer()),
+            TurnStateGetResponse::class to encodeWith(TurnStateGetResponse.serializer()),
+            TurnStateGetErrorResponse::class to
                 encodeWith(TurnStateGetErrorResponse.serializer()),
         )
 
@@ -513,16 +514,16 @@ internal object NetworkPayloadRegistry {
      * Liefert den zu [payload] gehörigen [MessageType].
      */
     fun messageTypeFor(payload: NetworkMessagePayload): MessageType =
-        payloadTypeByClass[payload.javaClass]
-            ?: throw UnsupportedPayloadClassException(payload.javaClass.name)
+        payloadTypeByClass[payload::class]
+            ?: throw UnsupportedPayloadClassException(payload.payloadClassName)
 
     /**
      * Serialisiert [payload] als JSON-String gemäß der registrierten Payload-Klasse.
      */
     fun serializePayload(payload: NetworkMessagePayload): String {
-        val serializer = payloadSerializerByClass[payload.javaClass]
+        val serializer = payloadSerializerByClass[payload::class]
         if (serializer == null) {
-            throw UnsupportedPayloadClassException(payload.javaClass.name)
+            throw UnsupportedPayloadClassException(payload.payloadClassName)
         }
 
         return serializer(payload)
@@ -543,3 +544,9 @@ internal object NetworkPayloadRegistry {
         return deserializer(json)
     }
 }
+
+/**
+ * Vollqualifizierter Name der Payload-Klasse für Fehlermeldungen.
+ */
+internal val NetworkMessagePayload.payloadClassName: String
+    get() = this::class.qualifiedName ?: this::class.toString()

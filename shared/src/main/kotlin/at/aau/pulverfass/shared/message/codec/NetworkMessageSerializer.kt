@@ -66,12 +66,12 @@ internal object NetworkMessageSerializer {
             json.encodeToString(serializer, payload).encodeToByteArray()
         } catch (exception: SerializationException) {
             throw NetworkSerializationException(
-                "Failed to serialize payload of type ${payload.javaClass.name}",
+                "Failed to serialize payload of type ${payload.payloadClassName}",
                 exception,
             )
         } catch (exception: IllegalArgumentException) {
             throw NetworkSerializationException(
-                "Failed to serialize payload of type ${payload.javaClass.name}",
+                "Failed to serialize payload of type ${payload.payloadClassName}",
                 exception,
             )
         }
@@ -92,7 +92,7 @@ internal object NetworkMessageSerializer {
             throw exception
         } catch (exception: IllegalArgumentException) {
             throw NetworkSerializationException(
-                "Failed to serialize payload of type ${payload.javaClass.name}",
+                "Failed to serialize payload of type ${payload.payloadClassName}",
                 exception,
             )
         }

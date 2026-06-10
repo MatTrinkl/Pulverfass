@@ -1116,7 +1116,7 @@ class NetworkPayloadRegistryTest {
             }
 
         assertEquals(
-            "Unsupported payload class: ${UnsupportedPayload::class.java.name}",
+            "Unsupported payload class: ${UnsupportedPayload::class.qualifiedName}",
             exception.message,
         )
     }
@@ -1129,7 +1129,7 @@ class NetworkPayloadRegistryTest {
             }
 
         assertEquals(
-            "Unsupported payload class: ${UnsupportedPayload::class.java.name}",
+            "Unsupported payload class: ${UnsupportedPayload::class.qualifiedName}",
             exception.message,
         )
     }

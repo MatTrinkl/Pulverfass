@@ -763,7 +763,7 @@ class NetworkMessageSerializerTest {
             }
 
         assertEquals(
-            "Unsupported payload class: ${UnsupportedPayload::class.java.name}",
+            "Unsupported payload class: ${UnsupportedPayload::class.qualifiedName}",
             exception.message,
         )
     }
@@ -779,7 +779,7 @@ class NetworkMessageSerializerTest {
             }
 
         assertEquals(
-            "Failed to serialize payload of type ${FailingPayload::class.java.name}",
+            "Failed to serialize payload of type ${FailingPayload::class.qualifiedName}",
             exception.message,
         )
         assertTrue(exception.cause is SerializationException)

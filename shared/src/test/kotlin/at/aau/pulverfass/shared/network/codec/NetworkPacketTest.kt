@@ -88,7 +88,7 @@ class NetworkPacketTest {
             }
 
         assertEquals(
-            "Unsupported payload class: ${UnknownPayload::class.java.name}",
+            "Unsupported payload class: ${UnknownPayload::class.qualifiedName}",
             exception.message,
         )
     }
