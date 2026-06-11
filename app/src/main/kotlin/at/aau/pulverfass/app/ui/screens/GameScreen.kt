@@ -519,7 +519,7 @@ internal fun GameScreenContent(
     val (showCountdown, countdownValue) = countdownState ?: rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
-    val canUseStableBottomInput =
+    val canUsePhaseInput =
         isConnected &&
             !uiState.isCatchingUp &&
             !uiState.isDesynced
@@ -707,10 +707,10 @@ internal fun GameScreenContent(
                 state =
                     BottomBarState(
                         currentPhase = uiState.turnPhase,
-                        canToggleCards = canUseStableBottomInput,
+                        canToggleCards = isConnected,
                         canEndPhase =
                             canEndCurrentPhase &&
-                                canUseStableBottomInput &&
+                                canUsePhaseInput &&
                                 !isActionResolutionPending &&
                                 !uiState.attackState.autoAttack.isRunning,
                         cardsVisible = uiState.cardsVisible,

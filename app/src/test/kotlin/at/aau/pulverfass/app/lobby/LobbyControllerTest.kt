@@ -1552,6 +1552,129 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `auto attack waits after catch up resolves pending battle`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AC12")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val sourceId = TerritoryId("brasilien")
+            val targetId = TerritoryId("argentinien")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val firstAttackReceived = CompletableDeferred<Unit>()
+            var attackCount = 0
+
+            fun publicSnapshot(
+                stateVersion: Long,
+                sourceTroops: Int,
+                targetTroops: Int,
+            ) = GameStateCatchUpResponse(
+                lobbyCode = lobbyCode,
+                stateVersion = stateVersion,
+                determinism =
+                    PublicDeterminismMetadataSnapshot(
+                        mapHash = "hash",
+                        schemaVersion = 1,
+                    ),
+                turnState =
+                    PublicTurnStateSnapshot(
+                        activePlayerId = playerId,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = playerId,
+                    ),
+                definition =
+                    MapDefinitionSnapshot(
+                        territories =
+                            listOf(
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = sourceId,
+                                    edges = listOf(MapTerritoryEdgeSnapshot(targetId)),
+                                ),
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = targetId,
+                                    edges = emptyList(),
+                                ),
+                            ),
+                        continents = emptyList(),
+                    ),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(sourceId, playerId, sourceTroops),
+                        MapTerritoryStateSnapshot(targetId, opponentId, targetTroops),
+                    ),
+            )
+
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(publicSnapshot(1, 6, 2))
+                        }
+                        is GameStatePrivateGetRequest ->
+                            outgoing.sendPayload(
+                                GameStatePrivateGetResponse(
+                                    lobbyCode = lobbyCode,
+                                    recipientPlayerId = playerId,
+                                    stateVersion = 1,
+                                    privateHandCards = emptyList(),
+                                ),
+                            )
+                        is AttackRequest -> {
+                            attackCount += 1
+                            if (attackCount == 1) {
+                                firstAttackReceived.complete(Unit)
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                            } else {
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                controller.adjustAttackTroops(1)
+                controller.adjustMoveAfterCapture(1)
+                controller.setAutoAttackEnabled(true)
+
+                controller.attack()
+                firstAttackReceived.await()
+                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+
+                server.broadcast(publicSnapshot(2, 4, 2))
+                val catchUpCompletedAt = System.currentTimeMillis()
+                delay(900)
+                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+                waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
+                assertTrue(System.currentTimeMillis() - catchUpCompletedAt >= 1_000L)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `server auto attack boundary waits for visible result delay`() {
         runBlocking {
             val lobbyCode = LobbyCode("AT02")

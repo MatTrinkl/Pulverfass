@@ -2662,18 +2662,37 @@ class LobbyController(
         runAutoAdvance: Boolean = true,
         reducer: (current: GameUiState, players: List<LobbyPlayerUi>) -> GameUiState,
     ) {
+        var delayAutoAttackContinuation = false
         _state.update { current ->
+            val previousAutoAttack = current.gameState.attackState.autoAttack
+            val nextGameState =
+                reducer(current.gameState, current.players)
+                    .withAutoAttackPreference(current.autoAttackEnabled)
+            delayAutoAttackContinuation =
+                shouldDelayAutoAttackAfterAuthoritativeState(
+                    previous = previousAutoAttack,
+                    next = nextGameState.attackState.autoAttack,
+                )
             current.copy(
-                gameState =
-                    reducer(current.gameState, current.players)
-                        .withAutoAttackPreference(current.autoAttackEnabled),
+                gameState = nextGameState,
             )
         }
         if (runAutoAdvance) {
             maybeAdvanceCurrentPhaseAutomatically()
         }
-        continueAutoAttackIfReady()
+        continueAutoAttackIfReady(delayBeforeRequest = delayAutoAttackContinuation)
     }
+
+    private fun shouldDelayAutoAttackAfterAuthoritativeState(
+        previous: AutoAttackUiState,
+        next: AutoAttackUiState,
+    ): Boolean =
+        previous.isEnabled &&
+            previous.intent != null &&
+            previous.isAwaitingResult &&
+            next.isEnabled &&
+            next.intent == previous.intent &&
+            !next.isAwaitingResult
 
     private fun GameUiState.withAutoAttackPreference(
         enabled: Boolean,
