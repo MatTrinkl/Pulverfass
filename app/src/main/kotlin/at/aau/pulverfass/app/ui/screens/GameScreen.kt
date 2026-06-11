@@ -1315,8 +1315,8 @@ private fun BoxScope.AttackResolutionOverlay(state: AttackResolutionOverlayState
                             stringResource(
                                 id = R.string.game_attack_resolving_route,
                                 state.attackerName,
-                                state.fromRegionId,
-                                state.toRegionId,
+                                regionDisplayName(state.fromRegionId),
+                                regionDisplayName(state.toRegionId),
                             ),
                         style = MaterialTheme.typography.bodySmall,
                         color = HudContentColor,
@@ -1697,6 +1697,17 @@ private fun endCurrentPhaseAction(
         TurnPhase.ATTACK -> onConfirmAttackDone
         else -> onAdvanceTurn
     }
+
+/*
+ * Nachschlagetabelle Region-ID -> lesbarer Gebietsname. Die technischen IDs wie
+ * "central_europe" tauchen nur intern auf; in den Auswahl-Panels und im
+ * Kampfergebnis sollen Spieler den Namen ("Mitteleuropa") sehen.
+ */
+private val regionDisplayNamesById: Map<String, String> =
+    PulverfassMapDefaults.regions.associate { region -> region.id to region.name }
+
+private fun regionDisplayName(regionId: String): String =
+    regionDisplayNamesById[regionId] ?: regionId
 
 /**
  * Priorisiert Verbindungs- und Synchronisationszustände vor Bedienhinweisen.
@@ -2428,7 +2439,7 @@ private fun ReinforcementPanel(
                 text =
                     stringResource(
                         id = R.string.game_reinforcements_target,
-                        state.selectedRegionId,
+                        regionDisplayName(state.selectedRegionId),
                     ),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -2494,8 +2505,8 @@ private fun AttackPanel(
                     text =
                         stringResource(
                             id = R.string.game_attack_route,
-                            state.fromRegionId,
-                            state.toRegionId,
+                            regionDisplayName(state.fromRegionId),
+                            regionDisplayName(state.toRegionId),
                         ),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -2579,8 +2590,8 @@ private fun FortifyPanel(
                     text =
                         stringResource(
                             id = R.string.game_fortify_route,
-                            state.fromRegionId,
-                            state.toRegionId,
+                            regionDisplayName(state.fromRegionId),
+                            regionDisplayName(state.toRegionId),
                         ),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -2709,8 +2720,8 @@ private fun AttackResultPanel(
                 text =
                     stringResource(
                         id = R.string.game_attack_result_title,
-                        fromRegionId,
-                        toRegionId,
+                        regionDisplayName(fromRegionId),
+                        regionDisplayName(toRegionId),
                     ),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
