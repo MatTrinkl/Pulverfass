@@ -291,6 +291,7 @@ jobs:
         run: >
           docker build
           --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --build-arg COMMIT_SHA=${{ github.sha }}
           --tag ${{ steps.metadata.outputs.local_tag }}
           .
 
@@ -474,6 +475,7 @@ jobs:
         run: >
           docker build
           --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --build-arg COMMIT_SHA=${{ github.sha }}
           --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
           --label org.opencontainers.image.revision=${{ github.sha }}
           --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
@@ -609,6 +611,7 @@ jobs:
         run: >
           docker build
           --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
+          --build-arg COMMIT_SHA=${{ github.sha }}
           --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
           --label org.opencontainers.image.revision=${{ github.sha }}
           --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}

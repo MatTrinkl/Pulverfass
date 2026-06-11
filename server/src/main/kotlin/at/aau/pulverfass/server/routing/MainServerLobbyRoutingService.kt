@@ -8,6 +8,7 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.logging.ServerLoggers
 import at.aau.pulverfass.server.persistence.LobbyPersistenceCallbacks
 import at.aau.pulverfass.server.session.SessionContextRegistry
+import at.aau.pulverfass.shared.event.CorrelationId
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
@@ -142,6 +143,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 import kotlin.random.Random
 
@@ -179,12 +181,17 @@ class MainServerLobbyRoutingService(
             "als die konfigurierte Grenze von "
         const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
             "Reconnect snapshot skipped connectionId={} lobbyCode={} "
+        const val CREATE_LOBBY_ERROR_CODE = "CREATE_LOBBY_FAILED"
+        const val ROUTING_ERROR_CODE = "ROUTING_ERROR"
+        const val CHARACTER_ALREADY_ASSIGNED_ERROR_CODE = "CHARACTER_ALREADY_ASSIGNED"
+        const val PLAYER_CONTEXT_MISSING_ERROR_CODE = "PLAYER_CONTEXT_MISSING"
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
     }
 
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
+    private val requestSequence = AtomicLong(1)
     private val gameStateDelivery =
         GameStateDeliveryDispatcher(
             sendPayload = network::send,
@@ -227,6 +234,7 @@ class MainServerLobbyRoutingService(
 
     private suspend fun routeDecodedPacket(packet: ReceivedPacket) {
         val request = decodeRequest(packet)
+        logRequestReceived(request)
         when (val payload = request.payload) {
             is ReconnectRequest ->
                 dispatchReconnectLobbySnapshot(
@@ -287,23 +295,121 @@ class MainServerLobbyRoutingService(
                     connectionId = packet.connectionId,
                     playerId = playerIdResolver(packet.connectionId),
                     occurredAtEpochMillis = nowEpochMillis(),
+                    correlationId = CorrelationId("srv-${requestSequence.getAndIncrement()}"),
                 ),
         )
     }
 
+    private fun logRequestReceived(request: DecodedNetworkRequest) {
+        logger.info("Request received {}", requestLogFields(request))
+    }
+
+    private fun logRequestCompleted(
+        request: DecodedNetworkRequest,
+        responseType: String,
+        lobbyCode: LobbyCode? = lobbyCodeOf(request.payload),
+        extraFields: Array<Pair<String, Any?>> = emptyArray(),
+    ) {
+        logger.info(
+            "Request completed {}",
+            requestLogFields(
+                request = request,
+                lobbyCode = lobbyCode,
+                extraFields =
+                    arrayOf(
+                        "responseType" to responseType,
+                        *extraFields,
+                    ),
+            ),
+        )
+    }
+
+    private fun logRequestRejected(
+        request: DecodedNetworkRequest,
+        errorCode: String,
+        reason: String,
+        cause: Throwable,
+        lobbyCode: LobbyCode? = lobbyCodeOf(request.payload),
+    ) {
+        val fields =
+            requestLogFields(
+                request = request,
+                lobbyCode = lobbyCode,
+                extraFields =
+                    arrayOf(
+                        "errorCode" to errorCode,
+                        "reason" to reason,
+                    ),
+            )
+
+        if (isUnexpectedRoutingCause(cause)) {
+            logger.warn("Request rejected {}", fields, cause)
+        } else {
+            logger.warn("Request rejected {}", fields)
+        }
+    }
+
+    private fun isUnexpectedRoutingCause(cause: Throwable): Boolean =
+        cause !is IllegalArgumentException && cause !is IllegalStateException
+
+    private fun requestLogFields(
+        request: DecodedNetworkRequest,
+        lobbyCode: LobbyCode? = lobbyCodeOf(request.payload),
+        playerId: PlayerId? = playerIdOf(request.payload) ?: request.context.playerId,
+        extraFields: Array<Pair<String, Any?>> = emptyArray(),
+    ): String =
+        logFields(
+            "connectionId" to request.connectionId.value,
+            "playerId" to playerId?.value,
+            "lobbyId" to lobbyCode?.value,
+            "messageType" to request.header.type.name,
+            "requestId" to request.context.correlationId?.value,
+            "clientRequestId" to clientRequestIdOf(request.payload),
+            *extraFields,
+        )
+
+    private fun logFields(vararg fields: Pair<String, Any?>): String =
+        fields.joinToString(separator = " ") { (key, value) ->
+            "$key=${formatLogValue(value)}"
+        }
+
+    private fun formatLogValue(value: Any?): String =
+        when (value) {
+            null -> "null"
+            is String ->
+                if (value.any(Char::isWhitespace)) {
+                    "\"${value.replace("\"", "\\\"")}\""
+                } else {
+                    value
+                }
+            else -> value.toString()
+        }
+
     private suspend fun routeCreateLobbyRequest(request: DecodedNetworkRequest) {
         runCatching {
-            handleCreateLobbyRequest(request)
+            val lobbyCode = handleCreateLobbyRequest(request)
+            logRequestCompleted(
+                request = request,
+                responseType = CreateLobbyResponse::class.simpleName ?: "CreateLobbyResponse",
+                lobbyCode = lobbyCode,
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
+            val reason = cause.message ?: "Lobby konnte nicht erstellt werden."
             dispatchCreateErrorResponse(
                 connectionId = request.connectionId,
-                reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
+                reason = reason,
+            )
+            logRequestRejected(
+                request = request,
+                errorCode = CREATE_LOBBY_ERROR_CODE,
+                reason = reason,
+                cause = cause,
             )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
-                    reason = cause.message ?: "Lobby konnte nicht erstellt werden.",
+                    reason = reason,
                     context =
                         LobbyRoutingContext(
                             connectionId = request.connectionId,
@@ -453,10 +559,25 @@ class MainServerLobbyRoutingService(
             val response = buildMapGetResponse(request, payload)
             requirePublicStatePayloadWithinLimit(response)
             gameStateDelivery.sendPublicState(request.connectionId, response)
+            logRequestCompleted(
+                request = request,
+                responseType = MapGetResponse::class.simpleName ?: "MapGetResponse",
+                extraFields =
+                    arrayOf(
+                        "stateVersion" to response.stateVersion,
+                        "mapHash" to response.mapHash,
+                    ),
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = mapGetErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
@@ -525,10 +646,26 @@ class MainServerLobbyRoutingService(
                 stateVersion = response.stateVersion,
                 trigger = RoundSnapshotTrigger.CATCH_UP_RESPONSE,
             )
+            logRequestCompleted(
+                request = request,
+                responseType =
+                    GameStateCatchUpResponse::class.simpleName ?: "GameStateCatchUpResponse",
+                extraFields =
+                    arrayOf(
+                        "stateVersion" to response.stateVersion,
+                        "clientStateVersion" to payload.clientStateVersion,
+                    ),
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = gameStateCatchUpErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
@@ -552,10 +689,22 @@ class MainServerLobbyRoutingService(
             val response = buildGameStatePrivateGetResponse(request, payload)
             requirePrivateStatePayloadWithinLimit(response)
             gameStateDelivery.sendPrivateState(request.connectionId, response)
+            logRequestCompleted(
+                request = request,
+                responseType =
+                    GameStatePrivateGetResponse::class.simpleName ?: "GameStatePrivateGetResponse",
+                extraFields = arrayOf("stateVersion" to response.stateVersion),
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = gameStatePrivateGetErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
@@ -704,10 +853,21 @@ class MainServerLobbyRoutingService(
                 request.connectionId,
                 ClaimCheatReinforcementBonusResponse(payload.lobbyCode),
             )
+            logRequestCompleted(
+                request = request,
+                responseType = "ClaimCheatReinforcementBonusResponse",
+                extraFields = arrayOf("eventCount" to events.size),
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = claimCheatReinforcementBonusErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
@@ -962,10 +1122,25 @@ class MainServerLobbyRoutingService(
         runCatching {
             val response = buildTurnStateGetResponse(payload)
             gameStateDelivery.sendPublicState(request.connectionId, response)
+            logRequestCompleted(
+                request = request,
+                responseType = TurnStateGetResponse::class.simpleName ?: "TurnStateGetResponse",
+                extraFields =
+                    arrayOf(
+                        "turnCount" to response.turnCount,
+                        "phase" to response.turnPhase.name,
+                    ),
+            )
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = turnStateGetErrorResponse(payload, cause)
             network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
             hooks.onRoutingError(
                 request.connectionId,
                 LobbyRoutingError.InvalidRoutingData(
@@ -984,7 +1159,18 @@ class MainServerLobbyRoutingService(
 
     private suspend fun routeCharacterSelectRequest(request: DecodedNetworkRequest) {
         val payload = request.payload as CharacterSelectRequest
-        val requesterPlayerId = request.context.playerId?.value ?: return
+        val requesterPlayerId =
+            request.context.playerId?.value
+                ?: run {
+                    val reason = "Connection ist keinem Spieler zugeordnet."
+                    logRequestRejected(
+                        request = request,
+                        errorCode = PLAYER_CONTEXT_MISSING_ERROR_CODE,
+                        reason = reason,
+                        cause = IllegalArgumentException(reason),
+                    )
+                    return
+                }
 
         val charMap = charactersByLobby.getOrPut(payload.lobbyCode) { ConcurrentHashMap() }
         val success =
@@ -999,9 +1185,16 @@ class MainServerLobbyRoutingService(
             }
 
         if (!success) {
+            val reason = "Achtung, dieser Charakter ist schon vergeben"
             network.send(
                 request.connectionId,
-                CharacterSelectErrorResponse("Achtung, dieser Charakter ist schon vergeben"),
+                CharacterSelectErrorResponse(reason),
+            )
+            logRequestRejected(
+                request = request,
+                errorCode = CHARACTER_ALREADY_ASSIGNED_ERROR_CODE,
+                reason = reason,
+                cause = IllegalArgumentException(reason),
             )
             return
         }
@@ -1027,6 +1220,11 @@ class MainServerLobbyRoutingService(
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId -> network.send(connectionId, broadcast) }
+        logRequestCompleted(
+            request = request,
+            responseType = CharacterSelectResponse::class.simpleName ?: "CharacterSelectResponse",
+            extraFields = arrayOf("characterId" to payload.characterId),
+        )
     }
 
     private suspend fun routeDecodedRequest(request: DecodedNetworkRequest) {
@@ -1036,6 +1234,14 @@ class MainServerLobbyRoutingService(
         when (val result = router.route(request)) {
             is LobbyRoutingResult.Success -> {
                 dispatchNetworkMessages(request)
+                responseTypeFor(request.payload)?.let { responseType ->
+                    logRequestCompleted(
+                        request = request,
+                        responseType = responseType,
+                        lobbyCode = result.context.lobbyCode ?: lobbyCode,
+                        extraFields = arrayOf("eventCount" to result.eventCount),
+                    )
+                }
                 if (lobbyCode != null) {
                     if (request.payload is StartGameRequest) {
                         grantBaseReinforcementsOnPhaseStart(
@@ -1056,6 +1262,13 @@ class MainServerLobbyRoutingService(
 
             is LobbyRoutingResult.Failure -> {
                 dispatchErrorResponse(request, result.error.reason)
+                logRequestRejected(
+                    request = request,
+                    errorCode = result.error::class.simpleName ?: ROUTING_ERROR_CODE,
+                    reason = result.error.reason,
+                    cause = result.error.cause ?: IllegalArgumentException(result.error.reason),
+                    lobbyCode = result.error.context.lobbyCode ?: lobbyCode,
+                )
                 hooks.onRoutingError(request.connectionId, result.error)
             }
         }
@@ -1071,10 +1284,11 @@ class MainServerLobbyRoutingService(
         }
     }
 
-    private suspend fun handleCreateLobbyRequest(request: DecodedNetworkRequest) {
+    private suspend fun handleCreateLobbyRequest(request: DecodedNetworkRequest): LobbyCode {
         val lobbyCode = createLobbyWithUniqueCode()
         lobbyManager.submit(LobbyCreated(lobbyCode), request.context)
         network.send(request.connectionId, CreateLobbyResponse(lobbyCode = lobbyCode))
+        return lobbyCode
     }
 
     private suspend fun dispatchReconnectLobbySnapshot(
@@ -2799,13 +3013,56 @@ class MainServerLobbyRoutingService(
     private fun lobbyCodeOf(payload: NetworkMessagePayload): LobbyCode? =
         when (payload) {
             is AttackRequest -> payload.lobbyCode
+            is CharacterSelectRequest -> payload.lobbyCode
+            is ClaimCheatReinforcementBonusRequest -> payload.lobbyCode
+            is ConfirmAttackDoneRequest -> payload.lobbyCode
+            is ConfirmReinforcementsDoneRequest -> payload.lobbyCode
             is FortifyMoveRequest -> payload.lobbyCode
+            is GameStateCatchUpRequest -> payload.lobbyCode
+            is GameStatePrivateGetRequest -> payload.lobbyCode
             is JoinLobbyRequest -> payload.lobbyCode
             is LeaveLobbyRequest -> payload.lobbyCode
+            is LobbyPlayerCountRequest -> payload.lobbyCode
             is KickPlayerRequest -> payload.lobbyCode
+            is PlaceReinforcementsRequest -> payload.lobbyCode
             is StartGameRequest -> payload.lobbyCode
+            is StartPlayerSetRequest -> payload.lobbyCode
+            is TradeInCardsRequest -> payload.lobbyCode
             is MapGetRequest -> payload.lobbyCode
             is TurnAdvanceRequest -> payload.lobbyCode
+            is TurnStateGetRequest -> payload.lobbyCode
+            else -> null
+        }
+
+    private fun playerIdOf(payload: NetworkMessagePayload): PlayerId? =
+        when (payload) {
+            is AttackRequest -> payload.playerId
+            is CharacterSelectRequest -> payload.playerId
+            is ClaimCheatReinforcementBonusRequest -> payload.playerId
+            is ConfirmAttackDoneRequest -> payload.playerId
+            is ConfirmReinforcementsDoneRequest -> payload.playerId
+            is FortifyMoveRequest -> payload.playerId
+            is GameStatePrivateGetRequest -> payload.playerId
+            is KickPlayerRequest -> payload.requesterPlayerId
+            is PlaceReinforcementsRequest -> payload.playerId
+            is StartPlayerSetRequest -> payload.requesterPlayerId
+            is TradeInCardsRequest -> payload.playerId
+            is TurnAdvanceRequest -> payload.playerId
+            else -> null
+        }
+
+    private fun clientRequestIdOf(payload: NetworkMessagePayload): String? =
+        when (payload) {
+            is AttackRequest -> payload.requestId
+            else -> null
+        }
+
+    private fun responseTypeFor(payload: NetworkMessagePayload): String? =
+        when (payload) {
+            is JoinLobbyRequest -> JoinLobbyResponse::class.simpleName
+            is LeaveLobbyRequest -> LeaveLobbyResponse::class.simpleName
+            is KickPlayerRequest -> KickPlayerResponse::class.simpleName
+            is StartGameRequest -> StartGameResponse::class.simpleName
             else -> null
         }
 
