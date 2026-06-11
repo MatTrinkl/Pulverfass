@@ -34,6 +34,19 @@ interface PlayerNameStore {
      * @param characterId stabile ID aus `Characters`.
      */
     fun saveCharacterId(characterId: String)
+
+    /**
+     * Liefert, ob Auto-Angriff als globale Voreinstellung aktiviert ist.
+     */
+    fun readAutoAttackEnabled(): Boolean
+
+    /**
+     * Speichert die globale Auto-Angriff-Voreinstellung.
+     *
+     * @param enabled `true`, wenn neue Angriffsauswahlen den Auto-Angriff
+     * voraktiviert anzeigen sollen.
+     */
+    fun saveAutoAttackEnabled(enabled: Boolean)
 }
 
 /**
@@ -47,6 +60,10 @@ object NoOpPlayerNameStore : PlayerNameStore {
     override fun readCharacterId(): String? = null
 
     override fun saveCharacterId(characterId: String) = Unit
+
+    override fun readAutoAttackEnabled(): Boolean = false
+
+    override fun saveAutoAttackEnabled(enabled: Boolean) = Unit
 }
 
 /**
@@ -86,9 +103,19 @@ class SharedPreferencesPlayerNameStore(
             .apply()
     }
 
+    override fun readAutoAttackEnabled(): Boolean =
+        preferences.getBoolean(KEY_AUTO_ATTACK_ENABLED, false)
+
+    override fun saveAutoAttackEnabled(enabled: Boolean) {
+        preferences.edit()
+            .putBoolean(KEY_AUTO_ATTACK_ENABLED, enabled)
+            .apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "pulverfass_player_settings"
         const val KEY_PLAYER_NAME = "player_name"
         const val KEY_CHARACTER_ID = "character_id"
+        const val KEY_AUTO_ATTACK_ENABLED = "auto_attack_enabled"
     }
 }

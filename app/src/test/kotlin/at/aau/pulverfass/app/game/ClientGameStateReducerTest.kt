@@ -33,6 +33,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -829,6 +830,301 @@ class ClientGameStateReducerTest {
         assertEquals(2, battle.occupyingTroopCount)
         assertTrue(battle.captured)
         assertEquals(battle, afterAutomaticAdvance.attackState.latestResult)
+    }
+
+    @Test
+    fun `auto attack result keeps route for next attack until target is captured`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val result =
+            ClientGameStateReducer.applyDelta(
+                current =
+                    GameUiState(
+                        stateVersion = 1,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                        adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                        territoryStates =
+                            mapOf(
+                                sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                                targetId to GameTerritoryUiState(targetId, bobId, 3),
+                            ),
+                        attackState =
+                            AttackUiState(
+                                attackTroops = 3,
+                                moveAfterCapture = 3,
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        intent =
+                                            AutoAttackIntent(
+                                                fromTerritoryId = sourceId,
+                                                toTerritoryId = targetId,
+                                                attackTroops = 3,
+                                                moveAfterCapture = 3,
+                                            ),
+                                        isEnabled = true,
+                                        isAwaitingResult = true,
+                                        pendingRequestId = "auto-attack-1",
+                                    ),
+                            ),
+                    ),
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                AttackResolvedBroadcastEvent(
+                                    lobbyCode = lobbyCode,
+                                    attackerPlayerId = aliceId,
+                                    defenderPlayerId = bobId,
+                                    fromTerritoryId = sourceId,
+                                    toTerritoryId = targetId,
+                                    attackTroops = 3,
+                                    sourceTroopsBefore = 5,
+                                    targetTroopsBefore = 3,
+                                    requestedAttackDice = 3,
+                                    attackDice = 3,
+                                    defendDice = 2,
+                                    attackerRolls = listOf(6, 3, 1),
+                                    defenderRolls = listOf(5, 2),
+                                    attackerLosses = 1,
+                                    defenderLosses = 1,
+                                    attackerRemaining = 4,
+                                    defenderRemaining = 2,
+                                ),
+                                TerritoryTroopsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    territoryId = sourceId,
+                                    troopCount = 4,
+                                    stateVersion = 2,
+                                ),
+                                TerritoryTroopsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    territoryId = targetId,
+                                    troopCount = 2,
+                                    stateVersion = 2,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals("brazil", result.selectionFromRegionId)
+        assertEquals("argentina", result.selectionToRegionId)
+        assertEquals("argentina", result.selectedRegionId)
+        assertFalse(result.attackState.latestResult?.captured ?: true)
+        assertTrue(result.attackState.autoAttack.isEnabled)
+        assertFalse(result.attackState.autoAttack.isAwaitingResult)
+        assertEquals(null, result.attackState.autoAttack.pendingRequestId)
+    }
+
+    @Test
+    fun `catch up during auto attack keeps intent ready for next request`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val intent =
+            AutoAttackIntent(
+                fromTerritoryId = sourceId,
+                toTerritoryId = targetId,
+                attackTroops = 2,
+                moveAfterCapture = 2,
+            )
+        val result =
+            ClientGameStateReducer.applyCatchUpResponse(
+                current =
+                    GameUiState(
+                        stateVersion = 11,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                        adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                        territoryStates =
+                            mapOf(
+                                sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                                targetId to GameTerritoryUiState(targetId, bobId, 1),
+                            ),
+                        attackState =
+                            AttackUiState(
+                                attackTroops = 2,
+                                moveAfterCapture = 2,
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        intent = intent,
+                                        isEnabled = true,
+                                        isAwaitingResult = true,
+                                        pendingRequestId = "auto-attack-5",
+                                        errorText = "old",
+                                    ),
+                            ),
+                        isCatchingUp = true,
+                    ),
+                response =
+                    GameStateCatchUpResponse(
+                        lobbyCode = lobbyCode,
+                        stateVersion = 12,
+                        determinism = determinism,
+                        turnState =
+                            PublicTurnStateSnapshot(
+                                activePlayerId = aliceId,
+                                turnPhase = TurnPhase.ATTACK,
+                                turnCount = 1,
+                                startPlayerId = aliceId,
+                            ),
+                        definition =
+                            MapDefinitionSnapshot(
+                                territories =
+                                    listOf(
+                                        MapTerritoryDefinitionSnapshot(
+                                            territoryId = sourceId,
+                                            edges = listOf(MapTerritoryEdgeSnapshot(targetId)),
+                                        ),
+                                        MapTerritoryDefinitionSnapshot(
+                                            territoryId = targetId,
+                                            edges = emptyList(),
+                                        ),
+                                    ),
+                                continents = emptyList(),
+                            ),
+                        territoryStates =
+                            listOf(
+                                MapTerritoryStateSnapshot(sourceId, aliceId, 4),
+                                MapTerritoryStateSnapshot(targetId, bobId, 1),
+                            ),
+                    ),
+                players = players,
+            )
+
+        assertFalse(result.isCatchingUp)
+        assertEquals(12, result.stateVersion)
+        assertEquals(4, result.territoryStates.getValue(sourceId).troopCount)
+        assertEquals(1, result.territoryStates.getValue(targetId).troopCount)
+        assertEquals(2, result.attackState.attackTroops)
+        assertEquals(2, result.attackState.moveAfterCapture)
+        assertTrue(result.attackState.autoAttack.isEnabled)
+        assertEquals(intent, result.attackState.autoAttack.intent)
+        assertFalse(result.attackState.autoAttack.isAwaitingResult)
+        assertNull(result.attackState.autoAttack.pendingRequestId)
+        assertNull(result.attackState.autoAttack.errorText)
+    }
+
+    @Test
+    fun `attack selection changes keep armed auto attack setting`() {
+        val sourceId = TerritoryId("brasilien")
+        val result =
+            ClientGameStateReducer.selectRegion(
+                current =
+                    GameUiState(
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                        territoryStates =
+                            mapOf(
+                                sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                            ),
+                        attackState =
+                            AttackUiState(
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        isEnabled = true,
+                                        statusText = "Auto-Angriff beendet.",
+                                    ),
+                            ),
+                    ),
+                regionId = "brazil",
+                localPlayerId = aliceId,
+            )
+
+        assertEquals("brazil", result.selectionFromRegionId)
+        assertTrue(result.attackState.autoAttack.isEnabled)
+        assertFalse(result.attackState.autoAttack.isRunning)
+        assertNull(result.attackState.autoAttack.statusText)
+    }
+
+    @Test
+    fun `phase and snapshot resets keep armed auto attack toggle`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val current =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                attackState =
+                    AttackUiState(
+                        autoAttack =
+                            AutoAttackUiState(
+                                intent =
+                                    AutoAttackIntent(
+                                        fromTerritoryId = sourceId,
+                                        toTerritoryId = targetId,
+                                        attackTroops = 2,
+                                        moveAfterCapture = 2,
+                                    ),
+                                isEnabled = true,
+                                isAwaitingResult = true,
+                                pendingRequestId = "auto-attack-1",
+                            ),
+                    ),
+            )
+        val phase =
+            ClientGameStateReducer.applyPhaseBoundary(
+                current = current,
+                event =
+                    PhaseBoundaryEvent(
+                        lobbyCode = lobbyCode,
+                        stateVersion = 2,
+                        previousPhase = TurnPhase.ATTACK,
+                        nextPhase = TurnPhase.FORTIFY,
+                        activePlayerId = aliceId,
+                        turnCount = 1,
+                    ),
+            )
+        val turn =
+            ClientGameStateReducer.applyTurnStateGetResponse(
+                current = current,
+                response =
+                    TurnStateGetResponse(
+                        lobbyCode = lobbyCode,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.DRAW_CARD,
+                        turnCount = 1,
+                        startPlayerId = aliceId,
+                    ),
+            )
+        val snapshot =
+            ClientGameStateReducer.applyCatchUpResponse(
+                current = current,
+                response =
+                    GameStateCatchUpResponse(
+                        lobbyCode = lobbyCode,
+                        stateVersion = 3,
+                        determinism = determinism,
+                        turnState =
+                            PublicTurnStateSnapshot(
+                                activePlayerId = aliceId,
+                                turnPhase = TurnPhase.REINFORCEMENTS,
+                                turnCount = 2,
+                                startPlayerId = aliceId,
+                                pendingReinforcements = 3,
+                            ),
+                        definition = mapDefinition("brasilien"),
+                        territoryStates =
+                            listOf(MapTerritoryStateSnapshot(sourceId, aliceId, 5)),
+                    ),
+                players = players,
+            )
+
+        listOf(phase, turn, snapshot).forEach { state ->
+            assertTrue(state.attackState.autoAttack.isEnabled)
+            assertFalse(state.attackState.autoAttack.isRunning)
+            assertNull(state.attackState.autoAttack.pendingRequestId)
+        }
     }
 
     @Test

@@ -208,6 +208,7 @@ fun GameScreen(
                 onAdjustAttackTroops = controller::adjustAttackTroops,
                 onAdjustMoveAfterCapture = controller::adjustMoveAfterCapture,
                 onAttack = controller::attack,
+                onSetAutoAttackEnabled = controller::setAutoAttackEnabled,
                 onConfirmAttackDone = controller::confirmAttackDone,
                 onAdjustFortifyTroops = controller::adjustFortifyTroops,
                 onFortifyMove = controller::fortifyMove,
@@ -286,6 +287,7 @@ internal data class GameScreenActions(
     val onAdjustAttackTroops: (Int) -> Unit = {},
     val onAdjustMoveAfterCapture: (Int) -> Unit = {},
     val onAttack: () -> Unit = {},
+    val onSetAutoAttackEnabled: (Boolean) -> Unit = {},
     val onConfirmAttackDone: () -> Unit = {},
     val onAdjustFortifyTroops: (Int) -> Unit = {},
     val onFortifyMove: () -> Unit = {},
@@ -362,6 +364,8 @@ private data class AttackPanelState(
     val maximumAttackTroops: Int,
     val canAdjust: Boolean,
     val canAttack: Boolean,
+    val canToggleAutoAttack: Boolean,
+    val canDismiss: Boolean,
 )
 
 private data class AttackPanelActions(
@@ -369,6 +373,7 @@ private data class AttackPanelActions(
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
     val onAttack: () -> Unit,
+    val onSetAutoAttackEnabled: (Boolean) -> Unit,
 )
 
 private data class AttackPanelHostState(
@@ -386,6 +391,7 @@ private data class AttackPanelHostActions(
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
     val onAttack: () -> Unit,
+    val onSetAutoAttackEnabled: (Boolean) -> Unit,
 )
 
 internal data class AttackResolutionOverlayState(
@@ -465,6 +471,7 @@ internal fun GameScreenContent(
     val onAdjustAttackTroops = actions.onAdjustAttackTroops
     val onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture
     val onAttack = actions.onAttack
+    val onSetAutoAttackEnabled = actions.onSetAutoAttackEnabled
     val onConfirmAttackDone = actions.onConfirmAttackDone
     val onAdjustFortifyTroops = actions.onAdjustFortifyTroops
     val onFortifyMove = actions.onFortifyMove
@@ -520,6 +527,10 @@ internal fun GameScreenContent(
     val (showCountdown, countdownValue) = countdownState ?: rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
+    val canUsePhaseInput =
+        isConnected &&
+            !uiState.isCatchingUp &&
+            !uiState.isDesynced
 
     val desyncedText = stringResource(id = R.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
@@ -561,7 +572,11 @@ internal fun GameScreenContent(
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
                  * handeln darf und der Client synchron verbunden ist.
                  */
-                    if (canUseGameActions && !isActionResolutionPending) {
+                    if (
+                        canUseGameActions &&
+                        !isActionResolutionPending &&
+                        !uiState.attackState.autoAttack.isRunning
+                    ) {
                         onRegionSelected(region.id)
                     }
                 },
@@ -674,6 +689,7 @@ internal fun GameScreenContent(
                         onAdjustAttackTroops = onAdjustAttackTroops,
                         onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
                         onAttack = onAttack,
+                        onSetAutoAttackEnabled = onSetAutoAttackEnabled,
                     ),
             )
 
@@ -699,7 +715,11 @@ internal fun GameScreenContent(
                 state =
                     BottomBarState(
                         currentPhase = uiState.turnPhase,
-                        canEndPhase = canEndCurrentPhase,
+                        canEndPhase =
+                            canEndCurrentPhase &&
+                                canUsePhaseInput &&
+                                !isActionResolutionPending &&
+                                !uiState.attackState.autoAttack.isRunning,
                         cardsVisible = uiState.cardsVisible,
                     ),
                 onToggleCards = onToggleCards,
@@ -716,6 +736,7 @@ internal fun GameScreenContent(
                 show = showOptionsOverlay,
                 isMusicEnabled = isMusicEnabled,
                 isSfxEnabled = isSfxEnabled,
+                autoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
                 onMusicToggle = { enabled ->
                     isMusicEnabled = enabled
                     musicManager?.setMusicMuted(!enabled)
@@ -724,6 +745,7 @@ internal fun GameScreenContent(
                     isSfxEnabled = enabled
                     musicManager?.setSfxMuted(!enabled)
                 },
+                onAutoAttackToggle = onSetAutoAttackEnabled,
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
             )
@@ -857,8 +879,10 @@ private fun OptionsOverlay(
     show: Boolean,
     isMusicEnabled: Boolean,
     isSfxEnabled: Boolean,
+    autoAttackEnabled: Boolean,
     onMusicToggle: (Boolean) -> Unit,
     onSfxToggle: (Boolean) -> Unit,
+    onAutoAttackToggle: (Boolean) -> Unit,
     onNavigateToMain: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -884,6 +908,11 @@ private fun OptionsOverlay(
             label = "SOUND-EFFEKTE",
             isEnabled = isSfxEnabled,
             onToggle = onSfxToggle,
+        )
+        InGameAudioToggleRow(
+            label = "AUTO-ANGRIFF",
+            isEnabled = autoAttackEnabled,
+            onToggle = onAutoAttackToggle,
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
@@ -1429,6 +1458,7 @@ private fun BoxScope.AttackPanelHost(
     }
 
     val (fromRegionId, toRegionId) = state.selection
+    val isAutoAttackRunning = state.uiState.attackState.autoAttack.isRunning
     AttackPanel(
         state =
             AttackPanelState(
@@ -1436,9 +1466,25 @@ private fun BoxScope.AttackPanelHost(
                 fromRegionId = fromRegionId,
                 toRegionId = toRegionId,
                 maximumAttackTroops = maximumAttackTroops(state.uiState, fromRegionId),
-                canAdjust = state.canManageAttacks && !state.isCommandPending,
+                canAdjust =
+                    state.canManageAttacks &&
+                        !state.isCommandPending &&
+                        !isAutoAttackRunning,
                 canAttack =
                     state.uiState.canSubmitAttack(state.localPlayerId, state.isConnected) &&
+                        !state.isCommandPending &&
+                        !isAutoAttackRunning,
+                canToggleAutoAttack =
+                    state.uiState.attackState.autoAttack.isEnabled ||
+                        (
+                            state.uiState.canStartAutoAttack(
+                                state.localPlayerId,
+                                state.isConnected,
+                            ) &&
+                                !state.isCommandPending
+                        ),
+                canDismiss =
+                    !isAutoAttackRunning &&
                         !state.isCommandPending,
             ),
         actions =
@@ -1447,6 +1493,7 @@ private fun BoxScope.AttackPanelHost(
                 onAdjustAttackTroops = actions.onAdjustAttackTroops,
                 onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture,
                 onAttack = actions.onAttack,
+                onSetAutoAttackEnabled = actions.onSetAutoAttackEnabled,
             ),
         modifier =
             Modifier
@@ -1627,7 +1674,7 @@ internal fun createAttackResolutionOverlayState(
     fallbackPlayerName: String,
     isAttackRequestPending: Boolean,
 ): AttackResolutionOverlayState? {
-    if (!isAttackRequestPending) {
+    if (!isAttackRequestPending || uiState.attackState.autoAttack.isRunning) {
         return null
     }
     val (fromRegionId, toRegionId) = selection ?: return null
@@ -2517,7 +2564,7 @@ private fun AttackPanel(
                     label = "X",
                     onClick = actions.onDismiss,
                     selected = false,
-                    enabled = true,
+                    enabled = state.canDismiss,
                     modifier =
                         Modifier
                             .size(34.dp)
@@ -2543,6 +2590,11 @@ private fun AttackPanel(
                 onAdjust = actions.onAdjustMoveAfterCapture,
                 tagPrefix = "attack_move",
             )
+            AutoAttackControl(
+                checked = state.attackState.autoAttack.isEnabled,
+                enabled = state.canToggleAutoAttack,
+                onCheckedChange = actions.onSetAutoAttackEnabled,
+            )
             BlockActionButton(
                 label = stringResource(id = R.string.game_attack_submit),
                 onClick = actions.onAttack,
@@ -2551,6 +2603,38 @@ private fun AttackPanel(
                 modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
             )
         }
+    }
+}
+
+@Composable
+private fun AutoAttackControl(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_attack_auto),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = PulverfassColors.GoldBright,
+                    checkedTrackColor = PulverfassColors.GoldDark,
+                    uncheckedThumbColor = PulverfassColors.TextMuted,
+                    uncheckedTrackColor = PulverfassColors.SurfaceDark,
+                ),
+            modifier = Modifier.testTag("attack_auto_toggle"),
+        )
     }
 }
 
