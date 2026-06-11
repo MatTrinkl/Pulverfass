@@ -93,7 +93,6 @@ import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
-import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GameMapTerritoryMapper
 import at.aau.pulverfass.app.game.GamePlayerUi
@@ -1664,7 +1663,7 @@ internal fun createAttackResolutionOverlayState(
     fallbackPlayerName: String,
     isAttackRequestPending: Boolean,
 ): AttackResolutionOverlayState? {
-    if (!isAttackRequestPending) {
+    if (!isAttackRequestPending || uiState.attackState.autoAttack.isRunning) {
         return null
     }
     val (fromRegionId, toRegionId) = selection ?: return null
@@ -2557,7 +2556,7 @@ private fun AttackPanel(
                 tagPrefix = "attack_move",
             )
             AutoAttackControl(
-                autoAttack = state.attackState.autoAttack,
+                checked = state.attackState.autoAttack.isEnabled,
                 enabled = state.canToggleAutoAttack,
                 onCheckedChange = actions.onSetAutoAttackEnabled,
             )
@@ -2574,50 +2573,33 @@ private fun AttackPanel(
 
 @Composable
 private fun AutoAttackControl(
-    autoAttack: AutoAttackUiState,
+    checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(id = R.string.game_attack_auto),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Switch(
-                checked = autoAttack.isEnabled,
-                onCheckedChange = onCheckedChange,
-                enabled = enabled,
-                colors =
-                    SwitchDefaults.colors(
-                        checkedThumbColor = PulverfassColors.GoldBright,
-                        checkedTrackColor = PulverfassColors.GoldDark,
-                        uncheckedThumbColor = PulverfassColors.TextMuted,
-                        uncheckedTrackColor = PulverfassColors.SurfaceDark,
-                    ),
-                modifier = Modifier.testTag("attack_auto_toggle"),
-            )
-        }
-
-        val status = autoAttack.errorText ?: autoAttack.statusText
-        if (status != null) {
-            Text(
-                text = status,
-                color =
-                    if (autoAttack.errorText != null) {
-                        PulverfassColors.Danger
-                    } else {
-                        PulverfassColors.TextMuted
-                    },
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.testTag("attack_auto_status"),
-            )
-        }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(id = R.string.game_attack_auto),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = PulverfassColors.GoldBright,
+                    checkedTrackColor = PulverfassColors.GoldDark,
+                    uncheckedThumbColor = PulverfassColors.TextMuted,
+                    uncheckedTrackColor = PulverfassColors.SurfaceDark,
+                ),
+            modifier = Modifier.testTag("attack_auto_toggle"),
+        )
     }
 }
 

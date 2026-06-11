@@ -1520,8 +1520,12 @@ class LobbyControllerTest {
                 firstResponseSent.await()
                 delay(100)
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+                val firstResultReleasedAt = System.currentTimeMillis()
                 releaseFirstDelta.complete(Unit)
+                delay(450)
+                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
+                assertTrue(System.currentTimeMillis() - firstResultReleasedAt >= 500L)
                 waitUntil {
                     controller.state.value.gameState.attackState.autoAttack.statusText ==
                         LobbyControllerConfig().autoAttackStoppedCaptured

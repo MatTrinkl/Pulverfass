@@ -192,6 +192,7 @@ class LobbyController(
     private var deferredOwnAttackPhaseBoundary: PhaseBoundaryEvent? = null
     private var manuallyConsumedAttackBoundaryStateVersion: Long? = null
     private var autoAttackRequestSequence: Long = 0L
+    private var delayedAutoAttackContinuationJob: Job? = null
 
     init {
         scope.launch {
@@ -459,6 +460,7 @@ class LobbyController(
     fun close() {
         cancelReconnect()
         cancelDelayedAutoPhaseAdvance()
+        cancelDelayedAutoAttackContinuation()
         network.close()
     }
 
@@ -466,6 +468,7 @@ class LobbyController(
         val lobbyCode = state.value.activeLobbyCode
         suppressNextAttackBoundaryNotice = false
         cancelDelayedAutoPhaseAdvance()
+        cancelDelayedAutoAttackContinuation()
         if (lobbyCode != null) {
             scope.launch {
                 runCatching {
@@ -1197,10 +1200,12 @@ class LobbyController(
 
     private fun continueAutoAttackIfReady(
         authoritativeGameState: GameUiState = state.value.gameState,
+        delayBeforeRequest: Boolean = false,
     ) {
         val snapshot = state.value
         val autoAttack = authoritativeGameState.attackState.autoAttack
         if (!autoAttack.isEnabled || autoAttack.intent == null) {
+            cancelDelayedAutoAttackContinuation()
             return
         }
 
@@ -1223,6 +1228,12 @@ class LobbyController(
             return
         }
 
+        if (delayBeforeRequest) {
+            scheduleAutoAttackContinuationAfterVisualDelay()
+            return
+        }
+
+        cancelDelayedAutoAttackContinuation()
         val requestId = nextAutoAttackRequestId()
         markAutoAttackRequestSent(requestId)
         scope.launch {
@@ -1350,6 +1361,7 @@ class LobbyController(
         errorText: String? = null,
         keepEnabled: Boolean = true,
     ) {
+        cancelDelayedAutoAttackContinuation()
         if (!keepEnabled) {
             playerNameStore.saveAutoAttackEnabled(false)
         }
@@ -1402,6 +1414,27 @@ class LobbyController(
     private fun nextAutoAttackRequestId(): String {
         autoAttackRequestSequence += 1
         return "auto-attack-$autoAttackRequestSequence"
+    }
+
+    private fun scheduleAutoAttackContinuationAfterVisualDelay() {
+        if (delayedAutoAttackContinuationJob?.isActive == true) {
+            return
+        }
+        delayedAutoAttackContinuationJob =
+            scope.launch {
+                delay(AUTO_ATTACK_CONTINUATION_DELAY_MILLIS)
+                clearDelayedAutoAttackContinuation()
+                continueAutoAttackIfReady()
+            }
+    }
+
+    private fun cancelDelayedAutoAttackContinuation() {
+        delayedAutoAttackContinuationJob?.cancel()
+        clearDelayedAutoAttackContinuation()
+    }
+
+    private fun clearDelayedAutoAttackContinuation() {
+        delayedAutoAttackContinuationJob = null
     }
 
     /** Beendet die Angriffsphase ueber den dafuer vorgesehenen Serverrequest. */
@@ -2467,7 +2500,10 @@ class LobbyController(
                 syncMessage = result.state.lastSyncError,
             )
         } else {
-            continueAutoAttackIfReady(authoritativeGameState = authoritativeGameState)
+            continueAutoAttackIfReady(
+                authoritativeGameState = authoritativeGameState,
+                delayBeforeRequest = containsOwnAttackResult,
+            )
         }
     }
 
@@ -2883,3 +2919,4 @@ private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
 private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L
+private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 500L
