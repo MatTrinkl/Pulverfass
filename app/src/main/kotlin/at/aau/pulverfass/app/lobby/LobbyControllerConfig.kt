@@ -48,10 +48,8 @@ data class LobbyControllerConfig(
     val errorAttackSelectionMissing: String =
         "Wähle ein eigenes und ein benachbartes fremdes Gebiet",
     val errorAttackFailed: String = "Angriff fehlgeschlagen",
-    val autoAttackArmed: String = "Auto-Angriff bereit. Starte mit Angreifen.",
     val autoAttackStarted: String = "Auto-Angriff gestartet.",
     val autoAttackPending: String = "Auto-Angriff wartet auf das Serverergebnis.",
-    val autoAttackStoppedByUser: String = "Auto-Angriff deaktiviert.",
     val autoAttackStoppedCaptured: String =
         "Zielgebiet erobert. Auto-Angriff bleibt aktiviert.",
     val autoAttackStoppedSourceWeak: String =

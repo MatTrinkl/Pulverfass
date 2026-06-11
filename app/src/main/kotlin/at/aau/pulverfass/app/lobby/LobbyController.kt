@@ -1074,7 +1074,7 @@ class LobbyController(
         playerNameStore.saveAutoAttackEnabled(enabled)
         if (!enabled) {
             stopAutoAttack(
-                statusText = config.autoAttackStoppedByUser,
+                statusText = null,
                 keepEnabled = false,
             )
             return
@@ -1085,16 +1085,15 @@ class LobbyController(
             val canStart =
                 !autoAttack.isRunning &&
                     it.gameState.canStartAutoAttack(it.ownPlayerId, it.isConnected)
-            val statusText =
-                when {
-                    autoAttack.isRunning -> autoAttack.statusText
-                    canStart -> config.autoAttackArmed
-                    else -> null
-                }
             it.copy(
                 autoAttackEnabled = true,
                 errorText = if (canStart) null else it.errorText,
-                gameState = it.gameState.withAutoAttackPreference(true, statusText = statusText),
+                gameState =
+                    it.gameState.withAutoAttackPreference(
+                        enabled = true,
+                        statusText = null,
+                        errorText = null,
+                    ),
             )
         }
     }

@@ -179,12 +179,14 @@ class LobbyControllerTest {
 
             assertFalse(controller.state.value.autoAttackEnabled)
             assertFalse(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertNull(controller.state.value.gameState.attackState.autoAttack.statusText)
             assertFalse(playerNameStore.readAutoAttackEnabled())
 
             controller.setAutoAttackEnabled(true)
 
             assertTrue(controller.state.value.autoAttackEnabled)
             assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertNull(controller.state.value.gameState.attackState.autoAttack.statusText)
             assertTrue(playerNameStore.readAutoAttackEnabled())
             assertNull(controller.state.value.errorText)
         } finally {
