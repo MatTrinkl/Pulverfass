@@ -51,6 +51,7 @@ val generateDokkaProductDocs by tasks.registering {
                 appendLine("<ul>")
                 appendLine("""<li><a href="#product-docs">Produktdokumentation</a></li>""")
                 appendLine("""<li><a href="app/index.html">App API</a></li>""")
+                appendLine("""<li><a href="client/index.html">Client API</a></li>""")
                 appendLine("""<li><a href="server/index.html">Server API</a></li>""")
                 appendLine("""<li><a href="shared/index.html">Shared API</a></li>""")
                 appendLine("</ul>")
@@ -59,6 +60,7 @@ val generateDokkaProductDocs by tasks.registering {
                 appendLine()
                 appendLine("<ul>")
                 appendLine("""<li><a href="app/index.html"><strong>app</strong></a>: Android-App und App-seitige Integration</li>""")
+                appendLine("""<li><a href="client/index.html"><strong>client</strong></a>: Compose-Multiplatform-Client (Android + iOS)</li>""")
                 appendLine("""<li><a href="server/index.html"><strong>server</strong></a>: Ktor-Server, Transport und Server-Networklayer</li>""")
                 appendLine("""<li><a href="shared/index.html"><strong>shared</strong></a>: Gemeinsame Netzwerk- und Protokolltypen</li>""")
                 appendLine("</ul>")
@@ -125,7 +127,7 @@ dokka {
 }
 
 dependencies {
-    listOf(":app", ":server", ":shared")
+    listOf(":app", ":client", ":server", ":shared")
         .filter { projectPath -> findProject(projectPath) != null }
         .forEach { projectPath ->
             dokka(project(projectPath))

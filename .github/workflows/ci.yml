@@ -175,6 +175,7 @@ jobs:
           ./gradlew
           :shared:assemble
           :app:testDebugUnitTest
+          :client:testDebugUnitTest
           --stacktrace
 
       - name: Upload app unit test reports
@@ -185,6 +186,47 @@ jobs:
           path: |
             app/build/reports/tests/**
             app/build/test-results/**
+            client/build/reports/tests/**
+            client/build/test-results/**
+          if-no-files-found: ignore
+
+  ios-compile-check:
+    name: iOS Compile Check
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Compile iOS targets and run shared iOS tests
+        run: >
+          ./gradlew
+          :shared:compileKotlinIosArm64
+          :shared:iosSimulatorArm64Test
+          :client:compileKotlinIosArm64
+          :client:linkDebugFrameworkIosSimulatorArm64
+          --stacktrace
+
+      - name: Upload iOS test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-reports
+          path: |
+            shared/build/reports/tests/iosSimulatorArm64Test/**
+            shared/build/test-results/iosSimulatorArm64Test/**
           if-no-files-found: ignore
 
   dokka-build:
