@@ -1,0 +1,89 @@
+package at.aau.pulverfass.client.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavController
+import at.aau.pulverfass.client.audio.BackgroundMusicManager
+import at.aau.pulverfass.client.audio.MusicTrack
+import at.aau.pulverfass.client.ui.components.VideoAsset
+import at.aau.pulverfass.client.ui.components.VideoPlayer
+import at.aau.pulverfass.client.ui.navigation.Screen
+import at.aau.pulverfass.client.ui.theme.PulverfassColors
+import kotlinx.coroutines.delay
+
+private const val MAX_INTRO_DURATION_MS = 10_000L
+
+/**
+ * Gabumon Studios Intro-Screen beim App-Start.
+ *
+ * Spielt das Studio-Intro-Video und navigiert danach zum LoadScreen. Der
+ * immersive Vollbildmodus wird bewusst von `MainActivity` für die gesamte App
+ * gehalten: Würde dieser Screen beim Verlassen Systembars wieder einblenden,
+ * wären sie während des direkt folgenden LoadScreens sichtbar.
+ *
+ * Ein Tap überspringt das Intro sofort. Video-Ende und Sicherheits-Timeout
+ * führen in denselben idempotenten Navigationspfad, damit kein doppelter
+ * Backstack-Eintrag entstehen kann.
+ *
+ * @param navController Navigation Controller für die Weiterleitung.
+ */
+@Composable
+fun StudioIntroScreen(
+    navController: NavController,
+    musicManager: BackgroundMusicManager,
+) {
+    var hasNavigated by remember { mutableStateOf(false) }
+
+    /*
+     * navigateNext ist idempotent — egal wie oft sie aufgerufen wird
+     * (click + onCompleted + safety timeout), navigiert nur EINMAL.
+     */
+    val navigateNext = {
+        if (!hasNavigated) {
+            hasNavigated = true
+            navController.navigate(Screen.Load.route) {
+                popUpTo(Screen.StudioIntro.route) { inclusive = true }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        musicManager.play(MusicTrack.STUDIO_INTRO, loop = false)
+    }
+
+    // Sicherheits-Fallback, falls das Video hängt oder nicht geladen wird.
+    LaunchedEffect(Unit) {
+        delay(MAX_INTRO_DURATION_MS)
+        navigateNext()
+    }
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { navigateNext() },
+                ),
+    ) {
+        VideoPlayer(
+            asset = VideoAsset.STUDIO_INTRO,
+            onCompleted = { navigateNext() },
+            loop = false,
+            cover = true,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
