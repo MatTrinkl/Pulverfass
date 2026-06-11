@@ -127,7 +127,7 @@ class GameStateMapperTest {
     }
 
     @Test
-    fun `buildRegionStates grays departed owners while keeping them visible`() {
+    fun `buildRegionStates uses the neutral color for departed owners`() {
         val departedId = PlayerId(99)
         val territoryId = TerritoryId("brasilien")
         val territories =
@@ -145,7 +145,7 @@ class GameStateMapperTest {
 
         assertEquals("99", region.ownerPlayerId)
         assertEquals("Verlassener Spieler", region.ownerName)
-        assertEquals(Color(0xFF5E6268), region.accentColor)
+        assertEquals(Color(0xFFC2C2C2), region.accentColor)
     }
 
     @Test
