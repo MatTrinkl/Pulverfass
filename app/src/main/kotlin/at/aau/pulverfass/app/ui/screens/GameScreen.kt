@@ -699,11 +699,6 @@ internal fun GameScreenContent(
                 state =
                     BottomBarState(
                         currentPhase = uiState.turnPhase,
-                        canUseLocalInput =
-                            isConnected &&
-                                !uiState.isCatchingUp &&
-                                !uiState.isDesynced &&
-                                !isActionResolutionPending,
                         canEndPhase = canEndCurrentPhase,
                         cardsVisible = uiState.cardsVisible,
                     ),
@@ -2766,7 +2761,6 @@ private fun AttackResultPanel(
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
-    val canUseLocalInput: Boolean,
     val canEndPhase: Boolean,
     val cardsVisible: Boolean,
 )
@@ -2805,8 +2799,8 @@ private fun BottomActionClusters(
                         stringResource(id = R.string.game_cards_button)
                     },
                 onClick = onToggleCards,
-                selected = false,
-                enabled = state.canUseLocalInput,
+                selected = true,
+                enabled = true,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
                 musicManager = musicManager,
             )
