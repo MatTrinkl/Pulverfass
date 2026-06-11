@@ -111,6 +111,7 @@ import at.aau.pulverfass.app.ui.components.CharacterCoin
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.PulverfassTitleText
 import at.aau.pulverfass.app.ui.components.VideoPlayer
+import at.aau.pulverfass.app.ui.map.AttackVfxRequest
 import at.aau.pulverfass.app.ui.map.InteractiveGameMap
 import at.aau.pulverfass.app.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.app.ui.map.PulverfassMapDefaults
@@ -554,6 +555,7 @@ internal fun GameScreenContent(
             InteractiveGameMap(
                 regions = PulverfassMapDefaults.regions,
                 regionStates = uiState.regionStates,
+                attackVfx = uiState.attackState.latestResult?.toAttackVfxRequest(),
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
                 /*
@@ -2688,6 +2690,29 @@ private fun TroopAmountSliderRow(
                     .testTag("${tagPrefix}_slider"),
         )
     }
+}
+
+/**
+ * Übersetzt das Kampfergebnis in einen Clash-Animationsauftrag für die Karte.
+ *
+ * Liefert `null`, wenn sich ein Territory nicht auf eine Kartenregion abbilden
+ * lässt; in dem Fall entfällt nur die Animation, das Ergebnispanel und der
+ * Spielzustand bleiben unberührt.
+ */
+private fun AttackResultUiState.toAttackVfxRequest(): AttackVfxRequest? {
+    val fromRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(fromTerritoryId) ?: return null
+    val toRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(toTerritoryId) ?: return null
+    return AttackVfxRequest(
+        attackId = attackId,
+        fromRegionId = fromRegionId,
+        toRegionId = toRegionId,
+        attackerLosses = attackerLosses,
+        defenderLosses = defenderLosses,
+        sourceTroopsBefore = sourceTroopsBefore,
+        targetTroopsBefore = targetTroopsBefore,
+    )
 }
 
 /** Zeigt das letzte vom Server aufgelöste Kampfergebnis ohne lokale Berechnung. */

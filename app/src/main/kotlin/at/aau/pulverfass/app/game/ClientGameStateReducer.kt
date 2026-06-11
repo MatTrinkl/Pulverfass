@@ -788,6 +788,16 @@ object ClientGameStateReducer {
                                     attackerRemaining = event.attackerRemaining,
                                     defenderRemaining = event.defenderRemaining,
                                     occupyingTroopCount = event.occupyingTroopCount,
+                                    attackId =
+                                        event.stateVersion
+                                            ?: (
+                                                (
+                                                    current.attackState.latestResult
+                                                        ?.attackId ?: 0L
+                                                ) + 1L
+                                            ),
+                                    sourceTroopsBefore = event.sourceTroopsBefore,
+                                    targetTroopsBefore = event.targetTroopsBefore,
                                 ),
                         ),
                 )
