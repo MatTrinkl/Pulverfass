@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,8 +52,23 @@ private const val MAP_IMAGE_WIDTH_PX = 3840
 private const val MAP_IMAGE_HEIGHT_PX = 2160
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
-private const val TERRITORY_OVERLAY_ALPHA = 0.78f
-private val MapOverlaySurfaceColor = Color.White
+
+/*
+ * Statt jedes Territory ganzflächig einzufärben, zeichnen wir nur einen Rand in
+ * Besitzerfarbe. So bleibt die Kartenkunst im Inneren sichtbar, während Besitz
+ * über Outline und Truppen-Chip eindeutig lesbar bleibt. Die Randform steckt
+ * fertig in den Masken (`territory_*.png` sind reine Rand-Ringe); hier wird nur
+ * die Deckkraft je nach Besitz skaliert.
+ */
+private const val OWNED_BORDER_ALPHA = 0xFF
+private const val NEUTRAL_BORDER_ALPHA = 0x70
+
+/*
+ * Durchmesser des Truppen-Chips. Bewusst kompakt, damit kleine Gebiete beim
+ * Herauszoomen nicht vom Chip verdeckt werden.
+ */
+private val RegionCounterSize = 26.dp
+private val NeutralRegionColor = Color(0xFF8F8F8F)
 private val MapOverlayBorderColor = Color.Black
 private val MapOverlayContentColor = Color.Black
 private val MapOverlayInverseColor = Color.White
@@ -74,9 +90,10 @@ data class MapPoint(
 /**
  * Beschreibt eine Territory-Region der Spielkarte.
  *
- * [maskResId] verweist auf die transparente Territory-Maske. [idMapColorRgb]
- * ist die exakte RGB-Farbe aus `map_region_id.png`, die für Hitdetection
- * verwendet wird. Andere Farben werden bewusst ignoriert.
+ * [maskResId] verweist auf die transparente Rand-Maske des Gebiets (ein reiner
+ * Outline-Ring). [idMapColorRgb] ist die exakte RGB-Farbe aus
+ * `map_region_id.png`, die für Hitdetection verwendet wird. Andere Farben werden
+ * bewusst ignoriert.
  *
  * @param id Android-interne Region-ID der Bitmap-Assets
  * @param name lesbarer Gebietsname für UI und Debugging
@@ -152,10 +169,10 @@ data class InteractiveGameMapOptions(
 /**
  * Vorberechnete Bitmap-Daten für eine Compose-Renderphase.
  *
- * [overlay] enthält alle Territory-Masken bereits eingefärbt und zusammengelegt.
- * [anchors] sind automatisch berechnete Schwerpunkte der Masken und dienen als
- * Position für Truppenzähler. Das verhindert, dass Labels von Hand gepflegt
- * werden müssen, solange die Masken sauber sind.
+ * [overlay] enthält alle Territory-Ränder bereits eingefärbt und zusammengelegt.
+ * Die Masken sind reine Rand-Ringe (siehe `territory_*.png`); ihr Alpha gibt die
+ * Randform vor, das RGB kommt aus dem GameState. [anchors] sind die automatisch
+ * berechneten Schwerpunkte der Masken und dienen als Position für die Zähler.
  */
 private data class TerritoryRenderAssets(
     val overlay: ImageBitmap,
@@ -362,12 +379,12 @@ fun InteractiveGameMap(
      */
     val regionTintColors =
         regions.associate { region ->
-            region.id to (regionStates[region.id]?.accentColor ?: Color(0xFF8F8F8F))
+            region.id to (regionStates[region.id]?.accentColor ?: NeutralRegionColor)
         }
 
     /*
-     * Masken werden nur neu zusammengesetzt, wenn sich Regionliste oder Farben
-     * ändern. Zoom/Pan löst dadurch kein teures Bitmap-Rebuild aus.
+     * Die Rand-Masken werden nur neu zusammengesetzt, wenn sich Regionliste oder
+     * Farben ändern. Zoom/Pan löst dadurch kein teures Bitmap-Rebuild aus.
      */
     val territoryRenderAssets =
         remember(resources, regions, regionTintColors) {
@@ -478,9 +495,10 @@ fun InteractiveGameMap(
                             Modifier
                                 .align(Alignment.TopStart)
                                 .offset {
+                                    val half = RegionCounterSize.toPx() / 2f
                                     IntOffset(
-                                        x = (labelPosition.x - 18.dp.toPx()).roundToInt(),
-                                        y = (labelPosition.y - 18.dp.toPx()).roundToInt(),
+                                        x = (labelPosition.x - half).roundToInt(),
+                                        y = (labelPosition.y - half).roundToInt(),
                                     )
                                 }
                                 .testTag("region_button_${region.id}"),
@@ -842,23 +860,30 @@ private fun RegionTroopCounter(
     isSelected: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = if (isSelected) MapOverlayContentColor else MapOverlaySurfaceColor
-    val contentColor = if (isSelected) MapOverlayInverseColor else MapOverlayContentColor
+    /*
+     * Der Chip trägt die Besitzerfarbe. So bleibt der Besitz auch bei sehr
+     * kleinen Gebieten eindeutig, in denen der Rand allein schwer zu treffen ist.
+     * Die ausgewählte Region behält den kräftigen Kontrast-Look.
+     */
+    val ownerColor = state?.accentColor ?: NeutralRegionColor
+    val containerColor = if (isSelected) MapOverlayContentColor else ownerColor
+    val contentColor =
+        if (isSelected) MapOverlayInverseColor else readableContentColor(ownerColor)
 
     Surface(
         modifier =
             modifier
-                .size(36.dp),
+                .size(RegionCounterSize),
         shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,
-        border = BorderStroke(1.5.dp, MapOverlayBorderColor),
+        border = BorderStroke(1.dp, MapOverlayBorderColor),
         shadowElevation = 0.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = state?.troopCount?.toString() ?: "0",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }
@@ -941,9 +966,10 @@ private fun buildTerritoryRenderAssets(
     val anchors = mutableMapOf<String, MapPoint>()
 
     /*
-     * Jede Territory-Maske ist ein transparentes Bild, dessen sichtbare Pixel
-     * genau das Gebiet beschreiben. Beim Rebuild färben wir diese Pixel mit der
-     * aktuellen Owner-Farbe ein und schreiben sie in ein gemeinsames Overlay.
+     * Jede Territory-Maske ist ein vorgebackener Rand-Ring: Ihre sichtbaren Pixel
+     * beschreiben nur noch die Außenlinie des Gebiets. Beim Rebuild färben wir
+     * diese Pixel mit der aktuellen Besitzerfarbe ein und schreiben sie in ein
+     * gemeinsames Overlay. Das Innere bleibt frei und gibt die Kartenkunst frei.
      */
     regions.forEach { region ->
         val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
@@ -962,18 +988,25 @@ private fun buildTerritoryRenderAssets(
             val maskPixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-            val tintColor = regionTintColors[region.id] ?: Color(0xFF8F8F8F)
+            val tintColor = regionTintColors[region.id] ?: NeutralRegionColor
             val tintRgb = tintColor.toArgb() and RGB_MASK
+            /*
+             * Neutrale Gebiete nehmen sich mit einem gedämpften Rand zurück,
+             * besessene Gebiete bekommen einen kräftigen Rand. Das Alpha der
+             * Maske bleibt als Faktor erhalten, damit weiche Randkanten sauber
+             * skalieren.
+             */
+            val alphaScale =
+                if (tintColor == NeutralRegionColor) {
+                    NEUTRAL_BORDER_ALPHA / 255f
+                } else {
+                    OWNED_BORDER_ALPHA / 255f
+                }
             var visibleCount = 0L
             var sumX = 0.0
             var sumY = 0.0
             var index = 0
 
-            /*
-             * Alpha kommt aus der Maske, RGB aus dem GameState. So bleiben
-             * Küsten/Antialiasing der Maske erhalten, während Besitzwechsel nur
-             * die Farbe austauschen.
-             */
             for (y in 0 until bitmap.height) {
                 for (x in 0 until bitmap.width) {
                     val alpha = (maskPixels[index] ushr 24) and 0xFF
@@ -982,7 +1015,7 @@ private fun buildTerritoryRenderAssets(
                         sumX += x.toDouble()
                         sumY += y.toDouble()
                         overlayPixels[index] =
-                            ((alpha * TERRITORY_OVERLAY_ALPHA).roundToInt() shl 24) or tintRgb
+                            ((alpha * alphaScale).roundToInt() shl 24) or tintRgb
                     }
                     index++
                 }
@@ -1009,6 +1042,13 @@ private fun buildTerritoryRenderAssets(
         anchors = anchors,
     )
 }
+
+/**
+ * Wählt für einen Truppen-Chip eine gut lesbare Textfarbe je nach Helligkeit der
+ * Besitzerfarbe.
+ */
+private fun readableContentColor(background: Color): Color =
+    if (background.luminance() > 0.5f) MapOverlayContentColor else MapOverlayInverseColor
 
 private fun Offset.isFinite(): Boolean = x.isFinite() && y.isFinite()
 
