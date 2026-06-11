@@ -1561,6 +1561,7 @@ class LobbyControllerTest {
             val targetId = TerritoryId("argentinien")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val firstAttackReceived = CompletableDeferred<Unit>()
+            val releaseFirstResponse = CompletableDeferred<Unit>()
             var attackCount = 0
 
             fun publicSnapshot(
@@ -1632,6 +1633,7 @@ class LobbyControllerTest {
                             attackCount += 1
                             if (attackCount == 1) {
                                 firstAttackReceived.complete(Unit)
+                                releaseFirstResponse.await()
                                 outgoing.sendPayload(
                                     AttackResponse(lobbyCode, requestId = payload.requestId),
                                 )
@@ -1663,6 +1665,8 @@ class LobbyControllerTest {
 
                 server.broadcast(publicSnapshot(2, 4, 2))
                 val catchUpCompletedAt = System.currentTimeMillis()
+                delay(100)
+                releaseFirstResponse.complete(Unit)
                 delay(900)
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
