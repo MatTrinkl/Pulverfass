@@ -1,0 +1,74 @@
+package at.aau.pulverfass.client.network
+
+import at.aau.pulverfass.client.network.receive.PacketReceiver
+import at.aau.pulverfass.client.network.send.PacketSender
+import at.aau.pulverfass.client.network.transport.WebSocketTransport
+import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
+import at.aau.pulverfass.shared.network.codec.MessageCodec
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+/**
+ * Android-seitige Komposition der technischen Netzwerkschichten.
+ *
+ * Die Klasse bündelt WebSocket-Transport, Header-Dekodierung eingehender
+ * Pakete und den technischen Sendepfad für ausgehende Pakete. Fachliche
+ * Session-Entscheidungen bleiben absichtlich im LobbyController, weil dort
+ * bekannt ist, ob ein empfangener Token neu gespeichert oder während eines
+ * Reconnects ignoriert werden muss.
+ */
+class ClientNetwork(
+    scope: CoroutineScope,
+    val transport: WebSocketTransport = WebSocketTransport(scope),
+    val packetReceiver: PacketReceiver = PacketReceiver(),
+) {
+    private val sender: PacketSender = PacketSender(transport)
+
+    init {
+        scope.launch {
+            transport.events.collect { event ->
+                packetReceiver.onTransportEvent(event)
+            }
+        }
+    }
+
+    /**
+     * Baut eine technische WebSocket-Verbindung zum Server auf.
+     *
+     * Ein erneuter Aufruf delegiert an den Transport, der eine bestehende
+     * Verbindung vor einem Reconnect selbst sauber trennt.
+     */
+    suspend fun connect(serverUrl: String) {
+        transport.connect(serverUrl)
+    }
+
+    /**
+     * Trennt die aktuelle Verbindung.
+     *
+     * Der optionale [reason] wird nur an den Transport weitergereicht und
+     * beeinflusst keine fachliche Client-State-Maschine.
+     */
+    suspend fun disconnect(reason: String? = null) {
+        transport.disconnect(reason)
+    }
+
+    /**
+     * Serialisiert eine fachliche Payload in das binäre Protokollformat und
+     * sendet sie über die einzige vom Android-Client unterstützte Verbindung.
+     *
+     * @throws IllegalStateException wenn der zugrunde liegende Transport keine
+     * aktive Verbindung hält
+     */
+    suspend fun sendPayload(payload: NetworkMessagePayload) {
+        val bytes = MessageCodec.encode(payload)
+        sender.send(CLIENT_CONNECTION_ID, bytes)
+    }
+
+    /**
+     * Gibt Transportressourcen frei und beendet die Lebensdauer dieses
+     * Netzwerkstacks.
+     */
+    fun close() {
+        transport.close()
+    }
+}
