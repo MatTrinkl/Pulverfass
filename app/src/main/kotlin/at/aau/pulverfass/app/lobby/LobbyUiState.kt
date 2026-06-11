@@ -34,6 +34,7 @@ data class LobbyUiState(
     val globalPlayerCount: Int? = null,
     val playerColor: Color? = null,
     val characterId: String? = null,
+    val autoAttackEnabled: Boolean = false,
     val characterSelectError: String? = null,
     val autoPhaseNoticeText: String? = null,
     val autoPhaseNoticeQueue: List<String> = emptyList(),

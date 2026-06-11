@@ -147,14 +147,18 @@ class LobbyController(
         MutableStateFlow(
             run {
                 val savedCharacterId = playerNameStore.readCharacterId()
+                val savedAutoAttackEnabled = playerNameStore.readAutoAttackEnabled()
                 LobbyUiState(
                     serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
                     playerName = playerNameStore.readPlayerName().orEmpty(),
                     statusText = config.statusNotConnected,
                     sessionToken = reconnectSessionStore.readSessionToken(),
                     gameStarted = wasGameStartedOnLastAppRun,
-                    gameState = GameUiState(isStarted = wasGameStartedOnLastAppRun),
+                    gameState =
+                        GameUiState(isStarted = wasGameStartedOnLastAppRun)
+                            .withAutoAttackPreference(savedAutoAttackEnabled),
                     characterId = savedCharacterId,
+                    autoAttackEnabled = savedAutoAttackEnabled,
                 )
             },
         )
@@ -486,7 +490,7 @@ class LobbyController(
                 ownPlayerId = null,
                 gameStarted = false,
                 sessionToken = null,
-                gameState = GameUiState(),
+                gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
                 autoPhaseNoticeQueue = emptyList(),
@@ -1064,48 +1068,30 @@ class LobbyController(
      * serverautoritativen AttackRequests.
      */
     fun setAutoAttackEnabled(enabled: Boolean) {
-        if (enabled) {
-            armAutoAttack()
-        } else {
+        playerNameStore.saveAutoAttackEnabled(enabled)
+        if (!enabled) {
             stopAutoAttack(
                 statusText = config.autoAttackStoppedByUser,
                 keepEnabled = false,
             )
-        }
-    }
-
-    private fun armAutoAttack() {
-        val snapshot = state.value
-        val playerId = snapshot.ownPlayerId
-        if (playerId == null) {
-            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
-            return
-        }
-        val fromRegionId = snapshot.gameState.selectionFromRegionId
-        val toRegionId = snapshot.gameState.selectionToRegionId
-        if (fromRegionId == null || toRegionId == null) {
-            _state.update { it.copy(errorText = config.errorAttackSelectionMissing) }
-            return
-        }
-        if (!snapshot.gameState.canStartAutoAttack(playerId, snapshot.isConnected)) {
-            _state.update { it.copy(errorText = config.errorAttackNotAllowed) }
             return
         }
 
         _state.update {
+            val autoAttack = it.gameState.attackState.autoAttack
+            val canStart =
+                !autoAttack.isRunning &&
+                    it.gameState.canStartAutoAttack(it.ownPlayerId, it.isConnected)
+            val statusText =
+                when {
+                    autoAttack.isRunning -> autoAttack.statusText
+                    canStart -> config.autoAttackArmed
+                    else -> null
+                }
             it.copy(
-                errorText = null,
-                gameState =
-                    it.gameState.copy(
-                        attackState =
-                            it.gameState.attackState.copy(
-                                autoAttack =
-                                    AutoAttackUiState(
-                                        isEnabled = true,
-                                        statusText = config.autoAttackArmed,
-                                    ),
-                            ),
-                    ),
+                autoAttackEnabled = true,
+                errorText = if (canStart) null else it.errorText,
+                gameState = it.gameState.withAutoAttackPreference(true, statusText = statusText),
             )
         }
     }
@@ -1364,13 +1350,17 @@ class LobbyController(
         errorText: String? = null,
         keepEnabled: Boolean = true,
     ) {
+        if (!keepEnabled) {
+            playerNameStore.saveAutoAttackEnabled(false)
+        }
         _state.update {
             val autoAttack = it.gameState.attackState.autoAttack
-            val nextIsEnabled = keepEnabled && autoAttack.isEnabled
+            val nextIsEnabled = keepEnabled && it.autoAttackEnabled
             if (
                 !autoAttack.isEnabled &&
                 !autoAttack.isAwaitingResult &&
                 autoAttack.intent == null &&
+                it.autoAttackEnabled == nextIsEnabled &&
                 errorText == null
             ) {
                 it
@@ -1378,11 +1368,13 @@ class LobbyController(
                 !autoAttack.isEnabled &&
                 !autoAttack.isAwaitingResult &&
                 autoAttack.statusText == statusText &&
-                autoAttack.errorText == errorText
+                autoAttack.errorText == errorText &&
+                it.autoAttackEnabled == nextIsEnabled
             ) {
                 it
             } else {
                 it.copy(
+                    autoAttackEnabled = nextIsEnabled,
                     gameState =
                         it.gameState.copy(
                             attackState =
@@ -1493,7 +1485,11 @@ class LobbyController(
         clearDelayedAutoPhaseAdvance()
         deferredOwnAttackPhaseState = null
         manuallyConsumedAttackBoundaryStateVersion = deferredPhaseState.stateVersion
-        _state.update { current -> current.copy(gameState = deferredPhaseState) }
+        _state.update { current ->
+            current.copy(
+                gameState = deferredPhaseState.withAutoAttackPreference(current.autoAttackEnabled),
+            )
+        }
         maybeAdvanceCurrentPhaseAutomatically()
         return true
     }
@@ -1904,7 +1900,7 @@ class LobbyController(
                     players = emptyList(),
                     playerNames = emptyList(),
                     gameStarted = false,
-                    gameState = GameUiState(),
+                    gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 )
             }
             playersById.clear()
@@ -2416,11 +2412,13 @@ class LobbyController(
                 delta = payload,
                 players = snapshot.players,
             )
+        val authoritativeGameState =
+            result.state.withAutoAttackPreference(snapshot.autoAttackEnabled)
         val isOwnAttackAutoBoundary =
             isOwnAttackAutoBoundaryDelta(
                 snapshot = snapshot,
                 payload = payload,
-                nextState = result.state,
+                nextState = authoritativeGameState,
             )
         /*
          * Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
@@ -2440,10 +2438,10 @@ class LobbyController(
                 !shouldDelayOwnAttackPhaseState
         val visibleGameState =
             if (shouldDelayOwnAttackPhaseState) {
-                deferredOwnAttackPhaseState = result.state
-                result.state.copy(turnPhase = TurnPhase.ATTACK)
+                deferredOwnAttackPhaseState = authoritativeGameState
+                authoritativeGameState.copy(turnPhase = TurnPhase.ATTACK)
             } else {
-                result.state
+                authoritativeGameState
             }
 
         if (shouldShowOwnAttackAutoNotice) {
@@ -2469,7 +2467,7 @@ class LobbyController(
                 syncMessage = result.state.lastSyncError,
             )
         } else {
-            continueAutoAttackIfReady(authoritativeGameState = result.state)
+            continueAutoAttackIfReady(authoritativeGameState = authoritativeGameState)
         }
     }
 
@@ -2602,7 +2600,7 @@ class LobbyController(
                         ClientGameStateReducer.applyPhaseBoundary(
                             current = current.gameState,
                             event = payload,
-                        ),
+                        ).withAutoAttackPreference(current.autoAttackEnabled),
                 )
             if (showServerAttackAutoNotice) {
                 updated.withQueuedAutoPhaseNotice(AUTO_PHASE_ATTACK_DONE_NOTICE)
@@ -2622,12 +2620,34 @@ class LobbyController(
         reducer: (current: GameUiState, players: List<LobbyPlayerUi>) -> GameUiState,
     ) {
         _state.update { current ->
-            current.copy(gameState = reducer(current.gameState, current.players))
+            current.copy(
+                gameState =
+                    reducer(current.gameState, current.players)
+                        .withAutoAttackPreference(current.autoAttackEnabled),
+            )
         }
         if (runAutoAdvance) {
             maybeAdvanceCurrentPhaseAutomatically()
         }
         continueAutoAttackIfReady()
+    }
+
+    private fun GameUiState.withAutoAttackPreference(
+        enabled: Boolean,
+        statusText: String? = attackState.autoAttack.statusText,
+        errorText: String? = attackState.autoAttack.errorText,
+    ): GameUiState {
+        val nextAutoAttack =
+            if (enabled) {
+                attackState.autoAttack.copy(
+                    isEnabled = true,
+                    statusText = statusText,
+                    errorText = errorText,
+                )
+            } else {
+                AutoAttackUiState()
+            }
+        return copy(attackState = attackState.copy(autoAttack = nextAutoAttack))
     }
 
     private fun updateGameError(reason: String) {
@@ -2794,7 +2814,7 @@ class LobbyController(
                 playerNames = emptyList(),
                 ownPlayerId = null,
                 gameStarted = false,
-                gameState = GameUiState(),
+                gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
                 autoPhaseNoticeQueue = emptyList(),
