@@ -125,11 +125,19 @@ import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-private val HudSurfaceColor = Color.White
-private val HudSurfaceMutedColor = Color(0xFFF1F1F1)
-private val HudBorderColor = Color.Black
-private val HudContentColor = Color.Black
-private val HudInverseColor = Color.White
+/*
+ * Gemeinsame HUD-Palette für alle Ingame-Flächen (Topbar, Sidebars, Bottombar,
+ * Phasen-Panels). Alle Flächen teilen sich denselben dunklen Look mit Goldrahmen,
+ * damit das HUD über der Karte als eine zusammenhängende Ebene wirkt.
+ */
+private val HudSurfaceColor = PulverfassColors.SurfaceDark.copy(alpha = 0.92f)
+private val HudSurfaceMutedColor = PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)
+private val HudBorderColor = PulverfassColors.GoldDark
+private val HudContentColor = PulverfassColors.TextOnDark
+private val HudInverseColor = PulverfassColors.SurfaceDark
+private val HudAccentColor = PulverfassColors.GoldBright
+private val HudActiveHighlightColor = PulverfassColors.GoldDark.copy(alpha = 0.35f)
+private val HudSelectedCardColor = PulverfassColors.Gold.copy(alpha = 0.30f)
 private val TopBarHeight = 52.dp
 private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
@@ -1727,10 +1735,11 @@ private fun GameStatusBanner(
     Surface(
         modifier = modifier.testTag("game_sync_banner"),
         shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceMutedColor,
+        color = HudSurfaceColor,
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Row(
             modifier =
@@ -1752,6 +1761,11 @@ private fun GameStatusBanner(
                 shape = RoundedCornerShape(6.dp),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 modifier = Modifier.testTag("game_sync_reload_button"),
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = HudAccentColor,
+                        contentColor = HudInverseColor,
+                    ),
             ) {
                 Text(
                     text =
@@ -1799,11 +1813,11 @@ private fun GameTopBar(
     Surface(
         modifier = modifier.testTag("game_top_bar"),
         shape = RoundedCornerShape(0.dp),
-        color = PulverfassColors.SurfaceDark.copy(alpha = 0.92f),
-        contentColor = PulverfassColors.TextOnDark,
+        color = HudSurfaceColor,
+        contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, PulverfassColors.GoldDark),
+        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Row(
             modifier =
@@ -1833,14 +1847,14 @@ private fun GameTopBar(
                     contentPadding = PaddingValues(0.dp),
                     colors =
                         ButtonDefaults.filledTonalButtonColors(
-                            containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.65f),
-                            contentColor = PulverfassColors.TextOnDark,
+                            containerColor = HudSurfaceMutedColor,
+                            contentColor = HudContentColor,
                         ),
                 ) {
                     Text(
                         text = "⚙",
                         style = MaterialTheme.typography.titleMedium,
-                        color = PulverfassColors.TextOnDark,
+                        color = HudContentColor,
                     )
                 }
                 PlayerAvatar(player = personalPlayer, size = 28.dp)
@@ -1848,12 +1862,12 @@ private fun GameTopBar(
                     Text(
                         text = stringResource(id = R.string.game_personal_player_label),
                         style = MaterialTheme.typography.labelSmall,
-                        color = PulverfassColors.TextOnDark,
+                        color = HudContentColor,
                     )
                     Text(
                         text = personalPlayer.name,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = PulverfassColors.GoldBright,
+                        color = HudAccentColor,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -1870,13 +1884,13 @@ private fun GameTopBar(
                 Text(
                     text = stringResource(id = R.string.game_phase_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = PulverfassColors.TextOnDark,
+                    color = HudContentColor,
                 )
                 Text(
                     text = stringResource(id = phase.labelRes()),
                     modifier = Modifier.testTag("game_phase_value"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = PulverfassColors.GoldBright,
+                    color = HudAccentColor,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -1892,13 +1906,13 @@ private fun GameTopBar(
                 Text(
                     text = stringResource(id = R.string.game_round_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = PulverfassColors.TextOnDark,
+                    color = HudContentColor,
                 )
                 Text(
                     text = stringResource(id = R.string.game_round_value, round),
                     modifier = Modifier.testTag("game_round_value"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = PulverfassColors.GoldBright,
+                    color = HudAccentColor,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -1921,6 +1935,7 @@ private fun CardsSidebar(
             contentColor = HudContentColor,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, HudBorderColor),
         ) {
             PrivateHandPanel(
                 state = state,
@@ -1962,6 +1977,7 @@ private fun PlayerSidebar(
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -2009,8 +2025,8 @@ private fun PlayerSidebarRow(
                     .bringIntoViewRequester(bringIntoViewRequester)
                     .fillMaxWidth()
                     .background(
-                        if (isActive) HudSurfaceMutedColor else Color.Transparent,
-                        RoundedCornerShape(14.dp),
+                        if (isActive) HudActiveHighlightColor else Color.Transparent,
+                        RoundedCornerShape(6.dp),
                     )
                     .wrapContentHeight()
                     .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -2037,7 +2053,7 @@ private fun PlayerSidebarRow(
                     Text(
                         text = player.name,
                         style = MaterialTheme.typography.labelLarge,
-                        color = HudContentColor,
+                        color = if (isActive) HudAccentColor else HudContentColor,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     )
                 }
@@ -2086,7 +2102,7 @@ internal fun connectionStatusIndicatorColor(status: ConnectionStatus): Color =
 private fun HostIndicator() {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = HudContentColor,
+        color = HudAccentColor,
         contentColor = HudInverseColor,
     ) {
         Text(
@@ -2122,7 +2138,7 @@ private fun ActiveTurnIndicator(isVisible: Boolean) {
 
         drawPath(
             path = trianglePath,
-            color = HudBorderColor,
+            color = HudAccentColor,
         )
     }
 }
@@ -2257,6 +2273,11 @@ internal fun PrivateHandPanel(
                     modifier = Modifier.fillMaxWidth().testTag("trade_in_cards_button"),
                     shape = RoundedCornerShape(6.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = HudAccentColor,
+                            contentColor = HudInverseColor,
+                        ),
                 ) {
                     Text(
                         text = stringResource(id = R.string.game_cards_trade_in),
@@ -2289,7 +2310,7 @@ private fun HandCardRow(
                     item.cardId?.let(onSelected)
                 },
         shape = RoundedCornerShape(6.dp),
-        color = if (item.isSelected) Color(0xFFD7EEE9) else HudSurfaceMutedColor,
+        color = if (item.isSelected) HudSelectedCardColor else HudSurfaceMutedColor,
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -2765,6 +2786,7 @@ private fun BottomActionClusters(
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Row(
             modifier =
@@ -2793,22 +2815,19 @@ private fun BottomActionClusters(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PhaseButton(
+                PhaseChip(
                     label = stringResource(id = R.string.game_action_reinforce),
                     selected = state.currentPhase == TurnPhase.REINFORCEMENTS,
-                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
-                PhaseButton(
+                PhaseChip(
                     label = stringResource(id = R.string.game_action_attack),
                     selected = state.currentPhase == TurnPhase.ATTACK,
-                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
-                PhaseButton(
+                PhaseChip(
                     label = stringResource(id = R.string.game_action_move),
                     selected = state.currentPhase == TurnPhase.FORTIFY,
-                    enabled = false,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -2831,20 +2850,36 @@ private fun BottomActionClusters(
     }
 }
 
+/**
+ * Reiner Phasenindikator ohne Klickverhalten.
+ *
+ * Die aktuelle Phase wird wie die Topbar-Werte in Gold hervorgehoben; die
+ * übrigen Phasen bleiben als gedämpfte Chips sichtbar.
+ */
 @Composable
-private fun PhaseButton(
+private fun PhaseChip(
     label: String,
     selected: Boolean,
-    enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    BlockActionButton(
-        label = label,
-        onClick = {},
-        selected = selected,
-        enabled = enabled,
-        modifier = modifier,
-    )
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) HudActiveHighlightColor else HudSurfaceMutedColor,
+        contentColor = if (selected) HudAccentColor else HudContentColor,
+        border = if (selected) BorderStroke(1.dp, HudBorderColor) else null,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+    }
 }
 
 @Composable
@@ -2877,7 +2912,7 @@ private fun BlockActionButton(
             contentPadding = contentPadding,
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = HudContentColor,
+                    containerColor = HudAccentColor,
                     contentColor = HudInverseColor,
                 ),
         ) {
