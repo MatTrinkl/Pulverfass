@@ -519,6 +519,10 @@ internal fun GameScreenContent(
     val (showCountdown, countdownValue) = countdownState ?: rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
+    val canUseStableBottomInput =
+        isConnected &&
+            !uiState.isCatchingUp &&
+            !uiState.isDesynced
 
     val desyncedText = stringResource(id = R.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
@@ -703,12 +707,12 @@ internal fun GameScreenContent(
                 state =
                     BottomBarState(
                         currentPhase = uiState.turnPhase,
-                        canUseLocalInput =
-                            isConnected &&
-                                !uiState.isCatchingUp &&
-                                !uiState.isDesynced &&
-                                !isActionResolutionPending,
-                        canEndPhase = canEndCurrentPhase,
+                        canToggleCards = canUseStableBottomInput,
+                        canEndPhase =
+                            canEndCurrentPhase &&
+                                canUseStableBottomInput &&
+                                !isActionResolutionPending &&
+                                !uiState.attackState.autoAttack.isRunning,
                         cardsVisible = uiState.cardsVisible,
                     ),
                 onToggleCards = onToggleCards,
@@ -2821,7 +2825,7 @@ private fun AttackResultPanel(
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
-    val canUseLocalInput: Boolean,
+    val canToggleCards: Boolean,
     val canEndPhase: Boolean,
     val cardsVisible: Boolean,
 )
@@ -2860,7 +2864,7 @@ private fun BottomActionClusters(
                     },
                 onClick = onToggleCards,
                 selected = false,
-                enabled = state.canUseLocalInput,
+                enabled = state.canToggleCards,
                 modifier = Modifier.width(CardsSidebarWidth - 20.dp),
                 musicManager = musicManager,
             )

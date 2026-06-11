@@ -1324,7 +1324,7 @@ class LobbyControllerTest {
             val sourceId = TerritoryId("brasilien")
             val targetId = TerritoryId("argentinien")
             val seenPayloads = CopyOnWriteArrayList<Any>()
-            val firstResponseSent = CompletableDeferred<Unit>()
+            val firstAttackReceived = CompletableDeferred<Unit>()
             val releaseFirstDelta = CompletableDeferred<Unit>()
             var attackCount = 0
             val server =
@@ -1395,10 +1395,7 @@ class LobbyControllerTest {
                         is AttackRequest -> {
                             attackCount += 1
                             if (attackCount == 1) {
-                                outgoing.sendPayload(
-                                    AttackResponse(lobbyCode, requestId = payload.requestId),
-                                )
-                                firstResponseSent.complete(Unit)
+                                firstAttackReceived.complete(Unit)
                                 releaseFirstDelta.await()
                                 outgoing.sendPayload(
                                     GameStateDeltaEvent(
@@ -1440,6 +1437,10 @@ class LobbyControllerTest {
                                                 ),
                                             ),
                                     ),
+                                )
+                                delay(100)
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
                                 )
                             } else {
                                 outgoing.sendPayload(
@@ -1517,7 +1518,7 @@ class LobbyControllerTest {
                 assertFalse(controller.state.value.gameState.attackState.autoAttack.isRunning)
 
                 controller.attack()
-                firstResponseSent.await()
+                firstAttackReceived.await()
                 delay(100)
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 val firstResultReleasedAt = System.currentTimeMillis()

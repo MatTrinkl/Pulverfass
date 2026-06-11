@@ -1215,21 +1215,24 @@ class LobbyController(
             return
         }
 
+        if (delayBeforeRequest) {
+            scheduleAutoAttackContinuationAfterVisualDelay()
+            return
+        }
+
         if (
             autoAttack.isAwaitingResult ||
             LobbyCommandKey.ATTACK in snapshot.pendingCommandKeys
         ) {
             return
         }
+        if (!delayBeforeRequest && delayedAutoAttackContinuationJob?.isActive == true) {
+            return
+        }
 
         val plan = autoAttackRequestPlan(snapshot, authoritativeGameState)
         if (plan == null) {
             stopAutoAttack(statusText = config.autoAttackStoppedInvalidTarget)
-            return
-        }
-
-        if (delayBeforeRequest) {
-            scheduleAutoAttackContinuationAfterVisualDelay()
             return
         }
 
