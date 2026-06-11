@@ -1256,6 +1256,7 @@ class LobbyController(
                             ),
                     ),
                 keepPendingUntilResponse = true,
+                trackPending = false,
             ).onFailure { error ->
                 val message = error.message ?: config.errorAttackFailed
                 stopAutoAttack(
@@ -1679,19 +1680,22 @@ class LobbyController(
     private suspend fun sendCommand(
         command: LobbyCommand,
         keepPendingUntilResponse: Boolean = false,
+        trackPending: Boolean = true,
     ): Result<Unit> {
-        if (state.value.pendingCommandKeys.contains(command.key)) {
+        if (trackPending && state.value.pendingCommandKeys.contains(command.key)) {
             return Result.success(Unit)
         }
 
-        _state.update {
-            it.copy(pendingCommandKeys = it.pendingCommandKeys + command.key)
+        if (trackPending) {
+            _state.update {
+                it.copy(pendingCommandKeys = it.pendingCommandKeys + command.key)
+            }
         }
         val result =
             runCatching {
                 commandDispatcher.send(command)
             }
-        if (!keepPendingUntilResponse || result.isFailure) {
+        if (trackPending && (!keepPendingUntilResponse || result.isFailure)) {
             clearPendingCommand(command.key)
         }
         return result
@@ -2922,4 +2926,4 @@ private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
 private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L
-private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 500L
+private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 1_000L
