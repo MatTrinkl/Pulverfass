@@ -23,6 +23,11 @@ kotlin {
             baseName = "ClientApp"
             isStatic = true
         }
+        // Obj-C-Interop (AVFoundation, UIKit) ist in Kotlin/Native als
+        // experimentell markiert; der Opt-in gilt für alle iOS-Kompilierungen.
+        iosTarget.compilerOptions {
+            optIn.add("kotlinx.cinterop.ExperimentalForeignApi")
+        }
     }
 
     sourceSets {
