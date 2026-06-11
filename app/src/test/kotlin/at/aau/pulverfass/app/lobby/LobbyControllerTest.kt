@@ -168,6 +168,31 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `controller should restore and persist auto attack preference`() {
+        val playerNameStore = InMemoryPlayerNameStore(autoAttackEnabled = true)
+        val controller = createController(playerNameStore = playerNameStore)
+        try {
+            assertTrue(controller.state.value.autoAttackEnabled)
+            assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+
+            controller.setAutoAttackEnabled(false)
+
+            assertFalse(controller.state.value.autoAttackEnabled)
+            assertFalse(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertFalse(playerNameStore.readAutoAttackEnabled())
+
+            controller.setAutoAttackEnabled(true)
+
+            assertTrue(controller.state.value.autoAttackEnabled)
+            assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertTrue(playerNameStore.readAutoAttackEnabled())
+            assertNull(controller.state.value.errorText)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
     fun `connect should fail fast when player name is blank`() {
         val controller = createController()
         try {
@@ -4011,6 +4036,7 @@ class LobbyControllerTest {
      */
     private class InMemoryPlayerNameStore(
         private var playerName: String? = null,
+        private var autoAttackEnabled: Boolean = false,
     ) : PlayerNameStore {
         private var characterId: String? = null
 
@@ -4024,6 +4050,12 @@ class LobbyControllerTest {
 
         override fun saveCharacterId(characterId: String) {
             this.characterId = characterId
+        }
+
+        override fun readAutoAttackEnabled(): Boolean = autoAttackEnabled
+
+        override fun saveAutoAttackEnabled(enabled: Boolean) {
+            autoAttackEnabled = enabled
         }
     }
 }
