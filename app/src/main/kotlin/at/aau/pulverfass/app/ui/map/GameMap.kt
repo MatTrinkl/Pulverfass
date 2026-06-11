@@ -68,7 +68,7 @@ private const val NEUTRAL_BORDER_ALPHA = 0x70
  * Herauszoomen nicht vom Chip verdeckt werden.
  */
 private val RegionCounterSize = 26.dp
-private val NeutralRegionColor = Color(0xFF8F8F8F)
+private val NeutralRegionColor = Color(0xFFC2C2C2)
 private val MapOverlayBorderColor = Color.Black
 private val MapOverlayContentColor = Color.Black
 private val MapOverlayInverseColor = Color.White

@@ -8,7 +8,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
-private val NeutralTerritoryColor = Color(0xFF8F8F8F)
+private val NeutralTerritoryColor = Color(0xFFC2C2C2)
 private val DepartedTerritoryColor = Color(0xFF5E6268)
 
 /**
