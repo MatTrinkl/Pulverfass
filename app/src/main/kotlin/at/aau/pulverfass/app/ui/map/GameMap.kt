@@ -167,15 +167,28 @@ data class InteractiveGameMapOptions(
 )
 
 /**
- * Vorberechnete Bitmap-Daten für eine Compose-Renderphase.
+ * Einmalig dekodierte, farbunabhängige Randpixel einer Region.
  *
- * [overlay] enthält alle Territory-Ränder bereits eingefärbt und zusammengelegt.
- * Die Masken sind reine Rand-Ringe (siehe `territory_*.png`); ihr Alpha gibt die
- * Randform vor, das RGB kommt aus dem GameState. [anchors] sind die automatisch
- * berechneten Schwerpunkte der Masken und dienen als Position für die Zähler.
+ * [pixelIndices] sind die flachen Bildindizes (`y * width + x`) der sichtbaren
+ * Maskenpixel, [alphas] das zugehörige Alpha. So muss beim Einfärben nur über die
+ * wenigen Randpixel iteriert werden statt über das gesamte Bild.
  */
-private data class TerritoryRenderAssets(
-    val overlay: ImageBitmap,
+private class RegionMaskPixels(
+    val pixelIndices: IntArray,
+    val alphas: IntArray,
+)
+
+/**
+ * Dekodierte Rand-Masken aller Regionen. Hängt nur an der Maskenform und wird
+ * daher genau einmal pro Kartenladung berechnet.
+ *
+ * [pixelsByRegion] hält die sichtbaren Randpixel je Region, [anchors] die
+ * automatisch berechneten Schwerpunkte als Position für die Truppenzähler.
+ */
+private data class TerritoryMaskData(
+    val width: Int,
+    val height: Int,
+    val pixelsByRegion: Map<String, RegionMaskPixels>,
     val anchors: Map<String, MapPoint>,
 )
 
@@ -383,16 +396,23 @@ fun InteractiveGameMap(
         }
 
     /*
-     * Die Rand-Masken werden nur neu zusammengesetzt, wenn sich Regionliste oder
-     * Farben ändern. Zoom/Pan löst dadurch kein teures Bitmap-Rebuild aus.
+     * Die Rand-Masken werden genau einmal pro Kartenladung dekodiert. Das ist der
+     * teure Schritt (24 große PNGs) und hängt nur an der Maskenform, nicht an den
+     * Besitzerfarben.
      */
-    val territoryRenderAssets =
-        remember(resources, regions, regionTintColors) {
-            buildTerritoryRenderAssets(
-                resources = resources,
-                regions = regions,
-                regionTintColors = regionTintColors,
-            )
+    val territoryMaskData =
+        remember(resources, regions) {
+            decodeTerritoryMasks(resources = resources, regions = regions)
+        }
+
+    /*
+     * Nur das Einfärben des Overlays hängt an den Besitzerfarben. Da hier lediglich
+     * die wenigen Randpixel gesetzt werden, ist ein Besitzwechsel günstig und löst
+     * kein erneutes Dekodieren aus.
+     */
+    val territoryOverlay =
+        remember(territoryMaskData, regionTintColors) {
+            paintTerritoryOverlay(maskData = territoryMaskData, regionTintColors = regionTintColors)
         }
 
     val layoutMetrics =
@@ -463,7 +483,7 @@ fun InteractiveGameMap(
                         .testTag("game_map_canvas"),
             ) {
                 drawGameMap(
-                    territoryOverlay = territoryRenderAssets.overlay,
+                    territoryOverlay = territoryOverlay,
                     layoutMetrics = layoutMetrics,
                     viewportState = viewportState,
                     backgroundPainter = options.backgroundPainter,
@@ -471,7 +491,7 @@ fun InteractiveGameMap(
             }
 
             regions.forEach { region ->
-                val anchor = territoryRenderAssets.anchors[region.id] ?: region.fallbackAnchor
+                val anchor = territoryMaskData.anchors[region.id] ?: region.fallbackAnchor
                 val labelPosition =
                     mapPointToScreenOffset(
                         point = anchor,
@@ -955,21 +975,20 @@ private fun DrawScope.withMapTransform(
     }
 }
 
-private fun buildTerritoryRenderAssets(
+private fun decodeTerritoryMasks(
     resources: Resources,
     regions: List<GameMapRegion>,
-    regionTintColors: Map<String, Color>,
-): TerritoryRenderAssets {
+): TerritoryMaskData {
     var targetWidth = MAP_IMAGE_WIDTH_PX
     var targetHeight = MAP_IMAGE_HEIGHT_PX
-    var overlayPixels = IntArray(targetWidth * targetHeight)
+    val pixelsByRegion = mutableMapOf<String, RegionMaskPixels>()
     val anchors = mutableMapOf<String, MapPoint>()
 
     /*
      * Jede Territory-Maske ist ein vorgebackener Rand-Ring: Ihre sichtbaren Pixel
-     * beschreiben nur noch die Außenlinie des Gebiets. Beim Rebuild färben wir
-     * diese Pixel mit der aktuellen Besitzerfarbe ein und schreiben sie in ein
-     * gemeinsames Overlay. Das Innere bleibt frei und gibt die Kartenkunst frei.
+     * beschreiben nur die Außenlinie des Gebiets. Dieses Dekodieren ist der teure
+     * Teil und hängt nicht an den Besitzerfarben, läuft daher nur einmal. Wir
+     * merken uns je Region die sichtbaren Pixel und schmeißen die Bitmap weg.
      */
     regions.forEach { region ->
         val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
@@ -982,26 +1001,13 @@ private fun buildTerritoryRenderAssets(
                  */
                 targetWidth = bitmap.width
                 targetHeight = bitmap.height
-                overlayPixels = IntArray(targetWidth * targetHeight)
             }
 
             val maskPixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-            val tintColor = regionTintColors[region.id] ?: NeutralRegionColor
-            val tintRgb = tintColor.toArgb() and RGB_MASK
-            /*
-             * Neutrale Gebiete nehmen sich mit einem gedämpften Rand zurück,
-             * besessene Gebiete bekommen einen kräftigen Rand. Das Alpha der
-             * Maske bleibt als Faktor erhalten, damit weiche Randkanten sauber
-             * skalieren.
-             */
-            val alphaScale =
-                if (tintColor == NeutralRegionColor) {
-                    NEUTRAL_BORDER_ALPHA / 255f
-                } else {
-                    OWNED_BORDER_ALPHA / 255f
-                }
+            val pixelIndices = ArrayList<Int>()
+            val alphas = ArrayList<Int>()
             var visibleCount = 0L
             var sumX = 0.0
             var sumY = 0.0
@@ -1011,16 +1017,18 @@ private fun buildTerritoryRenderAssets(
                 for (x in 0 until bitmap.width) {
                     val alpha = (maskPixels[index] ushr 24) and 0xFF
                     if (alpha > 1) {
+                        pixelIndices.add(index)
+                        alphas.add(alpha)
                         visibleCount++
                         sumX += x.toDouble()
                         sumY += y.toDouble()
-                        overlayPixels[index] =
-                            ((alpha * alphaScale).roundToInt() shl 24) or tintRgb
                     }
                     index++
                 }
             }
 
+            pixelsByRegion[region.id] =
+                RegionMaskPixels(pixelIndices.toIntArray(), alphas.toIntArray())
             anchors[region.id] =
                 if (visibleCount > 0L) {
                     MapPoint(
@@ -1035,12 +1043,53 @@ private fun buildTerritoryRenderAssets(
         }
     }
 
-    val overlayBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-    overlayBitmap.setPixels(overlayPixels, 0, targetWidth, 0, 0, targetWidth, targetHeight)
-    return TerritoryRenderAssets(
-        overlay = overlayBitmap.asImageBitmap(),
+    return TerritoryMaskData(
+        width = targetWidth,
+        height = targetHeight,
+        pixelsByRegion = pixelsByRegion,
         anchors = anchors,
     )
+}
+
+/**
+ * Färbt die zwischengespeicherten Randpixel mit den aktuellen Besitzerfarben ein.
+ *
+ * Neutrale Gebiete nehmen sich mit einem gedämpften Rand zurück, besessene Gebiete
+ * bekommen einen kräftigen Rand. Es werden nur die wenigen Randpixel gesetzt, daher
+ * ist ein Besitzwechsel günstig und dekodiert nichts neu.
+ *
+ * @param maskData einmalig dekodierte Randpixel je Region
+ * @param regionTintColors aktuelle Besitzerfarbe je Region
+ * @return fertig eingefärbtes Overlay in Kartengröße
+ */
+private fun paintTerritoryOverlay(
+    maskData: TerritoryMaskData,
+    regionTintColors: Map<String, Color>,
+): ImageBitmap {
+    val overlayPixels = IntArray(maskData.width * maskData.height)
+
+    maskData.pixelsByRegion.forEach { (regionId, mask) ->
+        val tintColor = regionTintColors[regionId] ?: NeutralRegionColor
+        val tintRgb = tintColor.toArgb() and RGB_MASK
+        val alphaScale =
+            if (tintColor == NeutralRegionColor) {
+                NEUTRAL_BORDER_ALPHA / 255f
+            } else {
+                OWNED_BORDER_ALPHA / 255f
+            }
+
+        val indices = mask.pixelIndices
+        val alphas = mask.alphas
+        for (k in indices.indices) {
+            overlayPixels[indices[k]] =
+                ((alphas[k] * alphaScale).roundToInt() shl 24) or tintRgb
+        }
+    }
+
+    val overlayBitmap =
+        Bitmap.createBitmap(maskData.width, maskData.height, Bitmap.Config.ARGB_8888)
+    overlayBitmap.setPixels(overlayPixels, 0, maskData.width, 0, 0, maskData.width, maskData.height)
+    return overlayBitmap.asImageBitmap()
 }
 
 /**
