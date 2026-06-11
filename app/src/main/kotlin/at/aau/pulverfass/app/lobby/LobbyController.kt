@@ -2945,4 +2945,4 @@ private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
 private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L
-private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 1_000L
+private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 500L

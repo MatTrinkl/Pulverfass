@@ -1525,10 +1525,10 @@ class LobbyControllerTest {
                 assertTrue(LobbyCommandKey.ATTACK !in controller.state.value.pendingCommandKeys)
                 val firstResultReleasedAt = System.currentTimeMillis()
                 releaseFirstDelta.complete(Unit)
-                delay(900)
+                delay(300)
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
-                assertTrue(System.currentTimeMillis() - firstResultReleasedAt >= 1_000L)
+                assertTrue(System.currentTimeMillis() - firstResultReleasedAt >= 500L)
                 waitUntil {
                     controller.state.value.gameState.attackState.autoAttack.statusText ==
                         LobbyControllerConfig().autoAttackStoppedCaptured
@@ -1667,10 +1667,10 @@ class LobbyControllerTest {
                 val catchUpCompletedAt = System.currentTimeMillis()
                 delay(100)
                 releaseFirstResponse.complete(Unit)
-                delay(900)
+                delay(300)
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
-                assertTrue(System.currentTimeMillis() - catchUpCompletedAt >= 1_000L)
+                assertTrue(System.currentTimeMillis() - catchUpCompletedAt >= 500L)
             } finally {
                 controller.close()
                 server.close()
