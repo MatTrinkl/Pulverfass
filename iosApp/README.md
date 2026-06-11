@@ -10,6 +10,9 @@ und Logik lebt in Kotlin; dieses Projekt enthält nur den SwiftUI-Einstieg, die
 - **JDK 17+** (für den Gradle-Build, der vom Xcode-Build-Script aufgerufen wird)
 - Für echte Geräte: ein (kostenloser) Apple-Account in Xcode hinterlegt
 
+> **Frischer Mac?** Komplette Schritt-für-Schritt-Anleitung von der
+> Xcode-Installation bis zum iPhone-Build: [docs/ios/mac-setup.md](../docs/ios/mac-setup.md)
+
 ## Bauen & Starten
 
 1. Repository klonen, Branch auschecken.

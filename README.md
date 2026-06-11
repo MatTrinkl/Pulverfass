@@ -49,6 +49,7 @@ iOS-Build (nur am Mac): siehe [iosApp/README.md](iosApp/README.md).
 - Netzwerk-Nachrichtenkonventionen: [docs/network-messages/README.md](docs/network-messages/README.md)
 - Server-spezifische Hinweise: [server/README.md](server/README.md)
 - iOS-Build und Verifikation: [iosApp/README.md](iosApp/README.md)
+- Team-Mac-Setup (Xcode bis iPhone-Build): [docs/ios/mac-setup.md](docs/ios/mac-setup.md)
 
 ## Aktueller Implementierungsstand
 
