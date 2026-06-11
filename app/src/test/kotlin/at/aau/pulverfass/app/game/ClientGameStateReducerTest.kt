@@ -422,7 +422,7 @@ class ClientGameStateReducerTest {
 
         assertEquals(null, weakSource.selectionFromRegionId)
         assertEquals("brazil", selectedSource.selectionFromRegionId)
-        assertEquals(2, selectedSource.attackState.moveAfterCapture)
+        assertEquals(4, selectedSource.attackState.moveAfterCapture)
         assertEquals(null, ignoredTarget.selectionToRegionId)
         assertEquals("argentina", selectedTarget.selectionToRegionId)
         assertTrue(selectedTarget.canSubmitAttack(aliceId))
@@ -434,7 +434,7 @@ class ClientGameStateReducerTest {
         assertTrue(selectedTarget.canConfirmAttackDone(aliceId))
         assertFalse(selectedTarget.canRequestTurnAdvance(aliceId))
         assertEquals(4, increasedAttack.attackState.attackTroops)
-        assertEquals(3, increasedAttack.attackState.moveAfterCapture)
+        assertEquals(4, increasedAttack.attackState.moveAfterCapture)
         assertEquals(4, increasedOccupation.attackState.moveAfterCapture)
         assertEquals(null, dismissed.selectionFromRegionId)
     }

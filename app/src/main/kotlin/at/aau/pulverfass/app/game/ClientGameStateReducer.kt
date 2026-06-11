@@ -1006,19 +1006,30 @@ object ClientGameStateReducer {
         }
     }
 
-    private fun GameUiState.withAttackSource(regionId: String): GameUiState =
-        copy(
+    private fun GameUiState.withAttackSource(regionId: String): GameUiState {
+        /*
+         * Beide Slider starten auf Maximum: Angriffstruppen = alle verfügbaren
+         * Truppen der Quelle (Truppenzahl - 1) und Besatzungstruppen = volle
+         * Angriffsstärke. So muss der häufigste Fall (mit allem angreifen und
+         * voll besetzen) nicht erst hochgeschoben werden.
+         */
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(regionId)
+        val maxAttackTroops =
+            (territoryStates[sourceTerritoryId]?.troopCount?.minus(1) ?: MIN_ATTACK_TROOPS)
+                .coerceAtLeast(MIN_ATTACK_TROOPS)
+        return copy(
             selectedRegionId = regionId,
             selectionFromRegionId = regionId,
             selectionToRegionId = null,
             selectionMessage = null,
             attackState =
                 attackState.copy(
-                    attackTroops = MIN_ATTACK_TROOPS,
-                    moveAfterCapture = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
+                    attackTroops = maxAttackTroops,
+                    moveAfterCapture = maxAttackTroops,
                     autoAttack = attackState.autoAttack.resetForNewAttackSelection(),
                 ),
         )
+    }
 
     private fun GameUiState.clearAttackSelection(): GameUiState =
         copy(

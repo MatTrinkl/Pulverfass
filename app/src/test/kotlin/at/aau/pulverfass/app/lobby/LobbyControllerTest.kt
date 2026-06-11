@@ -1295,7 +1295,7 @@ class LobbyControllerTest {
                 val request = seenPayloads.filterIsInstance<AttackRequest>().last()
                 assertEquals(TerritoryId("brasilien"), request.fromTerritoryId)
                 assertEquals(TerritoryId("argentinien"), request.toTerritoryId)
-                assertEquals(3, request.attackTroops)
+                assertEquals(4, request.attackTroops)
                 assertEquals(3, request.moveAfterCapture)
                 assertTrue(
                     controller.state.value.gameState.attackState.latestResult?.captured == true,
@@ -1510,7 +1510,9 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
                 controller.selectGameRegion("brazil")
                 controller.selectGameRegion("argentina")
-                controller.adjustAttackTroops(1)
+                // Slider startet auf Maximum (Quelle 6 -> 5); auf die im Test
+                // gescriptete Kampfstärke von 3 herunterregeln.
+                controller.adjustAttackTroops(-2)
                 controller.adjustMoveAfterCapture(1)
                 controller.setAutoAttackEnabled(true)
 
@@ -1657,7 +1659,9 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
                 controller.selectGameRegion("brazil")
                 controller.selectGameRegion("argentina")
-                controller.adjustAttackTroops(1)
+                // Slider startet auf Maximum (Quelle 6 -> 5); auf 3 herunterregeln,
+                // damit der Auto-Angriff auch nach dem Verlust auf 4 Truppen weiterläuft.
+                controller.adjustAttackTroops(-2)
                 controller.adjustMoveAfterCapture(1)
                 controller.setAutoAttackEnabled(true)
 
