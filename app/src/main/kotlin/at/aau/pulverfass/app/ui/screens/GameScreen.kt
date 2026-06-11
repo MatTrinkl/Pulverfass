@@ -726,6 +726,7 @@ internal fun GameScreenContent(
                 show = showOptionsOverlay,
                 isMusicEnabled = isMusicEnabled,
                 isSfxEnabled = isSfxEnabled,
+                autoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
                 onMusicToggle = { enabled ->
                     isMusicEnabled = enabled
                     musicManager?.setMusicMuted(!enabled)
@@ -734,6 +735,7 @@ internal fun GameScreenContent(
                     isSfxEnabled = enabled
                     musicManager?.setSfxMuted(!enabled)
                 },
+                onAutoAttackToggle = onSetAutoAttackEnabled,
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
             )
@@ -867,8 +869,10 @@ private fun OptionsOverlay(
     show: Boolean,
     isMusicEnabled: Boolean,
     isSfxEnabled: Boolean,
+    autoAttackEnabled: Boolean,
     onMusicToggle: (Boolean) -> Unit,
     onSfxToggle: (Boolean) -> Unit,
+    onAutoAttackToggle: (Boolean) -> Unit,
     onNavigateToMain: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -894,6 +898,11 @@ private fun OptionsOverlay(
             label = "SOUND-EFFEKTE",
             isEnabled = isSfxEnabled,
             onToggle = onSfxToggle,
+        )
+        InGameAudioToggleRow(
+            label = "AUTO-ANGRIFF",
+            isEnabled = autoAttackEnabled,
+            onToggle = onAutoAttackToggle,
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
