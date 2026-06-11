@@ -57,8 +57,14 @@ kotlin {
         }
         getByName("androidUnitTest").dependencies {
             implementation(libs.junit)
+            implementation(libs.kotlin.test)
             implementation(libs.androidx.test.core)
             implementation(libs.robolectric)
+            implementation(project.dependencies.platform(libs.androidx.compose.bom))
+            implementation(libs.androidx.ui.test.junit4)
+            implementation(libs.ktor.server.core)
+            implementation(libs.ktor.server.netty)
+            implementation(libs.ktor.server.websockets)
         }
     }
 }
@@ -80,9 +86,19 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     lint {
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency")
     }
+}
+
+dependencies {
+    // Stellt androidx.activity.ComponentActivity im Debug-Manifest bereit,
+    // damit Robolectric-Compose-Tests (createComposeRule) eine Activity finden.
+    debugImplementation(libs.androidx.ui.test.manifest)
 }
 
 compose.resources {
