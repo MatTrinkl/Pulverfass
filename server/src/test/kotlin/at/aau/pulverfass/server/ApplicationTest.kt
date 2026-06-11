@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.logging.ServerLoggerNames
 import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
 import at.aau.pulverfass.server.persistence.FakeConnectionScript
 import at.aau.pulverfass.server.persistence.FakeJdbcDataSource
@@ -22,10 +23,17 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -49,6 +57,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 
 class ApplicationTest {
     private val mapDefinition =
@@ -434,6 +443,67 @@ class ApplicationTest {
         }
 
     @Test
+    fun `module exposes internal metrics endpoint`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig =
+                        ServerRuntimeConfig(
+                            appVersion = "v1.2.3",
+                            commitSha = "abcdef1234567890",
+                        ),
+                    databaseReadinessProbe = ReadyDatabaseProbe,
+                )
+            }
+
+            val response = client.get("/metrics")
+            val body = response.bodyAsText()
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(body.contains("pulverfass_server_info"))
+            assertTrue(body.contains("version=\"v1.2.3\""))
+            assertTrue(body.contains("commit=\"abcdef1234567890\""))
+            assertTrue(body.contains("database_configured=\"false\""))
+            assertTrue(body.contains("pulverfass_database_readiness{state=\"up\"} 1"))
+            assertTrue(body.contains("pulverfass_server_uptime_seconds"))
+        }
+
+    @Test
+    fun `formatMetricsResponse escapes labels and clamps uptime`() {
+        val response =
+            formatMetricsResponse(
+                runtimeConfig =
+                    ServerRuntimeConfig(
+                        appVersion = "v1.2.3 local",
+                        commitSha = "abc\"def",
+                    ),
+                readiness = DatabaseReadiness(DatabaseReadinessState.DOWN),
+                startedAtEpochMillis = 5_000,
+                nowEpochMillis = 3_000,
+            )
+
+        assertTrue(response.contains("version=\"v1.2.3 local\""))
+        assertTrue(response.contains("commit=\"abc\\\"def\""))
+        assertTrue(response.contains("pulverfass_database_readiness{state=\"down\"} 0"))
+        assertTrue(response.contains("pulverfass_server_uptime_seconds 0"))
+    }
+
+    @Test
+    fun `metrics endpoint internal host filter allows local and private addresses`() {
+        assertTrue(isInternalMetricsRequest("localhost"))
+        assertTrue(isInternalMetricsRequest("127.0.0.1"))
+        assertTrue(isInternalMetricsRequest("[::1]"))
+        assertTrue(isInternalMetricsRequest("10.1.2.3"))
+        assertTrue(isInternalMetricsRequest("172.16.0.1"))
+        assertTrue(isInternalMetricsRequest("172.31.255.255"))
+        assertTrue(isInternalMetricsRequest("192.168.1.10"))
+
+        assertFalse(isInternalMetricsRequest("8.8.8.8"))
+        assertFalse(isInternalMetricsRequest("172.15.0.1"))
+        assertFalse(isInternalMetricsRequest("172.32.0.1"))
+    }
+
+    @Test
     fun `transport only module still exposes standard http endpoints`() =
         testApplication {
             application {
@@ -671,6 +741,106 @@ class ApplicationTest {
 
             hostSession.close()
             guestSession.close()
+        }
+
+    @Test
+    fun `moduleWithLobbyRuntime logs correlated create join snapshot and leave flows`() =
+        testApplication {
+            val context = LoggerFactory.getILoggerFactory() as LoggerContext
+            val routingLogger =
+                context.getLogger("${ServerLoggerNames.TECHNICAL}.MainServerLobbyRoutingService")
+            val appender =
+                ListAppender<ILoggingEvent>().apply {
+                    this.context = context
+                    start()
+                }
+            routingLogger.addAppender(appender)
+
+            try {
+                application {
+                    moduleWithLobbyRuntime()
+                }
+
+                val client =
+                    createClient {
+                        install(WebSockets)
+                    }
+                val session = client.webSocketSession("/ws")
+                discardConnectionHandshake(session)
+
+                session.send(
+                    Frame.Binary(fin = true, data = MessageCodec.encode(CreateLobbyRequest)),
+                )
+                val createLobbyResponse = assertIs<CreateLobbyResponse>(receivePayload(session))
+                val lobbyCode = createLobbyResponse.lobbyCode
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(session))
+                assertIs<PlayerJoinedLobbyEvent>(receivePayload(session))
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(MapGetRequest(lobbyCode)),
+                    ),
+                )
+                assertIs<MapGetResponse>(receivePayload(session))
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(LeaveLobbyResponse(lobbyCode), receivePayload(session))
+                session.close()
+
+                val messages = appender.list.map(ILoggingEvent::getFormattedMessage)
+                assertTrue(
+                    messages.any {
+                        it.contains("Request received") &&
+                            it.contains("messageType=LOBBY_CREATE_REQUEST") &&
+                            it.contains("requestId=srv-")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("responseType=CreateLobbyResponse") &&
+                            it.contains("lobbyId=${lobbyCode.value}")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_JOIN_REQUEST") &&
+                            it.contains("responseType=JoinLobbyResponse") &&
+                            it.contains("playerId=1")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_MAP_GET_REQUEST") &&
+                            it.contains("responseType=MapGetResponse") &&
+                            it.contains("mapHash=")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_LEAVE_REQUEST") &&
+                            it.contains("responseType=LeaveLobbyResponse")
+                    },
+                )
+            } finally {
+                routingLogger.detachAppender(appender)
+            }
         }
 
     private suspend fun discardConnectionHandshake(session: DefaultClientWebSocketSession) {
