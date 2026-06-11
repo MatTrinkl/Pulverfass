@@ -47,8 +47,8 @@ import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
 import kotlin.math.roundToInt
 
-private const val MAP_IMAGE_WIDTH_PX = 2540
-private const val MAP_IMAGE_HEIGHT_PX = 1346
+private const val MAP_IMAGE_WIDTH_PX = 3840
+private const val MAP_IMAGE_HEIGHT_PX = 2160
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 private const val TERRITORY_OVERLAY_ALPHA = 0.78f
@@ -179,145 +179,145 @@ object PulverfassMapDefaults {
                 "america",
                 "Amerika",
                 R.drawable.territory_america,
-                rgbKey(0xE6, 0x19, 0x4B),
+                rgbKey(0xD3, 0x3C, 0x51),
             ),
             GameMapRegion(
                 "canada",
                 "Kanada",
                 R.drawable.territory_canada,
-                rgbKey(0x3C, 0xB4, 0x4B),
+                rgbKey(0x66, 0xAD, 0x56),
             ),
             GameMapRegion(
                 "mexico",
                 "Mexiko",
                 R.drawable.territory_mexico,
-                rgbKey(0xFF, 0xE1, 0x19),
+                rgbKey(0xF8, 0xE2, 0x58),
             ),
             GameMapRegion(
                 "greenland",
                 "Grönland",
                 R.drawable.territory_greenland,
-                rgbKey(0x43, 0x63, 0xD8),
+                rgbKey(0x4E, 0x64, 0xA5),
             ),
             GameMapRegion(
                 "british_islands",
                 "Britische Inseln",
                 R.drawable.territory_british_islands,
-                rgbKey(0xF5, 0x82, 0x31),
+                rgbKey(0xE0, 0x8D, 0x4C),
             ),
             GameMapRegion(
                 "scandinavia",
                 "Skandinavien",
                 R.drawable.territory_scandinavia,
-                rgbKey(0x91, 0x1E, 0xB4),
+                rgbKey(0x78, 0x3D, 0x87),
             ),
             GameMapRegion(
                 "west_europe",
                 "Westeuropa",
                 R.drawable.territory_west_europe,
-                rgbKey(0x46, 0xF0, 0xF0),
+                rgbKey(0xA6, 0xCF, 0xD4),
             ),
             GameMapRegion(
                 "central_europe",
                 "Mitteleuropa",
                 R.drawable.territory_central_europe,
-                rgbKey(0xF0, 0x32, 0xE6),
+                rgbKey(0xA5, 0x61, 0x9A),
             ),
             GameMapRegion(
                 "russia",
                 "Russland",
                 R.drawable.territory_russia,
-                rgbKey(0xBC, 0xF6, 0x0C),
+                rgbKey(0xAC, 0xC5, 0x49),
             ),
             GameMapRegion(
                 "siberia",
                 "Sibirien",
                 R.drawable.territory_siberia,
-                rgbKey(0xFA, 0xBE, 0xBE),
+                rgbKey(0xEB, 0xC3, 0xC2),
             ),
             GameMapRegion(
                 "east_siberia",
                 "Ostsibirien",
                 R.drawable.territory_east_siberia,
-                rgbKey(0x00, 0x80, 0x80),
+                rgbKey(0x35, 0x7E, 0x84),
             ),
             GameMapRegion(
                 "china",
                 "China",
                 R.drawable.territory_china,
-                rgbKey(0xE6, 0xBE, 0xFF),
+                rgbKey(0xD1, 0xC1, 0xD8),
             ),
             GameMapRegion(
                 "japan",
                 "Japan",
                 R.drawable.territory_japan,
-                rgbKey(0x9A, 0x63, 0x24),
+                rgbKey(0x8A, 0x5F, 0x33),
             ),
             GameMapRegion(
                 "orient",
                 "Orient",
                 R.drawable.territory_orient,
-                rgbKey(0xFF, 0xFA, 0xC8),
+                rgbKey(0xFA, 0xF4, 0xD6),
             ),
             GameMapRegion(
                 "middle_east",
                 "Mittlerer Osten",
                 R.drawable.territory_middle_east,
-                rgbKey(0x80, 0x00, 0x00),
+                rgbKey(0x76, 0x29, 0x20),
             ),
             GameMapRegion(
                 "egypt",
                 "Ägypten",
                 R.drawable.territory_egypt,
-                rgbKey(0xAA, 0xFF, 0xC3),
+                rgbKey(0xCD, 0xE0, 0xCC),
             ),
             GameMapRegion(
                 "west_africa",
                 "Westafrika",
                 R.drawable.territory_west_africa,
-                rgbKey(0x80, 0x80, 0x00),
+                rgbKey(0x82, 0x82, 0x3C),
             ),
             GameMapRegion(
                 "central_africa",
                 "Zentralafrika",
                 R.drawable.territory_central_africa,
-                rgbKey(0xFF, 0xD8, 0xB1),
+                rgbKey(0xF3, 0xD8, 0xBC),
             ),
             GameMapRegion(
                 "south_africa",
                 "Südafrika",
                 R.drawable.territory_south_africa,
-                rgbKey(0x00, 0x00, 0x75),
+                rgbKey(0x19, 0x1D, 0x4F),
             ),
             GameMapRegion(
                 "brazil",
                 "Brasilien",
                 R.drawable.territory_brazil,
-                rgbKey(0xA9, 0xA9, 0xA9),
+                rgbKey(0xAB, 0xAB, 0xAB),
             ),
             GameMapRegion(
                 "andean_community",
                 "Andengemeinschaft",
                 R.drawable.territory_andean_community,
-                rgbKey(0xFF, 0x8C, 0x00),
+                rgbKey(0xE1, 0x8E, 0x37),
             ),
             GameMapRegion(
                 "argentina",
                 "Argentinien",
                 R.drawable.territory_argentina,
-                rgbKey(0x8B, 0x00, 0x8B),
+                rgbKey(0x75, 0x33, 0x7D),
             ),
             GameMapRegion(
                 "australia",
                 "Australien",
                 R.drawable.territory_australia,
-                rgbKey(0x00, 0xCE, 0xD1),
+                rgbKey(0x71, 0xB8, 0xC1),
             ),
             GameMapRegion(
                 "oceania",
                 "Ozeanien",
                 R.drawable.territory_oceania,
-                rgbKey(0xDC, 0x14, 0x3C),
+                rgbKey(0xCC, 0x39, 0x41),
             ),
         )
 }
