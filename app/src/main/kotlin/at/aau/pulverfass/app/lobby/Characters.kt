@@ -56,7 +56,7 @@ object Characters {
                 "Charakter 02",
                 wallpaperResId = R.raw.character_wallpaper_02_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_02,
+                fallbackImageResId = R.drawable.character_wallpaper_02_fallback,
             ),
             CharacterDefinition(
                 "character_03",
@@ -65,7 +65,7 @@ object Characters {
                 "Charakter 03",
                 wallpaperResId = R.raw.character_wallpaper_03_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_03,
+                fallbackImageResId = R.drawable.character_wallpaper_03_fallback,
             ),
             CharacterDefinition(
                 "character_04",
@@ -92,7 +92,7 @@ object Characters {
                 "Charakter 06",
                 wallpaperResId = R.raw.character_wallpaper_06_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_06,
+                fallbackImageResId = R.drawable.character_wallpaper_06_fallback,
             ),
             CharacterDefinition(
                 "character_07",
@@ -101,7 +101,7 @@ object Characters {
                 "Charakter 07",
                 wallpaperResId = R.raw.character_wallpaper_07_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_07,
+                fallbackImageResId = R.drawable.character_wallpaper_07_fallback,
             ),
             CharacterDefinition(
                 "character_08",
@@ -110,6 +110,7 @@ object Characters {
                 "Charakter 08",
                 wallpaperResId = R.raw.character_wallpaper_08_video,
                 isVideoWallpaper = true,
+                fallbackImageResId = R.drawable.character_wallpaper_08_fallback,
             ),
             CharacterDefinition(
                 "character_09",
@@ -118,7 +119,7 @@ object Characters {
                 "Charakter 09",
                 wallpaperResId = R.raw.character_wallpaper_09_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_09,
+                fallbackImageResId = R.drawable.character_wallpaper_09_fallback,
             ),
             CharacterDefinition(
                 "character_10",
@@ -136,7 +137,7 @@ object Characters {
                 "Charakter 11",
                 wallpaperResId = R.raw.character_wallpaper_11_video,
                 isVideoWallpaper = true,
-                fallbackImageResId = R.drawable.character_wallpaper_11,
+                fallbackImageResId = R.drawable.character_wallpaper_11_fallback,
             ),
         )
 

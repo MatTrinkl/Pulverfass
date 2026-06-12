@@ -9,7 +9,6 @@ import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
 private val NeutralTerritoryColor = Color(0xFFC2C2C2)
-private val DepartedTerritoryColor = Color(0xFF5E6268)
 
 /*
  * Übergangsfarbe für das kurze Fenster zwischen Lobby-Join und Charakter-
@@ -138,7 +137,6 @@ fun buildRegionStates(
             GameMapTerritoryMapper.toAndroidRegionId(territory.territoryId)
                 ?: return@mapNotNull null
         val owner = territory.ownerId?.let(playersById::get)
-        val isDepartedOwner = territory.ownerId != null && owner == null
         regionId to
             GameMapRegionState(
                 ownerPlayerId = territory.ownerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
@@ -147,12 +145,12 @@ fun buildRegionStates(
                         ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
                         ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                accentColor =
-                    when {
-                        owner != null -> owner.color
-                        isDepartedOwner -> DepartedTerritoryColor
-                        else -> NeutralTerritoryColor
-                    },
+                /*
+                 * Unbeanspruchte und von verlassenen Spielern zurückgelassene
+                 * Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
+                 * bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
+                 */
+                accentColor = owner?.color ?: NeutralTerritoryColor,
             )
     }.toMap()
 }

@@ -2,6 +2,7 @@ package at.aau.pulverfass.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.shared.ids.PlayerId
@@ -37,6 +38,31 @@ class GameScreenStateTest {
             createAttackResolutionOverlayState(
                 selection = null,
                 uiState = pendingAttackUiState(),
+                players = listOf(gamePlayer()),
+                fallbackPlayerName = "Fallback",
+                isAttackRequestPending = true,
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `createAttackResolutionOverlayState returns null during running auto attack`() {
+        val result =
+            createAttackResolutionOverlayState(
+                selection = "siberia" to "japan",
+                uiState =
+                    pendingAttackUiState().copy(
+                        attackState =
+                            AttackUiState(
+                                attackTroops = 3,
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        isEnabled = true,
+                                        isAwaitingResult = true,
+                                    ),
+                            ),
+                    ),
                 players = listOf(gamePlayer()),
                 fallbackPlayerName = "Fallback",
                 isAttackRequestPending = true,

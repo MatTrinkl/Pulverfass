@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -380,6 +381,16 @@ fun InteractiveGameMap(
     val resources = context.resources
 
     /*
+     * Der Tap-Callback wird über rememberUpdatedState immer aktuell gehalten. Sonst
+     * würde der pointerInput-Block die zum Startzeitpunkt gefangene Lambda behalten:
+     * Wird der Spieler nach dem Zug eines anderen wieder aktiv, ändert sich der
+     * Callback (jetzt darf ausgewählt werden), aber der Block startet ohne Key-
+     * Änderung nicht neu. Taps gingen dann ins Leere, bis eine Geste den Block neu
+     * startet.
+     */
+    val currentOnRegionSelected by rememberUpdatedState(onRegionSelected)
+
+    /*
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
      * Tap -> Kartenpixel -> RGB-Farbe -> GameMapRegion.
      */
@@ -454,7 +465,7 @@ fun InteractiveGameMap(
                                 )
 
                             if (tappedRegion != null) {
-                                onRegionSelected(tappedRegion)
+                                currentOnRegionSelected(tappedRegion)
                             }
                         }
                     }
