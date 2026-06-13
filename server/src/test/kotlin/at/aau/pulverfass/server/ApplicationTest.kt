@@ -47,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -800,7 +801,17 @@ class ApplicationTest {
                 assertEquals(LeaveLobbyResponse(lobbyCode), receivePayload(session))
                 session.close()
 
-                val messages = appender.list.map(ILoggingEvent::getFormattedMessage)
+                // Auf den letzten (Leave-)Completion-Log warten; die früheren Logs
+                // entstehen davor auf derselben Verbindungs-Coroutine und sind dann
+                // ebenfalls vorhanden.
+                val messages =
+                    awaitLoggedMessages(appender) { logged ->
+                        logged.any {
+                            it.contains("Request completed") &&
+                                it.contains("messageType=LOBBY_LEAVE_REQUEST") &&
+                                it.contains("responseType=LeaveLobbyResponse")
+                        }
+                    }
                 assertTrue(
                     messages.any {
                         it.contains("Request received") &&
@@ -865,6 +876,32 @@ class ApplicationTest {
             }
         }
         throw AssertionError("Expected lobby payload within 20 messages.")
+    }
+
+    /**
+     * Wartet, bis das [predicate] auf den gesammelten Log-Nachrichten erfüllt ist,
+     * und gibt anschließend die zuletzt gelesenen Nachrichten zurück.
+     *
+     * Die Completion-Logs werden auf der Server-Coroutine erst nach dem Versand der
+     * Antwort geschrieben, weshalb der Appender asynchron befüllt wird. Ohne dieses
+     * Warten könnte die Prüfung unter Last fehlschlagen, weil der erwartete Eintrag
+     * noch nicht angehängt wurde. Nach Ablauf von [timeoutMillis] werden die bis
+     * dahin vorhandenen Nachrichten zurückgegeben, damit die folgenden Assertions
+     * weiterhin eine aussagekräftige Fehlermeldung liefern.
+     */
+    private suspend fun awaitLoggedMessages(
+        appender: ListAppender<ILoggingEvent>,
+        timeoutMillis: Long = 5_000,
+        predicate: (List<String>) -> Boolean,
+    ): List<String> {
+        val deadlineNanos = System.nanoTime() + timeoutMillis * 1_000_000
+        while (true) {
+            val messages = appender.list.map(ILoggingEvent::getFormattedMessage)
+            if (predicate(messages) || System.nanoTime() >= deadlineNanos) {
+                return messages
+            }
+            delay(25)
+        }
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {
