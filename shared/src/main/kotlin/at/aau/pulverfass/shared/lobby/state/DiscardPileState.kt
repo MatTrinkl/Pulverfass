@@ -3,7 +3,7 @@ package at.aau.pulverfass.shared.lobby.state
 import kotlinx.serialization.Serializable
 
 /**
- * Platzhalter für den serverseitigen Ablagestapel.
+ * Serverseitiger Ablagestapel für eingetauschte Spielkarten.
  */
 @Serializable
 data class DiscardPileState(
@@ -11,5 +11,13 @@ data class DiscardPileState(
 ) {
     init {
         validateDistinctCardIds(cards, "DiscardPileState")
+    }
+
+    internal fun withCardsAdded(addedCards: List<CardState>): DiscardPileState {
+        require(addedCards.isNotEmpty()) {
+            "DiscardPileState.withCardsAdded benötigt mindestens eine Karte."
+        }
+
+        return copy(cards = cards + addedCards)
     }
 }

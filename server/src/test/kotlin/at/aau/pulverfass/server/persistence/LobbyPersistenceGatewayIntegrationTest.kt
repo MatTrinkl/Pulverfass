@@ -9,11 +9,14 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -142,6 +145,7 @@ class LobbyPersistenceGatewayIntegrationTest {
                         value = 8,
                         tradeIndex = 2,
                     ),
+                    CardDrawnEvent(lobbyCode, hostId, CardId("drawn-card")),
                     PendingReinforcementsSetEvent(
                         lobbyCode = lobbyCode,
                         playerId = hostId,
@@ -158,6 +162,7 @@ class LobbyPersistenceGatewayIntegrationTest {
                         cardIds = listOf(CardId("ca"), CardId("cb")),
                     ),
                     LobbyClosed(lobbyCode, "done"),
+                    MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
                     PlayerJoined(lobbyCode, thirdPlayerId, "Third"),
                     PlayerLeft(lobbyCode, thirdPlayerId, "quit"),
                     PlayerKicked(lobbyCode, thirdPlayerId, hostId),
@@ -208,10 +213,12 @@ class LobbyPersistenceGatewayIntegrationTest {
                     "attack_resolved",
                     "player_eliminated",
                     "card_set_traded_in",
+                    "card_drawn",
                     "pending_reinforcements_set",
                     "pending_reinforcements_changed",
                     "player_cards_removed",
                     "lobby_closed",
+                    "match_ended",
                     "player_joined",
                     "player_left",
                     "player_kicked",
@@ -243,6 +250,18 @@ class LobbyPersistenceGatewayIntegrationTest {
                 """["ca","cb","cc"]""",
                 tradeJson.getValue("cardIds").toString(),
             )
+
+            val drawJson =
+                Json.parseToJsonElement(
+                    persisted.first { it.eventType == "card_drawn" }.eventJson,
+                ).jsonObject
+            assertEquals("drawn-card", drawJson.getValue("cardId").jsonPrimitive.content)
+
+            val matchEndedJson =
+                Json.parseToJsonElement(
+                    persisted.first { it.eventType == "match_ended" }.eventJson,
+                ).jsonObject
+            assertEquals("DECK_EMPTY", matchEndedJson.getValue("reason").jsonPrimitive.content)
 
             val invalidJson =
                 Json.parseToJsonElement(

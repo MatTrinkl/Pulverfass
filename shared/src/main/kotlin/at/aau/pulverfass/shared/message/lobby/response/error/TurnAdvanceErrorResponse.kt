@@ -11,8 +11,10 @@ import kotlinx.serialization.Serializable
 enum class TurnAdvanceErrorCode {
     NOT_ACTIVE_PLAYER,
     GAME_PAUSED,
+    GAME_FINISHED,
     PHASE_MISMATCH,
     GAME_NOT_FOUND,
+    FORCED_TRADE_REQUIRED,
 }
 
 /**

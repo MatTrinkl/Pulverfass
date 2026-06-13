@@ -613,7 +613,7 @@ class ApplicationTest {
     }
 
     @Test
-    fun `startup helper functions classify recoverable and terminal states`() {
+    fun `startup helper functions classify recoverable states and cleanup candidates`() {
         val waiting =
             GameState
                 .initial(
@@ -647,12 +647,12 @@ class ApplicationTest {
 
         assertTrue(invokeBooleanHelper("isRecoverableOnStartup", waiting))
         assertTrue(invokeBooleanHelper("isRecoverableOnStartup", running))
-        assertFalse(invokeBooleanHelper("isRecoverableOnStartup", finished))
+        assertTrue(invokeBooleanHelper("isRecoverableOnStartup", finished))
         assertFalse(invokeBooleanHelper("isRecoverableOnStartup", closed))
-        assertTrue(invokeBooleanHelper("isTerminal", finished))
-        assertTrue(invokeBooleanHelper("isTerminal", closed))
-        assertFalse(invokeBooleanHelper("isTerminal", waiting))
-        assertFalse(invokeBooleanHelper("isTerminal", running))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", finished))
+        assertTrue(invokeBooleanHelper("requiresTerminalCleanup", closed))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", waiting))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", running))
         assertEquals(
             7L,
             invokeMaxPlayerId(listOf(waiting, running)),

@@ -36,6 +36,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
+ * @property territoryCapturedThisTurn signalisiert, ob im aktuellen Zug mindestens ein Gebiet erobert wurde
  * @property usedCheatReinforcementBonusByPlayer Spieler, die ihren einmaligen
  * Schummel-Verstärkungsbonus bereits verwendet haben
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
@@ -67,6 +68,7 @@ data class GameState(
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
+    val territoryCapturedThisTurn: Boolean = false,
     val usedCheatReinforcementBonusByPlayer: Set<PlayerId> = emptySet(),
     val mapDefinition: MapDefinition? = null,
     val territoryStates: Map<TerritoryId, TerritoryState> = emptyMap(),
@@ -685,6 +687,12 @@ data class GameState(
     internal fun withGameRandomState(state: Long): GameState = copy(gameRandomState = state)
 
     /**
+     * Setzt das zuggebundene Eroberungsflag für den aktiven Spieler.
+     */
+    internal fun withTerritoryCapturedThisTurn(captured: Boolean): GameState =
+        copy(territoryCapturedThisTurn = captured)
+
+    /**
      * Entfernt einen Spieler aus der aktiven TurnOrder, ohne ihn aus der Lobby zu entfernen.
      */
     internal fun withoutPlayerFromTurnOrder(playerId: PlayerId): GameState =
@@ -762,6 +770,29 @@ data class GameState(
     }
 
     /**
+     * Zieht die oberste Karte aus dem Deck in die Hand eines Spielers.
+     */
+    internal fun withCardDrawnFromDeck(
+        playerId: PlayerId,
+        cardId: CardId,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        val drawnCard =
+            deckState.topCard()
+                ?: throw IllegalArgumentException("Deck ist leer.")
+        require(drawnCard.cardId == cardId) {
+            "Card '${cardId.value}' ist nicht die oberste Karte des Decks."
+        }
+
+        return copy(
+            deckState = deckState.withoutTopCard(cardId),
+            handState = handState.withCardAdded(playerId, drawnCard),
+        )
+    }
+
+    /**
      * Entfernt genau eine Karte aus der Hand eines Spielers.
      */
     internal fun withoutCardFromHand(
@@ -774,6 +805,40 @@ data class GameState(
 
         return copy(
             handState = handState.withoutCard(playerId, cardId),
+        )
+    }
+
+    /**
+     * Entfernt Karten aus einer Spielerhand und legt sie auf den Ablagestapel.
+     */
+    internal fun withCardsMovedFromHandToDiscard(
+        playerId: PlayerId,
+        cardIds: List<CardId>,
+    ): GameState {
+        require(hasPlayer(playerId)) {
+            "Spieler '${playerId.value}' ist nicht Teil der Lobby '${lobbyCode.value}'."
+        }
+        require(cardIds.isNotEmpty()) {
+            "cardIds darf nicht leer sein."
+        }
+
+        val cardsById = handOf(playerId).associateBy(CardState::cardId)
+        val removedCards =
+            cardIds.map { cardId ->
+                cardsById[cardId]
+                    ?: throw IllegalArgumentException(
+                        "Card '${cardId.value}' ist nicht in der Hand von Spieler " +
+                            "'${playerId.value}'.",
+                    )
+            }
+        val updatedHandState =
+            cardIds.fold(handState) { currentHandState, cardId ->
+                currentHandState.withoutCard(playerId, cardId)
+            }
+
+        return copy(
+            handState = updatedHandState,
+            discardPileState = discardPileState.withCardsAdded(removedCards),
         )
     }
 

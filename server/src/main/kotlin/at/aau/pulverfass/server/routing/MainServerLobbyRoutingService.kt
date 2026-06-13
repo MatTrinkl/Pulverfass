@@ -24,10 +24,13 @@ import at.aau.pulverfass.shared.lobby.command.InvalidMapCommandException
 import at.aau.pulverfass.shared.lobby.command.MIN_ATTACK_COMMITTED_TROOPS
 import at.aau.pulverfass.shared.lobby.command.MapCommandRuleService
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -179,6 +182,8 @@ class MainServerLobbyRoutingService(
             "ueberschreitet die konfigurierte Transportgrenze."
         const val PAYLOAD_LIMIT_DETAILS_PREFIX =
             "als die konfigurierte Grenze von "
+        const val REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX =
+            "Die Reinforcements-Phase kann erst beendet werden, wenn "
         const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
             "Reconnect snapshot skipped connectionId={} lobbyCode={} "
         const val CREATE_LOBBY_ERROR_CODE = "CREATE_LOBBY_FAILED"
@@ -727,17 +732,43 @@ class MainServerLobbyRoutingService(
 
         runCatching {
             val turnStateUpdate = buildTurnAdvanceEvent(request, payload)
-            lobbyManager.submit(turnStateUpdate, request.context)
-            grantBaseReinforcementsOnPhaseStart(
-                lobbyCode = payload.lobbyCode,
-                previousTurnState = previousTurnState,
-                context = request.context,
+            val drawPhaseEvent = buildDrawPhaseEventIfNeeded(payload.lobbyCode, payload.playerId)
+            val matchEnded = drawPhaseEvent is MatchEndedEvent
+            val eventsToSubmit =
+                if (drawPhaseEvent is MatchEndedEvent) {
+                    listOf(drawPhaseEvent)
+                } else {
+                    listOfNotNull(drawPhaseEvent, turnStateUpdate)
+                }
+            lobbyManager.submitAll(
+                payload.lobbyCode,
+                eventsToSubmit,
+                request.context,
             )
+            if (drawPhaseEvent is CardDrawnEvent) {
+                val updatedState =
+                    lobbyManager.getLobby(payload.lobbyCode)?.currentState()
+                        ?: throw IllegalStateException("GAME_NOT_FOUND")
+                sendPrivateStateUpdateBestEffort(
+                    lobbyCode = payload.lobbyCode,
+                    payload = PlayerHandUpdatedEvent.fromGameState(updatedState, payload.playerId),
+                    context = "draw-card private hand update",
+                )
+            }
+            if (!matchEnded) {
+                grantBaseReinforcementsOnPhaseStart(
+                    lobbyCode = payload.lobbyCode,
+                    previousTurnState = previousTurnState,
+                    context = request.context,
+                )
+            }
             network.send(request.connectionId, TurnAdvanceResponse(payload.lobbyCode))
-            broadcastPhaseBoundaryIfChanged(payload.lobbyCode, previousTurnState)
-            broadcastTurnStateIfChanged(payload.lobbyCode, previousTurnState)
-            broadcastFullSnapshotOnTurnChangeIfNeeded(payload.lobbyCode, previousTurnState)
-            autoAdvanceAttackPhaseIfNoValidAttacks(request, payload.lobbyCode, payload.playerId)
+            if (!matchEnded) {
+                broadcastPhaseBoundaryIfChanged(payload.lobbyCode, previousTurnState)
+                broadcastTurnStateIfChanged(payload.lobbyCode, previousTurnState)
+                broadcastFullSnapshotOnTurnChangeIfNeeded(payload.lobbyCode, previousTurnState)
+                autoAdvanceAttackPhaseIfNoValidAttacks(request, payload.lobbyCode, payload.playerId)
+            }
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = turnAdvanceErrorResponse(request, payload, cause)
@@ -1864,6 +1895,7 @@ class MainServerLobbyRoutingService(
             state.resolvedTurnState
                 ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
+        check(state.status != GameStatus.FINISHED) { "GAME_FINISHED" }
         require(!(contextPlayerId == null || contextPlayerId != payload.playerId)) {
             "NOT_ACTIVE_PLAYER"
         }
@@ -1876,6 +1908,12 @@ class MainServerLobbyRoutingService(
             ),
         ) {
             "PHASE_MISMATCH"
+        }
+        if (currentTurnState.turnPhase == TurnPhase.REINFORCEMENTS) {
+            val hand = state.handOf(payload.playerId)
+            require(!requiresForcedTradeInOnReinforcementPhase(state, payload.playerId, hand)) {
+                "FORCED_TRADE_REQUIRED"
+            }
         }
 
         val updatedTurnState =
@@ -1895,6 +1933,35 @@ class MainServerLobbyRoutingService(
             }
 
         return pausedOrAdvancedTurnState.toUpdatedEvent(payload.lobbyCode)
+    }
+
+    private fun buildDrawPhaseEventIfNeeded(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+    ): LobbyEvent? {
+        val state =
+            lobbyManager.getLobby(lobbyCode)?.currentState()
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val currentTurnState = state.resolvedTurnState ?: return null
+        if (
+            currentTurnState.activePlayerId != playerId ||
+            currentTurnState.turnPhase != TurnPhase.DRAW_CARD ||
+            !state.territoryCapturedThisTurn
+        ) {
+            return null
+        }
+
+        val drawnCard =
+            state.deckState.topCard()
+                ?: return MatchEndedEvent(
+                    lobbyCode = lobbyCode,
+                    reason = MatchEndReason.DECK_EMPTY,
+                )
+        return CardDrawnEvent(
+            lobbyCode = lobbyCode,
+            playerId = playerId,
+            cardId = drawnCard.cardId,
+        )
     }
 
     private fun buildFortifyMoveEvents(
@@ -2390,7 +2457,9 @@ class MainServerLobbyRoutingService(
             when (cause.message) {
                 "GAME_NOT_FOUND" -> TurnAdvanceErrorCode.GAME_NOT_FOUND
                 "GAME_PAUSED" -> TurnAdvanceErrorCode.GAME_PAUSED
+                "GAME_FINISHED" -> TurnAdvanceErrorCode.GAME_FINISHED
                 "PHASE_MISMATCH" -> TurnAdvanceErrorCode.PHASE_MISMATCH
+                "FORCED_TRADE_REQUIRED" -> TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED
                 else -> TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER
             }
 
@@ -2401,6 +2470,8 @@ class MainServerLobbyRoutingService(
                 TurnAdvanceErrorCode.GAME_PAUSED ->
                     "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
                         "Turn-Wechsel ist aktuell nicht erlaubt."
+                TurnAdvanceErrorCode.GAME_FINISHED ->
+                    "Spiel für Lobby '${payload.lobbyCode.value}' ist bereits beendet."
                 TurnAdvanceErrorCode.PHASE_MISMATCH -> {
                     val expectedPhase = payload.expectedPhase
                     val currentPhase =
@@ -2415,6 +2486,9 @@ class MainServerLobbyRoutingService(
                             "Serverzustand ist '${currentPhase.name}'."
                     }
                 }
+                TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED ->
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
+                        "die Pflichtabgabe von Karten erfüllt ist."
                 TurnAdvanceErrorCode.NOT_ACTIVE_PLAYER -> {
                     val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                     if (currentState?.isSpectator(payload.playerId) == true) {
@@ -2864,10 +2938,10 @@ class MainServerLobbyRoutingService(
                     }
                 }
                 ConfirmReinforcementsDoneErrorCode.PENDING_REINFORCEMENTS_REMAINING ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
                         "keine ausstehenden Verstärkungen mehr vorhanden sind."
                 ConfirmReinforcementsDoneErrorCode.FORCED_TRADE_REQUIRED ->
-                    "Die Reinforcements-Phase kann erst beendet werden, wenn " +
+                    REINFORCEMENTS_PHASE_END_BLOCKED_PREFIX +
                         "die Pflichtabgabe von Karten erfüllt ist."
             }
 
