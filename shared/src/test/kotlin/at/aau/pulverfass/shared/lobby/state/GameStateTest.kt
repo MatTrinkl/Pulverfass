@@ -580,6 +580,74 @@ class GameStateTest {
     }
 
     @Test
+    fun `should draw deck card and reject invalid draw helper inputs`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val firstCard = CardState(cardId = CardId("deck-first"), type = CardType.A)
+        val secondCard = CardState(cardId = CardId("deck-second"), type = CardType.B)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("DC12"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            ).copy(
+                deckState = DeckState(listOf(firstCard, secondCard)),
+            )
+
+        val drawn = baseState.withCardDrawnFromDeck(playerOne, firstCard.cardId)
+
+        assertEquals(listOf(firstCard), drawn.handOf(playerOne))
+        assertEquals(listOf(secondCard), drawn.deckState.cards)
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState.withCardDrawnFromDeck(PlayerId(99), firstCard.cardId)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState
+                .copy(deckState = DeckState())
+                .withCardDrawnFromDeck(playerOne, firstCard.cardId)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState.withCardDrawnFromDeck(playerOne, secondCard.cardId)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DeckState(listOf(firstCard)).withoutTopCard(secondCard.cardId)
+        }
+    }
+
+    @Test
+    fun `should move cards to discard and reject invalid discard helper inputs`() {
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val firstCard = CardState(cardId = CardId("hand-first"), type = CardType.A)
+        val secondCard = CardState(cardId = CardId("hand-second"), type = CardType.B)
+        val baseState =
+            GameState.initial(
+                lobbyCode = LobbyCode("DC13"),
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(playerOne, playerTwo),
+            )
+                .withCardAddedToHand(playerOne, firstCard)
+                .withCardAddedToHand(playerOne, secondCard)
+
+        val moved = baseState.withCardsMovedFromHandToDiscard(playerOne, listOf(firstCard.cardId))
+
+        assertEquals(listOf(secondCard), moved.handOf(playerOne))
+        assertEquals(listOf(firstCard), moved.discardPileState.cards)
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState.withCardsMovedFromHandToDiscard(PlayerId(99), listOf(firstCard.cardId))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState.withCardsMovedFromHandToDiscard(playerOne, emptyList())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            baseState.withCardsMovedFromHandToDiscard(playerOne, listOf(CardId("missing")))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DiscardPileState().withCardsAdded(emptyList())
+        }
+    }
+
+    @Test
     fun `should resolve legacy turn state when only legacy fields are set`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)

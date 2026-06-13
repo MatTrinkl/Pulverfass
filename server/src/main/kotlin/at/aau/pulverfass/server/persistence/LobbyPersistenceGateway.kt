@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -16,6 +17,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -321,6 +323,13 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                         )
                     },
             )
+        is CardDrawnEvent ->
+            persistedPayload(
+                type = "card_drawn",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "cardId" to cardId.value,
+            )
         is PendingReinforcementsSetEvent ->
             persistedPayload(
                 type = "pending_reinforcements_set",
@@ -362,6 +371,12 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 type = "lobby_closed",
                 "lobbyCode" to lobbyCode.value,
                 "reason" to reason,
+            )
+        is MatchEndedEvent ->
+            persistedPayload(
+                type = "match_ended",
+                "lobbyCode" to lobbyCode.value,
+                "reason" to reason.name,
             )
         is PlayerJoined ->
             persistedPayload(

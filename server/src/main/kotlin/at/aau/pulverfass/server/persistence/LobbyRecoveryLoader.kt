@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -17,6 +18,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -251,6 +254,7 @@ data class PersistedLobbyRecoverySnapshot(
     val closedReason: String? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
+    val territoryCapturedThisTurn: Boolean = false,
     val determinism: PublicDeterminismMetadataSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
@@ -290,6 +294,7 @@ data class PersistedLobbyRecoverySnapshot(
                 closedReason = gameState.closedReason,
                 lastInvalidActionReason = gameState.lastInvalidActionReason,
                 fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
+                territoryCapturedThisTurn = gameState.territoryCapturedThisTurn,
                 determinism =
                     PublicDeterminismMetadataSnapshot.from(
                         gameState.mapDefinition
@@ -357,6 +362,7 @@ data class PersistedLobbyRecoverySnapshot(
             closedReason = closedReason,
             lastInvalidActionReason = lastInvalidActionReason,
             fortifyUsedThisTurn = fortifyUsedThisTurn,
+            territoryCapturedThisTurn = territoryCapturedThisTurn,
             mapDefinition = restoredDefinition,
             territoryStates =
                 territoryStates.associate { snapshot ->
@@ -527,6 +533,12 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 value = jsonObject.int("value"),
                 tradeIndex = jsonObject.int("tradeIndex"),
             )
+        "card_drawn" ->
+            CardDrawnEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                cardId = CardId(jsonObject.string("cardId")),
+            )
         "pending_reinforcements_set" ->
             PendingReinforcementsSetEvent(
                 lobbyCode = lobbyCode,
@@ -551,6 +563,11 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 cardIds = jsonObject.stringList("cardIds").map(::CardId),
             )
         "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
+        "match_ended" ->
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.valueOf(jsonObject.string("reason")),
+            )
         "player_joined" ->
             PlayerJoined(
                 lobbyCode = lobbyCode,

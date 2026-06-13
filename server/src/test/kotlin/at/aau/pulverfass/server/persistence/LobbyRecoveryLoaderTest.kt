@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -14,6 +15,8 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
@@ -63,6 +66,7 @@ class LobbyRecoveryLoaderTest {
                 gameRandomSeed = 99L,
                 gameRandomState = 1234L,
                 fortifyUsedThisTurn = true,
+                territoryCapturedThisTurn = true,
                 stateVersion = 7,
                 processedEventCount = 7,
                 tradedInSetCount = 2,
@@ -301,6 +305,18 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
+            CardDrawnEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(5),
+                cardId = CardId("drawn-card"),
+            ),
+            record(
+                "card_drawn",
+                """{"lobbyCode":"LR11","playerId":5,"cardId":"drawn-card"}""",
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
             LobbyCreated(lobbyCode),
             record(
                 eventType = "lobby_created",
@@ -313,6 +329,14 @@ class LobbyRecoveryLoaderTest {
             record(
                 eventType = "lobby_closed",
                 eventJson = """{"lobbyCode":"LR11","reason":"done"}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
+            record(
+                eventType = "match_ended",
+                eventJson = """{"lobbyCode":"LR11","reason":"DECK_EMPTY"}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
