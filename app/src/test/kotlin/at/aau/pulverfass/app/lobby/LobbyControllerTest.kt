@@ -1529,8 +1529,11 @@ class LobbyControllerTest {
                 assertTrue(LobbyCommandKey.ATTACK !in controller.state.value.pendingCommandKeys)
                 val firstResultReleasedAt = System.currentTimeMillis()
                 releaseFirstDelta.complete(Unit)
-                delay(300)
-                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+                /*
+                 * Auf den zweiten Angriff warten und die verstrichene Zeit als
+                 * Untergrenze prüfen. Eine "noch nicht gefeuert"-Prüfung zu einem festen
+                 * Zeitpunkt rennt gegen den 500-ms-Timer und flackert unter Last.
+                 */
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
                 assertTrue(System.currentTimeMillis() - firstResultReleasedAt >= 500L)
                 waitUntil {
@@ -1673,8 +1676,11 @@ class LobbyControllerTest {
                 val catchUpCompletedAt = System.currentTimeMillis()
                 delay(100)
                 releaseFirstResponse.complete(Unit)
-                delay(300)
-                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+                /*
+                 * Auf den zweiten Angriff warten und die verstrichene Zeit als
+                 * Untergrenze prüfen. Eine "noch nicht gefeuert"-Prüfung zu einem festen
+                 * Zeitpunkt rennt gegen den 500-ms-Timer und flackert unter Last.
+                 */
                 waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
                 assertTrue(System.currentTimeMillis() - catchUpCompletedAt >= 500L)
             } finally {

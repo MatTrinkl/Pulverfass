@@ -801,9 +801,11 @@ class ApplicationTest {
                 assertEquals(LeaveLobbyResponse(lobbyCode), receivePayload(session))
                 session.close()
 
-                // Auf den letzten (Leave-)Completion-Log warten; die früheren Logs
-                // entstehen davor auf derselben Verbindungs-Coroutine und sind dann
-                // ebenfalls vorhanden.
+                /*
+                 * Auf den letzten (Leave-)Completion-Log warten; die früheren Logs
+                 * entstehen davor auf derselben Verbindungs-Coroutine und sind dann
+                 * ebenfalls vorhanden.
+                 */
                 val messages =
                     awaitLoggedMessages(appender) { logged ->
                         logged.any {
