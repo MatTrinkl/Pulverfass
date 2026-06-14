@@ -354,6 +354,63 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `single event delta applies match ended event when version is next server version`() {
+        val base =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+            )
+        val delta =
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = 2,
+                toVersion = 2,
+                events =
+                    listOf(
+                        MatchEndedBroadcastEvent(
+                            lobbyCode = lobbyCode,
+                            reason = MatchEndReason.TERRITORY_DOMINATION,
+                            winnerPlayerId = aliceId,
+                            stateVersion = 2,
+                        ),
+                    ),
+            )
+
+        val result = ClientGameStateReducer.applyDelta(base, delta, players)
+
+        assertFalse(result.needsCatchUp)
+        assertTrue(result.state.isFinished)
+        assertEquals(2, result.state.stateVersion)
+        assertEquals(aliceId, result.state.winnerPlayerId)
+    }
+
+    @Test
+    fun `direct match ended broadcast finishes local state`() {
+        val state =
+            ClientGameStateReducer.applyMatchEndedBroadcast(
+                current =
+                    GameUiState(
+                        stateVersion = 1,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+                event =
+                    MatchEndedBroadcastEvent(
+                        lobbyCode = lobbyCode,
+                        reason = MatchEndReason.TERRITORY_DOMINATION,
+                        winnerPlayerId = aliceId,
+                        stateVersion = 2,
+                    ),
+            )
+
+        assertTrue(state.isFinished)
+        assertEquals(2, state.stateVersion)
+        assertEquals(aliceId, state.winnerPlayerId)
+        assertFalse(state.canUseGameActions(aliceId))
+    }
+
+    @Test
     fun `duplicate delta is ignored without requesting catch up`() {
         val base = GameUiState(stateVersion = 3)
         val delta =

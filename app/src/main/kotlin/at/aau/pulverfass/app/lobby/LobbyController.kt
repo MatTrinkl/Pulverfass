@@ -31,6 +31,7 @@ import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
@@ -2165,6 +2166,10 @@ class LobbyController(
             is GameStateSnapshotBroadcast ->
                 applyGameState { current, players ->
                     ClientGameStateReducer.applySnapshotBroadcast(current, payload, players)
+                }
+            is MatchEndedBroadcastEvent ->
+                applyGameState { current, _ ->
+                    ClientGameStateReducer.applyMatchEndedBroadcast(current, payload)
                 }
             is GameStateDeltaEvent -> handleGameStateDelta(payload)
             is PhaseBoundaryEvent -> handlePhaseBoundary(payload)
