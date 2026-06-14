@@ -388,7 +388,7 @@ fun InteractiveGameMap(
      * Änderung nicht neu. Taps gingen dann ins Leere, bis eine Geste den Block neu
      * startet.
      */
-    val currentOnRegionSelected by rememberUpdatedState(onRegionSelected)
+    val currentOnRegionSelected = rememberUpdatedState(onRegionSelected)
 
     /*
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
@@ -466,7 +466,7 @@ fun InteractiveGameMap(
                                 )
 
                             if (tappedRegion != null) {
-                                currentOnRegionSelected(tappedRegion)
+                                currentOnRegionSelected.value(tappedRegion)
                             }
                         }
                     }

@@ -416,10 +416,11 @@ private fun logDatabaseReadiness(readiness: DatabaseReadiness) {
 }
 
 private fun GameState.isRecoverableOnStartup(): Boolean =
-    status == GameStatus.WAITING_FOR_PLAYERS || status == GameStatus.RUNNING
+    status == GameStatus.WAITING_FOR_PLAYERS ||
+        status == GameStatus.RUNNING ||
+        status == GameStatus.FINISHED
 
-private fun GameState.isTerminal(): Boolean =
-    status == GameStatus.CLOSED || status == GameStatus.FINISHED
+private fun GameState.requiresTerminalCleanup(): Boolean = status == GameStatus.CLOSED
 
 private fun List<GameState>.maxPlayerId(): Long =
     asSequence()
@@ -691,7 +692,7 @@ private fun Application.installLobbyRuntime(
             privateStatePayloadMaxBytes = runtimeConfig.webSocketMaxFrameSizeBytes.toInt(),
         )
     lobbyManager.registerAcceptedEventListener { lobbyCode, _, _, currentState ->
-        if (!currentState.isTerminal()) {
+        if (!currentState.requiresTerminalCleanup()) {
             return@registerAcceptedEventListener
         }
         cleanupTerminalLobbyState(

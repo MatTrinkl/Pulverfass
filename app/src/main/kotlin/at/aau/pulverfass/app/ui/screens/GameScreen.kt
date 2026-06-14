@@ -834,18 +834,21 @@ internal fun GameScreenContent(
 
             OptionsOverlay(
                 show = showOptionsOverlay,
-                isMusicEnabled = isMusicEnabled,
-                isSfxEnabled = isSfxEnabled,
-                autoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
-                onMusicToggle = { enabled ->
-                    isMusicEnabled = enabled
-                    musicManager?.setMusicMuted(!enabled)
-                },
-                onSfxToggle = { enabled ->
-                    isSfxEnabled = enabled
-                    musicManager?.setSfxMuted(!enabled)
-                },
-                onAutoAttackToggle = onSetAutoAttackEnabled,
+                options =
+                    InGameOptionsState(
+                        isMusicEnabled = isMusicEnabled,
+                        isSfxEnabled = isSfxEnabled,
+                        autoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
+                        onMusicToggle = { enabled ->
+                            isMusicEnabled = enabled
+                            musicManager?.setMusicMuted(!enabled)
+                        },
+                        onSfxToggle = { enabled ->
+                            isSfxEnabled = enabled
+                            musicManager?.setSfxMuted(!enabled)
+                        },
+                        onAutoAttackToggle = onSetAutoAttackEnabled,
+                    ),
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
             )
@@ -1008,6 +1011,26 @@ private fun AutoPhaseNoticeOverlay(
 }
 
 /**
+ * Bündelt Schalterzustände und Callbacks des Ingame-Optionsmenüs, damit
+ * [OptionsOverlay] mit wenigen Parametern auskommt.
+ *
+ * @property isMusicEnabled aktueller Musik-Schalterzustand.
+ * @property isSfxEnabled aktueller SFX-Schalterzustand.
+ * @property autoAttackEnabled aktueller Auto-Angriff-Schalterzustand.
+ * @property onMusicToggle setzt Musik sofort an oder aus.
+ * @property onSfxToggle setzt SFX sofort an oder aus.
+ * @property onAutoAttackToggle setzt den Auto-Angriff sofort an oder aus.
+ */
+private data class InGameOptionsState(
+    val isMusicEnabled: Boolean,
+    val isSfxEnabled: Boolean,
+    val autoAttackEnabled: Boolean,
+    val onMusicToggle: (Boolean) -> Unit,
+    val onSfxToggle: (Boolean) -> Unit,
+    val onAutoAttackToggle: (Boolean) -> Unit,
+)
+
+/**
  * Ingame-Optionsmenü über der Karte.
  *
  * Der gemeinsame [GameScreenOverlayContainer] konsumiert Pointer-Events im
@@ -1015,22 +1038,14 @@ private fun AutoPhaseNoticeOverlay(
  * Buttons geklickt werden, nicht versehentlich die Karte darunter gepannt werden.
  *
  * @param show `true`, wenn das Menü sichtbar sein soll.
- * @param isMusicEnabled aktueller Musik-Schalterzustand.
- * @param isSfxEnabled aktueller SFX-Schalterzustand.
- * @param onMusicToggle setzt Musik sofort an oder aus.
- * @param onSfxToggle setzt SFX sofort an oder aus.
+ * @param options Schalterzustände und Callbacks der Optionseinträge.
  * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü.
  * @param onClose schließt nur das Optionsmenü.
  */
 @Composable
 private fun OptionsOverlay(
     show: Boolean,
-    isMusicEnabled: Boolean,
-    isSfxEnabled: Boolean,
-    autoAttackEnabled: Boolean,
-    onMusicToggle: (Boolean) -> Unit,
-    onSfxToggle: (Boolean) -> Unit,
-    onAutoAttackToggle: (Boolean) -> Unit,
+    options: InGameOptionsState,
     onNavigateToMain: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -1057,16 +1072,20 @@ private fun OptionsOverlay(
     ) {
         PulverfassTitleText(text = "OPTIONEN", fontSize = 32.sp, letterSpacing = 3.sp)
         Spacer(modifier = Modifier.height(8.dp))
-        InGameAudioToggleRow(label = "MUSIK", isEnabled = isMusicEnabled, onToggle = onMusicToggle)
+        InGameAudioToggleRow(
+            label = "MUSIK",
+            isEnabled = options.isMusicEnabled,
+            onToggle = options.onMusicToggle,
+        )
         InGameAudioToggleRow(
             label = "SOUND-EFFEKTE",
-            isEnabled = isSfxEnabled,
-            onToggle = onSfxToggle,
+            isEnabled = options.isSfxEnabled,
+            onToggle = options.onSfxToggle,
         )
         InGameAudioToggleRow(
             label = "AUTO-ANGRIFF",
-            isEnabled = autoAttackEnabled,
-            onToggle = onAutoAttackToggle,
+            isEnabled = options.autoAttackEnabled,
+            onToggle = options.onAutoAttackToggle,
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
