@@ -210,7 +210,7 @@ fun GameScreen(
             ),
         musicManager = musicManager,
         onNavigateToMain = onLeaveGame,
-        onReconnect = controller::connect,
+        onReconnect = controller::retryReconnect,
     )
 }
 

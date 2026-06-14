@@ -2861,6 +2861,116 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `game reconnect button should reuse active session without normal lobby flow`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("GR01")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174232")
+            val payloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    payloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.sendPayload(CreateLobbyResponse(lobbyCode))
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = PlayerId(1),
+                                    playerDisplayName = payload.playerDisplayName,
+                                    isHost = true,
+                                ),
+                            )
+                        }
+                        is StartGameRequest -> {
+                            outgoing.sendPayload(StartGameResponse())
+                            outgoing.sendPayload(GameStartedEvent(payload.lobbyCode))
+                        }
+                        is ReconnectRequest ->
+                            outgoing.sendPayload(
+                                ReconnectResponse(
+                                    success = true,
+                                    playerId = PlayerId(1),
+                                    lobbyCode = lobbyCode,
+                                    playerDisplayName = "Alice",
+                                ),
+                            )
+                    }
+                }
+            val controller =
+                createController(
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.startGame()
+                waitUntil { controller.state.value.gameStarted }
+                waitUntil { payloads.any { it is GameStateCatchUpRequest } }
+
+                controller.disconnect()
+                waitUntil { !controller.state.value.isConnected }
+                payloads.clear()
+
+                controller.retryReconnect()
+
+                waitUntil {
+                    payloads.any {
+                        it is ReconnectRequest && it.sessionToken == originalToken
+                    }
+                }
+                waitUntil {
+                    controller.state.value.isConnected &&
+                        !controller.state.value.isReconnecting
+                }
+
+                assertFalse(payloads.any { it is CreateLobbyRequest })
+                assertFalse(payloads.any { it is JoinLobbyRequest })
+                assertFalse(payloads.any { it is StartGameRequest })
+                assertEquals(originalToken.value, controller.state.value.sessionToken)
+                assertEquals(lobbyCode.value, controller.state.value.activeLobbyCode)
+                assertEquals(PlayerId(1), controller.state.value.ownPlayerId)
+                assertTrue(controller.state.value.gameStarted)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `game reconnect button without session should not start normal connect`() {
+        runBlocking {
+            val config = LobbyControllerConfig()
+            val controller = createController(config = config)
+            try {
+                controller.updatePlayerName("Alice")
+
+                controller.retryReconnect()
+
+                val state = controller.state.value
+                assertFalse(state.isConnected)
+                assertFalse(state.isConnecting)
+                assertFalse(state.isReconnecting)
+                assertEquals(config.statusReconnectFailed, state.statusText)
+                assertEquals(config.errorReconnectTokenMissing, state.errorText)
+            } finally {
+                controller.close()
+            }
+        }
+    }
+
+    @Test
     fun `startup reconnect should reuse persisted token`() {
         runBlocking {
             val lobbyCode = LobbyCode("PR35")

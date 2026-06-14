@@ -387,6 +387,54 @@ class LobbyController(
         }
     }
 
+    /**
+     * Stößt die Wiederverbindung aus dem laufenden Spiel heraus erneut an.
+     *
+     * Der Button im Spiel darf keinen normalen Verbindungsaufbau starten, weil
+     * dieser ohne alte Session nicht sicher zur laufenden Lobby zurückfindet.
+     */
+    fun retryReconnect() {
+        manualDisconnectRequested = false
+        val snapshot = state.value
+
+        if (snapshot.isConnected) {
+            if (snapshot.gameState.isDesynced || snapshot.gameState.lastSyncError != null) {
+                requestGameCatchUp(
+                    reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                    syncMessage = "Spielstand wird synchronisiert.",
+                )
+            }
+            return
+        }
+
+        if (snapshot.isConnecting || snapshot.isReconnecting || awaitingReconnectResponse) {
+            _state.update {
+                it.copy(
+                    isReconnecting = true,
+                    statusText = config.statusReconnecting,
+                    errorText = null,
+                )
+            }
+            return
+        }
+
+        if (canReconnect(snapshot)) {
+            beginReconnect(snapshot)
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isConnected = false,
+                isConnecting = false,
+                isReconnecting = false,
+                statusText = config.statusReconnectFailed,
+                errorText = config.errorReconnectTokenMissing,
+            )
+        }
+        clearPendingLobbyAction()
+    }
+
     fun disconnect() {
         manualDisconnectRequested = true
         cancelReconnect()
