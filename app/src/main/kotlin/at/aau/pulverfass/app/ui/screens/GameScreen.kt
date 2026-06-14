@@ -81,7 +81,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -500,12 +499,10 @@ internal fun GameScreenContent(
     val localPlayerId = contentState.localPlayerId
 
     /*
-     * Geräte-relativer Abstand der oberen Navbar zum Screenrand: ~1 % der
-     * Bildschirmhöhe (sehr knapp am oberen Rand, auf jedem Gerät proportional
-     * gleich). Derselbe Wert verschiebt die darunter liegenden HUD-Elemente
-     * (Banner, Sidebars) mit, damit überall ein sauberer Abstand bleibt.
+     * Die obere Navbar sitzt bündig am oberen Screenrand (kein Abstand). Derselbe
+     * Wert wird für die darunter liegenden HUD-Elemente (Banner, Sidebars) genutzt.
      */
-    val topNavGap = (LocalConfiguration.current.screenHeightDp * 0.01f).dp
+    val topNavGap = 0.dp
 
     val uiState = contentState.uiState
     val isConnected = contentState.isConnected
@@ -2536,25 +2533,21 @@ private fun HandCardRow(
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
         /*
-         * Holz-Asset als Kartenhintergrund (innerhalb der Surface -> auf die
-         * abgerundeten Ecken geclippt). Eine ausgewählte Karte bekommt zusätzlich
-         * einen dezenten Gold-Tint über dem Holz.
+         * Holz-Asset als Kartenhintergrund: als matchParentSize-Image hinter dem
+         * Label, damit die Zeile sich an der Texthöhe orientiert (statt an der
+         * Bild-Intrinsicgröße). Eine ausgewählte Karte bekommt zusätzlich einen
+         * dezenten Gold-Tint über dem Holz.
          */
-        Box(
-            modifier =
-                Modifier
-                    .paint(
-                        painter = painterResource(id = R.drawable.ui_button_wood),
-                        contentScale = ContentScale.FillBounds,
-                    )
-                    .then(
-                        if (item.isSelected) {
-                            Modifier.background(HudSelectedCardColor)
-                        } else {
-                            Modifier
-                        },
-                    ),
-        ) {
+        Box(contentAlignment = Alignment.CenterStart) {
+            Image(
+                painter = painterResource(id = R.drawable.ui_button_wood),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            if (item.isSelected) {
+                Box(modifier = Modifier.matchParentSize().background(HudSelectedCardColor))
+            }
             Text(
                 text = item.label,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
