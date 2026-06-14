@@ -478,6 +478,12 @@ internal fun GameScreenContent(
     val onRefreshGameState = actions.onRefreshGameState
     val personalPlayer = players.firstOrNull { it.playerId == localPlayerId } ?: fallbackPlayer()
     val canUseGameActions = uiState.canUseGameActions(localPlayerId, isConnected)
+    val winningOverlayState =
+        createWinningOverlayState(
+            uiState = uiState,
+            players = players,
+            localPlayerId = localPlayerId,
+        )
 
     val isRefreshPending = pendingCommandKeys.hasRefreshRequest()
     val isReinforcementCommandPending = pendingCommandKeys.hasReinforcementRequest()
@@ -556,7 +562,7 @@ internal fun GameScreenContent(
          */
         Box(
             modifier =
-                if (showDisconnectOverlay) {
+                if (showDisconnectOverlay || winningOverlayState != null) {
                     Modifier.fillMaxSize().blur(20.dp)
                 } else {
                     Modifier.fillMaxSize()
@@ -770,14 +776,62 @@ internal fun GameScreenContent(
             )
         }
 
-        if (showDisconnectOverlay) {
+        if (showDisconnectOverlay && winningOverlayState == null) {
             DisconnectOverlay(
                 message = disconnectMessage,
                 onReconnect = onReconnect,
                 onNavigateToMain = onNavigateToMain,
             )
         }
+        winningOverlayState?.let { overlayState ->
+            WinningScreenOverlay(
+                state = overlayState,
+                onNavigateToMain = onNavigateToMain,
+            )
+        }
     }
+}
+
+/**
+ * Sichtbarer Zustand der finalen Gewinnanzeige.
+ *
+ * @property winnerPlayer UI-Spieler des Gewinners, falls in der lokalen Spielerliste vorhanden
+ * @property winnerName aufgelöster Anzeigename für das Ergebnis
+ * @property isLocalWinner `true`, wenn der lokale Spieler gewonnen hat
+ */
+internal data class WinningOverlayState(
+    val winnerPlayer: GamePlayerUi?,
+    val winnerName: String,
+    val isLocalWinner: Boolean,
+)
+
+/**
+ * Berechnet die reine Anzeigeprojektion für ein beendetes Match.
+ *
+ * @param uiState aktueller serverbasierter Spielzustand
+ * @param players aktuelle UI-Spielerliste
+ * @param localPlayerId eigener Spieler, falls bekannt
+ * @return Overlay-State oder `null`, solange das Match nicht beendet ist
+ */
+internal fun createWinningOverlayState(
+    uiState: GameUiState,
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+): WinningOverlayState? {
+    if (!uiState.isFinished) {
+        return null
+    }
+
+    val winnerId = uiState.winnerPlayerId
+    val winnerPlayer = players.firstOrNull { player -> player.playerId == winnerId }
+    return WinningOverlayState(
+        winnerPlayer = winnerPlayer,
+        winnerName =
+            winnerPlayer?.name
+                ?: winnerId?.let { "Spieler ${it.value}" }
+                ?: "Kein Gewinner",
+        isLocalWinner = winnerId != null && winnerId == localPlayerId,
+    )
 }
 
 @Composable
@@ -814,6 +868,59 @@ private fun GameScreenOverlayContainer(
             verticalArrangement = arrangement,
             modifier = columnModifier,
             content = content,
+        )
+    }
+}
+
+/**
+ * Zeigt das autoritative Match-Ergebnis mit Gewinnernamen.
+ *
+ * @param state aufbereiteter Gewinnerzustand
+ * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü
+ */
+@Composable
+private fun WinningScreenOverlay(
+    state: WinningOverlayState,
+    onNavigateToMain: () -> Unit,
+) {
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.88f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .fillMaxWidth(0.82f)
+                .widthIn(max = 460.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.82f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 30.dp, vertical = 28.dp)
+                .testTag("winning_screen_overlay"),
+    ) {
+        state.winnerPlayer?.let { winner ->
+            PlayerAvatar(player = winner, size = 84.dp)
+        }
+        PulverfassTitleText(
+            text =
+                if (state.isLocalWinner) {
+                    "SIEG"
+                } else {
+                    "SPIEL BEENDET"
+                },
+            fontSize = 34.sp,
+            letterSpacing = 3.sp,
+        )
+        Text(
+            text = "GEWINNER: ${state.winnerName}",
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        MainButton(
+            text = "ZURÜCK ZUM HAUPTMENÜ",
+            onClick = onNavigateToMain,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

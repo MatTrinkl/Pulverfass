@@ -5,6 +5,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 
@@ -16,6 +17,9 @@ import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
  */
 data class GameUiState(
     val isStarted: Boolean = false,
+    val gameStatus: GameStatus = GameStatus.RUNNING,
+    val matchEndReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val isCatchingUp: Boolean = false,
     val isDesynced: Boolean = false,
     val stateVersion: Long = 0,
@@ -48,6 +52,12 @@ data class GameUiState(
     val lastSyncError: String? = null,
 ) {
     /**
+     * Signalisiert ein fachlich beendetes Match.
+     */
+    val isFinished: Boolean
+        get() = gameStatus == GameStatus.FINISHED
+
+    /**
      * Prüft, ob lokale Spielaktionen aktuell sinnvoll angeboten werden dürfen.
      *
      * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
@@ -59,6 +69,7 @@ data class GameUiState(
         isConnected: Boolean = true,
     ): Boolean =
         localPlayerId != null &&
+            gameStatus == GameStatus.RUNNING &&
             activePlayerId == localPlayerId &&
             isConnected &&
             !isPaused &&

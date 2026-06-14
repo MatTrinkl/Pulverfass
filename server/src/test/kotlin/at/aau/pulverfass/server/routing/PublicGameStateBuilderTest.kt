@@ -9,6 +9,8 @@ import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.GameStarted
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
@@ -17,11 +19,13 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
@@ -114,6 +118,48 @@ class PublicGameStateBuilderTest {
         assertTrue(snapshot.turnState.fortifyUsedThisTurn)
         assertTrue(catchUp.turnState.fortifyUsedThisTurn)
         assertTrue(broadcast.turnState.fortifyUsedThisTurn)
+    }
+
+    @Test
+    fun `match ended event projects winner and snapshot fields`() {
+        val previousState = sampleGameState()
+        val winner = PlayerId(1)
+        val currentState =
+            previousState.copy(
+                stateVersion = 6,
+                status = GameStatus.FINISHED,
+                closedReason = MatchEndReason.TERRITORY_DOMINATION.name,
+                winnerPlayerId = winner,
+            )
+
+        val delta =
+            builder.buildDelta(
+                lobbyCode = previousState.lobbyCode,
+                event =
+                    MatchEndedEvent(
+                        lobbyCode = previousState.lobbyCode,
+                        reason = MatchEndReason.TERRITORY_DOMINATION,
+                        winnerPlayerId = winner,
+                    ),
+                previousState = previousState,
+                currentState = currentState,
+            )
+        val snapshot = builder.buildSnapshot(currentState)
+
+        assertEquals(
+            listOf(
+                MatchEndedBroadcastEvent(
+                    lobbyCode = previousState.lobbyCode,
+                    reason = MatchEndReason.TERRITORY_DOMINATION,
+                    winnerPlayerId = winner,
+                    stateVersion = 6L,
+                ),
+            ),
+            delta?.events,
+        )
+        assertEquals(GameStatus.FINISHED, snapshot.gameStatus)
+        assertEquals(MatchEndReason.TERRITORY_DOMINATION.name, snapshot.matchEndReason)
+        assertEquals(winner, snapshot.winnerPlayerId)
     }
 
     @Test

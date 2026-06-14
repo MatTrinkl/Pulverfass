@@ -8,11 +8,13 @@ import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
@@ -85,6 +87,9 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
@@ -111,6 +116,9 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
@@ -632,6 +640,9 @@ object ClientGameStateReducer {
         turnState: PublicTurnStateSnapshot,
         definition: MapDefinitionSnapshot,
         territoryStates: List<MapTerritoryStateSnapshot>,
+        gameStatus: GameStatus,
+        matchEndReason: String?,
+        winnerPlayerId: PlayerId?,
         players: List<LobbyPlayerUi>,
     ): GameUiState {
         if (stateVersion < current.stateVersion) {
@@ -642,6 +653,9 @@ object ClientGameStateReducer {
             current =
                 current.copy(
                     isStarted = true,
+                    gameStatus = gameStatus,
+                    matchEndReason = matchEndReason,
+                    winnerPlayerId = winnerPlayerId,
                     activePlayerId = turnState.activePlayerId,
                     turnPhase = turnState.turnPhase,
                     turnCount = turnState.turnCount,
@@ -718,7 +732,14 @@ object ClientGameStateReducer {
     ): GameUiState =
         when (event) {
             is GameStartedEvent ->
-                current.copy(isStarted = true, isCatchingUp = true, lastSyncError = null)
+                current.copy(
+                    isStarted = true,
+                    gameStatus = GameStatus.RUNNING,
+                    matchEndReason = null,
+                    winnerPlayerId = null,
+                    isCatchingUp = true,
+                    lastSyncError = null,
+                )
             is TurnStateUpdatedEvent ->
                 current.copy(
                     activePlayerId = event.activePlayerId,
@@ -772,8 +793,28 @@ object ClientGameStateReducer {
             is AttackResolvedBroadcastEvent -> current.applyAttackResolved(event)
             is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
             is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
+            is MatchEndedBroadcastEvent -> current.applyMatchEnded(event)
             else -> current
         }
+
+    private fun GameUiState.applyMatchEnded(event: MatchEndedBroadcastEvent): GameUiState =
+        copy(
+            gameStatus = GameStatus.FINISHED,
+            matchEndReason = event.reason.name,
+            winnerPlayerId = event.winnerPlayerId,
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            reinforcementState = ReinforcementUiState(),
+            reinforcementPlacementAmount = 1,
+            attackState = AttackUiState(),
+            fortifyState = FortifyUiState(),
+            selectedTradeInCardIds = emptySet(),
+            isCatchingUp = false,
+            isDesynced = false,
+            lastSyncError = null,
+        )
 
     private fun GameUiState.applyAttackResolved(event: AttackResolvedBroadcastEvent): GameUiState {
         val latestResult =

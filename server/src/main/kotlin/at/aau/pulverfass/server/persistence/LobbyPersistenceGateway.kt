@@ -377,6 +377,7 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 type = "match_ended",
                 "lobbyCode" to lobbyCode.value,
                 "reason" to reason.name,
+                "winnerPlayerId" to winnerPlayerId?.value,
             )
         is PlayerJoined ->
             persistedPayload(

@@ -222,6 +222,7 @@ class LobbyRecoveryLoader(
  * @property gameStarted Kennzeichen, ob die Partie gestartet wurde
  * @property status serialisierter [GameStatus]-Name
  * @property closedReason optionaler Schließgrund einer beendeten Lobby
+ * @property winnerPlayerId Gewinner eines beendeten Matches, falls eindeutig bestimmbar
  * @property lastInvalidActionReason letzte fachliche Fehlermeldung
  * @property fortifyUsedThisTurn Marker für bereits verbrauchte Fortify-Aktion
  * @property determinism determinismusrelevante Metadaten der Karte
@@ -252,6 +253,7 @@ data class PersistedLobbyRecoverySnapshot(
     val gameStarted: Boolean,
     val status: String,
     val closedReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
     val territoryCapturedThisTurn: Boolean = false,
@@ -292,6 +294,7 @@ data class PersistedLobbyRecoverySnapshot(
                 gameStarted = gameState.gameStarted,
                 status = gameState.status.name,
                 closedReason = gameState.closedReason,
+                winnerPlayerId = gameState.winnerPlayerId,
                 lastInvalidActionReason = gameState.lastInvalidActionReason,
                 fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
                 territoryCapturedThisTurn = gameState.territoryCapturedThisTurn,
@@ -360,6 +363,7 @@ data class PersistedLobbyRecoverySnapshot(
             gameRandomState = gameRandomState ?: gameRandomSeed ?: determinism.seed,
             lastEventContext = null,
             closedReason = closedReason,
+            winnerPlayerId = winnerPlayerId,
             lastInvalidActionReason = lastInvalidActionReason,
             fortifyUsedThisTurn = fortifyUsedThisTurn,
             territoryCapturedThisTurn = territoryCapturedThisTurn,
@@ -567,6 +571,7 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
             MatchEndedEvent(
                 lobbyCode = lobbyCode,
                 reason = MatchEndReason.valueOf(jsonObject.string("reason")),
+                winnerPlayerId = jsonObject.nullableLong("winnerPlayerId")?.let(::PlayerId),
             )
         "player_joined" ->
             PlayerJoined(

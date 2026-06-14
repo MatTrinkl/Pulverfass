@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
@@ -21,6 +22,7 @@ import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
@@ -912,6 +914,26 @@ class NetworkPayloadRegistryTest {
         assertEquals(payload, deserialized)
         assertTrue(serialized.contains("fromVersion"))
         assertTrue(serialized.contains("messageType"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for match ended broadcast`() {
+        val payload =
+            MatchEndedBroadcastEvent(
+                lobbyCode = LobbyCode("ME12"),
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = PlayerId(1),
+                stateVersion = 12L,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ENDED_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("TERRITORY_DOMINATION"))
+        assertTrue(serialized.contains("winnerPlayerId"))
     }
 
     @Test
