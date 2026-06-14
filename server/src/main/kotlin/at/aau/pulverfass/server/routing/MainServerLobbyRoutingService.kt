@@ -210,6 +210,13 @@ class MainServerLobbyRoutingService(
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
     private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
 
+    private data class TurnAdvancePlan(
+        val events: List<LobbyEvent>,
+        val drawnCardEvent: CardDrawnEvent? = null,
+    ) {
+        val matchEnded: Boolean = events.any { event -> event is MatchEndedEvent }
+    }
+
     init {
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
     }
@@ -731,21 +738,14 @@ class MainServerLobbyRoutingService(
         val previousTurnState = currentTurnState(payload.lobbyCode)
 
         runCatching {
-            val turnStateUpdate = buildTurnAdvanceEvent(request, payload)
-            val drawPhaseEvent = buildDrawPhaseEventIfNeeded(payload.lobbyCode, payload.playerId)
-            val matchEnded = drawPhaseEvent is MatchEndedEvent
-            val eventsToSubmit =
-                if (drawPhaseEvent is MatchEndedEvent) {
-                    listOf(drawPhaseEvent)
-                } else {
-                    listOfNotNull(drawPhaseEvent, turnStateUpdate)
-                }
+            val turnAdvancePlan = buildTurnAdvancePlan(request, payload)
+            val matchEnded = turnAdvancePlan.matchEnded
             lobbyManager.submitAll(
                 payload.lobbyCode,
-                eventsToSubmit,
+                turnAdvancePlan.events,
                 request.context,
             )
-            if (drawPhaseEvent is CardDrawnEvent) {
+            if (turnAdvancePlan.drawnCardEvent != null) {
                 val updatedState =
                     lobbyManager.getLobby(payload.lobbyCode)?.currentState()
                         ?: throw IllegalStateException("GAME_NOT_FOUND")
@@ -1890,6 +1890,84 @@ class MainServerLobbyRoutingService(
             lobbyManager.getLobby(payload.lobbyCode)
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
         val state = lobby.currentState()
+        val currentTurnState = requireValidTurnAdvanceState(request, payload, state)
+
+        return advanceTurnStateEvent(
+            lobbyCode = payload.lobbyCode,
+            turnState = currentTurnState,
+            turnOrder = state.turnOrder,
+        )
+    }
+
+    private fun buildTurnAdvancePlan(
+        request: DecodedNetworkRequest,
+        payload: TurnAdvanceRequest,
+    ): TurnAdvancePlan {
+        val lobby =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?: throw IllegalStateException("GAME_NOT_FOUND")
+        val state = lobby.currentState()
+        val currentTurnState = requireValidTurnAdvanceState(request, payload, state)
+        val firstTurnStateUpdate =
+            advanceTurnStateEvent(
+                lobbyCode = payload.lobbyCode,
+                turnState = currentTurnState,
+                turnOrder = state.turnOrder,
+            )
+
+        if (currentTurnState.turnPhase != TurnPhase.FORTIFY) {
+            val drawPhaseEvent =
+                buildDrawPhaseEventIfNeeded(
+                    lobbyCode = payload.lobbyCode,
+                    playerId = payload.playerId,
+                    state = state,
+                    currentTurnState = currentTurnState,
+                )
+
+            return when (drawPhaseEvent) {
+                is MatchEndedEvent -> TurnAdvancePlan(events = listOf(drawPhaseEvent))
+                is CardDrawnEvent ->
+                    TurnAdvancePlan(
+                        events = listOf(drawPhaseEvent, firstTurnStateUpdate),
+                        drawnCardEvent = drawPhaseEvent,
+                    )
+                else -> TurnAdvancePlan(events = listOf(firstTurnStateUpdate))
+            }
+        }
+
+        val drawCardTurnState = firstTurnStateUpdate.toTurnState()
+        if (drawCardTurnState.turnPhase != TurnPhase.DRAW_CARD || drawCardTurnState.isPaused) {
+            return TurnAdvancePlan(events = listOf(firstTurnStateUpdate))
+        }
+
+        val drawPhaseEvent =
+            buildDrawPhaseEventIfNeeded(
+                lobbyCode = payload.lobbyCode,
+                playerId = payload.playerId,
+                state = state,
+                currentTurnState = drawCardTurnState,
+            )
+        if (drawPhaseEvent is MatchEndedEvent) {
+            return TurnAdvancePlan(events = listOf(firstTurnStateUpdate, drawPhaseEvent))
+        }
+
+        val nextTurnStateUpdate =
+            advanceTurnStateEvent(
+                lobbyCode = payload.lobbyCode,
+                turnState = drawCardTurnState,
+                turnOrder = state.turnOrder,
+            )
+        return TurnAdvancePlan(
+            events = listOfNotNull(firstTurnStateUpdate, drawPhaseEvent, nextTurnStateUpdate),
+            drawnCardEvent = drawPhaseEvent as? CardDrawnEvent,
+        )
+    }
+
+    private fun requireValidTurnAdvanceState(
+        request: DecodedNetworkRequest,
+        payload: TurnAdvanceRequest,
+        state: GameState,
+    ): TurnState {
         val contextPlayerId = request.context.playerId
         val currentTurnState =
             state.resolvedTurnState
@@ -1916,10 +1994,18 @@ class MainServerLobbyRoutingService(
             }
         }
 
+        return currentTurnState
+    }
+
+    private fun advanceTurnStateEvent(
+        lobbyCode: LobbyCode,
+        turnState: TurnState,
+        turnOrder: List<PlayerId>,
+    ): TurnStateUpdatedEvent {
         val updatedTurnState =
             TurnStateMachine.advance(
-                turnState = currentTurnState,
-                turnOrder = state.turnOrder,
+                turnState = turnState,
+                turnOrder = turnOrder,
             )
         val pausedOrAdvancedTurnState =
             if (isPlayerConnected(updatedTurnState.activePlayerId)) {
@@ -1932,7 +2018,7 @@ class MainServerLobbyRoutingService(
                 )
             }
 
-        return pausedOrAdvancedTurnState.toUpdatedEvent(payload.lobbyCode)
+        return pausedOrAdvancedTurnState.toUpdatedEvent(lobbyCode)
     }
 
     private fun buildDrawPhaseEventIfNeeded(
@@ -1943,6 +2029,15 @@ class MainServerLobbyRoutingService(
             lobbyManager.getLobby(lobbyCode)?.currentState()
                 ?: throw IllegalStateException("GAME_NOT_FOUND")
         val currentTurnState = state.resolvedTurnState ?: return null
+        return buildDrawPhaseEventIfNeeded(lobbyCode, playerId, state, currentTurnState)
+    }
+
+    private fun buildDrawPhaseEventIfNeeded(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        state: GameState,
+        currentTurnState: TurnState,
+    ): LobbyEvent? {
         if (
             currentTurnState.activePlayerId != playerId ||
             currentTurnState.turnPhase != TurnPhase.DRAW_CARD ||
@@ -3417,6 +3512,17 @@ class MainServerLobbyRoutingService(
     ): TurnStateUpdatedEvent =
         TurnStateUpdatedEvent(
             lobbyCode = lobbyCode,
+            activePlayerId = activePlayerId,
+            turnPhase = turnPhase,
+            turnCount = turnCount,
+            startPlayerId = startPlayerId,
+            isPaused = isPaused,
+            pauseReason = pauseReason,
+            pausedPlayerId = pausedPlayerId,
+        )
+
+    private fun TurnStateUpdatedEvent.toTurnState(): TurnState =
+        TurnState(
             activePlayerId = activePlayerId,
             turnPhase = turnPhase,
             turnCount = turnCount,

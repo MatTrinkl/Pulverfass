@@ -78,7 +78,8 @@ data class GameUiState(
         canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
             turnPhase != null &&
             turnPhase != TurnPhase.REINFORCEMENTS &&
-            turnPhase != TurnPhase.ATTACK
+            turnPhase != TurnPhase.ATTACK &&
+            turnPhase != TurnPhase.DRAW_CARD
 
     /**
      * Prüft, ob die aktuelle Verstärkungsphase lokal bedient werden kann.

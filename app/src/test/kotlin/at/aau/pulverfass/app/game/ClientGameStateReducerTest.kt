@@ -662,6 +662,7 @@ class ClientGameStateReducerTest {
         assertEquals(null, serverConsumedSelection.selectionToRegionId)
         assertFalse(serverConsumedSelection.canSubmitFortifyMove(aliceId))
         assertFalse(resetFortifyState.fortifyState.hasMoved)
+        assertFalse(resetFortifyState.canRequestTurnAdvance(aliceId))
         assertEquals(null, ignoredAfterMove.selectionFromRegionId)
     }
 
