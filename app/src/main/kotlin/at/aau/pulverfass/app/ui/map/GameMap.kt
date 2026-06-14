@@ -435,6 +435,7 @@ fun InteractiveGameMap(
 
     val attackVfxController = rememberAttackVfxController(attackVfx)
     val activeAttackVfx = attackVfxController.activeRequest
+    val regionsById = remember(regions) { regions.associateBy(GameMapRegion::id) }
 
     Box(
         modifier =
@@ -548,8 +549,18 @@ fun InteractiveGameMap(
             }
 
             if (activeAttackVfx != null) {
-                val fromAnchor = territoryMaskData.anchors[activeAttackVfx.fromRegionId]
-                val toAnchor = territoryMaskData.anchors[activeAttackVfx.toRegionId]
+                /*
+                 * Wie bei den Truppen-Bubbles oben fällt der Anker auf
+                 * GameMapRegion.fallbackAnchor zurück, falls eine Maske nicht
+                 * dekodiert werden konnte. Sonst entfiele die Clash-Animation
+                 * stillschweigend, obwohl Zahlen und Farben aktualisiert werden.
+                 */
+                val fromAnchor =
+                    territoryMaskData.anchors[activeAttackVfx.fromRegionId]
+                        ?: regionsById[activeAttackVfx.fromRegionId]?.fallbackAnchor
+                val toAnchor =
+                    territoryMaskData.anchors[activeAttackVfx.toRegionId]
+                        ?: regionsById[activeAttackVfx.toRegionId]?.fallbackAnchor
                 if (fromAnchor != null && toAnchor != null) {
                     AttackVfxOverlay(
                         controller = attackVfxController,

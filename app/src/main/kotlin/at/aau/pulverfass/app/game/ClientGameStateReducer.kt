@@ -135,7 +135,22 @@ object ClientGameStateReducer {
         if (delta.toVersion <= current.stateVersion) {
             return DeltaApplyResult(state = current, needsCatchUp = false)
         }
-        if (!canApplyDelta(localVersion = current.stateVersion, delta = delta)) {
+        /*
+         * Der Server kodiert Single-Event-Deltas mit fromVersion == toVersion (die
+         * Version enthält das Event bereits, siehe PublicGameStateBuilder.buildDelta).
+         * Solche Deltas erfüllen canApplyDelta nie und würden sonst fälschlich als
+         * Lücke einen Catch-up auslösen, der ihre flüchtigen Events -- etwa das
+         * AttackResolvedBroadcastEvent fürs Kampf-VFX -- verschluckt. Liegt ein
+         * solches Delta genau eine Version vor uns, ist es der nächste Schritt und
+         * wird regulär angewandt; echte Lücken laufen weiterhin über den Catch-up.
+         */
+        val isSameVersionNextStep =
+            delta.fromVersion == delta.toVersion &&
+                delta.toVersion == current.stateVersion + 1
+        if (
+            !isSameVersionNextStep &&
+            !canApplyDelta(localVersion = current.stateVersion, delta = delta)
+        ) {
             return DeltaApplyResult(
                 state =
                     current.copy(

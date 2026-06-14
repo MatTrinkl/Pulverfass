@@ -19,6 +19,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,7 +42,6 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -63,6 +64,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -71,21 +73,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,6 +114,7 @@ import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.components.CharacterCoin
+import at.aau.pulverfass.app.ui.components.GameActionButton
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.PulverfassTitleText
 import at.aau.pulverfass.app.ui.components.VideoPlayer
@@ -137,15 +144,50 @@ private val HudBorderColor = PulverfassColors.GoldDark
 private val HudContentColor = PulverfassColors.TextOnDark
 private val HudInverseColor = PulverfassColors.SurfaceDark
 private val HudAccentColor = PulverfassColors.GoldBright
-private val HudActiveHighlightColor = PulverfassColors.GoldDark.copy(alpha = 0.35f)
 private val HudSelectedCardColor = PulverfassColors.Gold.copy(alpha = 0.30f)
-private val TopBarHeight = 52.dp
-private val BottomBarHeight = 54.dp
+
+/** Dunkelbraune Schriftfarbe des Phasen-Headers (Text über dem phase_image). */
+private val PhaseHeaderTextColor = PulverfassColors.TextOnParchment
+
+/** Einheitliche Breite der drei mittleren Phasen-Buttons der Bottom-Bar. */
+private val PhaseButtonWidth = 132.dp
+private val TopBarHeight = 138.dp
+private val BottomBarHeight = 76.dp
+
+/*
+ * Feste Breiten der beiden Top-HUD-Segmente (footer_bar-Panels). Bewusst ~50 %
+ * breiter als der reine Inhalt, damit Options/Spieler bzw. "Runde X" mittig auf
+ * einem breiteren Navbar-Bild sitzen. Feste dp-Werte -> auf allen Geräten
+ * gleich proportioniert.
+ */
+private val TopSegmentLeftWidth = 270.dp
+
+/** Horizontales Innen-Padding der Top-Bar. */
+private val TopBarHorizontalPadding = 16.dp
+
+/** Höhe des linken "Dein Spieler"/Options-Panels. */
+private val OptionsPanelHeight = 138.dp
+
+/** Höhe des mittigen phase_image. */
+private val PhaseImageHeight = 69.dp
+
+/** Abstand der Spielerliste vom oberen Screenrand ("Runde X" + Liste). */
+private val PlayerListTopInset = 76.dp
 private val SidebarWidth = 156.dp
 private val CardsSidebarWidth = SidebarWidth
+
+/*
+ * Die rechte Spielerleiste ist bewusst etwas breiter als die Karten-Sidebar,
+ * damit Avatar, Name und Host-Marker im playerlist_background-Panel nicht
+ * gedrückt wirken. Sie nutzt eine eigene Konstante, um die Karten-Sidebar
+ * (links) und den davon abgeleiteten Karten-Button in der Bottom-Bar
+ * unverändert zu lassen.
+ */
+private val PlayerSidebarWidth = 250.dp
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val PLAYER_LEFT_TOAST_DURATION_MILLIS = 2_800L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -456,6 +498,15 @@ internal fun GameScreenContent(
 ) {
     val players = contentState.players
     val localPlayerId = contentState.localPlayerId
+
+    /*
+     * Geräte-relativer Abstand der oberen Navbar zum Screenrand: ~1 % der
+     * Bildschirmhöhe (sehr knapp am oberen Rand, auf jedem Gerät proportional
+     * gleich). Derselbe Wert verschiebt die darunter liegenden HUD-Elemente
+     * (Banner, Sidebars) mit, damit überall ein sauberer Abstand bleibt.
+     */
+    val topNavGap = (LocalConfiguration.current.screenHeightDp * 0.01f).dp
+
     val uiState = contentState.uiState
     val isConnected = contentState.isConnected
     val pendingCommandKeys = contentState.pendingCommandKeys
@@ -542,6 +593,30 @@ internal fun GameScreenContent(
     var isMusicEnabled by remember { mutableStateOf(musicManager?.isMusicMuted?.not() ?: true) }
     var isSfxEnabled by remember { mutableStateOf(musicManager?.isSfxMuted?.not() ?: true) }
 
+    /*
+     * Reine Anzeige: Verliert ein Mitspieler die Verbindung (= verlässt das
+     * Spiel), wird dafür kurz ein Ingame-Toast eingeblendet. Beobachtet wird nur
+     * der ohnehin vorhandene Verbindungsstatus pro Spieler -- es wird keine Spiel-
+     * oder Netzwerklogik verändert. Der eigene Spieler ist ausgenommen (dafür gibt
+     * es bereits das Disconnect-Overlay).
+     */
+    var playerLeftMessage by remember { mutableStateOf<String?>(null) }
+    val previousConnectionStatuses = remember { mutableStateMapOf<PlayerId, ConnectionStatus>() }
+    val playerLeftTemplate = stringResource(id = R.string.game_player_left_toast)
+    LaunchedEffect(players) {
+        players.forEach { player ->
+            val previous = previousConnectionStatuses[player.playerId]
+            if (
+                player.playerId != localPlayerId &&
+                previous == ConnectionStatus.CONNECTED &&
+                player.connectionStatus == ConnectionStatus.DISCONNECTED
+            ) {
+                playerLeftMessage = playerLeftTemplate.format(player.name)
+            }
+            previousConnectionStatuses[player.playerId] = player.connectionStatus
+        }
+    }
+
     Box(
         modifier =
             Modifier
@@ -586,14 +661,34 @@ internal fun GameScreenContent(
                 modifier = Modifier.fillMaxSize(),
             )
 
+            /*
+             * Dunkle Vignette rund um den gesamten Screen: zur Mitte hin
+             * transparent, zu den Rändern/Ecken hin abgedunkelt. Liegt über der
+             * Karte, aber unter dem HUD, damit die Bedienelemente klar bleiben.
+             */
+            Box(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.radialGradient(
+                                colorStops =
+                                    arrayOf(
+                                        0.62f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.62f),
+                                    ),
+                            ),
+                        ),
+            )
+
             GameTopBar(
                 personalPlayer = personalPlayer,
                 phase = uiState.turnPhase,
-                round = uiState.turnCount.coerceAtLeast(1),
                 onOptionsClick = { showOptionsOverlay = true },
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
+                        .padding(top = topNavGap)
                         .fillMaxWidth(),
             )
 
@@ -611,7 +706,7 @@ internal fun GameScreenContent(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = TopBarHeight)
+                        .padding(top = topNavGap + TopBarHeight)
                         .fillMaxWidth(),
             )
 
@@ -634,7 +729,7 @@ internal fun GameScreenContent(
                 modifier =
                     Modifier
                         .align(Alignment.CenterStart)
-                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
+                        .padding(top = topNavGap + TopBarHeight, bottom = BottomBarHeight)
                         .requiredWidth(CardsSidebarWidth)
                         .fillMaxHeight(),
             )
@@ -647,11 +742,14 @@ internal fun GameScreenContent(
             PlayerSidebar(
                 players = players,
                 activePlayerId = uiState.activePlayerId,
+                round = uiState.turnCount.coerceAtLeast(1),
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                        .width(SidebarWidth)
+                        // Liste + "Runde X"-Titel weiter oben: Top max. ~60 px vom
+                        // Screenrand; untere Kante bleibt über der Bottom-Bar.
+                        .padding(top = PlayerListTopInset, bottom = BottomBarHeight)
+                        .width(PlayerSidebarWidth)
                         .fillMaxHeight(),
             )
 
@@ -759,6 +857,15 @@ internal fun GameScreenContent(
                 onDismiss = actions.onClearAutoPhaseNotice,
             )
 
+            PlayerLeftToast(
+                message = playerLeftMessage,
+                onDismiss = { playerLeftMessage = null },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = TopBarHeight + 12.dp),
+            )
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
@@ -776,6 +883,45 @@ internal fun GameScreenContent(
                 onNavigateToMain = onNavigateToMain,
             )
         }
+    }
+}
+
+/**
+ * Kurzer, automatisch ausblendender Ingame-Toast (z. B. wenn ein Mitspieler das
+ * Spiel verlässt). Bei [message] == `null` ist nichts sichtbar; sobald eine
+ * Nachricht gesetzt wird, blendet sie nach [PLAYER_LEFT_TOAST_DURATION_MILLIS]
+ * über [onDismiss] selbst wieder aus -- kein dauerhafter Hinweis, kein Spam.
+ */
+@Composable
+private fun PlayerLeftToast(
+    message: String?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LaunchedEffect(message) {
+        if (message != null) {
+            delay(PLAYER_LEFT_TOAST_DURATION_MILLIS)
+            onDismiss()
+        }
+    }
+    if (message == null) return
+    Surface(
+        modifier = modifier.testTag("player_left_toast"),
+        shape = RoundedCornerShape(10.dp),
+        color = PulverfassColors.SurfaceWood.copy(alpha = 0.95f),
+        contentColor = PulverfassColors.TextPrimary,
+        tonalElevation = 0.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = PulverfassColors.TextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -895,12 +1041,18 @@ private fun OptionsOverlay(
         arrangement = Arrangement.spacedBy(12.dp),
         columnModifier =
             Modifier
-                .fillMaxWidth(0.45f)
-                .background(
-                    PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
-                    RoundedCornerShape(12.dp),
+                .fillMaxWidth(0.5f)
+                /*
+                 * player_card dient hier als dekorativer Panel-Hintergrund des
+                 * Options-Menüs (nicht mehr in der Spielerliste). FillBounds füllt
+                 * das Panel; das großzügige Padding hält den Inhalt innerhalb des
+                 * gemalten Kartenrahmens.
+                 */
+                .paint(
+                    painter = painterResource(id = R.drawable.player_card),
+                    contentScale = ContentScale.FillBounds,
                 )
-                .padding(horizontal = 32.dp, vertical = 24.dp)
+                .padding(horizontal = 40.dp, vertical = 36.dp)
                 .verticalScroll(scrollState),
     ) {
         PulverfassTitleText(text = "OPTIONEN", fontSize = 32.sp, letterSpacing = 3.sp)
@@ -1861,117 +2013,118 @@ private fun SyncProgressOverlay(modifier: Modifier = Modifier) {
 private fun GameTopBar(
     personalPlayer: GamePlayerUi,
     phase: TurnPhase?,
-    round: Int,
     onOptionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.testTag("game_top_bar"),
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, HudBorderColor),
+    /*
+     * Links Options-Button + "Dein Spieler" auf dem footer_bar-Panel, mittig das
+     * phase_image als Phasenanzeige. Die "Runde X"-Anzeige sitzt als Titel oben in
+     * der Spielerliste (siehe PlayerSidebar), nicht mehr in der Top-Bar.
+     */
+    Box(
+        modifier =
+            modifier
+                .testTag("game_top_bar")
+                .height(TopBarHeight)
+                .displayCutoutPadding()
+                .padding(horizontal = TopBarHorizontalPadding),
     ) {
-        Row(
+        TopHudSegment(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .height(TopBarHeight)
-                    .displayCutoutPadding(),
-            verticalAlignment = Alignment.CenterVertically,
+                    .align(Alignment.CenterStart)
+                    .width(TopSegmentLeftWidth)
+                    .height(OptionsPanelHeight),
         ) {
-            Row(
+            val optionsDescription = "Optionen"
+            Image(
+                painter = painterResource(id = R.drawable.options_button),
+                contentDescription = optionsDescription,
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp, end = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val optionsDescription = "Optionen"
-                FilledTonalButton(
-                    onClick = onOptionsClick,
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .semantics { contentDescription = optionsDescription }
-                            .testTag("game_options_button"),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp),
-                    colors =
-                        ButtonDefaults.filledTonalButtonColors(
-                            containerColor = HudSurfaceMutedColor,
-                            contentColor = HudContentColor,
-                        ),
-                ) {
-                    Text(
-                        text = "⚙",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = HudContentColor,
-                    )
-                }
-                PlayerAvatar(player = personalPlayer, size = 28.dp)
-                Column {
-                    Text(
-                        text = stringResource(id = R.string.game_personal_player_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = HudContentColor,
-                    )
-                    Text(
-                        text = personalPlayer.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = HudAccentColor,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
+                        .size(38.dp)
+                        .testTag("game_options_button")
+                        .clickable(role = Role.Button, onClick = onOptionsClick),
+            )
+            PlayerAvatar(player = personalPlayer, size = 32.dp)
+            Column {
                 Text(
-                    text = stringResource(id = R.string.game_phase_label),
+                    text = stringResource(id = R.string.game_personal_player_label),
                     style = MaterialTheme.typography.labelSmall,
                     color = HudContentColor,
                 )
                 Text(
-                    text = stringResource(id = phase.labelRes()),
-                    modifier = Modifier.testTag("game_phase_value"),
-                    style = MaterialTheme.typography.titleSmall,
+                    text = personalPlayer.name,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = HudAccentColor,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = stringResource(id = R.string.game_round_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = HudContentColor,
-                )
-                Text(
-                    text = stringResource(id = R.string.game_round_value, round),
-                    modifier = Modifier.testTag("game_round_value"),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = HudAccentColor,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
+
+        PhaseHeader(
+            phase = phase,
+            modifier = Modifier.align(Alignment.Center),
+        )
+    }
+}
+
+/**
+ * Dekoratives HUD-Segment der Top-Bar: legt die Inhalte auf das footer_bar-Asset
+ * als gerahmtes Panel (links "Dein Spieler", rechts "Runde").
+ */
+@Composable
+private fun TopHudSegment(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier =
+            modifier
+                .paint(
+                    painter = painterResource(id = R.drawable.footer_bar),
+                    contentScale = ContentScale.FillBounds,
+                )
+                .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        // Inhalt im (breiteren) Navbar-Panel zentriert (Options/Spieler mittig).
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        content = content,
+    )
+}
+
+/**
+ * Mittiger Phasen-Header: das dekorative phase_image als Plakette mit dem
+ * aktuellen Phasennamen in dunkelbrauner Schrift darüber.
+ */
+@Composable
+private fun PhaseHeader(
+    phase: TurnPhase?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.phase_image),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(PhaseImageHeight),
+        )
+        Text(
+            text = stringResource(id = phase.labelRes()),
+            modifier =
+                Modifier
+                    .testTag("game_phase_value")
+                    .padding(horizontal = 18.dp),
+            style = MaterialTheme.typography.titleSmall,
+            color = PhaseHeaderTextColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -2008,6 +2161,7 @@ private fun CardsSidebar(
 private fun PlayerSidebar(
     players: List<GamePlayerUi>,
     activePlayerId: PlayerId?,
+    round: Int,
     modifier: Modifier = Modifier,
 ) {
     val playerListScrollState = rememberScrollState()
@@ -2023,36 +2177,55 @@ private fun PlayerSidebar(
         }
     }
 
-    Surface(
+    /*
+     * Kein farbiger/dunkler Flächenhintergrund mehr und kein Goldrand: Allein das
+     * dekorative playerlist_background-Asset rahmt die Sidebar. So wirkt die Liste
+     * sauber freigestellt über der Karte statt wie eine massive Box.
+     */
+    Box(
         modifier =
             modifier
-                .testTag("game_player_panel"),
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, HudBorderColor),
+                .testTag("game_player_panel")
+                /*
+                 * Crop statt FillBounds: Das Panel-Asset behält seine
+                 * Originalproportionen (keine vertikale Streckung) und füllt die
+                 * Sidebar, indem Überstehendes beschnitten wird.
+                 */
+                .paint(
+                    painter = painterResource(id = R.drawable.playerlist_background),
+                    contentScale = ContentScale.Crop,
+                ),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(playerListScrollState)
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(
+            // "Runde X" als zentrierter Titel oben in der Spielerliste -- selbe
+            // Schriftart/Stil wie die übrigen Listentexte (labelLarge).
+            Text(
+                text = stringResource(id = R.string.game_round_value, round),
                 modifier =
                     Modifier
-                        .fillMaxSize()
-                        .verticalScroll(playerListScrollState)
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                players.forEach { player ->
-                    PlayerSidebarRow(
-                        player = player,
-                        isActive = player.playerId == activePlayerId,
-                        disableBringIntoView =
-                            activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
-                    )
-                }
+                        .align(Alignment.CenterHorizontally)
+                        .testTag("game_round_value")
+                        .padding(bottom = 2.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = HudAccentColor,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
+
+            players.forEach { player ->
+                PlayerSidebarRow(
+                    player = player,
+                    isActive = player.playerId == activePlayerId,
+                    disableBringIntoView =
+                        activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
+                )
             }
         }
     }
@@ -2073,50 +2246,58 @@ private fun PlayerSidebarRow(
         }
     }
 
-    Column {
-        Row(
-            modifier =
-                Modifier
-                    .bringIntoViewRequester(bringIntoViewRequester)
-                    .fillMaxWidth()
-                    .background(
-                        if (isActive) HudActiveHighlightColor else Color.Transparent,
-                        RoundedCornerShape(6.dp),
-                    )
-                    .wrapContentHeight()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+    /*
+     * Hochwertiger, gleichmäßiger Eintrag mit klarer Hierarchie: Avatar, Name
+     * (+ Host-Marker) und Verbindungs-Statuspunkt sitzen als zentrierte Gruppe in
+     * der Zeile -- mit bewusst großzügigem Abstand vor dem Statuspunkt, der aber
+     * mittig bleibt. Eine konstante Mindesthöhe sorgt für ruhige, gleich hohe
+     * Zeilen. Der aktive Spieler wird nicht mehr durch Rahmen/Tint, sondern
+     * ausschließlich durch das Marker-Icon (marker.png) links gekennzeichnet.
+     */
+    Row(
+        modifier =
+            Modifier
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (isActive) {
+            Image(
+                painter = painterResource(id = R.drawable.marker),
+                contentDescription = null,
+                modifier = Modifier.size(width = 18.dp, height = 20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        PlayerAvatar(player = player, size = 36.dp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            ActiveTurnIndicator(isVisible = isActive)
-            PlayerAvatar(player = player, size = 28.dp)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ConnectionStatusIndicator(
-                        status = player.connectionStatus,
-                        modifier =
-                            Modifier.testTag(
-                                "player_connection_status_${player.playerId.value}",
-                            ),
-                    )
-                    Text(
-                        text = player.name,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (isActive) HudAccentColor else HudContentColor,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    )
-                }
-                if (player.isHost) {
-                    HostIndicator()
-                }
+            Text(
+                text = player.name,
+                modifier = Modifier.widthIn(max = 100.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isActive) HudAccentColor else HudContentColor,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (player.isHost) {
+                HostIndicator()
             }
         }
+        Spacer(modifier = Modifier.width(22.dp))
+        ConnectionStatusIndicator(
+            status = player.connectionStatus,
+            modifier =
+                Modifier.testTag(
+                    "player_connection_status_${player.playerId.value}",
+                ),
+        )
     }
 }
 
@@ -2155,47 +2336,11 @@ internal fun connectionStatusIndicatorColor(status: ConnectionStatus): Color =
 
 @Composable
 private fun HostIndicator() {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = HudAccentColor,
-        contentColor = HudInverseColor,
-    ) {
-        Text(
-            text = stringResource(id = R.string.game_host_indicator),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = HudInverseColor,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
-private fun ActiveTurnIndicator(isVisible: Boolean) {
-    if (!isVisible) {
-        Spacer(modifier = Modifier.width(8.dp))
-        return
-    }
-
-    Canvas(
-        modifier =
-            Modifier
-                .size(width = 8.dp, height = 14.dp)
-                .testTag("active_player_marker"),
-    ) {
-        val trianglePath =
-            Path().apply {
-                moveTo(size.width, size.height / 2f)
-                lineTo(0f, 0f)
-                lineTo(0f, size.height)
-                close()
-            }
-
-        drawPath(
-            path = trianglePath,
-            color = HudAccentColor,
-        )
-    }
+    Image(
+        painter = painterResource(id = R.drawable.host_marker),
+        contentDescription = stringResource(id = R.string.game_host_indicator),
+        modifier = Modifier.size(width = 44.dp, height = 18.dp),
+    )
 }
 
 @Composable
@@ -2365,18 +2510,39 @@ private fun HandCardRow(
                     item.cardId?.let(onSelected)
                 },
         shape = RoundedCornerShape(6.dp),
-        color = if (item.isSelected) HudSelectedCardColor else HudSurfaceMutedColor,
+        color = Color.Transparent,
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
-        Text(
-            text = item.label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = HudContentColor,
-        )
+        /*
+         * Holz-Asset als Kartenhintergrund (innerhalb der Surface -> auf die
+         * abgerundeten Ecken geclippt). Eine ausgewählte Karte bekommt zusätzlich
+         * einen dezenten Gold-Tint über dem Holz.
+         */
+        Box(
+            modifier =
+                Modifier
+                    .paint(
+                        painter = painterResource(id = R.drawable.ui_button_wood),
+                        contentScale = ContentScale.FillBounds,
+                    )
+                    .then(
+                        if (item.isSelected) {
+                            Modifier.background(HudSelectedCardColor)
+                        } else {
+                            Modifier
+                        },
+                    ),
+        ) {
+            Text(
+                text = item.label,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = HudContentColor,
+            )
+        }
     }
 }
 
@@ -2893,106 +3059,114 @@ private fun BottomActionClusters(
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, HudBorderColor),
+    /*
+     * Buttons liegen frei über der Karte (kein Flächenhintergrund). Box-Layout:
+     * "Karten" links (CenterStart), die drei Phasen-Buttons als Gruppe genau in
+     * der Bildschirmmitte (Center) -- also direkt unter dem Phase-Header und über
+     * dem mittleren "Angriff"-Button -- und "Phase beenden" rechts (CenterEnd).
+     * "Karten" und "Phase beenden" sind exakt gleich breit (sideButtonWidth) und
+     * beide fillMaxHeight, damit ihre Buttons/PNGs identisch hoch sind. Das
+     * horizontale Padding hält alle Buttons mit Abstand zum Screenrand.
+     */
+    Box(
+        modifier =
+            modifier
+                .height(BottomBarHeight)
+                .padding(horizontal = 20.dp, vertical = 6.dp),
     ) {
-        Row(
+        val sideButtonWidth = 132.dp
+
+        GameActionButton(
+            label =
+                if (state.cardsVisible) {
+                    stringResource(id = R.string.game_cards_hide)
+                } else {
+                    stringResource(id = R.string.game_cards_button)
+                },
+            backgroundActive = R.drawable.btn_cards,
+            backgroundInactive = R.drawable.btn_cards,
+            active = true,
+            enabled = true,
+            fontSize = 11.sp,
+            onClick = {
+                musicManager?.playSfx(R.raw.sfx_ui_click)
+                onToggleCards()
+            },
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .height(BottomBarHeight)
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                    .align(Alignment.CenterStart)
+                    .width(sideButtonWidth)
+                    .fillMaxHeight(),
+        )
+
+        /*
+         * Alle drei Phasen-Buttons teilen exakt dieselbe Breite (PhaseButtonWidth)
+         * und Höhe (fillMaxHeight) -- identische Größe. Der kleinere Text-Offset
+         * (textStartFraction) gibt den langen Wörtern "Verstärken"/"Verschieben"
+         * genug Platz, damit sie vollständig im Button stehen statt aus dem Screen
+         * zu laufen. Die Gruppe ist exakt screen-mittig ausgerichtet.
+         */
+        Row(
+            modifier = Modifier.align(Alignment.Center).fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            BlockActionButton(
-                label =
-                    if (state.cardsVisible) {
-                        stringResource(id = R.string.game_cards_hide)
-                    } else {
-                        stringResource(id = R.string.game_cards_button)
-                    },
-                onClick = onToggleCards,
-                selected = true,
-                enabled = true,
-                modifier = Modifier.width(CardsSidebarWidth - 20.dp),
-                musicManager = musicManager,
+            GameActionButton(
+                label = stringResource(id = R.string.game_action_reinforce),
+                backgroundActive = R.drawable.btn_verstaerken,
+                backgroundInactive = R.drawable.btn_verstaerken_inactive,
+                active = state.currentPhase == TurnPhase.REINFORCEMENTS,
+                textStartFraction = 0.27f,
+                fontSize = 10.sp,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
-
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PhaseChip(
-                    label = stringResource(id = R.string.game_action_reinforce),
-                    selected = state.currentPhase == TurnPhase.REINFORCEMENTS,
-                    modifier = Modifier.weight(1f),
-                )
-                PhaseChip(
-                    label = stringResource(id = R.string.game_action_attack),
-                    selected = state.currentPhase == TurnPhase.ATTACK,
-                    modifier = Modifier.weight(1f),
-                )
-                PhaseChip(
-                    label = stringResource(id = R.string.game_action_move),
-                    selected = state.currentPhase == TurnPhase.FORTIFY,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            Row(
-                modifier = Modifier.width(172.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BlockActionButton(
-                    label = stringResource(id = R.string.game_end_round_button),
-                    onClick = onEndPhase,
-                    selected = true,
-                    enabled = state.canEndPhase,
-                    modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
-                    musicManager = musicManager,
-                    sfxResId = R.raw.sfx_attack_confirm,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Reiner Phasenindikator ohne Klickverhalten.
- *
- * Die aktuelle Phase wird wie die Topbar-Werte in Gold hervorgehoben; die
- * übrigen Phasen bleiben als gedämpfte Chips sichtbar.
- */
-@Composable
-private fun PhaseChip(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) HudActiveHighlightColor else HudSurfaceMutedColor,
-        contentColor = if (selected) HudAccentColor else HudContentColor,
-        border = if (selected) BorderStroke(1.dp, HudBorderColor) else null,
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            GameActionButton(
+                label = stringResource(id = R.string.game_action_attack),
+                backgroundActive = R.drawable.btn_attack,
+                backgroundInactive = R.drawable.btn_attack_inactive,
+                active = state.currentPhase == TurnPhase.ATTACK,
+                textStartFraction = 0.27f,
+                fontSize = 10.sp,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
+            )
+            GameActionButton(
+                label = stringResource(id = R.string.game_action_move),
+                backgroundActive = R.drawable.btn_verschieben,
+                backgroundInactive = R.drawable.btn_verschieben_inactive,
+                active = state.currentPhase == TurnPhase.FORTIFY,
+                textStartFraction = 0.27f,
+                fontSize = 10.sp,
+                // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe wie
+                // bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
+                backgroundScale = ContentScale.Crop,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
         }
+
+        GameActionButton(
+            label = stringResource(id = R.string.game_end_round_button),
+            backgroundActive = R.drawable.btn_phaseend,
+            backgroundInactive = R.drawable.btn_phaseend,
+            active = true,
+            enabled = state.canEndPhase,
+            onClick = {
+                musicManager?.playSfx(R.raw.sfx_attack_confirm)
+                onEndPhase()
+            },
+            // Gleiche Breite/Höhe wie "Karten"; kleiner Text-Offset, damit das
+            // lange Label "PHASE BEENDEN" vollständig in den Button passt.
+            textStartFraction = 0.22f,
+            fontSize = 9.sp,
+            // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe wie
+            // bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
+            backgroundScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(sideButtonWidth)
+                    .fillMaxHeight()
+                    .testTag("end_round_button"),
+        )
     }
 }
 

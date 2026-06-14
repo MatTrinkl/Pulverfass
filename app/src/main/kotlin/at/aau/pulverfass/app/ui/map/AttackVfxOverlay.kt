@@ -1,5 +1,6 @@
 package at.aau.pulverfass.app.ui.map
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -11,23 +12,24 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import at.aau.pulverfass.app.R
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.cos
-import kotlin.math.sin
 
 /*
  * Zeitachse der Clash-Animation. Die Phasen laufen nacheinander beziehungsweise
@@ -39,18 +41,18 @@ private const val BURST_DURATION_MS = 500
 private const val LABEL_DELAY_MS = 150
 private const val LABEL_DURATION_MS = 700
 
-private const val PARTICLE_COUNT = 12
-private const val FULL_CIRCLE_DEGREES = 360f
 private val BurstMaxRadius = 42.dp
-private val ParticleRadius = 3.dp
 private val LineWidth = 3.dp
 private val LabelRiseDistance = 34.dp
 private val LabelSideOffset = 18.dp
 
-private val BurstCoreColor = Color(0xFFFFF3B0)
-private val BurstGlowColor = Color(0xFFFF9800)
-private val ShockwaveColor = Color(0xFFFFCC80)
+/** Sichtbare Explosion ~1.82x des Burst-Radius (Durchmesser); 30 % kleiner als zuvor. */
+private const val EXPLOSION_SIZE_FACTOR = 1.82f
+
 private val DamageLabelColor = Color(0xFFFF5252)
+
+/** Log-Tag zur Diagnose der Clash-Animation (siehe [AttackVfxController]). */
+internal const val VFX_LOG_TAG = "AttackVfx"
 
 /**
  * Beschreibt einen abzuspielenden Kampf-Effekt auf der Karte.
@@ -75,12 +77,22 @@ data class AttackVfxRequest(
  * Spielt eingehende [AttackVfxRequest]s nacheinander ab.
  *
  * Schnell aufeinanderfolgende Kämpfe werden über eine Queue serialisiert statt
- * sich gegenseitig zu überschreiben. Bereits gesehene [AttackVfxRequest.attackId]s
- * werden ignoriert, damit derselbe Kampf nie doppelt animiert wird.
+ * sich gegenseitig zu überschreiben. Eine erneut eingereihte [AttackVfxRequest.attackId]
+ * wird nur ignoriert, solange sie bereits in der Queue liegt oder gerade zuletzt
+ * abgespielt wurde -- so wird derselbe Kampf nie doppelt animiert, ein echter neuer
+ * Angriff aber auch nie fälschlich verschluckt.
  */
 internal class AttackVfxController {
     private val queue = mutableStateListOf<AttackVfxRequest>()
-    private val seenAttackIds = mutableSetOf<Long>()
+
+    /*
+     * Es wird nur der zuletzt fertig abgespielte Kampf unterdrückt, nicht die
+     * gesamte Historie. So wird ein erneut emittiertes Ergebnis (Recomposition
+     * oder State-Catch-up) nicht doppelt animiert, ein echter neuer Angriff aber
+     * niemals verschluckt -- selbst wenn seine attackId eine frühere zufällig
+     * wiederholt (etwa nach einem Reset des stateVersion-Fallbacks im Reducer).
+     */
+    private var lastPlayedAttackId: Long? = null
 
     val lineProgress = Animatable(0f)
     val burstProgress = Animatable(0f)
@@ -91,12 +103,26 @@ internal class AttackVfxController {
         get() = queue.firstOrNull()
 
     fun enqueue(request: AttackVfxRequest) {
-        if (seenAttackIds.add(request.attackId)) {
-            queue.add(request)
+        val skipReason =
+            when {
+                request.attackId == lastPlayedAttackId -> "zuletzt abgespielt"
+                queue.any { it.attackId == request.attackId } -> "bereits in Queue"
+                else -> null
+            }
+        if (skipReason != null) {
+            Log.d(VFX_LOG_TAG, "skip attackId=${request.attackId}: $skipReason")
+            return
         }
+        Log.d(
+            VFX_LOG_TAG,
+            "enqueue attackId=${request.attackId} " +
+                "${request.fromRegionId}->${request.toRegionId}",
+        )
+        queue.add(request)
     }
 
     suspend fun playHead() {
+        val head = queue.firstOrNull() ?: return
         lineProgress.snapTo(0f)
         burstProgress.snapTo(0f)
         labelProgress.snapTo(0f)
@@ -120,6 +146,7 @@ internal class AttackVfxController {
                 )
             }
         }
+        lastPlayedAttackId = head.attackId
         queue.removeAt(0)
     }
 }
@@ -175,12 +202,24 @@ internal fun AttackVfxOverlay(
             color = DamageLabelColor,
         )
 
+    // Einzelframes der Explosion; der Burst-Fortschritt wählt den Frame aus.
+    val explosionFrames =
+        listOf(
+            ImageBitmap.imageResource(id = R.drawable.explosion_01_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_02_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_03_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_04_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_05_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_06_vfx),
+            ImageBitmap.imageResource(id = R.drawable.explosion_07_vfx),
+        )
+
     Canvas(modifier = modifier) {
         val fromOffset =
             mapPointToScreenOffset(fromAnchor, layoutMetrics, viewportState)
         val toOffset =
             mapPointToScreenOffset(toAnchor, layoutMetrics, viewportState)
-        if (!fromOffset.isValid() || !toOffset.isValid()) {
+        if (!fromOffset.isRenderable() || !toOffset.isRenderable()) {
             return@Canvas
         }
 
@@ -197,7 +236,8 @@ internal fun AttackVfxOverlay(
             defenderColor = defenderColor,
             scale = scale,
         )
-        drawClashBurst(
+        drawExplosionFrame(
+            frames = explosionFrames,
             midpoint = midpoint,
             progress = controller.burstProgress.value,
             scale = scale,
@@ -251,58 +291,41 @@ private fun DrawScope.drawClashLines(
     }
 }
 
-private fun DrawScope.drawClashBurst(
+/**
+ * Zeichnet die Explosion als Frame-Sequenz: Der Burst-Fortschritt (0..1) wählt
+ * den passenden Frame aus den [frames]; das Bild wird unter Beibehaltung seines
+ * Seitenverhältnisses mittig auf [midpoint] gezeichnet und folgt über [scale]
+ * dem Zoom.
+ */
+private fun DrawScope.drawExplosionFrame(
+    frames: List<ImageBitmap>,
     midpoint: Offset,
     progress: Float,
     scale: Float,
 ) {
-    if (progress <= 0f || progress >= 1f) {
+    if (progress <= 0f || frames.isEmpty()) {
         return
     }
 
-    val maxRadius = BurstMaxRadius.toPx() * scale
-    val fade = 1f - progress
+    val frameIndex = (progress * frames.size).toInt().coerceIn(0, frames.lastIndex)
+    val image = frames[frameIndex]
 
-    /*
-     * Canvas-Fallback statt Frame-Assets: expandierender Shockwave-Ring, ein
-     * weicher Glow-Kern und radial davonfliegende Partikel ergeben zusammen
-     * einen lesbaren Einschlag ohne zusätzliche Bitmaps.
-     */
-    drawCircle(
-        color = ShockwaveColor.copy(alpha = fade),
-        radius = maxRadius * progress,
-        center = midpoint,
-        style = Stroke(width = LineWidth.toPx() * scale),
-    )
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colors = listOf(BurstCoreColor.copy(alpha = fade), Color.Transparent),
-                center = midpoint,
-                radius = (maxRadius * 0.6f).coerceAtLeast(1f),
+    val dstWidth = (BurstMaxRadius.toPx() * EXPLOSION_SIZE_FACTOR * scale).coerceAtLeast(1f)
+    val dstHeight = dstWidth * (image.height.toFloat() / image.width.toFloat())
+    val widthInt = dstWidth.toInt()
+    val heightInt = dstHeight.toInt()
+
+    drawImage(
+        image = image,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(image.width, image.height),
+        dstOffset =
+            IntOffset(
+                x = (midpoint.x - widthInt / 2f).toInt(),
+                y = (midpoint.y - heightInt / 2f).toInt(),
             ),
-        radius = maxRadius * 0.6f,
-        center = midpoint,
+        dstSize = IntSize(widthInt, heightInt),
     )
-
-    val particleTravel = maxRadius * progress
-    val particleRadius = ParticleRadius.toPx() * scale * fade
-    for (index in 0 until PARTICLE_COUNT) {
-        val angleDegrees = index * (FULL_CIRCLE_DEGREES / PARTICLE_COUNT)
-        val angleRadians = Math.toRadians(angleDegrees.toDouble())
-        val particleCenter =
-            midpoint +
-                Offset(
-                    x = (cos(angleRadians) * particleTravel).toFloat(),
-                    y = (sin(angleRadians) * particleTravel).toFloat(),
-                )
-        val color = if (index % 2 == 0) BurstGlowColor else BurstCoreColor
-        drawCircle(
-            color = color.copy(alpha = fade),
-            radius = particleRadius,
-            center = particleCenter,
-        )
-    }
 }
 
 private fun DrawScope.drawDamageLabels(
@@ -345,6 +368,6 @@ private fun DrawScope.drawDamageLabels(
     }
 }
 
-private fun Offset.isValid(): Boolean = isSpecified() && x.isFinite() && y.isFinite()
+private fun Offset.isRenderable(): Boolean = isSpecified() && x.isFinite() && y.isFinite()
 
 private fun Offset.isSpecified(): Boolean = this != Offset.Unspecified

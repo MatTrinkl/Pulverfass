@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
+import at.aau.pulverfass.app.ui.components.VideoPlayer
 import at.aau.pulverfass.app.ui.map.MapAssetPreloader
 import at.aau.pulverfass.app.ui.navigation.Screen
 import at.aau.pulverfass.app.ui.theme.PulverfassColors
@@ -53,6 +54,15 @@ fun LoadGameScreen(
     preloadGame: suspend (Resources, (loaded: Int, total: Int) -> Unit) -> Unit =
         MapAssetPreloader::preload,
     minDisplayTimeMillis: Long = MIN_LOAD_GAME_SCREEN_MILLIS,
+    background: @Composable () -> Unit = {
+        VideoPlayer(
+            videoResId = R.raw.loading_maingame,
+            loop = true,
+            cover = true,
+            muted = true,
+            modifier = Modifier.fillMaxSize(),
+        )
+    },
 ) {
     val resources = LocalContext.current.resources
     var loadedSteps by remember { mutableIntStateOf(0) }
@@ -103,6 +113,15 @@ fun LoadGameScreen(
                 },
         contentAlignment = Alignment.Center,
     ) {
+        background()
+
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.35f)),
+        )
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
