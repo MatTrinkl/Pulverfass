@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -150,22 +149,11 @@ private val PhaseHeaderTextColor = PulverfassColors.TextOnParchment
 
 /** Einheitliche Breite der drei mittleren Phasen-Buttons der Bottom-Bar. */
 private val PhaseButtonWidth = 132.dp
-private val TopBarHeight = 138.dp
+private val TopBarHeight = 78.dp
 private val BottomBarHeight = 76.dp
-
-/*
- * Feste Breiten der beiden Top-HUD-Segmente (footer_bar-Panels). Bewusst ~50 %
- * breiter als der reine Inhalt, damit Options/Spieler bzw. "Runde X" mittig auf
- * einem breiteren Navbar-Bild sitzen. Feste dp-Werte -> auf allen Geräten
- * gleich proportioniert.
- */
-private val TopSegmentLeftWidth = 270.dp
 
 /** Horizontales Innen-Padding der Top-Bar. */
 private val TopBarHorizontalPadding = 16.dp
-
-/** Höhe des linken "Dein Spieler"/Options-Panels. */
-private val OptionsPanelHeight = 138.dp
 
 /** Höhe des mittigen phase_image. */
 private val PhaseImageHeight = 69.dp
@@ -2045,12 +2033,15 @@ private fun GameTopBar(
                 .displayCutoutPadding()
                 .padding(horizontal = TopBarHorizontalPadding),
     ) {
-        TopHudSegment(
+        // Kein Navbar-Panel mehr: Options-Button + Spieler-Info liegen frei ganz
+        // links am oberen Rand und sind ggü. zuvor ~20 % größer.
+        Row(
             modifier =
                 Modifier
-                    .align(Alignment.CenterStart)
-                    .width(TopSegmentLeftWidth)
-                    .height(OptionsPanelHeight),
+                    .align(Alignment.TopStart)
+                    .padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val optionsDescription = "Optionen"
             Image(
@@ -2058,20 +2049,22 @@ private fun GameTopBar(
                 contentDescription = optionsDescription,
                 modifier =
                     Modifier
-                        .size(38.dp)
+                        .size(46.dp)
                         .testTag("game_options_button")
                         .clickable(role = Role.Button, onClick = onOptionsClick),
             )
-            PlayerAvatar(player = personalPlayer, size = 32.dp)
+            PlayerAvatar(player = personalPlayer, size = 38.dp)
             Column {
                 Text(
                     text = stringResource(id = R.string.game_personal_player_label),
                     style = MaterialTheme.typography.labelSmall,
+                    fontSize = 13.sp,
                     color = HudContentColor,
                 )
                 Text(
                     text = personalPlayer.name,
                     style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 17.sp,
                     color = HudAccentColor,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -2082,33 +2075,9 @@ private fun GameTopBar(
 
         PhaseHeader(
             phase = phase,
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier.align(Alignment.TopCenter),
         )
     }
-}
-
-/**
- * Dekoratives HUD-Segment der Top-Bar: legt die Inhalte auf das footer_bar-Asset
- * als gerahmtes Panel (links "Dein Spieler", rechts "Runde").
- */
-@Composable
-private fun TopHudSegment(
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
-) {
-    Row(
-        modifier =
-            modifier
-                .paint(
-                    painter = painterResource(id = R.drawable.footer_bar),
-                    contentScale = ContentScale.FillBounds,
-                )
-                .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        // Inhalt im (breiteren) Navbar-Panel zentriert (Options/Spieler mittig).
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        content = content,
-    )
 }
 
 /**
