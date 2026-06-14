@@ -44,10 +44,12 @@
     <string name="game_cards_empty">Keine Karten</string>
     <string name="game_cards_unknown">Unbekannte Karte</string>
     <string name="game_cards_trade_in">Set eintauschen</string>
-    <string name="game_card_type_a">Infanterie</string>
-    <string name="game_card_type_b">Kavallerie</string>
-    <string name="game_card_type_c">Artillerie</string>
-    <string name="game_card_type_joker">Joker</string>
+    <string name="game_cards_selected_count">Gewaehlte Karten: %1$d/3</string>
+    <string name="game_cards_selected">Ausgewaehlt</string>
+    <string name="game_card_type_a">Galeone</string>
+    <string name="game_card_type_b">Kanone</string>
+    <string name="game_card_type_c">Pirat</string>
+    <string name="game_card_type_joker">Kaiser</string>
     <string name="game_reinforcements_remaining">Verfügbar: %1$s</string>
     <string name="game_reinforcements_bonus">Gebiet %1$d · Kontinent %2$d · Karten %3$d</string>
     <string name="game_reinforcements_target">Ziel: %1$s</string>

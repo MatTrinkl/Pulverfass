@@ -457,12 +457,10 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun reinforcement_panel_places_troops_and_typed_hand_submits_trade_in() {
+    fun reinforcement_panel_places_troops() {
         val playerId = PlayerId(1)
-        val cardIds = listOf(CardId("a"), CardId("b"), CardId("c"))
         var placementDelta = 0
         var placed = false
-        var traded = false
         var closedRegion: String? = null
 
         composeTestRule.setContent {
@@ -485,7 +483,6 @@ class ScreenComposableTest {
                                     activePlayerId = playerId,
                                     turnPhase = TurnPhase.REINFORCEMENTS,
                                     selectedRegionId = "brazil",
-                                    cardsVisible = true,
                                     reinforcementState =
                                         ReinforcementUiState(
                                             playerId = playerId,
@@ -493,13 +490,6 @@ class ScreenComposableTest {
                                             territoryBonus = 2,
                                             isBonusBreakdownKnown = true,
                                         ),
-                                    privateHandCards =
-                                        listOf(
-                                            PrivateHandCardUi(cardIds[0], CardType.A),
-                                            PrivateHandCardUi(cardIds[1], CardType.B),
-                                            PrivateHandCardUi(cardIds[2], CardType.C),
-                                        ),
-                                    selectedTradeInCardIds = cardIds.toSet(),
                                 ),
                             isConnected = true,
                             pendingCommandKeys = emptySet(),
@@ -512,7 +502,6 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onAdjustReinforcementPlacementAmount = { placementDelta = it },
                             onPlaceReinforcements = { placed = true },
-                            onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
                     countdownState = false to 0,
@@ -532,15 +521,135 @@ class ScreenComposableTest {
             .onNodeWithTag("place_reinforcements_button")
             .assertIsEnabled()
             .performClick()
-        composeTestRule.onNodeWithText("Infanterie").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
-            .performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithTag("close_reinforcement_panel").performClick()
 
         assertEquals(1, placementDelta)
         assertTrue(placed)
-        assertTrue(traded)
         assertEquals("brazil", closedRegion)
+    }
+
+    @Test
+    fun cards_screen_shows_centered_typed_cards_and_submits_trade_in() {
+        val playerId = PlayerId(1)
+        val cardIds =
+            listOf(
+                CardId("territory:sahara:a"),
+                CardId("territory:brasilien:b"),
+                CardId("territory:japan:c"),
+            )
+        var selectedCardId: CardId? = null
+        var traded = false
+        var closed = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    cardsVisible = true,
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(cardIds[0], CardType.A),
+                                            PrivateHandCardUi(cardIds[1], CardType.B),
+                                            PrivateHandCardUi(cardIds[2], CardType.C),
+                                            PrivateHandCardUi(CardId("joker:1"), CardType.JOKER),
+                                        ),
+                                    selectedTradeInCardIds = cardIds.toSet(),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = { closed = true },
+                            onAdvanceTurn = {},
+                            onToggleTradeInCard = { selectedCardId = it },
+                            onTradeInCards = { traded = true },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("game_cards_screen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Galeone Sahara").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanone Brasilien").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pirat Japan").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Gewaehlte Karten: 3/3").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("game_hand_card_territory:sahara:a").performClick()
+        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.onNodeWithTag("game_cards_close").performClick()
+
+        assertEquals(cardIds[0], selectedCardId)
+        assertTrue(traded)
+        assertTrue(closed)
+    }
+
+    @Test
+    fun cards_screen_names_joker_cards_as_kaiser() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.DRAW_CARD,
+                                    cardsVisible = true,
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(CardId("joker:1"), CardType.JOKER),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Kaiser").assertIsDisplayed()
     }
 
     @Test

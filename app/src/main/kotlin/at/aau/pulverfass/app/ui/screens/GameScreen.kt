@@ -22,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -36,12 +37,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -86,6 +87,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -133,7 +135,7 @@ private val HudInverseColor = Color.White
 private val TopBarHeight = 52.dp
 private val BottomBarHeight = 54.dp
 private val SidebarWidth = 156.dp
-private val CardsSidebarWidth = SidebarWidth
+private val CardsButtonWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
@@ -476,6 +478,15 @@ internal fun GameScreenContent(
     val canClaimCheatReinforcementBonus =
         uiState.canManageReinforcements(localPlayerId, isConnected) &&
             !isReinforcementCommandPending
+    val privateHandState =
+        privateHandPanelState(
+            player = personalPlayer,
+            uiState = uiState,
+            localPlayerId = localPlayerId,
+            isConnected = isConnected,
+            isReinforcementCommandPending = isReinforcementCommandPending,
+            pendingCommandKeys = pendingCommandKeys,
+        )
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
@@ -590,30 +601,6 @@ internal fun GameScreenContent(
                         .fillMaxWidth(),
             )
 
-            CardsSidebar(
-                state =
-                    privateHandPanelState(
-                        player = personalPlayer,
-                        uiState = uiState,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                        isReinforcementCommandPending = isReinforcementCommandPending,
-                        pendingCommandKeys = pendingCommandKeys,
-                    ),
-                actions =
-                    PrivateHandPanelActions(
-                        onToggleTradeInCard = onToggleTradeInCard,
-                        onTradeInCards = onTradeInCards,
-                    ),
-                isVisible = uiState.cardsVisible,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                        .requiredWidth(CardsSidebarWidth)
-                        .fillMaxHeight(),
-            )
-
             LightSensorCheatTrigger(
                 enabled = canClaimCheatReinforcementBonus,
                 onTriggered = onClaimCheatReinforcementBonus,
@@ -706,6 +693,19 @@ internal fun GameScreenContent(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .navigationBarsPadding(),
+                musicManager = musicManager,
+            )
+
+            CardsScreen(
+                state = privateHandState,
+                actions =
+                    PrivateHandPanelActions(
+                        onToggleTradeInCard = onToggleTradeInCard,
+                        onTradeInCards = onTradeInCards,
+                    ),
+                isVisible = uiState.cardsVisible,
+                onClose = onToggleCards,
+                modifier = Modifier.fillMaxSize(),
                 musicManager = musicManager,
             )
 
@@ -1907,28 +1907,290 @@ private fun GameTopBar(
 }
 
 @Composable
-private fun CardsSidebar(
+private fun CardsScreen(
     state: PrivateHandPanelState,
     actions: PrivateHandPanelActions,
     isVisible: Boolean,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
 ) {
-    if (isVisible) {
-        Surface(
-            modifier = modifier,
-            shape = RoundedCornerShape(0.dp),
-            color = HudSurfaceColor,
-            contentColor = HudContentColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
+    if (!isVisible) return
+
+    val handCardItems = rememberHandCardItems(state)
+    Box(
+        modifier =
+            modifier
+                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f))
+                .testTag("game_cards_screen"),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes
+                                    .forEach { it.consume() }
+                            }
+                        }
+                    },
+        )
+
+        Row(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .displayCutoutPadding()
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            PrivateHandPanel(
-                state = state,
-                actions = actions,
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                PulverfassTitleText(
+                    text = stringResource(id = R.string.game_cards_title),
+                    fontSize = 30.sp,
+                    letterSpacing = 1.sp,
+                )
+                Text(
+                    text = state.playerName,
+                    color = PulverfassColors.TextOnDark,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            BlockActionButton(
+                label = stringResource(id = R.string.game_cards_hide),
+                onClick = onClose,
+                selected = false,
+                modifier = Modifier.width(132.dp).testTag("game_cards_close"),
+                musicManager = musicManager,
+            )
+        }
+
+        if (handCardItems.isEmpty()) {
+            Text(
+                text = stringResource(id = R.string.game_cards_empty),
+                color = PulverfassColors.TextOnDark,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else {
+            CenteredHandCards(
+                items = handCardItems,
+                selectable = state.canSelectTradeCards,
+                onSelected = actions.onToggleTradeInCard,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .testTag("game_cards_panel"),
+                musicManager = musicManager,
+            )
+        }
+
+        if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
+            Column(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 28.dp)
+                        .widthIn(min = 220.dp, max = 360.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            id = R.string.game_cards_selected_count,
+                            state.selectedTradeInCardIds.size,
+                        ),
+                    color = PulverfassColors.TextOnDark,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                FilledTonalButton(
+                    onClick = {
+                        musicManager?.playSfx(R.raw.sfx_card_select)
+                        actions.onTradeInCards()
+                    },
+                    enabled = state.canTradeInCards,
+                    modifier = Modifier.fillMaxWidth().testTag("trade_in_cards_button"),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.game_cards_trade_in),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                if (state.isTradePending) {
+                    Text(
+                        text = stringResource(id = R.string.loading),
+                        color = PulverfassColors.TextOnDark,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CenteredHandCards(
+    items: List<HandCardItemUi>,
+    selectable: Boolean,
+    onSelected: (CardId) -> Unit,
+    modifier: Modifier = Modifier,
+    musicManager: BackgroundMusicManager? = null,
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val compact = maxWidth < 440.dp
+        val cardWidth = if (compact) 96.dp else 124.dp
+        val cardHeight = if (compact) 138.dp else 178.dp
+        val gap = if (compact) 14.dp else 22.dp
+        val cardCount = items.size
+        val totalCardsWidth = cardWidth * cardCount.toFloat()
+        val totalGapWidth = gap * (cardCount - 1).coerceAtLeast(0).toFloat()
+        val totalWidth = totalCardsWidth + totalGapWidth
+        val horizontalPadding = ((maxWidth - totalWidth) / 2f).coerceAtLeast(24.dp)
+
+        LazyRow(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(cardHeight + 28.dp),
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(
+                items = items,
+                key = HandCardItemUi::stableKey,
+            ) { item ->
+                LargeHandCard(
+                    item = item,
+                    selectable = selectable,
+                    onSelected = onSelected,
+                    width = cardWidth,
+                    height = cardHeight,
+                    musicManager = musicManager,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LargeHandCard(
+    item: HandCardItemUi,
+    selectable: Boolean,
+    onSelected: (CardId) -> Unit,
+    width: Dp,
+    height: Dp,
+    musicManager: BackgroundMusicManager? = null,
+) {
+    val accentColor = item.type.handCardAccentColor()
+    val borderColor = if (item.isSelected) Color(0xFFB8E36F) else accentColor
+    val surfaceColor = if (item.isSelected) Color(0xFFFFF6D8) else Color(0xFFF7F1DF)
+
+    Surface(
+        modifier =
+            Modifier
+                .width(width)
+                .height(height)
+                .graphicsLayer {
+                    val selectedScale = if (item.isSelected) 1.04f else 1f
+                    scaleX = selectedScale
+                    scaleY = selectedScale
+                }
+                .testTag("game_hand_card_${item.stableKey}")
+                .clickable(enabled = selectable && item.cardId != null) {
+                    musicManager?.playSfx(R.raw.sfx_card_select_alt)
+                    item.cardId?.let(onSelected)
+                },
+        shape = RoundedCornerShape(8.dp),
+        color = surfaceColor,
+        contentColor = HudContentColor,
+        border = BorderStroke(if (item.isSelected) 3.dp else 1.dp, borderColor),
+        tonalElevation = 0.dp,
+        shadowElevation = if (item.isSelected) 8.dp else 2.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Box(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                        .height(7.dp)
+                        .background(accentColor, RoundedCornerShape(4.dp)),
+            )
+            Text(
+                text = item.label,
+                color = HudContentColor,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                fontSize = if (width < 110.dp) 13.sp else 15.sp,
+                lineHeight = if (width < 110.dp) 15.sp else 17.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 3,
+            )
+            Text(
+                text =
+                    if (item.isSelected) {
+                        stringResource(id = R.string.game_cards_selected)
+                    } else {
+                        item.type.handCardFooter()
+                    },
+                color = if (item.isSelected) Color(0xFF315B20) else accentColor,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberHandCardItems(state: PrivateHandPanelState): List<HandCardItemUi> {
+    val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
+    val typeLabels =
+        mapOf(
+            CardType.A to stringResource(id = R.string.game_card_type_a),
+            CardType.B to stringResource(id = R.string.game_card_type_b),
+            CardType.C to stringResource(id = R.string.game_card_type_c),
+            CardType.JOKER to stringResource(id = R.string.game_card_type_joker),
+        )
+
+    return remember(
+        state.handCards,
+        state.privateHandCards,
+        state.selectedTradeInCardIds,
+        unknownCardLabel,
+        typeLabels,
+    ) {
+        if (state.privateHandCards.isNotEmpty()) {
+            state.privateHandCards.map { card ->
+                HandCardItemUi(
+                    stableKey = card.cardId.value,
+                    label = card.handCardLabel(typeLabels),
+                    cardId = card.cardId,
+                    isSelected = card.cardId in state.selectedTradeInCardIds,
+                    type = card.type,
+                )
+            }
+        } else {
+            buildHandCardItems(
+                handCards = state.handCards,
+                unknownCardLabel = unknownCardLabel,
             )
         }
     }
@@ -2173,38 +2435,7 @@ internal fun PrivateHandPanel(
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
 ) {
-    val unknownCardLabel = stringResource(id = R.string.game_cards_unknown)
-    val typeLabels =
-        mapOf(
-            CardType.A to stringResource(id = R.string.game_card_type_a),
-            CardType.B to stringResource(id = R.string.game_card_type_b),
-            CardType.C to stringResource(id = R.string.game_card_type_c),
-            CardType.JOKER to stringResource(id = R.string.game_card_type_joker),
-        )
-    val handCardItems =
-        remember(
-            state.handCards,
-            state.privateHandCards,
-            state.selectedTradeInCardIds,
-            unknownCardLabel,
-            typeLabels,
-        ) {
-            if (state.privateHandCards.isNotEmpty()) {
-                state.privateHandCards.map { card ->
-                    HandCardItemUi(
-                        stableKey = card.cardId.value,
-                        label = typeLabels.getValue(card.type),
-                        cardId = card.cardId,
-                        isSelected = card.cardId in state.selectedTradeInCardIds,
-                    )
-                }
-            } else {
-                buildHandCardItems(
-                    handCards = state.handCards,
-                    unknownCardLabel = unknownCardLabel,
-                )
-            }
-        }
+    val handCardItems = rememberHandCardItems(state)
 
     Column(
         modifier = modifier.testTag("game_cards_panel"),
@@ -2309,6 +2540,7 @@ internal data class HandCardItemUi(
     val label: String,
     val cardId: CardId? = null,
     val isSelected: Boolean = false,
+    val type: CardType? = null,
 )
 
 /**
@@ -2336,6 +2568,86 @@ internal fun buildHandCardItems(
         )
     }
 }
+
+/**
+ * Bildet die sichtbare Kartenbezeichnung aus Typ und codierter Territory-ID.
+ */
+private fun PrivateHandCardUi.handCardLabel(typeLabels: Map<CardType, String>): String {
+    val typeLabel = typeLabels.getValue(type)
+    val territoryName = cardId.territoryDisplayName()
+    return if (territoryName == null || type == CardType.JOKER) {
+        typeLabel
+    } else {
+        "$typeLabel $territoryName"
+    }
+}
+
+private fun CardId.territoryDisplayName(): String? {
+    val parts = value.split(":")
+    if (parts.size != 3 || parts[0] != "territory") {
+        return null
+    }
+    return territoryDisplayNames[parts[1]] ?: parts[1].fallbackTerritoryDisplayName()
+}
+
+private fun String.fallbackTerritoryDisplayName(): String =
+    split("_")
+        .filter { it.isNotBlank() }
+        .joinToString(" ") { part ->
+            part.replaceFirstChar { char ->
+                if (char.isLowerCase()) {
+                    char.titlecase()
+                } else {
+                    char.toString()
+                }
+            }
+        }
+
+private fun CardType?.handCardAccentColor(): Color =
+    when (this) {
+        CardType.A -> Color(0xFF1F6D7A)
+        CardType.B -> Color(0xFF8B3F2B)
+        CardType.C -> Color(0xFF5C4D8B)
+        CardType.JOKER -> Color(0xFFB2872E)
+        null -> HudBorderColor
+    }
+
+private fun CardType?.handCardFooter(): String =
+    when (this) {
+        CardType.A -> "A"
+        CardType.B -> "B"
+        CardType.C -> "C"
+        CardType.JOKER -> "JOKER"
+        null -> ""
+    }
+
+private val territoryDisplayNames =
+    mapOf(
+        "argentinien" to "Argentinien",
+        "brasilien" to "Brasilien",
+        "mittelamerika" to "Mittelamerika",
+        "usa" to "USA",
+        "andengemeinschaft" to "Andengemeinschaft",
+        "alaska" to "Alaska",
+        "kanada" to "Kanada",
+        "groenland" to "Groenland",
+        "grossbritannien" to "Grossbritannien",
+        "westeuropa" to "Westeuropa",
+        "skandinavien" to "Skandinavien",
+        "mitteleuropa" to "Mitteleuropa",
+        "russland" to "Russland",
+        "naher_osten" to "Naher Osten",
+        "sibirien" to "Sibirien",
+        "china" to "China",
+        "japan" to "Japan",
+        "ferner_osten" to "Ferner Osten",
+        "australien" to "Australien",
+        "ozeanien" to "Ozeanien",
+        "aegypten" to "Aegypten",
+        "sahara" to "Sahara",
+        "zentral_afrika" to "Zentralafrika",
+        "sued_afrika" to "Suedafrika",
+    )
 
 /**
  * Zeigt die Platzierungssteuerung für ein bereits ausgewähltes eigenes Gebiet.
@@ -2785,7 +3097,7 @@ private fun BottomActionClusters(
                 onClick = onToggleCards,
                 selected = false,
                 enabled = state.canUseLocalInput,
-                modifier = Modifier.width(CardsSidebarWidth - 20.dp),
+                modifier = Modifier.width(CardsButtonWidth - 20.dp),
                 musicManager = musicManager,
             )
 
@@ -2808,6 +3120,12 @@ private fun BottomActionClusters(
                 PhaseButton(
                     label = stringResource(id = R.string.game_action_move),
                     selected = state.currentPhase == TurnPhase.FORTIFY,
+                    enabled = false,
+                    modifier = Modifier.weight(1f),
+                )
+                PhaseButton(
+                    label = stringResource(id = R.string.game_action_draw_card),
+                    selected = state.currentPhase == TurnPhase.DRAW_CARD,
                     enabled = false,
                     modifier = Modifier.weight(1f),
                 )
