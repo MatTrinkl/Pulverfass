@@ -29,6 +29,8 @@ import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
@@ -697,6 +699,142 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             assertTrue(playerOne !in snapshot.usedCheatReinforcementBonusByPlayer)
         }
 
+    @Test
+    fun `cheat report is rejected when requester does not match reporter`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRE1")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingReport(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ReportCheatRequest(
+                            lobbyCode = lobbyCode,
+                            reporterPlayerId = playerTwo,
+                            accusedPlayerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ReportCheatErrorCode.REQUESTER_MISMATCH, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+        }
+
+    @Test
+    fun `cheat report is rejected when player reports himself`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRE2")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingReport(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ReportCheatRequest(
+                            lobbyCode = lobbyCode,
+                            reporterPlayerId = playerOne,
+                            accusedPlayerId = playerOne,
+                        ),
+                )
+
+            assertEquals(ReportCheatErrorCode.SELF_REPORT, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+        }
+
+    @Test
+    fun `cheat report is rejected for unknown accused player`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRE3")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val unknownPlayer = PlayerId(99)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingReport(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ReportCheatRequest(
+                            lobbyCode = lobbyCode,
+                            reporterPlayerId = playerOne,
+                            accusedPlayerId = unknownPlayer,
+                        ),
+                )
+
+            assertEquals(ReportCheatErrorCode.UNKNOWN_PLAYER, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+        }
+
+    @Test
+    fun `cheat report is rejected before game has started`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CRE4")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                ).copy(
+                    gameStarted = false,
+                    status = GameStatus.WAITING_FOR_PLAYERS,
+                )
+
+            val (error, snapshot) =
+                exerciseFailingReport(
+                    lobbyCode = lobbyCode,
+                    state = baseState,
+                    requesterPlayerId = playerOne,
+                    request =
+                        ReportCheatRequest(
+                            lobbyCode = lobbyCode,
+                            reporterPlayerId = playerOne,
+                            accusedPlayerId = playerTwo,
+                        ),
+                )
+
+            assertEquals(ReportCheatErrorCode.GAME_NOT_RUNNING, error.code)
+            assertEquals(2, snapshot.pendingReinforcementsFor(playerOne))
+        }
+
     private suspend fun ApplicationTestBuilder.exerciseFailingClaim(
         lobbyCode: LobbyCode,
         state: GameState,
@@ -754,6 +892,79 @@ class ClaimCheatReinforcementBonusIntegrationTest {
 
                 val error =
                     assertIs<ClaimCheatReinforcementBonusErrorResponse>(
+                        receiveRelevantTestPayload(requesterSession.first),
+                    )
+
+                val snapshot =
+                    lobbyManager.getLobby(lobbyCode)?.currentState()
+                        ?: error("snapshot missing")
+                requesterSession.first.close()
+                error to snapshot
+            }
+        } finally {
+            routingService.stop()
+            lobbyManager.shutdownAll()
+            serverScope.cancel()
+        }
+    }
+
+    private suspend fun ApplicationTestBuilder.exerciseFailingReport(
+        lobbyCode: LobbyCode,
+        state: GameState,
+        requesterPlayerId: PlayerId,
+        request: ReportCheatRequest,
+    ): Pair<ReportCheatErrorResponse, GameState> {
+        val network = ServerNetwork()
+        val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = LobbyManager(serverScope)
+        val router =
+            MainServerRouter(
+                lobbyManager = lobbyManager,
+                mapper = DefaultNetworkToLobbyEventMapper(),
+            )
+        val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+        val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+        val routingService =
+            MainServerLobbyRoutingService(
+                network = network,
+                router = router,
+                lobbyManager = lobbyManager,
+                playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                hooks = MainServerLobbyRoutingServiceHooks(),
+            )
+
+        application {
+            module(network)
+        }
+        lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = state)
+        routingService.start(serverScope)
+
+        val client =
+            createClient {
+                install(WebSockets)
+            }
+
+        return try {
+            coroutineScope {
+                val requesterSession =
+                    connectSessionWithConnection(
+                        client = client,
+                        network = network,
+                        playerId = requesterPlayerId,
+                        playersByConnection = playersByConnection,
+                        connectionsByPlayer = connectionsByPlayer,
+                    )
+
+                requesterSession.first.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(request),
+                    ),
+                )
+
+                val error =
+                    assertIs<ReportCheatErrorResponse>(
                         receiveRelevantTestPayload(requesterSession.first),
                     )
 
