@@ -943,7 +943,7 @@ private fun BoxScope.YourTurnBanner(
                 fontWeight = FontWeight.Bold,
                 fontSize = 30.sp,
                 letterSpacing = 3.sp,
-                color = PulverfassColors.GoldBright,
+                color = PulverfassColors.TextOnParchment,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 32.dp),
             )
