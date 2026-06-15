@@ -140,7 +140,7 @@ private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
-private const val CHEAT_LIGHT_COVERED_LUX = 2f
+private const val CHEAT_LIGHT_COVERED_LUX = 5f
 
 /**
  * Einstiegspunkt des Spielbildschirms.
