@@ -238,6 +238,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         receiveRelevantTestPayload(cheaterSession.first),
                     )
 
+                    // Erst die Platzierung macht den Cheat für die anderen Spieler sichtbar.
                     cheaterSession.first.send(
                         Frame.Binary(
                             fin = true,
@@ -258,6 +259,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    // Beide Clients bekommen die sichtbare Truppenänderung.
                     assertIs<TerritoryTroopsChangedEvent>(
                         receiveRelevantTestPayload(
                             session = cheaterSession.first,
@@ -278,6 +280,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    // Danach liegt das Meldefenster offen und die Meldung muss korrekt sein.
                     reporterSession.first.send(
                         Frame.Binary(
                             fin = true,
@@ -305,6 +308,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    // Ich gehe einmal bis zur nächsten Runde, damit die 0-Truppen-Strafe greift.
                     advanceTurn(
                         cheaterSession.first,
                         lobbyCode,

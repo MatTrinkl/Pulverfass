@@ -879,6 +879,9 @@ private fun OptionsOverlay(
     if (!show) return
     val scrollState = rememberScrollState()
     var showCheatReportPlayers by remember { mutableStateOf(false) }
+    /*
+     * Der eigene Spieler wird nicht angeboten, weil man sich nicht selbst melden darf.
+     */
     val reportablePlayers = players.filter { it.playerId != localPlayerId }
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
@@ -903,8 +906,8 @@ private fun OptionsOverlay(
         )
         Spacer(modifier = Modifier.height(8.dp))
         /*
-         * Die Meldefunktion liegt bewusst in den Optionen, damit die Kartenoberfläche
-         * nicht mit zusätzlichen Buttons überladen wird.
+         * Die Meldefunktion liegt in den Optionen, weil sie nur selten gebraucht wird.
+         * So bleibt die Karte frei für die normalen Spielaktionen.
          */
         MainButton(
             text = "CHEAT MELDEN",
@@ -916,6 +919,10 @@ private fun OptionsOverlay(
                     !isReportCheatPending,
         )
         if (showCheatReportPlayers) {
+            /*
+             * Erst nach dem Klick auf "CHEAT MELDEN" zeige ich die Spielerliste an.
+             * Dadurch nimmt die Funktion im normalen Optionsmenü wenig Platz weg.
+             */
             Text(
                 text = "SPIELER AUSWÄHLEN",
                 color = PulverfassColors.TextOnDark,

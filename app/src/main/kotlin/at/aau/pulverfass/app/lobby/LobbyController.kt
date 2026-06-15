@@ -182,7 +182,7 @@ class LobbyController(
             /*
              * Transportevents beschreiben nur Socket-Lifecycle. Fachliche
              * Entscheidungen wie "Reconnect starten" oder "Pending Create senden"
-             * liegen bewusst hier im Controller.
+             * liegen hier im Controller.
              */
             network.transport.events.collect { event ->
                 when (event) {
@@ -985,12 +985,20 @@ class LobbyController(
             _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
             return
         }
+        /*
+         * Selbstmeldungen blockiere ich schon in der App. Der Server prüft das
+         * später trotzdem noch einmal, damit manipulierte Requests nicht durchkommen.
+         */
         if (reporterPlayerId == accusedPlayerId) {
             _state.update { it.copy(errorText = "Du kannst dich nicht selbst melden.") }
             return
         }
 
         scope.launch {
+            /*
+             * Die App schickt nur, wer wen meldet. Ob die Meldung stimmt,
+             * entscheidet der Server anhand des aktuellen Meldefensters.
+             */
             sendCommand(
                 command =
                     LobbyCommand(
@@ -1778,6 +1786,10 @@ class LobbyController(
                 clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
                 _state.update {
                     it.copy(
+                        /*
+                         * Die Meldung läuft über errorText, weil dort bereits kurze
+                         * Rückmeldungen an den Spieler angezeigt werden.
+                         */
                         errorText =
                             if (payload.correct) {
                                 "Cheat korrekt gemeldet: +3 Truppen in deiner nächsten " +
@@ -2208,7 +2220,7 @@ class LobbyController(
      * Topbar beim aktiven Angreifer bereits auf Fortify springen, bevor die
      * lokale Auto-Skip-Notice sichtbar wird.
      *
-     * Manuelle Bestätigungen werden bewusst ausgeschlossen, weil der Spieler in
+     * Manuelle Bestätigungen werden hier ausgeschlossen, weil der Spieler in
      * diesem Fall selbst auf "Phase beenden" geklickt hat und kein Auto-Popup
      * erwartet.
      *
@@ -2241,7 +2253,7 @@ class LobbyController(
     }
 
     /**
-     * Übernimmt einen im Attack-Delta bewusst zurückgehaltenen Phasenwechsel.
+     * Übernimmt einen im Attack-Delta zurückgehaltenen Phasenwechsel.
      *
      * Der Server kann das Kampfergebnis und den Wechsel auf Fortify im selben
      * Delta liefern. Für den angreifenden Client bleibt die sichtbare Phase

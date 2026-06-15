@@ -238,7 +238,7 @@ class MainServerLobbyRoutingService(
     private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
 
     /*
-     * Die Cheat-Meldelogik bleibt bewusst serverseitig.
+     * Die Cheat-Meldelogik bleibt auf dem Server.
      * Die App darf nur melden, aber nicht selbst entscheiden, ob die Meldung stimmt.
      */
     private val cheatReportLock = Any()
@@ -246,12 +246,14 @@ class MainServerLobbyRoutingService(
     /*
      * Nach dem Cheat ist der Vorteil für andere Spieler noch nicht sicher sichtbar.
      * Deshalb wartet der Server bis zur nächsten Verstärkungsplatzierung dieses Spielers.
+     * Erst dann können die anderen Spieler den Verdacht überhaupt sehen.
      */
     private val pendingVisibleCheatByLobby = mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
     /*
      * Speichert pro Lobby, welcher Spieler gerade ein offenes 20-Sekunden-Meldefenster hat.
      * Es wird kein eigener Timer gestartet; beim Melden wird einfach die Ablaufzeit geprüft.
+     * Das spart einen Hintergrundjob und reicht für diese Regel völlig aus.
      */
     private val cheatReportWindowsByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, CheatReportWindow>>()
@@ -265,6 +267,7 @@ class MainServerLobbyRoutingService(
     /*
      * Bonus oder Malus wird nicht sofort angewendet, sondern erst in der nächsten
      * Verstärkungsphase des meldenden Spielers.
+     * Mehrere falsche Meldungen addieren sich, werden später aber bei 0 begrenzt.
      */
     private val nextReinforcementModifierByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, Int>>()
@@ -1265,6 +1268,10 @@ class MainServerLobbyRoutingService(
         val adjustment =
             synchronized(cheatReportLock) {
                 val activePlayerId = currentTurnState.activePlayerId
+                /*
+                 * Die gespeicherten Folgen einer Meldung werden hier verbraucht.
+                 * Danach wirken sie nicht versehentlich in einer späteren Runde noch einmal.
+                 */
                 val modifiers = nextReinforcementModifierByLobby[lobbyCode]
                 val modifier = modifiers?.remove(activePlayerId) ?: 0
                 if (modifiers?.isEmpty() == true) {
@@ -2327,6 +2334,10 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
     ) {
+        /*
+         * Der Spieler hat den Cheat ausgelöst, aber noch nichts Sichtbares gemacht.
+         * Darum wird hier nur vorgemerkt und noch kein Meldefenster geöffnet.
+         */
         synchronized(cheatReportLock) {
             pendingVisibleCheatByLobby
                 .getOrPut(lobbyCode) { mutableSetOf() }
@@ -2343,6 +2354,10 @@ class MainServerLobbyRoutingService(
             if (pendingPlayers?.remove(accusedPlayerId) != true) {
                 return@synchronized
             }
+            /*
+             * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist.
+             * Wartet der Cheater vorher ab, verliert dadurch niemand die Chance zu melden.
+             */
             if (pendingPlayers.isEmpty()) {
                 pendingVisibleCheatByLobby.remove(lobbyCode)
             }
@@ -2394,6 +2409,10 @@ class MainServerLobbyRoutingService(
                 require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
                     "ALREADY_REPORTED"
                 }
+                /*
+                 * Dieser Schlüssel enthält auch das Ablaufdatum des Fensters.
+                 * Bei einem späteren Cheat desselben Spielers ist es dadurch wieder eine neue Meldung.
+                 */
             }
 
             /*
