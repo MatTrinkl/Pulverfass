@@ -47,6 +47,7 @@ import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -64,6 +65,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
@@ -80,6 +82,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGet
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
@@ -974,6 +977,42 @@ class LobbyController(
         }
     }
 
+    fun reportCheat(accusedPlayerId: PlayerId) {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val reporterPlayerId = snapshot.ownPlayerId
+        if (lobbyCode == null || reporterPlayerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        if (reporterPlayerId == accusedPlayerId) {
+            _state.update { it.copy(errorText = "Du kannst dich nicht selbst melden.") }
+            return
+        }
+
+        scope.launch {
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.REPORT_CHEAT,
+                        payload =
+                            ReportCheatRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                reporterPlayerId = reporterPlayerId,
+                                accusedPlayerId = accusedPlayerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(
+                        errorText = error.message ?: "Cheat-Meldung konnte nicht gesendet werden.",
+                    )
+                }
+            }
+        }
+    }
+
     /**
      * Bestätigt die Verstärkungsphase, sobald der Restpool vollständig verbraucht ist.
      *
@@ -1734,6 +1773,26 @@ class LobbyController(
                 if (isPendingJoin) {
                     handleJoinLobbyResponse(payload)
                 }
+            }
+            is ReportCheatResponse -> {
+                clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                _state.update {
+                    it.copy(
+                        errorText =
+                            if (payload.correct) {
+                                "Cheat korrekt gemeldet: +3 Truppen in deiner nächsten " +
+                                    "Verstärkungsphase. Der gemeldete Spieler erhält in " +
+                                    "seiner nächsten Verstärkungsphase 0 Truppen."
+                            } else {
+                                "Falsche Cheat-Meldung: -3 Truppen in deiner nächsten " +
+                                    "Verstärkungsphase."
+                            },
+                    )
+                }
+            }
+            is ReportCheatErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                updateGameError(payload.reason)
             }
             is JoinLobbyErrorResponse -> {
                 val isPendingJoin =

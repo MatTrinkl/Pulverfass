@@ -194,6 +194,7 @@ fun GameScreen(
                     controller::adjustReinforcementPlacementAmount,
                 onPlaceReinforcements = controller::placeReinforcements,
                 onClaimCheatReinforcementBonus = controller::claimCheatReinforcementBonus,
+                onReportCheat = controller::reportCheat,
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
@@ -253,6 +254,7 @@ internal data class GameScreenContentState(
  * @param onAdjustReinforcementPlacementAmount ändert den Verstärkungs-Slider.
  * @param onPlaceReinforcements sendet eine Verstärkungsplatzierung.
  * @param onClaimCheatReinforcementBonus fordert den Lichtsensor-Cheatbonus an.
+ * @param onReportCheat meldet einen vermuteten Cheat eines anderen Spielers.
  * @param onConfirmReinforcementsDone bestätigt das Ende der Verstärkungsphase.
  * @param onToggleTradeInCard markiert oder demarkiert eine private Karte.
  * @param onTradeInCards sendet den Kartentausch.
@@ -272,6 +274,7 @@ internal data class GameScreenActions(
     val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
     val onPlaceReinforcements: () -> Unit = {},
     val onClaimCheatReinforcementBonus: () -> Unit = {},
+    val onReportCheat: (PlayerId) -> Unit = {},
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
@@ -451,6 +454,7 @@ internal fun GameScreenContent(
     val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
     val onPlaceReinforcements = actions.onPlaceReinforcements
     val onClaimCheatReinforcementBonus = actions.onClaimCheatReinforcementBonus
+    val onReportCheat = actions.onReportCheat
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
@@ -469,6 +473,7 @@ internal fun GameScreenContent(
     val isAttackRequestPending = LobbyCommandKey.ATTACK in pendingCommandKeys
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
     val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
+    val isReportCheatPending = LobbyCommandKey.REPORT_CHEAT in pendingCommandKeys
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
     val canManageFortify = uiState.canManageFortify(localPlayerId, isConnected)
@@ -713,6 +718,9 @@ internal fun GameScreenContent(
                 show = showOptionsOverlay,
                 isMusicEnabled = isMusicEnabled,
                 isSfxEnabled = isSfxEnabled,
+                players = players,
+                localPlayerId = localPlayerId,
+                isReportCheatPending = isReportCheatPending,
                 onMusicToggle = { enabled ->
                     isMusicEnabled = enabled
                     musicManager?.setMusicMuted(!enabled)
@@ -721,6 +729,7 @@ internal fun GameScreenContent(
                     isSfxEnabled = enabled
                     musicManager?.setSfxMuted(!enabled)
                 },
+                onReportCheat = onReportCheat,
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
             )
@@ -844,8 +853,12 @@ private fun AutoPhaseNoticeOverlay(
  * @param show `true`, wenn das Menü sichtbar sein soll.
  * @param isMusicEnabled aktueller Musik-Schalterzustand.
  * @param isSfxEnabled aktueller SFX-Schalterzustand.
+ * @param players Spieler, die als mögliche Cheat-Verdächtige angezeigt werden.
+ * @param localPlayerId eigener Spieler, damit Selbstmeldungen in der UI ausgeblendet werden.
+ * @param isReportCheatPending `true`, solange eine Cheat-Meldung auf Antwort wartet.
  * @param onMusicToggle setzt Musik sofort an oder aus.
  * @param onSfxToggle setzt SFX sofort an oder aus.
+ * @param onReportCheat sendet die Meldung für den ausgewählten Spieler.
  * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü.
  * @param onClose schließt nur das Optionsmenü.
  */
@@ -854,13 +867,19 @@ private fun OptionsOverlay(
     show: Boolean,
     isMusicEnabled: Boolean,
     isSfxEnabled: Boolean,
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+    isReportCheatPending: Boolean,
     onMusicToggle: (Boolean) -> Unit,
     onSfxToggle: (Boolean) -> Unit,
+    onReportCheat: (PlayerId) -> Unit,
     onNavigateToMain: () -> Unit,
     onClose: () -> Unit,
 ) {
     if (!show) return
     val scrollState = rememberScrollState()
+    var showCheatReportPlayers by remember { mutableStateOf(false) }
+    val reportablePlayers = players.filter { it.playerId != localPlayerId }
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
         arrangement = Arrangement.spacedBy(12.dp),
@@ -882,6 +901,41 @@ private fun OptionsOverlay(
             isEnabled = isSfxEnabled,
             onToggle = onSfxToggle,
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        /*
+         * Die Meldefunktion liegt bewusst in den Optionen, damit die Kartenoberfläche
+         * nicht mit zusätzlichen Buttons überladen wird.
+         */
+        MainButton(
+            text = "CHEAT MELDEN",
+            onClick = { showCheatReportPlayers = !showCheatReportPlayers },
+            modifier = Modifier.fillMaxWidth(),
+            enabled =
+                localPlayerId != null &&
+                    reportablePlayers.isNotEmpty() &&
+                    !isReportCheatPending,
+        )
+        if (showCheatReportPlayers) {
+            Text(
+                text = "SPIELER AUSWÄHLEN",
+                color = PulverfassColors.TextOnDark,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            reportablePlayers.forEach { player ->
+                MainButton(
+                    text = player.name,
+                    onClick = {
+                        onReportCheat(player.playerId)
+                        showCheatReportPlayers = false
+                        onClose()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isReportCheatPending,
+                    fontSize = 14,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
             text = "SCHLIESSEN",
