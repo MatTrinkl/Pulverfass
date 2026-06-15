@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -14,6 +15,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,6 +92,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -170,6 +175,10 @@ private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
 private const val PLAYER_LEFT_TOAST_DURATION_MILLIS = 2_800L
+private const val YOUR_TURN_BANNER_DURATION_MILLIS = 2_200L
+
+/** Seitenverhältnis des ui_lobby_roster_panel-Assets (908x550). */
+private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -834,6 +843,11 @@ internal fun GameScreenContent(
                 musicManager = musicManager,
             )
 
+            YourTurnBanner(
+                activePlayerId = uiState.activePlayerId,
+                localPlayerId = localPlayerId,
+            )
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
@@ -849,6 +863,64 @@ internal fun GameScreenContent(
                 message = disconnectMessage,
                 onReconnect = onReconnect,
                 onNavigateToMain = onNavigateToMain,
+            )
+        }
+    }
+}
+
+/**
+ * Kurze, automatisch ausblendende "Du bist dran"-Einblendung.
+ *
+ * Erscheint genau dann, wenn der aktive Spieler auf den lokalen Spieler wechselt
+ * (= dein Zug beginnt). Der [LaunchedEffect] hängt am [activePlayerId]; ein
+ * Wechsel weg von dir blendet das Banner sofort wieder aus. Als Hintergrund
+ * dient das Lobby-Roster-Panel.
+ */
+@Composable
+private fun BoxScope.YourTurnBanner(
+    activePlayerId: PlayerId?,
+    localPlayerId: PlayerId?,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(activePlayerId) {
+        if (activePlayerId != null && activePlayerId == localPlayerId) {
+            visible = true
+            delay(YOUR_TURN_BANNER_DURATION_MILLIS)
+            visible = false
+        } else {
+            visible = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .width(320.dp)
+                    .aspectRatio(LOBBY_ROSTER_PANEL_RATIO)
+                    .testTag("your_turn_banner"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            Text(
+                text = stringResource(id = R.string.game_your_turn),
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                letterSpacing = 3.sp,
+                color = PulverfassColors.GoldBright,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp),
             )
         }
     }

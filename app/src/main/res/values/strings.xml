@@ -48,6 +48,7 @@
     <string name="game_cards_close">Schließen</string>
     <string name="game_cards_hint_select">Wähle 3 Karten für ein gültiges Set (Joker zählt als Wildcard)</string>
     <string name="game_cards_hint_locked">Karten kannst du nur in deiner Verstärkungsphase eintauschen</string>
+    <string name="game_your_turn">Du bist dran</string>
     <string name="game_card_type_a">Infanterie</string>
     <string name="game_card_type_b">Kavallerie</string>
     <string name="game_card_type_c">Artillerie</string>
