@@ -60,6 +60,7 @@
     <string name="game_attack_troops">Angriffstruppen</string>
     <string name="game_attack_occupy">Besetzung bei Eroberung</string>
     <string name="game_attack_submit">Angreifen</string>
+    <string name="game_attack_auto">Auto-Angriff</string>
     <string name="game_attack_close">Schließen</string>
     <string name="game_attack_resolving_title">Angriff wird aufgelöst</string>
     <string name="game_attack_resolving_route">%1$s greift von %2$s nach %3$s an</string>

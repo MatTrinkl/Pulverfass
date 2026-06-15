@@ -228,6 +228,9 @@ class MainActivity : AppCompatActivity() {
                                     navController = navController,
                                     playerName = optionsState.playerName,
                                     onPlayerNameChange = lobbyController::updatePlayerName,
+                                    autoAttackEnabled = optionsState.autoAttackEnabled,
+                                    onAutoAttackEnabledChange =
+                                        lobbyController::setAutoAttackEnabled,
                                     musicManager = musicManager,
                                 )
                             }

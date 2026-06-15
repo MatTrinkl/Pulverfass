@@ -855,7 +855,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("attack_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Angriff: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Angriff: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag("attack_troops_slider").performSemanticsAction(
             SemanticsActions.SetProgress,
         ) { setProgress ->
@@ -939,7 +939,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("fortify_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Verschieben: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verschieben: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag("fortify_troops_slider").performSemanticsAction(
             SemanticsActions.SetProgress,
         ) { setProgress ->
@@ -1000,7 +1000,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("attack_result_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kampfergebnis: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kampfergebnis: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag(
             "attack_result_outcome",
         ).assertTextEquals("Erobert · Besetzung: 2")
