@@ -549,37 +549,59 @@ fun InteractiveGameMap(
             }
 
             if (activeAttackVfx != null) {
-                /*
-                 * Wie bei den Truppen-Bubbles oben fällt der Anker auf
-                 * GameMapRegion.fallbackAnchor zurück, falls eine Maske nicht
-                 * dekodiert werden konnte. Sonst entfiele die Clash-Animation
-                 * stillschweigend, obwohl Zahlen und Farben aktualisiert werden.
-                 */
-                val fromAnchor =
-                    territoryMaskData.anchors[activeAttackVfx.fromRegionId]
-                        ?: regionsById[activeAttackVfx.fromRegionId]?.fallbackAnchor
-                val toAnchor =
-                    territoryMaskData.anchors[activeAttackVfx.toRegionId]
-                        ?: regionsById[activeAttackVfx.toRegionId]?.fallbackAnchor
-                if (fromAnchor != null && toAnchor != null) {
-                    AttackVfxOverlay(
-                        controller = attackVfxController,
-                        fromAnchor = fromAnchor,
-                        toAnchor = toAnchor,
-                        attackerColor =
-                            regionStates[activeAttackVfx.fromRegionId]?.accentColor
-                                ?: NeutralRegionColor,
-                        defenderColor =
-                            regionStates[activeAttackVfx.toRegionId]?.accentColor
-                                ?: NeutralRegionColor,
-                        layoutMetrics = layoutMetrics,
-                        viewportState = viewportState,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                ActiveAttackVfx(
+                    request = activeAttackVfx,
+                    controller = attackVfxController,
+                    anchors = territoryMaskData.anchors,
+                    regionsById = regionsById,
+                    regionStates = regionStates,
+                    layoutMetrics = layoutMetrics,
+                    viewportState = viewportState,
+                )
             }
         }
     }
+}
+
+/**
+ * Rendert die Clash-Animation für den aktuell aktiven [request].
+ *
+ * Wie bei den Truppen-Bubbles fällt der Anker auf
+ * [GameMapRegion.fallbackAnchor] zurück, falls eine Maske nicht dekodiert werden
+ * konnte. Fehlt auch dieser, entfällt die Animation, ohne den restlichen
+ * Kartenzustand zu beeinflussen.
+ */
+@Composable
+private fun ActiveAttackVfx(
+    request: AttackVfxRequest,
+    controller: AttackVfxController,
+    anchors: Map<String, MapPoint>,
+    regionsById: Map<String, GameMapRegion>,
+    regionStates: Map<String, GameMapRegionState>,
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+) {
+    val fromAnchor =
+        anchors[request.fromRegionId]
+            ?: regionsById[request.fromRegionId]?.fallbackAnchor
+            ?: return
+    val toAnchor =
+        anchors[request.toRegionId]
+            ?: regionsById[request.toRegionId]?.fallbackAnchor
+            ?: return
+    AttackVfxOverlay(
+        controller = controller,
+        fromAnchor = fromAnchor,
+        toAnchor = toAnchor,
+        colors =
+            ClashColors(
+                attacker = regionStates[request.fromRegionId]?.accentColor ?: NeutralRegionColor,
+                defender = regionStates[request.toRegionId]?.accentColor ?: NeutralRegionColor,
+            ),
+        layoutMetrics = layoutMetrics,
+        viewportState = viewportState,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 /**

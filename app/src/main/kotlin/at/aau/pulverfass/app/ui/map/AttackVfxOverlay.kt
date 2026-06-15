@@ -73,6 +73,12 @@ data class AttackVfxRequest(
     val targetTroopsBefore: Int,
 )
 
+/** Akzentfarben der beiden Kampfparteien für die Clash-Animation. */
+data class ClashColors(
+    val attacker: Color,
+    val defender: Color,
+)
+
 /**
  * Spielt eingehende [AttackVfxRequest]s nacheinander ab.
  *
@@ -187,8 +193,7 @@ internal fun AttackVfxOverlay(
     controller: AttackVfxController,
     fromAnchor: MapPoint,
     toAnchor: MapPoint,
-    attackerColor: Color,
-    defenderColor: Color,
+    colors: ClashColors,
     layoutMetrics: MapLayoutMetrics,
     viewportState: MapViewportState,
     modifier: Modifier = Modifier,
@@ -232,8 +237,7 @@ internal fun AttackVfxOverlay(
             midpoint = midpoint,
             lineProgress = controller.lineProgress.value,
             burstProgress = controller.burstProgress.value,
-            attackerColor = attackerColor,
-            defenderColor = defenderColor,
+            colors = colors,
             scale = scale,
         )
         drawExplosionFrame(
@@ -259,8 +263,7 @@ private fun DrawScope.drawClashLines(
     midpoint: Offset,
     lineProgress: Float,
     burstProgress: Float,
-    attackerColor: Color,
-    defenderColor: Color,
+    colors: ClashColors,
     scale: Float,
 ) {
     if (lineProgress <= 0f) {
@@ -278,8 +281,8 @@ private fun DrawScope.drawClashLines(
 
     val strokeWidth = LineWidth.toPx() * scale
     listOf(
-        Triple(fromOffset, attackerColor, lineProgress),
-        Triple(toOffset, defenderColor, lineProgress),
+        Triple(fromOffset, colors.attacker, lineProgress),
+        Triple(toOffset, colors.defender, lineProgress),
     ).forEach { (start, color, progress) ->
         val end = start + (midpoint - start) * progress
         drawLine(

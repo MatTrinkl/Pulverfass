@@ -26,15 +26,24 @@ import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 
 /**
- * Spiel-Aktionsbutton mit PNG-Hintergrund (Icon links im Asset) und im Code
- * gerendertem Label.
+ * Bündelt das rein optische Erscheinungsbild eines [GameActionButton].
  *
- * Die neuen Button-Grafiken enthalten links ein Icon, aber keinen eingebrannten
- * Text mehr. Der Text wird deshalb hier gerendert und nach rechts versetzt: Er
- * beginnt erst ab [textStartFraction] der Buttonbreite, damit das Icon links
- * vollständig sichtbar bleibt, und wird im freien rechten Bereich horizontal wie
- * vertikal zentriert. Aktiver/inaktiver Zustand nutzt unterschiedliche
- * Hintergrund-PNGs ([backgroundActive] / [backgroundInactive]).
+ * Die Hintergrund-PNGs enthalten links ein Icon, aber keinen eingebrannten Text.
+ * Der Text beginnt deshalb erst ab [textStartFraction] der Buttonbreite, damit
+ * das Icon sichtbar bleibt. Aktiver/inaktiver Zustand nutzt unterschiedliche
+ * Hintergründe ([backgroundActive] / [backgroundInactive]).
+ */
+data class GameActionButtonStyle(
+    @DrawableRes val backgroundActive: Int,
+    @DrawableRes val backgroundInactive: Int,
+    val backgroundScale: ContentScale = ContentScale.FillBounds,
+    val textStartFraction: Float = 0.36f,
+    val fontSize: TextUnit = 13.sp,
+)
+
+/**
+ * Spiel-Aktionsbutton mit PNG-Hintergrund (Icon links im Asset) und im Code
+ * gerendertem Label. Das Aussehen kommt gebündelt über [style].
  *
  * @param onClick `null` für reine Anzeige-Buttons (z. B. Phasenindikatoren) ohne
  *   Klickverhalten.
@@ -42,17 +51,13 @@ import at.aau.pulverfass.app.ui.theme.PulverfassFonts
 @Composable
 fun GameActionButton(
     label: String,
-    @DrawableRes backgroundActive: Int,
-    @DrawableRes backgroundInactive: Int,
+    style: GameActionButtonStyle,
     modifier: Modifier = Modifier,
     active: Boolean = true,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
-    textStartFraction: Float = 0.36f,
-    fontSize: TextUnit = 13.sp,
-    backgroundScale: ContentScale = ContentScale.FillBounds,
 ) {
-    val background = if (active) backgroundActive else backgroundInactive
+    val background = if (active) style.backgroundActive else style.backgroundInactive
     val interactionModifier =
         if (onClick != null) {
             Modifier.clickable(
@@ -75,20 +80,20 @@ fun GameActionButton(
         Image(
             painter = painterResource(id = background),
             contentDescription = null,
-            contentScale = backgroundScale,
+            contentScale = style.backgroundScale,
             modifier = Modifier.matchParentSize(),
         )
         Box(
             modifier =
                 Modifier
                     .matchParentSize()
-                    .padding(start = maxWidth * textStartFraction, end = 8.dp),
+                    .padding(start = maxWidth * style.textStartFraction, end = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = label,
                 color = if (active) PulverfassColors.Parchment else PulverfassColors.TextMuted,
-                fontSize = fontSize,
+                fontSize = style.fontSize,
                 fontFamily = PulverfassFonts.CinzelDecorative,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,

@@ -112,6 +112,7 @@ import at.aau.pulverfass.app.lobby.LobbyCommandKey
 import at.aau.pulverfass.app.lobby.LobbyController
 import at.aau.pulverfass.app.ui.components.CharacterCoin
 import at.aau.pulverfass.app.ui.components.GameActionButton
+import at.aau.pulverfass.app.ui.components.GameActionButtonStyle
 import at.aau.pulverfass.app.ui.components.MainButton
 import at.aau.pulverfass.app.ui.components.PulverfassTitleText
 import at.aau.pulverfass.app.ui.components.VideoPlayer
@@ -535,6 +536,10 @@ internal fun GameScreenContent(
             isAttackRequestPending = isAttackRequestPending,
         )
     val isActionResolutionPending = attackResolutionState != null
+    val canSelectRegion =
+        canUseGameActions &&
+            !isActionResolutionPending &&
+            !uiState.attackState.autoAttack.isRunning
     val fortifyPanelSelection = visibleFortifySelection(uiState, canManageFortify)
     val canEndCurrentPhase =
         canEndCurrentPhase(
@@ -574,27 +579,15 @@ internal fun GameScreenContent(
 
     /*
      * Reine Anzeige: Verliert ein Mitspieler die Verbindung (= verlässt das
-     * Spiel), wird dafür kurz ein Ingame-Toast eingeblendet. Beobachtet wird nur
-     * der ohnehin vorhandene Verbindungsstatus pro Spieler -- es wird keine Spiel-
-     * oder Netzwerklogik verändert. Der eigene Spieler ist ausgenommen (dafür gibt
-     * es bereits das Disconnect-Overlay).
+     * Spiel), wird dafür kurz ein Ingame-Toast eingeblendet. Die Erkennung steckt
+     * in [PlayerLeftDetector]; hier wird nur die anzuzeigende Nachricht gehalten.
      */
     var playerLeftMessage by remember { mutableStateOf<String?>(null) }
-    val previousConnectionStatuses = remember { mutableStateMapOf<PlayerId, ConnectionStatus>() }
-    val playerLeftTemplate = stringResource(id = R.string.game_player_left_toast)
-    LaunchedEffect(players) {
-        players.forEach { player ->
-            val previous = previousConnectionStatuses[player.playerId]
-            if (
-                player.playerId != localPlayerId &&
-                previous == ConnectionStatus.CONNECTED &&
-                player.connectionStatus == ConnectionStatus.DISCONNECTED
-            ) {
-                playerLeftMessage = playerLeftTemplate.format(player.name)
-            }
-            previousConnectionStatuses[player.playerId] = player.connectionStatus
-        }
-    }
+    PlayerLeftDetector(
+        players = players,
+        localPlayerId = localPlayerId,
+        onPlayerLeft = { playerLeftMessage = it },
+    )
 
     Box(
         modifier =
@@ -626,13 +619,10 @@ internal fun GameScreenContent(
                 /*
                  * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
-                 * handeln darf und der Client synchron verbunden ist.
+                 * handeln darf und der Client synchron verbunden ist
+                 * ([canSelectRegion]).
                  */
-                    if (
-                        canUseGameActions &&
-                        !isActionResolutionPending &&
-                        !uiState.attackState.autoAttack.isRunning
-                    ) {
+                    if (canSelectRegion) {
                         onRegionSelected(region.id)
                     }
                 },
@@ -863,6 +853,45 @@ internal fun GameScreenContent(
         }
     }
 }
+
+/**
+ * Beobachtet den Verbindungsstatus der Mitspieler und meldet über
+ * [onPlayerLeft], sobald ein anderer Spieler von CONNECTED auf DISCONNECTED
+ * wechselt (= das Spiel verlässt). Der eigene Spieler ist ausgenommen, weil es
+ * dafür bereits das Disconnect-Overlay gibt. Es wird keine Spiel- oder
+ * Netzwerklogik verändert -- nur der ohnehin vorhandene Status gespiegelt.
+ */
+@Composable
+private fun PlayerLeftDetector(
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+    onPlayerLeft: (String) -> Unit,
+) {
+    val template = stringResource(id = R.string.game_player_left_toast)
+    val previousConnectionStatuses = remember { mutableStateMapOf<PlayerId, ConnectionStatus>() }
+    LaunchedEffect(players) {
+        players.forEach { player ->
+            val previous = previousConnectionStatuses[player.playerId]
+            if (hasJustLeft(player, localPlayerId, previous)) {
+                onPlayerLeft(template.format(player.name))
+            }
+            previousConnectionStatuses[player.playerId] = player.connectionStatus
+        }
+    }
+}
+
+/**
+ * Prüft, ob [player] gerade von einem verbundenen in einen getrennten Zustand
+ * gewechselt ist und nicht der lokale Spieler ist.
+ */
+private fun hasJustLeft(
+    player: GamePlayerUi,
+    localPlayerId: PlayerId?,
+    previousStatus: ConnectionStatus?,
+): Boolean =
+    player.playerId != localPlayerId &&
+        previousStatus == ConnectionStatus.CONNECTED &&
+        player.connectionStatus == ConnectionStatus.DISCONNECTED
 
 /**
  * Kurzer, automatisch ausblendender Ingame-Toast (z. B. wenn ein Mitspieler das
@@ -3025,11 +3054,12 @@ private fun BottomActionClusters(
                 } else {
                     stringResource(id = R.string.game_cards_button)
                 },
-            backgroundActive = R.drawable.btn_cards,
-            backgroundInactive = R.drawable.btn_cards,
-            active = true,
-            enabled = true,
-            fontSize = 11.sp,
+            style =
+                GameActionButtonStyle(
+                    backgroundActive = R.drawable.btn_cards,
+                    backgroundInactive = R.drawable.btn_cards,
+                    fontSize = 11.sp,
+                ),
             onClick = {
                 musicManager?.playSfx(R.raw.sfx_ui_click)
                 onToggleCards()
@@ -3055,53 +3085,64 @@ private fun BottomActionClusters(
         ) {
             GameActionButton(
                 label = stringResource(id = R.string.game_action_reinforce),
-                backgroundActive = R.drawable.btn_verstaerken,
-                backgroundInactive = R.drawable.btn_verstaerken_inactive,
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = R.drawable.btn_verstaerken,
+                        backgroundInactive = R.drawable.btn_verstaerken_inactive,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                    ),
                 active = state.currentPhase == TurnPhase.REINFORCEMENTS,
-                textStartFraction = 0.27f,
-                fontSize = 10.sp,
                 modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
             GameActionButton(
                 label = stringResource(id = R.string.game_action_attack),
-                backgroundActive = R.drawable.btn_attack,
-                backgroundInactive = R.drawable.btn_attack_inactive,
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = R.drawable.btn_attack,
+                        backgroundInactive = R.drawable.btn_attack_inactive,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                    ),
                 active = state.currentPhase == TurnPhase.ATTACK,
-                textStartFraction = 0.27f,
-                fontSize = 10.sp,
                 modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
             GameActionButton(
                 label = stringResource(id = R.string.game_action_move),
-                backgroundActive = R.drawable.btn_verschieben,
-                backgroundInactive = R.drawable.btn_verschieben_inactive,
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = R.drawable.btn_verschieben,
+                        backgroundInactive = R.drawable.btn_verschieben_inactive,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                        // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe
+                        // wie bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
+                        backgroundScale = ContentScale.Crop,
+                    ),
                 active = state.currentPhase == TurnPhase.FORTIFY,
-                textStartFraction = 0.27f,
-                fontSize = 10.sp,
-                // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe wie
-                // bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
-                backgroundScale = ContentScale.Crop,
                 modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
         }
 
         GameActionButton(
             label = stringResource(id = R.string.game_end_round_button),
-            backgroundActive = R.drawable.btn_phaseend,
-            backgroundInactive = R.drawable.btn_phaseend,
-            active = true,
+            style =
+                GameActionButtonStyle(
+                    backgroundActive = R.drawable.btn_phaseend,
+                    backgroundInactive = R.drawable.btn_phaseend,
+                    // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe wie
+                    // bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
+                    backgroundScale = ContentScale.Crop,
+                    // Kleiner Text-Offset, damit das lange Label "PHASE BEENDEN"
+                    // vollständig in den Button passt.
+                    textStartFraction = 0.22f,
+                    fontSize = 9.sp,
+                ),
             enabled = state.canEndPhase,
             onClick = {
                 musicManager?.playSfx(R.raw.sfx_attack_confirm)
                 onEndPhase()
             },
-            // Gleiche Breite/Höhe wie "Karten"; kleiner Text-Offset, damit das
-            // lange Label "PHASE BEENDEN" vollständig in den Button passt.
-            textStartFraction = 0.22f,
-            fontSize = 9.sp,
-            // Quadratisches Asset (Ratio 1.5): Crop füllt die Buttonhöhe wie
-            // bei "Karten", statt das Motiv klein/gestaucht zu zeigen.
-            backgroundScale = ContentScale.Crop,
             modifier =
                 Modifier
                     .align(Alignment.CenterEnd)
