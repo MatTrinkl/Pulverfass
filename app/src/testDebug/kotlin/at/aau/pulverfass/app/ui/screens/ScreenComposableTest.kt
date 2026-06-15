@@ -457,12 +457,10 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun reinforcement_panel_places_troops_and_typed_hand_submits_trade_in() {
+    fun reinforcement_panel_places_troops_and_closes() {
         val playerId = PlayerId(1)
-        val cardIds = listOf(CardId("a"), CardId("b"), CardId("c"))
         var placementDelta = 0
         var placed = false
-        var traded = false
         var closedRegion: String? = null
 
         composeTestRule.setContent {
@@ -485,7 +483,7 @@ class ScreenComposableTest {
                                     activePlayerId = playerId,
                                     turnPhase = TurnPhase.REINFORCEMENTS,
                                     selectedRegionId = "brazil",
-                                    cardsVisible = true,
+                                    cardsVisible = false,
                                     reinforcementState =
                                         ReinforcementUiState(
                                             playerId = playerId,
@@ -493,13 +491,6 @@ class ScreenComposableTest {
                                             territoryBonus = 2,
                                             isBonusBreakdownKnown = true,
                                         ),
-                                    privateHandCards =
-                                        listOf(
-                                            PrivateHandCardUi(cardIds[0], CardType.A),
-                                            PrivateHandCardUi(cardIds[1], CardType.B),
-                                            PrivateHandCardUi(cardIds[2], CardType.C),
-                                        ),
-                                    selectedTradeInCardIds = cardIds.toSet(),
                                 ),
                             isConnected = true,
                             pendingCommandKeys = emptySet(),
@@ -512,7 +503,6 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onAdjustReinforcementPlacementAmount = { placementDelta = it },
                             onPlaceReinforcements = { placed = true },
-                            onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
                     countdownState = false to 0,
@@ -532,15 +522,70 @@ class ScreenComposableTest {
             .onNodeWithTag("place_reinforcements_button")
             .assertIsEnabled()
             .performClick()
-        composeTestRule.onNodeWithText("Infanterie").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
-            .performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithTag("close_reinforcement_panel").performClick()
 
         assertEquals(1, placementDelta)
         assertTrue(placed)
-        assertTrue(traded)
         assertEquals("brazil", closedRegion)
+    }
+
+    @Test
+    fun card_hand_overlay_shows_fanned_cards_and_submits_trade_in() {
+        val playerId = PlayerId(1)
+        val cardIds = listOf(CardId("a"), CardId("b"), CardId("c"))
+        var traded = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    cardsVisible = true,
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(cardIds[0], CardType.A),
+                                            PrivateHandCardUi(cardIds[1], CardType.B),
+                                            PrivateHandCardUi(cardIds[2], CardType.C),
+                                        ),
+                                    selectedTradeInCardIds = cardIds.toSet(),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onTradeInCards = { traded = true },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("card_hand_overlay").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Infanterie").assertCountEquals(1)
+        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        assertTrue(traded)
     }
 
     @Test

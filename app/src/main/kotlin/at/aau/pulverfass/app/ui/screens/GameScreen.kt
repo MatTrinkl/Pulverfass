@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -160,15 +159,10 @@ private val PhaseImageHeight = 69.dp
 
 /** Abstand der Spielerliste vom oberen Screenrand ("Runde X" + Liste). */
 private val PlayerListTopInset = 76.dp
-private val SidebarWidth = 156.dp
-private val CardsSidebarWidth = SidebarWidth
 
 /*
- * Die rechte Spielerleiste ist bewusst etwas breiter als die Karten-Sidebar,
- * damit Avatar, Name und Host-Marker im playerlist_background-Panel nicht
- * gedrückt wirken. Sie nutzt eine eigene Konstante, um die Karten-Sidebar
- * (links) und den davon abgeleiteten Karten-Button in der Bottom-Bar
- * unverändert zu lassen.
+ * Die rechte Spielerleiste ist bewusst breit gewählt, damit Avatar, Name und
+ * Host-Marker im playerlist_background-Panel nicht gedrückt wirken.
  */
 private val PlayerSidebarWidth = 250.dp
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
@@ -695,30 +689,6 @@ internal fun GameScreenContent(
                         .fillMaxWidth(),
             )
 
-            CardsSidebar(
-                state =
-                    privateHandPanelState(
-                        player = personalPlayer,
-                        uiState = uiState,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                        isReinforcementCommandPending = isReinforcementCommandPending,
-                        pendingCommandKeys = pendingCommandKeys,
-                    ),
-                actions =
-                    PrivateHandPanelActions(
-                        onToggleTradeInCard = onToggleTradeInCard,
-                        onTradeInCards = onTradeInCards,
-                    ),
-                isVisible = uiState.cardsVisible,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(top = topNavGap + TopBarHeight, bottom = BottomBarHeight)
-                        .requiredWidth(CardsSidebarWidth)
-                        .fillMaxHeight(),
-            )
-
             LightSensorCheatTrigger(
                 enabled = canClaimCheatReinforcementBonus,
                 onTriggered = onClaimCheatReinforcementBonus,
@@ -852,6 +822,26 @@ internal fun GameScreenContent(
                     Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = TopBarHeight + 12.dp),
+            )
+
+            CardHandOverlay(
+                state =
+                    privateHandPanelState(
+                        player = personalPlayer,
+                        uiState = uiState,
+                        localPlayerId = localPlayerId,
+                        isConnected = isConnected,
+                        isReinforcementCommandPending = isReinforcementCommandPending,
+                        pendingCommandKeys = pendingCommandKeys,
+                    ),
+                actions =
+                    PrivateHandPanelActions(
+                        onToggleTradeInCard = onToggleTradeInCard,
+                        onTradeInCards = onTradeInCards,
+                    ),
+                isVisible = uiState.cardsVisible,
+                onClose = onToggleCards,
+                musicManager = musicManager,
             )
 
             CountdownOverlay(
@@ -2110,35 +2100,6 @@ private fun PhaseHeader(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
-    }
-}
-
-@Composable
-private fun CardsSidebar(
-    state: PrivateHandPanelState,
-    actions: PrivateHandPanelActions,
-    isVisible: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    if (isVisible) {
-        Surface(
-            modifier = modifier,
-            shape = RoundedCornerShape(0.dp),
-            color = HudSurfaceColor,
-            contentColor = HudContentColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, HudBorderColor),
-        ) {
-            PrivateHandPanel(
-                state = state,
-                actions = actions,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-            )
-        }
     }
 }
 
