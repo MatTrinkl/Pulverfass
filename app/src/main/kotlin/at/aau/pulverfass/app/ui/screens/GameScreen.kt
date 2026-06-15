@@ -24,6 +24,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,6 +79,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
@@ -2761,7 +2764,7 @@ private fun GamePopupPanel(
 ) {
     Box(modifier = modifier) {
         Image(
-            painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
+            painter = painterResource(id = R.drawable.player_card),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.matchParentSize(),
@@ -2769,6 +2772,50 @@ private fun GamePopupPanel(
         CompositionLocalProvider(LocalContentColor provides PulverfassColors.TextOnParchment) {
             content()
         }
+    }
+}
+
+/**
+ * Popup-Aktionsbutton auf Basis von footer_bar.png mit zentriertem Label.
+ */
+@Composable
+private fun PopupActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .defaultMinSize(minHeight = 52.dp)
+                .alpha(if (enabled) 1f else 0.45f)
+                .clickable(
+                    enabled = enabled,
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.footer_bar),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.matchParentSize(),
+        )
+        Text(
+            text = text.uppercase(),
+            color = PulverfassColors.Parchment,
+            fontFamily = PulverfassFonts.CinzelDecorative,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            letterSpacing = 2.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -2873,11 +2920,10 @@ private fun ReinforcementPanel(
                     onAdjust = actions.onAdjustPlacementAmount,
                     tagPrefix = "reinforcement",
                 )
-                MainButton(
+                PopupActionButton(
                     text = stringResource(id = R.string.game_reinforcements_place),
                     onClick = actions.onPlace,
                     enabled = state.canPlace,
-                    fontSize = 13,
                     modifier = Modifier.fillMaxWidth().testTag("place_reinforcements_button"),
                 )
             }
@@ -2962,11 +3008,10 @@ private fun AttackPanel(
                 enabled = state.canToggleAutoAttack,
                 onCheckedChange = actions.onSetAutoAttackEnabled,
             )
-            MainButton(
+            PopupActionButton(
                 text = stringResource(id = R.string.game_attack_submit),
                 onClick = actions.onAttack,
                 enabled = state.canAttack,
-                fontSize = 13,
                 modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
             )
         }
@@ -3066,11 +3111,10 @@ private fun FortifyPanel(
                 onAdjust = actions.onAdjustFortifyTroops,
                 tagPrefix = "fortify_troops",
             )
-            MainButton(
+            PopupActionButton(
                 text = stringResource(id = R.string.game_fortify_submit),
                 onClick = actions.onMove,
                 enabled = state.canMove,
-                fontSize = 13,
                 modifier = Modifier.fillMaxWidth().testTag("fortify_submit_button"),
             )
         }
