@@ -171,7 +171,6 @@ private val PlayerListTopInset = 76.dp
  * Host-Marker im playerlist_background-Panel nicht gedrückt wirken.
  */
 private val PlayerSidebarWidth = 210.dp
-private val PlayerSidebarEndInset = 10.dp
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
@@ -722,12 +721,8 @@ internal fun GameScreenContent(
                         .align(Alignment.CenterEnd)
                         // Liste + "Runde X"-Titel weiter oben: Top max. ~60 px vom
                         // Screenrand; untere Kante bleibt über der Bottom-Bar.
-                        // End-Padding hält die Leiste etwas vom rechten Rand weg.
-                        .padding(
-                            top = PlayerListTopInset,
-                            bottom = BottomBarHeight,
-                            end = PlayerSidebarEndInset,
-                        )
+                        // Bündig am rechten Screenrand (kein End-Abstand).
+                        .padding(top = PlayerListTopInset, bottom = BottomBarHeight)
                         .width(PlayerSidebarWidth)
                         .fillMaxHeight(),
             )
