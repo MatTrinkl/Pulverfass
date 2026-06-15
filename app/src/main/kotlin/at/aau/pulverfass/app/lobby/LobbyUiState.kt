@@ -36,5 +36,6 @@ data class LobbyUiState(
     val characterId: String? = null,
     val characterSelectError: String? = null,
     val autoPhaseNoticeText: String? = null,
+    val cheatReportNoticeText: String? = null,
     val autoPhaseNoticeQueue: List<String> = emptyList(),
 )

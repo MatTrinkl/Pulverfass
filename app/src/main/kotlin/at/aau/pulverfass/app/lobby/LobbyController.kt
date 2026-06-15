@@ -315,6 +315,10 @@ class LobbyController(
         }
     }
 
+    fun clearCheatReportNotice() {
+        _state.update { it.copy(cheatReportNoticeText = null) }
+    }
+
     /**
      * Fügt eine Auto-Phasenmeldung dedupliziert in die UI-Queue ein.
      *
@@ -995,6 +999,7 @@ class LobbyController(
         }
 
         scope.launch {
+            _state.update { it.copy(cheatReportNoticeText = null) }
             /*
              * Die App schickt nur, wer wen meldet. Ob die Meldung stimmt,
              * entscheidet der Server anhand des aktuellen Meldefensters.
@@ -1784,21 +1789,19 @@ class LobbyController(
             }
             is ReportCheatResponse -> {
                 clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                val reportNotice =
+                    if (payload.correct) {
+                        "Deine Meldung war korrekt. Du erhältst in deiner nächsten " +
+                            "Verstärkungsphase +3 Truppen. Der gemeldete Spieler erhält " +
+                            "dann 0 Truppen."
+                    } else {
+                        "Du hast jemanden falsch verdächtigt. In deiner nächsten " +
+                            "Verstärkungsphase werden dir 3 Truppen abgezogen."
+                    }
                 _state.update {
                     it.copy(
-                        /*
-                         * Die Meldung läuft über errorText, weil dort bereits kurze
-                         * Rückmeldungen an den Spieler angezeigt werden.
-                         */
-                        errorText =
-                            if (payload.correct) {
-                                "Cheat korrekt gemeldet: +3 Truppen in deiner nächsten " +
-                                    "Verstärkungsphase. Der gemeldete Spieler erhält in " +
-                                    "seiner nächsten Verstärkungsphase 0 Truppen."
-                            } else {
-                                "Falsche Cheat-Meldung: -3 Truppen in deiner nächsten " +
-                                    "Verstärkungsphase."
-                            },
+                        errorText = null,
+                        cheatReportNoticeText = reportNotice,
                     )
                 }
             }

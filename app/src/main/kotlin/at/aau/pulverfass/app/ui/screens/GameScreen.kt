@@ -137,6 +137,7 @@ private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 3_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -184,6 +185,7 @@ fun GameScreen(
                 character = character,
                 playerName = lobbyState.playerName,
                 autoPhaseNoticeText = lobbyState.autoPhaseNoticeText,
+                cheatReportNoticeText = lobbyState.cheatReportNoticeText,
             ),
         actions =
             GameScreenActions(
@@ -206,6 +208,7 @@ fun GameScreen(
                 onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
                 onClearAutoPhaseNotice = controller::clearAutoPhaseNotice,
+                onClearCheatReportNotice = controller::clearCheatReportNotice,
             ),
         musicManager = musicManager,
         onNavigateToMain = onLeaveGame,
@@ -229,6 +232,7 @@ fun GameScreen(
  * @param character eigener Charakter für den Header.
  * @param playerName lokaler Anzeigename.
  * @param autoPhaseNoticeText aktuell sichtbare Auto-Phasenmeldung.
+ * @param cheatReportNoticeText aktuell sichtbare Rückmeldung zur Cheat-Meldung.
  */
 internal data class GameScreenContentState(
     val players: List<GamePlayerUi>,
@@ -240,6 +244,7 @@ internal data class GameScreenContentState(
     val character: CharacterDefinition? = null,
     val playerName: String = "",
     val autoPhaseNoticeText: String? = null,
+    val cheatReportNoticeText: String? = null,
 )
 
 /**
@@ -266,6 +271,7 @@ internal data class GameScreenContentState(
  * @param onFortifyMove sendet die einmalige Truppenverschiebung.
  * @param onRefreshGameState fordert einen Catch-up-Snapshot an.
  * @param onClearAutoPhaseNotice schließt die sichtbare Auto-Phasenmeldung.
+ * @param onClearCheatReportNotice schließt die sichtbare Cheat-Melde-Rückmeldung.
  */
 internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
@@ -286,6 +292,7 @@ internal data class GameScreenActions(
     val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
     val onClearAutoPhaseNotice: () -> Unit = {},
+    val onClearCheatReportNotice: () -> Unit = {},
 )
 
 /**
@@ -741,6 +748,11 @@ internal fun GameScreenContent(
                 onDismiss = actions.onClearAutoPhaseNotice,
             )
 
+            CheatReportNoticeOverlay(
+                message = contentState.cheatReportNoticeText,
+                onDismiss = actions.onClearCheatReportNotice,
+            )
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
@@ -835,6 +847,40 @@ private fun AutoPhaseNoticeOverlay(
                 .testTag("auto_phase_notice_popup"),
     ) {
         PulverfassTitleText(text = "PHASE GEWECHSELT", fontSize = 28.sp, letterSpacing = 2.sp)
+        Text(
+            text = message,
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
+@Composable
+private fun CheatReportNoticeOverlay(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    if (message == null) return
+
+    LaunchedEffect(message) {
+        delay(CHEAT_REPORT_NOTICE_DURATION_MILLIS)
+        onDismiss()
+    }
+
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.62f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .widthIn(max = 520.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.84f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+                .testTag("cheat_report_notice_popup"),
+    ) {
+        PulverfassTitleText(text = "CHEAT-MELDUNG", fontSize = 28.sp, letterSpacing = 2.sp)
         Text(
             text = message,
             color = PulverfassColors.TextOnDark,
