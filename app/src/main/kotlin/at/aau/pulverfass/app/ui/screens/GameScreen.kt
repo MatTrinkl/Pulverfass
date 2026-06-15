@@ -56,13 +56,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -2744,6 +2747,46 @@ internal fun buildHandCardItems(
 }
 
 /**
+ * Gemeinsames Popup-Gehäuse der Slider-Panels (Verstärken/Angriff/Verschieben).
+ *
+ * Nutzt das dekorative Pergament-Panel-Asset als Hintergrund und färbt alle
+ * enthaltenen Texte dunkel ([PulverfassColors.TextOnParchment]), damit sie auf
+ * dem hellen Pergament lesbar sind. Inhalt kommt als [content] in eine Column mit
+ * Innen-Padding, das den dekorativen Rahmen freihält.
+ */
+@Composable
+private fun GamePopupPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier) {
+        Image(
+            painter = painterResource(id = R.drawable.ui_lobby_roster_panel),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.matchParentSize(),
+        )
+        CompositionLocalProvider(LocalContentColor provides PulverfassColors.TextOnParchment) {
+            content()
+        }
+    }
+}
+
+/**
+ * Gold getönter Truppen-Slider, einheitlich für alle Popups.
+ */
+@Composable
+private fun troopSliderColors() =
+    SliderDefaults.colors(
+        thumbColor = PulverfassColors.GoldBright,
+        activeTrackColor = PulverfassColors.GoldDark,
+        inactiveTrackColor = PulverfassColors.ParchmentEdge,
+        disabledThumbColor = PulverfassColors.TextMuted,
+        disabledActiveTrackColor = PulverfassColors.ParchmentDark,
+        disabledInactiveTrackColor = PulverfassColors.ParchmentDark,
+    )
+
+/**
  * Zeigt die Platzierungssteuerung für ein bereits ausgewähltes eigenes Gebiet.
  *
  * Diese Composable wird ausschließlich bei einem positiven Restpool in [state]
@@ -2756,18 +2799,14 @@ private fun ReinforcementPanel(
     actions: ReinforcementPanelActions,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    GamePopupPanel(
         modifier =
             modifier
                 .widthIn(max = 560.dp)
                 .testTag("reinforcement_panel"),
-        shape = RoundedCornerShape(6.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 34.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -2834,11 +2873,11 @@ private fun ReinforcementPanel(
                     onAdjust = actions.onAdjustPlacementAmount,
                     tagPrefix = "reinforcement",
                 )
-                BlockActionButton(
-                    label = stringResource(id = R.string.game_reinforcements_place),
+                MainButton(
+                    text = stringResource(id = R.string.game_reinforcements_place),
                     onClick = actions.onPlace,
-                    selected = true,
                     enabled = state.canPlace,
+                    fontSize = 13,
                     modifier = Modifier.fillMaxWidth().testTag("place_reinforcements_button"),
                 )
             }
@@ -2861,18 +2900,14 @@ private fun AttackPanel(
 ) {
     val minimumMoveAfterCapture =
         minimumOccupyingTroopsForAttack(state.attackState.attackTroops)
-    Surface(
+    GamePopupPanel(
         modifier =
             modifier
                 .widthIn(max = 600.dp)
                 .testTag("attack_panel"),
-        shape = RoundedCornerShape(6.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 34.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -2927,11 +2962,11 @@ private fun AttackPanel(
                 enabled = state.canToggleAutoAttack,
                 onCheckedChange = actions.onSetAutoAttackEnabled,
             )
-            BlockActionButton(
-                label = stringResource(id = R.string.game_attack_submit),
+            MainButton(
+                text = stringResource(id = R.string.game_attack_submit),
                 onClick = actions.onAttack,
-                selected = true,
                 enabled = state.canAttack,
+                fontSize = 13,
                 modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
             )
         }
@@ -2983,18 +3018,14 @@ private fun FortifyPanel(
     actions: FortifyPanelActions,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    GamePopupPanel(
         modifier =
             modifier
                 .widthIn(max = 560.dp)
                 .testTag("fortify_panel"),
-        shape = RoundedCornerShape(6.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 34.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -3035,11 +3066,11 @@ private fun FortifyPanel(
                 onAdjust = actions.onAdjustFortifyTroops,
                 tagPrefix = "fortify_troops",
             )
-            BlockActionButton(
-                label = stringResource(id = R.string.game_fortify_submit),
+            MainButton(
+                text = stringResource(id = R.string.game_fortify_submit),
                 onClick = actions.onMove,
-                selected = true,
                 enabled = state.canMove,
+                fontSize = 13,
                 modifier = Modifier.fillMaxWidth().testTag("fortify_submit_button"),
             )
         }
@@ -3098,6 +3129,7 @@ private fun TroopAmountSliderRow(
             valueRange = safeMinAmount.toFloat()..sliderMaxAmount.toFloat(),
             steps = (safeMaxAmount - safeMinAmount - 1).coerceAtLeast(0),
             enabled = canAdjust && safeMaxAmount > safeMinAmount,
+            colors = troopSliderColors(),
             modifier =
                 Modifier
                     .fillMaxWidth()
