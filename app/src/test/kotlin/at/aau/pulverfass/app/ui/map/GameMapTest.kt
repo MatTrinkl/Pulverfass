@@ -24,9 +24,9 @@ class GameMapTest {
         val metrics =
             createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = mapAspectRatio)
 
-        assertFloatEquals(1132.244f, metrics.mapSize.width)
+        assertFloatEquals(1066.667f, metrics.mapSize.width)
         assertFloatEquals(600f, metrics.mapSize.height)
-        assertFloatEquals(-66.122f, metrics.mapOrigin.x)
+        assertFloatEquals(-33.333f, metrics.mapOrigin.x)
         assertFloatEquals(0f, metrics.mapOrigin.y)
     }
 
@@ -102,12 +102,12 @@ class GameMapTest {
                 screenPoint = Offset(500f, 250f),
                 layoutMetrics = metrics,
                 viewportState = MapViewportState(),
-                imageSize = IntSize(2540, 1346),
+                imageSize = IntSize(3840, 2160),
             )
 
         assertNotNull(pixel)
-        assertEquals(1270, pixel.x)
-        assertEquals(673, pixel.y)
+        assertEquals(1920, pixel.x)
+        assertEquals(1080, pixel.y)
     }
 
     @Test
@@ -115,7 +115,7 @@ class GameMapTest {
         val region =
             findRegionByIdColor(
                 regions = PulverfassMapDefaults.regions,
-                pixelRgb = 0x00F032E6,
+                pixelRgb = 0x00A5619A,
             )
 
         assertNotNull(region)
@@ -127,7 +127,7 @@ class GameMapTest {
         val region =
             findRegionByIdColor(
                 regions = PulverfassMapDefaults.regions,
-                pixelRgb = 0x00008080,
+                pixelRgb = 0x00357E84,
             )
 
         assertNotNull(region)
@@ -139,7 +139,7 @@ class GameMapTest {
         assertNull(
             findRegionByIdColor(
                 regions = PulverfassMapDefaults.regions,
-                pixelRgb = 0x00F032E5,
+                pixelRgb = 0x00A5619B,
             ),
         )
         assertNull(

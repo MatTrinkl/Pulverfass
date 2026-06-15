@@ -6,7 +6,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Prüft persistierte Spielereinstellungen im Android-SharedPreferences-Store.
@@ -61,6 +63,30 @@ class PlayerNameStoreTest {
         NoOpPlayerNameStore.saveCharacterId("character_03")
 
         assertNull(NoOpPlayerNameStore.readCharacterId())
+    }
+
+    @Test
+    fun `shared preferences store should persist auto attack setting across instances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = SharedPreferencesPlayerNameStore(context)
+
+        store.saveAutoAttackEnabled(false)
+        assertFalse(store.readAutoAttackEnabled())
+
+        store.saveAutoAttackEnabled(true)
+
+        val restoredStore = SharedPreferencesPlayerNameStore(context)
+        assertTrue(restoredStore.readAutoAttackEnabled())
+
+        restoredStore.saveAutoAttackEnabled(false)
+        assertFalse(SharedPreferencesPlayerNameStore(context).readAutoAttackEnabled())
+    }
+
+    @Test
+    fun `no op store should never persist auto attack setting`() {
+        NoOpPlayerNameStore.saveAutoAttackEnabled(true)
+
+        assertFalse(NoOpPlayerNameStore.readAutoAttackEnabled())
     }
 
     @Test
