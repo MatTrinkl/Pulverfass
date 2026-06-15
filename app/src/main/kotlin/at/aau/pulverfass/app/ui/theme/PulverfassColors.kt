@@ -53,22 +53,6 @@ object PulverfassColors {
     val PlayerRed = Color(0xFFD50000)
     val PlayerMagenta = Color(0xFFFF1493)
 
-    /**
-     * Liste aller Player-Farben in fester Reihenfolge.
-     * Use case: Spieler-Index → Color via [playerColors][index].
-     */
-    val playerColors: List<Color> =
-        listOf(
-            PlayerBlue,
-            PlayerOrange,
-            PlayerGreen,
-            PlayerPurple,
-            PlayerYellow,
-            PlayerCyan,
-            PlayerRed,
-            PlayerMagenta,
-        )
-
     // ============================================
     // SEMANTIC COLORS
     // ============================================

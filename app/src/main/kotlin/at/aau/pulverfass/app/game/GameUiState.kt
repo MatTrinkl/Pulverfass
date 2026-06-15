@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 
 /**
  * Android-Projektion des serverautoritativen öffentlichen GameStates.
@@ -170,6 +171,21 @@ data class GameUiState(
             attackState.attackTroops >= MIN_ATTACK_TROOPS &&
             attackState.moveAfterCapture in
             minimumOccupyingTroopsForAttack(attackState.attackTroops)..attackState.attackTroops
+
+    /**
+     * Prueft, ob fuer die aktuelle Auswahl ein Auto-Angriff vorgemerkt oder
+     * gestartet werden darf.
+     *
+     * Ein bereits laufender Auto-Angriff darf nicht noch einmal gestartet werden;
+     * die einzelne Sequenz wird danach vom Controller serverautoritativ
+     * fortgesetzt.
+     */
+    fun canStartAutoAttack(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canSubmitAttack(localPlayerId, isConnected) &&
+            !attackState.autoAttack.isRunning
 
     /**
      * Die Angriffsphase darf ohne Angriff oder nach beliebig vielen Kämpfen enden.
@@ -421,7 +437,44 @@ data class AttackUiState(
     val attackTroops: Int = MIN_ATTACK_TROOPS,
     val moveAfterCapture: Int = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
     val latestResult: AttackResultUiState? = null,
+    val autoAttack: AutoAttackUiState = AutoAttackUiState(),
 )
+
+/**
+ * Sichtbarer Zustand einer laufenden Auto-Attack-Sequenz.
+ *
+ * Der Zustand ist rein clientseitig. Der Server sieht weiterhin nur normale,
+ * einzelne [at.aau.pulverfass.shared.message.lobby.request.AttackRequest]s.
+ */
+data class AutoAttackUiState(
+    val intent: AutoAttackIntent? = null,
+    val isEnabled: Boolean = false,
+    val isAwaitingResult: Boolean = false,
+    val pendingRequestId: String? = null,
+    val statusText: String? = null,
+    val errorText: String? = null,
+) {
+    val isRunning: Boolean
+        get() = intent != null || isAwaitingResult
+}
+
+/**
+ * Eingefrorene Angriffsabsicht, die Auto-Attack gegen dasselbe Ziel wiederholt.
+ *
+ * `attackTroops` und `moveAfterCapture` sind die vom Nutzer gewählten Werte.
+ * Wenn das Ausgangsgebiet nach serverseitigen Verlusten diese Angriffsstärke
+ * nicht mehr tragen kann, beendet der Controller nur die laufende Sequenz.
+ */
+data class AutoAttackIntent(
+    val fromTerritoryId: TerritoryId,
+    val toTerritoryId: TerritoryId,
+    val attackTroops: Int,
+    val moveAfterCapture: Int,
+) {
+    fun matches(event: AttackResolvedBroadcastEvent): Boolean =
+        fromTerritoryId == event.fromTerritoryId &&
+            toTerritoryId == event.toTerritoryId
+}
 
 /**
  * Lokale Eingabe der einmaligen Truppenverschiebung in der Fortify-Phase.

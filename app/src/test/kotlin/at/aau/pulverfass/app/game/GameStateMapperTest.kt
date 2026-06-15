@@ -1,8 +1,8 @@
 package at.aau.pulverfass.app.game
 
 import androidx.compose.ui.graphics.Color
+import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
-import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.connection.ConnectionStatus
@@ -12,22 +12,31 @@ import kotlin.test.assertEquals
 /**
  * Prüft die Projektion von Lobby-Spielern und Territory-State in den Game-UI-State.
  *
- * Die Tests sichern stabile Spielerfarben, Charakterzuordnung und die Darstellung
- * verlassener Spieler ab, damit Karte und Spielerleiste dieselbe Quelle verwenden.
+ * Die Tests sichern charaktergebundene Spielerfarben, Charakterzuordnung und die
+ * Darstellung verlassener Spieler ab, damit Karte und Spielerleiste dieselbe
+ * Quelle verwenden.
  */
 class GameStateMapperTest {
     @Test
-    fun `lobbyPlayersToGamePlayers uses palette color when no ownPlayerId given`() {
+    fun `lobbyPlayersToGamePlayers binds color to the chosen character`() {
         val players =
             listOf(
-                LobbyPlayerUi(playerId = PlayerId(1), displayName = "Alice"),
-                LobbyPlayerUi(playerId = PlayerId(2), displayName = "Bob"),
+                LobbyPlayerUi(
+                    playerId = PlayerId(1),
+                    displayName = "Alice",
+                    characterId = "character_01",
+                ),
+                LobbyPlayerUi(
+                    playerId = PlayerId(2),
+                    displayName = "Bob",
+                    characterId = "character_02",
+                ),
             )
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(Characters.byId("character_01")!!.color, result[0].color)
+        assertEquals(Characters.byId("character_02")!!.color, result[1].color)
     }
 
     @Test
@@ -35,7 +44,11 @@ class GameStateMapperTest {
         val ownId = PlayerId(2)
         val players =
             listOf(
-                LobbyPlayerUi(playerId = PlayerId(1), displayName = "Alice"),
+                LobbyPlayerUi(
+                    playerId = PlayerId(1),
+                    displayName = "Alice",
+                    characterId = "character_01",
+                ),
                 LobbyPlayerUi(playerId = ownId, displayName = "Bob"),
             )
 
@@ -46,8 +59,8 @@ class GameStateMapperTest {
                 ownCharacterId = "character_04",
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(Characters.byId("character_01")!!.color, result[0].color)
+        assertEquals(Characters.byId("character_04")!!.color, result[1].color)
         assertEquals("character_04", result[1].characterId)
     }
 
@@ -74,41 +87,13 @@ class GameStateMapperTest {
     }
 
     @Test
-    fun `lobbyPlayersToGamePlayers keeps gameplay color independent from character`() {
-        val players =
-            listOf(
-                LobbyPlayerUi(
-                    playerId = PlayerId(1),
-                    displayName = "Alice",
-                    characterId = "character_03",
-                ),
-                LobbyPlayerUi(
-                    playerId = PlayerId(2),
-                    displayName = "Bob",
-                    characterId = "character_07",
-                ),
-            )
+    fun `lobbyPlayersToGamePlayers falls back to neutral color without a character`() {
+        val players = listOf(LobbyPlayerUi(playerId = PlayerId(1), displayName = "Alice"))
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
-        assertEquals("character_03", result[0].characterId)
-        assertEquals("character_07", result[1].characterId)
-    }
-
-    @Test
-    fun `lobbyPlayersToGamePlayers assigns colors by stable player id order`() {
-        val players =
-            listOf(
-                LobbyPlayerUi(playerId = PlayerId(20), displayName = "Bob"),
-                LobbyPlayerUi(playerId = PlayerId(10), displayName = "Alice"),
-            )
-
-        val result = lobbyPlayersToGamePlayers(players)
-
-        assertEquals(PulverfassColors.playerColors[1], result[0].color)
-        assertEquals(PulverfassColors.playerColors[0], result[1].color)
+        assertEquals(Color(0xFF9E9E9E), result[0].color)
+        assertEquals(null, result[0].characterId)
     }
 
     @Test
@@ -135,11 +120,14 @@ class GameStateMapperTest {
 
         val result = buildRegionStates(territoryStates = territories, players = players)
 
-        assertEquals(PulverfassColors.playerColors[0], result.getValue("brazil").accentColor)
+        assertEquals(
+            Characters.byId("character_01")!!.color,
+            result.getValue("brazil").accentColor,
+        )
     }
 
     @Test
-    fun `buildRegionStates grays departed owners while keeping them visible`() {
+    fun `buildRegionStates uses the neutral color for departed owners`() {
         val departedId = PlayerId(99)
         val territoryId = TerritoryId("brasilien")
         val territories =
@@ -157,7 +145,7 @@ class GameStateMapperTest {
 
         assertEquals("99", region.ownerPlayerId)
         assertEquals("Verlassener Spieler", region.ownerName)
-        assertEquals(Color(0xFF5E6268), region.accentColor)
+        assertEquals(Color(0xFFC2C2C2), region.accentColor)
     }
 
     @Test
@@ -171,7 +159,7 @@ class GameStateMapperTest {
                 ownCharacterId = "character_03",
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(Color(0xFF9E9E9E), result[0].color)
         assertEquals(null, result[0].characterId)
     }
 
@@ -194,7 +182,7 @@ class GameStateMapperTest {
                 ownCharacterId = null,
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(Characters.byId("character_01")!!.color, result[0].color)
         assertEquals("character_01", result[0].characterId)
     }
 }

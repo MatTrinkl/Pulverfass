@@ -52,6 +52,8 @@ fun OptionsScreen(
     navController: NavController,
     playerName: String,
     onPlayerNameChange: (String) -> Unit,
+    autoAttackEnabled: Boolean,
+    onAutoAttackEnabledChange: (Boolean) -> Unit,
     musicManager: BackgroundMusicManager,
 ) {
     var isMusicEnabled by remember { mutableStateOf(!musicManager.isMusicMuted) }
@@ -118,7 +120,7 @@ fun OptionsScreen(
                         )
                         .padding(horizontal = 24.dp, vertical = 16.dp),
             ) {
-                AudioToggleRow(
+                OptionToggleRow(
                     label = "MUSIK",
                     isEnabled = isMusicEnabled,
                     onToggle = { enabled ->
@@ -127,13 +129,19 @@ fun OptionsScreen(
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                AudioToggleRow(
+                OptionToggleRow(
                     label = "SOUND-EFFEKTE",
                     isEnabled = isSfxEnabled,
                     onToggle = { enabled ->
                         isSfxEnabled = enabled
                         musicManager.setSfxMuted(!enabled)
                     },
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OptionToggleRow(
+                    label = "AUTO-ANGRIFF",
+                    isEnabled = autoAttackEnabled,
+                    onToggle = onAutoAttackEnabledChange,
                 )
             }
             Spacer(modifier = Modifier.height(32.dp))
@@ -148,7 +156,7 @@ fun OptionsScreen(
 }
 
 @Composable
-private fun AudioToggleRow(
+private fun OptionToggleRow(
     label: String,
     isEnabled: Boolean,
     onToggle: (Boolean) -> Unit,

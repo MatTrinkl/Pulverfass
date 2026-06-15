@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
+import at.aau.pulverfass.app.game.playerColorFor
 import at.aau.pulverfass.app.lobby.CharacterDefinition
 import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyController
@@ -222,7 +223,15 @@ fun WaitingRoomScreen(
                 coinAnimCharacter = Characters.byId(id)
                 controller.selectCharacter(id)
             },
-            onSelect = { id -> controller.updateCharacter(id) },
+            /*
+             * Reines Durchblättern im Carousel darf den Charakter NICHT
+             * übernehmen. Sonst würde der Wert lokal als state.characterId
+             * committet (inkl. Spielerfarbe und In-Game-Charakter) und sogar
+             * persistiert, ohne je per SPEICHERN bestätigt oder an den Server
+             * gesendet worden zu sein. Startet der Host währenddessen das Spiel,
+             * liefe der Spieler mit einem nie gespeicherten Charakter los.
+             */
+            onSelect = {},
             onCoinComplete = {
                 coinAnimCharacter?.let { controller.updateCharacter(it.id) }
                 showCharacterPicker = false
@@ -493,20 +502,20 @@ private fun buildWaitingRoomPlayers(
             WaitingRoomPlayerUi(
                 displayName = effectivePlayerName,
                 isHost = effectiveIsHost,
-                color = playerColorAt(0),
+                color = playerColorFor(selectedCharacterId),
                 characterId = selectedCharacterId,
             ),
         )
     } else {
-        val colorsByPlayerId = playerColorsById(players)
         players.map { player ->
             val isOwn = player.playerId == ownPlayerId
+            val characterId = if (isOwn) selectedCharacterId else player.characterId
             WaitingRoomPlayerUi(
                 displayName = player.displayName,
                 isHost = player.isHost,
                 isDisconnected = player.isDisconnected,
-                color = colorsByPlayerId.getValue(player.playerId),
-                characterId = if (isOwn) selectedCharacterId else player.characterId,
+                color = playerColorFor(characterId),
+                characterId = characterId,
             )
         }
     }
@@ -591,15 +600,6 @@ internal fun availableCharacterIndexNear(
 
     return null
 }
-
-private fun playerColorAt(index: Int): Color =
-    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-
-private fun playerColorsById(players: List<LobbyPlayerUi>): Map<PlayerId, Color> =
-    players
-        .sortedBy { it.playerId.value }
-        .mapIndexed { index, player -> player.playerId to playerColorAt(index) }
-        .toMap()
 
 @Composable
 private fun CharacterPreview(

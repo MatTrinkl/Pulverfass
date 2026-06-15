@@ -8,9 +8,8 @@ import at.aau.pulverfass.shared.message.connection.ConnectionStatus
  * Darstellungsmodell eines Spielers im GameScreen.
  *
  * Die [PlayerId] kommt aus dem `shared`-Modul; Farbe und Kürzel sind reine
- * Android-UI-Daten. [characterId] bleibt getrennt von der Spielerfarbe, damit
- * das Portrait frei gewählt werden kann, ohne die spielrelevante Kartenfarbe zu
- * verändern.
+ * Android-UI-Daten. [color] leitet sich aus der Akzentfarbe des [characterId]
+ * gewählten Charakters ab, sodass Portrait und Kartenfarbe zusammenpassen.
  */
 data class GamePlayerUi(
     val playerId: PlayerId,
