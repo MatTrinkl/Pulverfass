@@ -79,6 +79,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -99,6 +100,7 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
@@ -128,6 +130,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
@@ -191,7 +195,30 @@ class MainServerLobbyRoutingService(
         const val CHARACTER_ALREADY_ASSIGNED_ERROR_CODE = "CHARACTER_ALREADY_ASSIGNED"
         const val PLAYER_CONTEXT_MISSING_ERROR_CODE = "PLAYER_CONTEXT_MISSING"
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
+        const val CHEAT_REPORT_WINDOW_MILLIS = 20_000L
+        const val CHEAT_REPORT_REWARD = 3
+        const val CHEAT_REPORT_PENALTY = -3
     }
+
+    private data class CheatReportWindow(
+        val expiresAtMillis: Long,
+    )
+
+    private data class CheatReportKey(
+        val reporterPlayerId: PlayerId,
+        val accusedPlayerId: PlayerId,
+        val expiresAtMillis: Long,
+    )
+
+    private data class CheatReportResult(
+        val correct: Boolean,
+        val modifierDelta: Int,
+    )
+
+    private data class CheatReinforcementAdjustment(
+        val modifier: Int,
+        val zeroReinforcements: Boolean,
+    )
 
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
@@ -209,6 +236,45 @@ class MainServerLobbyRoutingService(
     private val publicGameStateBuilder = PublicGameStateBuilder()
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
     private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
+
+    /*
+     * Die Cheat-Meldelogik bleibt bewusst serverseitig.
+     * Die App darf nur melden, aber nicht selbst entscheiden, ob die Meldung stimmt.
+     */
+    private val cheatReportLock = Any()
+
+    /*
+     * Nach dem Cheat ist der Vorteil für andere Spieler noch nicht sicher sichtbar.
+     * Deshalb wartet der Server bis zur nächsten Verstärkungsplatzierung dieses Spielers.
+     */
+    private val pendingVisibleCheatByLobby = mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
+
+    /*
+     * Speichert pro Lobby, welcher Spieler gerade ein offenes 20-Sekunden-Meldefenster hat.
+     * Es wird kein eigener Timer gestartet; beim Melden wird einfach die Ablaufzeit geprüft.
+     */
+    private val cheatReportWindowsByLobby =
+        mutableMapOf<LobbyCode, MutableMap<PlayerId, CheatReportWindow>>()
+
+    /*
+     * Merkt sich, wer eine konkrete Cheat-Aktion schon gemeldet hat.
+     * Dadurch kann derselbe Spieler nicht mehrfach für denselben Cheat-Bonus bekommen.
+     */
+    private val cheatReportsByLobby = mutableMapOf<LobbyCode, MutableSet<CheatReportKey>>()
+
+    /*
+     * Bonus oder Malus wird nicht sofort angewendet, sondern erst in der nächsten
+     * Verstärkungsphase des meldenden Spielers.
+     */
+    private val nextReinforcementModifierByLobby =
+        mutableMapOf<LobbyCode, MutableMap<PlayerId, Int>>()
+
+    /*
+     * Wenn ein Spieler korrekt beim Cheaten erwischt wird, bekommt er in seiner
+     * nächsten Verstärkungsphase 0 Truppen. Auch diese Strafe bleibt am Server.
+     */
+    private val nextZeroReinforcementPenaltyByLobby =
+        mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
     init {
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
@@ -258,6 +324,7 @@ class MainServerLobbyRoutingService(
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
             is FortifyMoveRequest -> routeFortifyMoveRequest(request)
             is PlaceReinforcementsRequest -> routePlaceReinforcementsRequest(request)
+            is ReportCheatRequest -> routeReportCheatRequest(request)
             is StartPlayerSetRequest -> routeStartPlayerSetRequest(request)
             is TradeInCardsRequest -> routeTradeInCardsRequest(request)
             is TurnStateGetRequest -> routeTurnStateGetRequest(request)
@@ -880,6 +947,11 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildClaimCheatReinforcementBonusEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
+            /*
+             * Der Cheat wird hier nur vorgemerkt. Das Meldefenster startet erst,
+             * wenn die zusätzlichen Truppen durch eine Platzierung sichtbar werden.
+             */
+            markCheatReportWindowPending(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
                 ClaimCheatReinforcementBonusResponse(payload.lobbyCode),
@@ -892,6 +964,80 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = claimCheatReinforcementBonusErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            logRequestRejected(
+                request = request,
+                errorCode = error.code.name,
+                reason = error.reason,
+                cause = cause,
+            )
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeReportCheatRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as ReportCheatRequest
+
+        runCatching {
+            val lobby =
+                lobbyManager.getLobby(payload.lobbyCode)
+                    ?: throw IllegalStateException("GAME_NOT_FOUND")
+            val state = lobby.currentState()
+            val contextPlayerId = request.context.playerId
+
+            require(!(contextPlayerId == null || contextPlayerId != payload.reporterPlayerId)) {
+                "REQUESTER_MISMATCH"
+            }
+            require(state.gameStarted) { "GAME_NOT_RUNNING" }
+            require(
+                payload.reporterPlayerId in state.players &&
+                    payload.accusedPlayerId in state.players,
+            ) {
+                "UNKNOWN_PLAYER"
+            }
+            require(payload.reporterPlayerId != payload.accusedPlayerId) { "SELF_REPORT" }
+
+            val result =
+                resolveCheatReport(
+                    lobbyCode = payload.lobbyCode,
+                    reporterPlayerId = payload.reporterPlayerId,
+                    accusedPlayerId = payload.accusedPlayerId,
+                )
+
+            network.send(
+                request.connectionId,
+                ReportCheatResponse(
+                    lobbyCode = payload.lobbyCode,
+                    accusedPlayerId = payload.accusedPlayerId,
+                    correct = result.correct,
+                    modifierDelta = result.modifierDelta,
+                ),
+            )
+            logRequestCompleted(
+                request = request,
+                responseType = "ReportCheatResponse",
+                extraFields =
+                    arrayOf(
+                        "accusedPlayerId" to payload.accusedPlayerId.value,
+                        "correct" to result.correct,
+                        "modifierDelta" to result.modifierDelta,
+                    ),
+            )
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = reportCheatErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             logRequestRejected(
                 request = request,
@@ -955,6 +1101,11 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildPlaceReinforcementsEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
+            /*
+             * Erst nach einer erfolgreichen Platzierung können andere Spieler den
+             * Cheat auf der Karte erkennen. Ab diesem Zeitpunkt läuft die Meldefrist.
+             */
+            openPendingCheatReportWindowAfterPlacement(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
                 PlaceReinforcementsResponse(lobbyCode = payload.lobbyCode),
@@ -1110,6 +1261,61 @@ class MainServerLobbyRoutingService(
             ),
             context,
         )
+
+        val adjustment =
+            synchronized(cheatReportLock) {
+                val activePlayerId = currentTurnState.activePlayerId
+                val modifiers = nextReinforcementModifierByLobby[lobbyCode]
+                val modifier = modifiers?.remove(activePlayerId) ?: 0
+                if (modifiers?.isEmpty() == true) {
+                    nextReinforcementModifierByLobby.remove(lobbyCode)
+                }
+
+                val penalizedPlayers = nextZeroReinforcementPenaltyByLobby[lobbyCode]
+                val zeroReinforcements = penalizedPlayers?.remove(activePlayerId) == true
+                if (penalizedPlayers?.isEmpty() == true) {
+                    nextZeroReinforcementPenaltyByLobby.remove(lobbyCode)
+                }
+
+                CheatReinforcementAdjustment(
+                    modifier = modifier,
+                    zeroReinforcements = zeroReinforcements,
+                )
+            }
+
+        if (adjustment.zeroReinforcements) {
+            /*
+             * Die Cheater-Strafe ist stärker als ein möglicher Bonus oder Malus:
+             * In dieser Verstärkungsphase soll der Spieler wirklich bei 0 landen.
+             */
+            if (breakdown.total > 0) {
+                lobbyManager.submit(
+                    PendingReinforcementsChangedEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = currentTurnState.activePlayerId,
+                        delta = -breakdown.total,
+                    ),
+                    context,
+                )
+            }
+            return
+        }
+
+        /*
+         * Der Malus darf den Verstärkungspool nicht negativ machen.
+         * Falls ein Spieler weniger als 3 Verstärkungen bekommt, wird der Malus begrenzt.
+         */
+        val appliedModifier = adjustment.modifier.coerceAtLeast(-breakdown.total)
+        if (appliedModifier != 0) {
+            lobbyManager.submit(
+                PendingReinforcementsChangedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = currentTurnState.activePlayerId,
+                    delta = appliedModifier,
+                ),
+                context,
+            )
+        }
     }
 
     private suspend fun routeStartPlayerSetRequest(request: DecodedNetworkRequest) {
@@ -2117,6 +2323,104 @@ class MainServerLobbyRoutingService(
         )
     }
 
+    private fun markCheatReportWindowPending(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ) {
+        synchronized(cheatReportLock) {
+            pendingVisibleCheatByLobby
+                .getOrPut(lobbyCode) { mutableSetOf() }
+                .add(accusedPlayerId)
+        }
+    }
+
+    private fun openPendingCheatReportWindowAfterPlacement(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ) {
+        synchronized(cheatReportLock) {
+            val pendingPlayers = pendingVisibleCheatByLobby[lobbyCode]
+            if (pendingPlayers?.remove(accusedPlayerId) != true) {
+                return@synchronized
+            }
+            if (pendingPlayers.isEmpty()) {
+                pendingVisibleCheatByLobby.remove(lobbyCode)
+            }
+            openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
+        }
+    }
+
+    private fun openCheatReportWindowLocked(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ) {
+        /*
+         * Statt einen Timer laufen zu lassen, speichere ich nur den Zeitpunkt,
+         * bis wann eine Meldung noch gültig ist. Das ist einfacher und robuster.
+         */
+        cheatReportWindowsByLobby
+            .getOrPut(lobbyCode) { mutableMapOf() }[accusedPlayerId] =
+            CheatReportWindow(
+                expiresAtMillis = nowEpochMillis() + CHEAT_REPORT_WINDOW_MILLIS,
+            )
+    }
+
+    private fun resolveCheatReport(
+        lobbyCode: LobbyCode,
+        reporterPlayerId: PlayerId,
+        accusedPlayerId: PlayerId,
+    ): CheatReportResult =
+        synchronized(cheatReportLock) {
+            /*
+             * Hier entscheidet ausschließlich der Server, ob eine Meldung korrekt ist.
+             * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch ein
+             * gültiges Cheat-Meldefenster offen ist.
+             */
+            val window = cheatReportWindowsByLobby[lobbyCode]?.get(accusedPlayerId)
+            val now = nowEpochMillis()
+            val correct = window != null && now <= window.expiresAtMillis
+
+            if (window != null && !correct) {
+                cheatReportWindowsByLobby[lobbyCode]?.remove(accusedPlayerId)
+            }
+
+            if (correct) {
+                val key =
+                    CheatReportKey(
+                        reporterPlayerId = reporterPlayerId,
+                        accusedPlayerId = accusedPlayerId,
+                        expiresAtMillis = window.expiresAtMillis,
+                    )
+                require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
+                    "ALREADY_REPORTED"
+                }
+            }
+
+            /*
+             * Korrekte Meldung: +3 für den Melder und 0 Truppen für den Cheater
+             * in dessen nächster Verstärkungsphase.
+             * Falsche Meldung: -3 für den meldenden Spieler.
+             */
+            val modifierDelta =
+                if (correct) {
+                    CHEAT_REPORT_REWARD
+                } else {
+                    CHEAT_REPORT_PENALTY
+                }
+            val modifiers = nextReinforcementModifierByLobby.getOrPut(lobbyCode) { mutableMapOf() }
+            modifiers[reporterPlayerId] = (modifiers[reporterPlayerId] ?: 0) + modifierDelta
+            if (correct) {
+                nextZeroReinforcementPenaltyByLobby
+                    .getOrPut(lobbyCode) { mutableSetOf() }
+                    .add(accusedPlayerId)
+            }
+
+            CheatReportResult(
+                correct = correct,
+                modifierDelta = modifierDelta,
+            )
+        }
+
     private fun buildAttackEvents(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
@@ -2649,6 +2953,49 @@ class MainServerLobbyRoutingService(
         return ClaimCheatReinforcementBonusErrorResponse(code = code, reason = reason)
     }
 
+    private fun reportCheatErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: ReportCheatRequest,
+        cause: Throwable,
+    ): ReportCheatErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> ReportCheatErrorCode.GAME_NOT_FOUND
+                "REQUESTER_MISMATCH" -> ReportCheatErrorCode.REQUESTER_MISMATCH
+                "GAME_NOT_RUNNING" -> ReportCheatErrorCode.GAME_NOT_RUNNING
+                "SELF_REPORT" -> ReportCheatErrorCode.SELF_REPORT
+                "ALREADY_REPORTED" -> ReportCheatErrorCode.ALREADY_REPORTED
+                else -> ReportCheatErrorCode.UNKNOWN_PLAYER
+            }
+
+        val reason =
+            when (code) {
+                ReportCheatErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                ReportCheatErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        connectionNotAssignedToLobby(payload.lobbyCode)
+                    } else {
+                        "Reporter '${payload.reporterPlayerId.value}' passt nicht zur " +
+                            "aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                ReportCheatErrorCode.GAME_NOT_RUNNING ->
+                    "Cheat-Meldungen sind erst in einem laufenden Spiel möglich."
+                ReportCheatErrorCode.UNKNOWN_PLAYER ->
+                    "Reporter '${payload.reporterPlayerId.value}' oder beschuldigter Spieler " +
+                        "'${payload.accusedPlayerId.value}' ist nicht Teil der Lobby."
+                ReportCheatErrorCode.SELF_REPORT ->
+                    "Spieler können sich nicht selbst als Cheater melden."
+                ReportCheatErrorCode.ALREADY_REPORTED ->
+                    "Dieser Cheat wurde von Spieler '${payload.reporterPlayerId.value}' " +
+                        "bereits gemeldet."
+            }
+
+        return ReportCheatErrorResponse(code = code, reason = reason)
+    }
+
     private fun attackErrorResponse(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
@@ -3099,6 +3446,7 @@ class MainServerLobbyRoutingService(
             is LobbyPlayerCountRequest -> payload.lobbyCode
             is KickPlayerRequest -> payload.lobbyCode
             is PlaceReinforcementsRequest -> payload.lobbyCode
+            is ReportCheatRequest -> payload.lobbyCode
             is StartGameRequest -> payload.lobbyCode
             is StartPlayerSetRequest -> payload.lobbyCode
             is TradeInCardsRequest -> payload.lobbyCode
@@ -3119,6 +3467,7 @@ class MainServerLobbyRoutingService(
             is GameStatePrivateGetRequest -> payload.playerId
             is KickPlayerRequest -> payload.requesterPlayerId
             is PlaceReinforcementsRequest -> payload.playerId
+            is ReportCheatRequest -> payload.reporterPlayerId
             is StartPlayerSetRequest -> payload.requesterPlayerId
             is TradeInCardsRequest -> payload.playerId
             is TurnAdvanceRequest -> payload.playerId
