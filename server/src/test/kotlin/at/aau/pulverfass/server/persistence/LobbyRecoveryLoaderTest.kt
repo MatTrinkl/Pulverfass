@@ -341,6 +341,19 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = PlayerId(1),
+            ),
+            record(
+                eventType = "match_ended",
+                eventJson =
+                    """{"lobbyCode":"LR11","reason":"TERRITORY_DOMINATION","winnerPlayerId":1}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
             PlayerJoined(lobbyCode, PlayerId(1), "Alice"),
             record(
                 "player_joined",

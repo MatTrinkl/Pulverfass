@@ -5,16 +5,19 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
@@ -87,6 +90,48 @@ class ClientGameStateReducerTest {
         assertTrue(state.canManageReinforcements(aliceId))
         assertEquals(5, state.regionStates.getValue("brazil").troopCount)
         assertEquals("Alice", state.regionStates.getValue("brazil").ownerName)
+    }
+
+    @Test
+    fun `catch up snapshot restores finished match winner`() {
+        val response =
+            GameStateCatchUpResponse(
+                lobbyCode = lobbyCode,
+                stateVersion = 8,
+                determinism = determinism,
+                turnState =
+                    PublicTurnStateSnapshot(
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 4,
+                        startPlayerId = aliceId,
+                    ),
+                definition = mapDefinition("brasilien"),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(
+                            territoryId = TerritoryId("brasilien"),
+                            ownerId = aliceId,
+                            troopCount = 5,
+                        ),
+                    ),
+                gameStatus = GameStatus.FINISHED,
+                matchEndReason = MatchEndReason.TERRITORY_DOMINATION.name,
+                winnerPlayerId = aliceId,
+            )
+
+        val state =
+            ClientGameStateReducer.applyCatchUpResponse(
+                current = GameUiState(isCatchingUp = true),
+                response = response,
+                players = players,
+            )
+
+        assertTrue(state.isFinished)
+        assertEquals(GameStatus.FINISHED, state.gameStatus)
+        assertEquals(MatchEndReason.TERRITORY_DOMINATION.name, state.matchEndReason)
+        assertEquals(aliceId, state.winnerPlayerId)
+        assertFalse(state.canUseGameActions(aliceId))
     }
 
     @Test
@@ -263,6 +308,106 @@ class ClientGameStateReducerTest {
         )
         assertEquals("Alice", result.state.regionStates.getValue("brazil").ownerName)
         assertEquals(null, result.state.lastSyncError)
+    }
+
+    @Test
+    fun `delta applies match ended event and clears pending selections`() {
+        val base =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+                selectedRegionId = "brazil",
+                selectionFromRegionId = "brazil",
+                selectionToRegionId = "argentina",
+                selectedTradeInCardIds = setOf(CardId("a")),
+                attackState = AttackUiState(attackTroops = 3),
+                fortifyState = FortifyUiState(troopCount = 2, hasMoved = true),
+            )
+        val delta =
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = 1,
+                toVersion = 2,
+                events =
+                    listOf(
+                        MatchEndedBroadcastEvent(
+                            lobbyCode = lobbyCode,
+                            reason = MatchEndReason.TERRITORY_DOMINATION,
+                            winnerPlayerId = aliceId,
+                            stateVersion = 2,
+                        ),
+                    ),
+            )
+
+        val result = ClientGameStateReducer.applyDelta(base, delta, players)
+
+        assertFalse(result.needsCatchUp)
+        assertTrue(result.state.isFinished)
+        assertEquals(GameStatus.FINISHED, result.state.gameStatus)
+        assertEquals(aliceId, result.state.winnerPlayerId)
+        assertNull(result.state.selectedRegionId)
+        assertNull(result.state.selectionFromRegionId)
+        assertNull(result.state.selectionToRegionId)
+        assertTrue(result.state.selectedTradeInCardIds.isEmpty())
+        assertFalse(result.state.canUseGameActions(aliceId))
+    }
+
+    @Test
+    fun `single event delta applies match ended event when version is next server version`() {
+        val base =
+            GameUiState(
+                stateVersion = 1,
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.ATTACK,
+            )
+        val delta =
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = 2,
+                toVersion = 2,
+                events =
+                    listOf(
+                        MatchEndedBroadcastEvent(
+                            lobbyCode = lobbyCode,
+                            reason = MatchEndReason.TERRITORY_DOMINATION,
+                            winnerPlayerId = aliceId,
+                            stateVersion = 2,
+                        ),
+                    ),
+            )
+
+        val result = ClientGameStateReducer.applyDelta(base, delta, players)
+
+        assertFalse(result.needsCatchUp)
+        assertTrue(result.state.isFinished)
+        assertEquals(2, result.state.stateVersion)
+        assertEquals(aliceId, result.state.winnerPlayerId)
+    }
+
+    @Test
+    fun `direct match ended broadcast finishes local state`() {
+        val state =
+            ClientGameStateReducer.applyMatchEndedBroadcast(
+                current =
+                    GameUiState(
+                        stateVersion = 1,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+                event =
+                    MatchEndedBroadcastEvent(
+                        lobbyCode = lobbyCode,
+                        reason = MatchEndReason.TERRITORY_DOMINATION,
+                        winnerPlayerId = aliceId,
+                        stateVersion = 2,
+                    ),
+            )
+
+        assertTrue(state.isFinished)
+        assertEquals(2, state.stateVersion)
+        assertEquals(aliceId, state.winnerPlayerId)
+        assertFalse(state.canUseGameActions(aliceId))
     }
 
     @Test

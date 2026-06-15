@@ -1,6 +1,8 @@
 package at.aau.pulverfass.shared.message.lobby
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
@@ -22,4 +24,7 @@ internal data class PublicGameStateWireSnapshot(
     val turnState: PublicTurnStateSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
+    val gameStatus: GameStatus = GameStatus.RUNNING,
+    val matchEndReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
 )

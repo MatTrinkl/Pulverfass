@@ -2249,26 +2249,77 @@ class MainServerLobbyRoutingService(
         val sourceTroops = state.troopCountOf(payload.fromTerritoryId)
         require(payload.attackTroops <= sourceTroops - 1) { "INSUFFICIENT_TROOPS" }
 
-        return try {
-            mapCommandRuleService.createEvents(
-                state = state,
-                command =
-                    AttackCommand(
-                        lobbyCode = payload.lobbyCode,
-                        playerId = payload.playerId,
-                        fromTerritoryId = payload.fromTerritoryId,
-                        toTerritoryId = payload.toTerritoryId,
-                        requestedAttackDice = minOf(3, payload.attackTroops),
-                        committedTroopCount = payload.attackTroops,
-                        occupyingTroopCount = payload.moveAfterCapture,
-                    ),
-            )
-        } catch (cause: InvalidMapCommandException) {
-            if (cause.reasonCode != null) {
-                throw IllegalArgumentException(cause.reasonCode, cause)
+        val attackEvents =
+            try {
+                mapCommandRuleService.createEvents(
+                    state = state,
+                    command =
+                        AttackCommand(
+                            lobbyCode = payload.lobbyCode,
+                            playerId = payload.playerId,
+                            fromTerritoryId = payload.fromTerritoryId,
+                            toTerritoryId = payload.toTerritoryId,
+                            requestedAttackDice = minOf(3, payload.attackTroops),
+                            committedTroopCount = payload.attackTroops,
+                            occupyingTroopCount = payload.moveAfterCapture,
+                        ),
+                )
+            } catch (cause: InvalidMapCommandException) {
+                if (cause.reasonCode != null) {
+                    throw IllegalArgumentException(cause.reasonCode, cause)
+                }
+                throw cause
             }
-            throw cause
+        val winnerPlayerId = territoryDominationWinnerAfterEvents(state, attackEvents)
+
+        return if (winnerPlayerId != null) {
+            attackEvents +
+                MatchEndedEvent(
+                    lobbyCode = payload.lobbyCode,
+                    reason = MatchEndReason.TERRITORY_DOMINATION,
+                    winnerPlayerId = winnerPlayerId,
+                )
+        } else {
+            attackEvents
         }
+    }
+
+    /**
+     * Projiziert die Owner-Änderungen einer Attack-Eventliste und prüft die Siegbedingung.
+     *
+     * @param state autoritativer Zustand vor dem Angriff
+     * @param events durch die Angriffsregeln erzeugte Domain-Events
+     * @return Gewinner bei vollständiger Gebietskontrolle oder `null`
+     */
+    private fun territoryDominationWinnerAfterEvents(
+        state: GameState,
+        events: List<LobbyEvent>,
+    ): PlayerId? {
+        if (events.none { event -> event is AttackResolvedEvent && event.capture }) {
+            return null
+        }
+
+        val projectedOwners =
+            state
+                .allTerritoryStates()
+                .associate { territoryState ->
+                    territoryState.territoryId to territoryState.ownerId
+                }
+                .toMutableMap()
+        events.filterIsInstance<AttackResolvedEvent>()
+            .filter(AttackResolvedEvent::capture)
+            .forEach { event ->
+                projectedOwners[event.toTerritoryId] = event.attackerPlayerId
+            }
+
+        if (
+            projectedOwners.isEmpty() ||
+            projectedOwners.values.any { ownerId -> ownerId == null }
+        ) {
+            return null
+        }
+
+        return projectedOwners.values.filterNotNull().toSet().singleOrNull()
     }
 
     private fun buildTradeInCardsEvents(

@@ -8,11 +8,13 @@ import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
@@ -85,6 +87,9 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
@@ -111,14 +116,17 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
     /**
      * Wendet ein öffentliches Delta auf den lokalen State an.
      *
-     * Deltas dürfen nur angewendet werden, wenn ihre `fromVersion` exakt zur
-     * lokalen [GameUiState.stateVersion] passt. Bei jeder Lücke wird bewusst kein
+     * Deltas dürfen nur angewendet werden, wenn sie direkt an die lokale
+     * [GameUiState.stateVersion] anschließen. Bei jeder Lücke wird bewusst kein
      * Teilupdate geraten, sondern Catch-up angefordert, damit die Karte wieder
      * vollständig serverautoritativen Zustand bekommt.
      *
@@ -162,6 +170,29 @@ object ClientGameStateReducer {
                 ),
             needsCatchUp = false,
         )
+    }
+
+    /**
+     * Wendet ein direkt gesendetes Match-Ende auf den lokalen State an.
+     *
+     * Der reguläre Pfad läuft über [GameStateDeltaEvent]. Diese Methode hält den
+     * Controller zusätzlich robust, falls ein Server das Ende als einzelnes
+     * Broadcast-Payload sendet.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param event serverseitiges Match-Ende
+     * @return aktualisierter UI-State
+     */
+    fun applyMatchEndedBroadcast(
+        current: GameUiState,
+        event: MatchEndedBroadcastEvent,
+    ): GameUiState {
+        val eventVersion = event.stateVersion ?: current.stateVersion
+        if (eventVersion < current.stateVersion) {
+            return current
+        }
+
+        return current.applyMatchEnded(event)
     }
 
     /**
@@ -632,6 +663,9 @@ object ClientGameStateReducer {
         turnState: PublicTurnStateSnapshot,
         definition: MapDefinitionSnapshot,
         territoryStates: List<MapTerritoryStateSnapshot>,
+        gameStatus: GameStatus,
+        matchEndReason: String?,
+        winnerPlayerId: PlayerId?,
         players: List<LobbyPlayerUi>,
     ): GameUiState {
         if (stateVersion < current.stateVersion) {
@@ -642,6 +676,9 @@ object ClientGameStateReducer {
             current =
                 current.copy(
                     isStarted = true,
+                    gameStatus = gameStatus,
+                    matchEndReason = matchEndReason,
+                    winnerPlayerId = winnerPlayerId,
                     activePlayerId = turnState.activePlayerId,
                     turnPhase = turnState.turnPhase,
                     turnCount = turnState.turnCount,
@@ -718,7 +755,14 @@ object ClientGameStateReducer {
     ): GameUiState =
         when (event) {
             is GameStartedEvent ->
-                current.copy(isStarted = true, isCatchingUp = true, lastSyncError = null)
+                current.copy(
+                    isStarted = true,
+                    gameStatus = GameStatus.RUNNING,
+                    matchEndReason = null,
+                    winnerPlayerId = null,
+                    isCatchingUp = true,
+                    lastSyncError = null,
+                )
             is TurnStateUpdatedEvent ->
                 current.copy(
                     activePlayerId = event.activePlayerId,
@@ -772,8 +816,29 @@ object ClientGameStateReducer {
             is AttackResolvedBroadcastEvent -> current.applyAttackResolved(event)
             is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
             is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
+            is MatchEndedBroadcastEvent -> current.applyMatchEnded(event)
             else -> current
         }
+
+    private fun GameUiState.applyMatchEnded(event: MatchEndedBroadcastEvent): GameUiState =
+        copy(
+            stateVersion = maxOf(stateVersion, event.stateVersion ?: stateVersion),
+            gameStatus = GameStatus.FINISHED,
+            matchEndReason = event.reason.name,
+            winnerPlayerId = event.winnerPlayerId,
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            reinforcementState = ReinforcementUiState(),
+            reinforcementPlacementAmount = 1,
+            attackState = AttackUiState(),
+            fortifyState = FortifyUiState(),
+            selectedTradeInCardIds = emptySet(),
+            isCatchingUp = false,
+            isDesynced = false,
+            lastSyncError = null,
+        )
 
     private fun GameUiState.applyAttackResolved(event: AttackResolvedBroadcastEvent): GameUiState {
         val latestResult =
@@ -1181,9 +1246,16 @@ object ClientGameStateReducer {
     private fun canApplyDelta(
         localVersion: Long,
         delta: GameStateDeltaEvent,
-    ): Boolean =
-        delta.fromVersion == localVersion &&
-            delta.toVersion > localVersion
+    ): Boolean {
+        val rangeDeltaFollowsLocalVersion =
+            delta.fromVersion == localVersion &&
+                delta.toVersion > localVersion
+        val singleEventDeltaFollowsLocalVersion =
+            delta.fromVersion == delta.toVersion &&
+                delta.fromVersion == localVersion + 1
+
+        return rangeDeltaFollowsLocalVersion || singleEventDeltaFollowsLocalVersion
+    }
 }
 
 /**
