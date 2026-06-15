@@ -2764,12 +2764,13 @@ private fun GamePopupPanel(
 ) {
     Box(modifier = modifier) {
         Image(
-            painter = painterResource(id = R.drawable.player_card),
+            painter = painterResource(id = R.drawable.playerlist_background),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.matchParentSize(),
         )
-        CompositionLocalProvider(LocalContentColor provides PulverfassColors.TextOnParchment) {
+        // Helle Schrift, weil das playerlist_background-Panel dunkel ist.
+        CompositionLocalProvider(LocalContentColor provides PulverfassColors.ParchmentLight) {
             content()
         }
     }
@@ -2849,7 +2850,7 @@ private fun ReinforcementPanel(
     GamePopupPanel(
         modifier =
             modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 720.dp)
                 .testTag("reinforcement_panel"),
     ) {
         Column(
@@ -2949,7 +2950,7 @@ private fun AttackPanel(
     GamePopupPanel(
         modifier =
             modifier
-                .widthIn(max = 600.dp)
+                .widthIn(max = 720.dp)
                 .testTag("attack_panel"),
     ) {
         Column(
@@ -3066,7 +3067,7 @@ private fun FortifyPanel(
     GamePopupPanel(
         modifier =
             modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 720.dp)
                 .testTag("fortify_panel"),
     ) {
         Column(
