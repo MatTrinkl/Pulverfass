@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -187,6 +186,10 @@ private const val PHASE_ACTION_FLASH_DURATION_MILLIS = 1_600L
 
 /** Seitenverhältnis des ui_lobby_roster_panel-Assets (908x550). */
 private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
+
+/** Höhe und natives Seitenverhältnis (605x202) des footer_bar-Buttons. */
+private val FooterButtonHeight = 60.dp
+private const val FOOTER_BAR_RATIO = 605f / 202f
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -2789,7 +2792,10 @@ private fun PopupActionButton(
     Box(
         modifier =
             modifier
-                .defaultMinSize(minHeight = 52.dp)
+                // Höhe + natives Seitenverhältnis von footer_bar (605:202), damit
+                // das Button-Bild nicht in die Breite gezogen wird.
+                .height(FooterButtonHeight)
+                .aspectRatio(FOOTER_BAR_RATIO)
                 .alpha(if (enabled) 1f else 0.45f)
                 .clickable(
                     enabled = enabled,
@@ -2925,7 +2931,10 @@ private fun ReinforcementPanel(
                     text = stringResource(id = R.string.game_reinforcements_place),
                     onClick = actions.onPlace,
                     enabled = state.canPlace,
-                    modifier = Modifier.fillMaxWidth().testTag("place_reinforcements_button"),
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .testTag("place_reinforcements_button"),
                 )
             }
         }
@@ -3013,7 +3022,10 @@ private fun AttackPanel(
                 text = stringResource(id = R.string.game_attack_submit),
                 onClick = actions.onAttack,
                 enabled = state.canAttack,
-                modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .testTag("attack_submit_button"),
             )
         }
     }
@@ -3116,7 +3128,10 @@ private fun FortifyPanel(
                 text = stringResource(id = R.string.game_fortify_submit),
                 onClick = actions.onMove,
                 enabled = state.canMove,
-                modifier = Modifier.fillMaxWidth().testTag("fortify_submit_button"),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .testTag("fortify_submit_button"),
             )
         }
     }
