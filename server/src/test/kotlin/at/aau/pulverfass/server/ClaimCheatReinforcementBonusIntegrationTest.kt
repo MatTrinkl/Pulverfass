@@ -9,6 +9,7 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
@@ -18,10 +19,18 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.request.ClaimCheatReinforcementBonusRequest
+import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
+import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
+import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.ClaimCheatReinforcementBonusResponse
+import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
+import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ClaimCheatReinforcementBonusErrorResponse
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.server.testing.ApplicationTestBuilder
@@ -135,6 +144,406 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                     assertTrue(playerOne in updatedState.usedCheatReinforcementBonusByPlayer)
 
                     session.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `correct cheat report rewards reporter and zeroes cheater reinforcements`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CHR1")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+            val placementTerritoryId = baseState.allTerritoryStates().first().territoryId
+
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+            lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = baseState)
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val cheaterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val reporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    cheaterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ClaimCheatReinforcementBonusRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertIs<GameStateDeltaEvent>(receiveRelevantTestPayload(cheaterSession.first))
+                    assertEquals(
+                        ClaimCheatReinforcementBonusResponse(lobbyCode),
+                        receiveRelevantTestPayload(cheaterSession.first),
+                    )
+
+                    cheaterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    PlaceReinforcementsRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        placements =
+                                            listOf(
+                                                TerritoryPlacement(
+                                                    territoryId = placementTerritoryId,
+                                                    amount = 1,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertEquals(
+                        PlaceReinforcementsResponse(lobbyCode),
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = reporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    reporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerTwo,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = true,
+                            modifierDelta = 3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = reporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    advanceTurn(
+                        cheaterSession.first,
+                        lobbyCode,
+                        playerOne,
+                        TurnPhase.REINFORCEMENTS,
+                    )
+                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.ATTACK)
+                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.FORTIFY)
+                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.DRAW_CARD)
+                    advanceTurn(
+                        reporterSession.first,
+                        lobbyCode,
+                        playerTwo,
+                        TurnPhase.REINFORCEMENTS,
+                    )
+                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.ATTACK)
+                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.FORTIFY)
+                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.DRAW_CARD)
+
+                    val penalizedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("state missing")
+                    assertEquals(0, penalizedState.pendingReinforcementsFor(playerOne))
+
+                    cheaterSession.first.close()
+                    reporterSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `reporting cheat before visible reinforcement placement penalizes reporter`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CHR3")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+            lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = baseState)
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val cheaterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val reporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    cheaterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ClaimCheatReinforcementBonusRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertIs<GameStateDeltaEvent>(receiveRelevantTestPayload(cheaterSession.first))
+                    assertEquals(
+                        ClaimCheatReinforcementBonusResponse(lobbyCode),
+                        receiveRelevantTestPayload(cheaterSession.first),
+                    )
+
+                    reporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerTwo,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = false,
+                            modifierDelta = -3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = reporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    cheaterSession.first.close()
+                    reporterSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `reporting player without open cheat window penalizes reporter`() =
+        testApplication {
+            val lobbyCode = LobbyCode("CHR2")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val baseState =
+                reinforcementGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(playerOne, playerTwo),
+                    activePlayerId = playerOne,
+                    turnPhase = TurnPhase.REINFORCEMENTS,
+                    pendingPlayerId = playerOne,
+                    pendingAmount = 2,
+                )
+
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+            lobbyManager.createLobby(lobbyCode = lobbyCode, initialState = baseState)
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val reporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    reporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerTwo,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = false,
+                            modifierDelta = -3,
+                        ),
+                        receiveRelevantTestPayload(reporterSession.first),
+                    )
+
+                    reporterSession.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -380,6 +789,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             activePlayer = activePlayerId,
             turnOrder = players,
             turnNumber = 1,
+            gameStarted = true,
             turnState =
                 TurnState(
                     activePlayerId = activePlayerId,
@@ -415,6 +825,40 @@ class ClaimCheatReinforcementBonusIntegrationTest {
         playersByConnection[connectionId] = playerId
         connectionsByPlayer[playerId] = connectionId
         session to connectionId
+    }
+
+    private suspend fun advanceTurn(
+        session: DefaultClientWebSocketSession,
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        expectedPhase: TurnPhase,
+    ) {
+        session.send(
+            Frame.Binary(
+                fin = true,
+                data =
+                    MessageCodec.encode(
+                        TurnAdvanceRequest(
+                            lobbyCode = lobbyCode,
+                            playerId = playerId,
+                            expectedPhase = expectedPhase,
+                        ),
+                    ),
+            ),
+        )
+        assertEquals(TurnAdvanceResponse(lobbyCode), receivePayloadOf<TurnAdvanceResponse>(session))
+    }
+
+    private suspend inline fun <reified T> receivePayloadOf(
+        session: DefaultClientWebSocketSession,
+    ): T {
+        repeat(50) {
+            val payload = receiveRelevantTestPayload(session, skipGameSync = true)
+            if (payload is T) {
+                return payload
+            }
+        }
+        throw AssertionError("Expected ${T::class.simpleName}.")
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {

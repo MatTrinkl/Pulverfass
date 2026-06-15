@@ -82,6 +82,9 @@ class MessageTypeTest {
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE,
             ),
         )
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_REPORT_CHEAT_REQUEST))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_REPORT_CHEAT_RESPONSE))
+        assertTrue(MessageType.entries.contains(MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE))
         assertTrue(
             MessageType.entries.contains(MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST),
         )
