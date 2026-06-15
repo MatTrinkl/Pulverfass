@@ -704,6 +704,18 @@ internal fun GameScreenContent(
                     ),
             )
 
+            CardsScreen(
+                state = privateHandState,
+                actions =
+                    PrivateHandPanelActions(
+                        onToggleTradeInCard = onToggleTradeInCard,
+                        onTradeInCards = onTradeInCards,
+                    ),
+                isVisible = uiState.cardsVisible,
+                modifier = Modifier.fillMaxSize(),
+                musicManager = musicManager,
+            )
+
             BottomActionClusters(
                 state =
                     BottomBarState(
@@ -722,19 +734,6 @@ internal fun GameScreenContent(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .navigationBarsPadding(),
-                musicManager = musicManager,
-            )
-
-            CardsScreen(
-                state = privateHandState,
-                actions =
-                    PrivateHandPanelActions(
-                        onToggleTradeInCard = onToggleTradeInCard,
-                        onTradeInCards = onTradeInCards,
-                    ),
-                isVisible = uiState.cardsVisible,
-                onClose = onToggleCards,
-                modifier = Modifier.fillMaxSize(),
                 musicManager = musicManager,
             )
 
@@ -1775,7 +1774,11 @@ private fun visibleAttackSelection(
     uiState: GameUiState,
     canManageAttacks: Boolean,
 ): Pair<String, String>? {
-    if (uiState.turnPhase != TurnPhase.ATTACK || !canManageAttacks) {
+    if (
+        uiState.turnPhase != TurnPhase.ATTACK ||
+        !canManageAttacks ||
+        uiState.attackState.autoAttack.isRunning
+    ) {
         return null
     }
     val fromRegionId = uiState.selectionFromRegionId ?: return null
@@ -1854,6 +1857,7 @@ private fun canEndCurrentPhase(
             uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
                 !isFortifyCommandPending &&
                 !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
+        TurnPhase.DRAW_CARD -> false
         else ->
             uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
                 !pendingCommandKeys.contains(LobbyCommandKey.TURN_ADVANCE)
@@ -2104,7 +2108,6 @@ private fun CardsScreen(
     state: PrivateHandPanelState,
     actions: PrivateHandPanelActions,
     isVisible: Boolean,
-    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
 ) {
@@ -2132,34 +2135,25 @@ private fun CardsScreen(
                     },
         )
 
-        Row(
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .displayCutoutPadding()
                     .padding(horizontal = 24.dp, vertical = 18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                PulverfassTitleText(
-                    text = stringResource(id = R.string.game_cards_title),
-                    fontSize = 30.sp,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    text = state.playerName,
-                    color = PulverfassColors.TextOnDark,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            BlockActionButton(
-                label = stringResource(id = R.string.game_cards_hide),
-                onClick = onClose,
-                selected = false,
-                modifier = Modifier.width(132.dp).testTag("game_cards_close"),
-                musicManager = musicManager,
+            PulverfassTitleText(
+                text = stringResource(id = R.string.game_cards_title),
+                fontSize = 30.sp,
+                letterSpacing = 1.sp,
+            )
+            Text(
+                text = state.playerName,
+                color = PulverfassColors.TextOnDark,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
 
@@ -2190,7 +2184,7 @@ private fun CardsScreen(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(bottom = 28.dp)
+                        .padding(bottom = BottomBarHeight + 28.dp)
                         .widthIn(min = 220.dp, max = 360.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -3355,7 +3349,10 @@ private fun BottomActionClusters(
                 onClick = onToggleCards,
                 selected = true,
                 enabled = true,
-                modifier = Modifier.width(CardsButtonWidth - 20.dp),
+                modifier =
+                    Modifier
+                        .width(CardsButtonWidth - 20.dp)
+                        .testTag("cards_toggle_button"),
                 musicManager = musicManager,
             )
 
@@ -3376,11 +3373,6 @@ private fun BottomActionClusters(
                 PhaseChip(
                     label = stringResource(id = R.string.game_action_move),
                     selected = state.currentPhase == TurnPhase.FORTIFY,
-                    modifier = Modifier.weight(1f),
-                )
-                PhaseChip(
-                    label = stringResource(id = R.string.game_action_draw_card),
-                    selected = state.currentPhase == TurnPhase.DRAW_CARD,
                     modifier = Modifier.weight(1f),
                 )
             }

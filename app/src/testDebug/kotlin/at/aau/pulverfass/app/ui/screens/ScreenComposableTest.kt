@@ -25,6 +25,8 @@ import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.AutoAttackIntent
+import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameTerritoryUiState
@@ -598,7 +600,8 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithTag("game_hand_card_territory:sahara:a").performClick()
         composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
-        composeTestRule.onNodeWithTag("game_cards_close").performClick()
+        composeTestRule.onAllNodesWithTag("game_cards_close").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("cards_toggle_button").performClick()
 
         assertEquals(cardIds[0], selectedCardId)
         assertTrue(traded)
@@ -873,6 +876,62 @@ class ScreenComposableTest {
         assertEquals(1, moveAdjustment)
         assertTrue(attacked)
         assertTrue(finished)
+    }
+
+    @Test
+    fun auto_attack_hides_manual_attack_panel() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.ATTACK,
+                                    selectionFromRegionId = "brazil",
+                                    selectionToRegionId = "argentina",
+                                    attackState =
+                                        AttackUiState(
+                                            attackTroops = 3,
+                                            moveAfterCapture = 3,
+                                            autoAttack =
+                                                AutoAttackUiState(
+                                                    intent =
+                                                        AutoAttackIntent(
+                                                            fromTerritoryId =
+                                                                TerritoryId("brasilien"),
+                                                            toTerritoryId =
+                                                                TerritoryId("argentinien"),
+                                                            attackTroops = 3,
+                                                            moveAfterCapture = 3,
+                                                        ),
+                                                    isEnabled = true,
+                                                    isAwaitingResult = true,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("attack_panel").assertCountEquals(0)
     }
 
     @Test
