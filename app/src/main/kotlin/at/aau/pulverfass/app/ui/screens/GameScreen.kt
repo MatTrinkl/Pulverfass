@@ -1034,7 +1034,10 @@ private fun OptionsOverlay(
                         showCheatReportPlayers = false
                         onClose()
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("cheat_report_player_${player.playerId.value}"),
                     enabled = !options.isReportCheatPending,
                     fontSize = 14,
                 )
