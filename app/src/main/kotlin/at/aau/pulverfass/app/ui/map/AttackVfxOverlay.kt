@@ -12,24 +12,24 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import at.aau.pulverfass.app.R
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /*
  * Zeitachse der Clash-Animation. Die Phasen laufen nacheinander beziehungsweise
@@ -46,8 +46,13 @@ private val LineWidth = 3.dp
 private val LabelRiseDistance = 34.dp
 private val LabelSideOffset = 18.dp
 
-/** Sichtbare Explosion ~1.82x des Burst-Radius (Durchmesser); 30 % kleiner als zuvor. */
-private const val EXPLOSION_SIZE_FACTOR = 1.82f
+/** Maße und Farben des vollständig im Code gezeichneten Explosions-Bursts. */
+private val BurstRingWidth = 3.dp
+private val BurstSparkRadius = 3.dp
+private const val BURST_SPARK_COUNT = 8
+private val BurstCoreColor = Color(0xFFFFF3E0)
+private val BurstEdgeColor = Color(0xFFFF7043)
+private val BurstSparkColor = Color(0xFFFFCA28)
 
 private val DamageLabelColor = Color(0xFFFF5252)
 
@@ -207,18 +212,6 @@ internal fun AttackVfxOverlay(
             color = DamageLabelColor,
         )
 
-    // Einzelframes der Explosion; der Burst-Fortschritt wählt den Frame aus.
-    val explosionFrames =
-        listOf(
-            ImageBitmap.imageResource(id = R.drawable.explosion_01_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_02_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_03_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_04_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_05_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_06_vfx),
-            ImageBitmap.imageResource(id = R.drawable.explosion_07_vfx),
-        )
-
     Canvas(modifier = modifier) {
         val fromOffset =
             mapPointToScreenOffset(fromAnchor, layoutMetrics, viewportState)
@@ -240,8 +233,7 @@ internal fun AttackVfxOverlay(
             colors = colors,
             scale = scale,
         )
-        drawExplosionFrame(
-            frames = explosionFrames,
+        drawClashBurst(
             midpoint = midpoint,
             progress = controller.burstProgress.value,
             scale = scale,
@@ -295,40 +287,65 @@ private fun DrawScope.drawClashLines(
 }
 
 /**
- * Zeichnet die Explosion als Frame-Sequenz: Der Burst-Fortschritt (0..1) wählt
- * den passenden Frame aus den [frames]; das Bild wird unter Beibehaltung seines
- * Seitenverhältnisses mittig auf [midpoint] gezeichnet und folgt über [scale]
- * dem Zoom.
+ * Zeichnet die Explosion vollständig im Code (ohne Bild-Assets): eine
+ * expandierende Schockwelle, ein verblassender Kernglow und ein paar nach außen
+ * fliegende Funken. Der Burst-Fortschritt (0..1) treibt Radius und Transparenz,
+ * [scale] koppelt die Größe an den Kartenzoom.
  */
-private fun DrawScope.drawExplosionFrame(
-    frames: List<ImageBitmap>,
+private fun DrawScope.drawClashBurst(
     midpoint: Offset,
     progress: Float,
     scale: Float,
 ) {
-    if (progress <= 0f || frames.isEmpty()) {
+    if (progress <= 0f) {
         return
     }
 
-    val frameIndex = (progress * frames.size).toInt().coerceIn(0, frames.lastIndex)
-    val image = frames[frameIndex]
+    val maxRadius = BurstMaxRadius.toPx() * scale
+    val fade = (1f - progress).coerceIn(0f, 1f)
 
-    val dstWidth = (BurstMaxRadius.toPx() * EXPLOSION_SIZE_FACTOR * scale).coerceAtLeast(1f)
-    val dstHeight = dstWidth * (image.height.toFloat() / image.width.toFloat())
-    val widthInt = dstWidth.toInt()
-    val heightInt = dstHeight.toInt()
-
-    drawImage(
-        image = image,
-        srcOffset = IntOffset.Zero,
-        srcSize = IntSize(image.width, image.height),
-        dstOffset =
-            IntOffset(
-                x = (midpoint.x - widthInt / 2f).toInt(),
-                y = (midpoint.y - heightInt / 2f).toInt(),
+    // Kernglow: heller, weicher Kern, der mit fortschreitendem Burst verblasst.
+    val coreRadius = (maxRadius * (0.4f + progress * 0.6f)).coerceAtLeast(1f)
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colors =
+                    listOf(
+                        BurstCoreColor.copy(alpha = fade),
+                        BurstEdgeColor.copy(alpha = fade * 0.5f),
+                        Color.Transparent,
+                    ),
+                center = midpoint,
+                radius = coreRadius,
             ),
-        dstSize = IntSize(widthInt, heightInt),
+        radius = coreRadius,
+        center = midpoint,
     )
+
+    // Schockwelle: dünner werdender Ring, der nach außen läuft.
+    val ringRadius = maxRadius * (0.3f + progress)
+    drawCircle(
+        color = BurstCoreColor.copy(alpha = fade * 0.9f),
+        radius = ringRadius,
+        center = midpoint,
+        style = Stroke(width = (BurstRingWidth.toPx() * scale) * (1f - progress * 0.5f)),
+    )
+
+    // Funken: gleichmäßig verteilte Partikel, die mit dem Burst nach außen fliegen.
+    val sparkDistance = maxRadius * (0.5f + progress)
+    val sparkRadius = (BurstSparkRadius.toPx() * scale) * fade
+    if (sparkRadius > 0f) {
+        repeat(BURST_SPARK_COUNT) { index ->
+            val angle = (2.0 * PI * index / BURST_SPARK_COUNT).toFloat()
+            val sparkCenter =
+                midpoint + Offset(cos(angle), sin(angle)) * sparkDistance
+            drawCircle(
+                color = BurstSparkColor.copy(alpha = fade),
+                radius = sparkRadius,
+                center = sparkCenter,
+            )
+        }
+    }
 }
 
 private fun DrawScope.drawDamageLabels(

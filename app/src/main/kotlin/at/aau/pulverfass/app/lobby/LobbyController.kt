@@ -1370,6 +1370,11 @@ class LobbyController(
         }
         _state.update {
             val autoAttack = it.gameState.attackState.autoAttack
+            // Lief gerade eine Auto-Angriff-Sequenz, wird die (jetzt veraltete)
+            // Gebietsauswahl mitgelöscht, damit sich das Angriffspanel automatisch
+            // schließt. Bei einer Eroberung erledigt das bereits der Reducer; hier
+            // werden alle übrigen Stoppgründe (z. B. zu schwache Quelle) abgedeckt.
+            val wasRunning = autoAttack.intent != null || autoAttack.isAwaitingResult
             val nextIsEnabled = keepEnabled && it.autoAttackEnabled
             if (
                 !autoAttack.isEnabled &&
@@ -1392,6 +1397,12 @@ class LobbyController(
                     autoAttackEnabled = nextIsEnabled,
                     gameState =
                         it.gameState.copy(
+                            selectedRegionId =
+                                if (wasRunning) null else it.gameState.selectedRegionId,
+                            selectionFromRegionId =
+                                if (wasRunning) null else it.gameState.selectionFromRegionId,
+                            selectionToRegionId =
+                                if (wasRunning) null else it.gameState.selectionToRegionId,
                             attackState =
                                 it.gameState.attackState.copy(
                                     autoAttack =
