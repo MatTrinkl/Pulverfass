@@ -177,6 +177,7 @@ private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
 private const val PLAYER_LEFT_TOAST_DURATION_MILLIS = 2_800L
 private const val YOUR_TURN_BANNER_DURATION_MILLIS = 2_200L
+private const val PHASE_ACTION_FLASH_DURATION_MILLIS = 1_600L
 
 /** Seitenverhältnis des ui_lobby_roster_panel-Assets (908x550). */
 private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
@@ -599,6 +600,24 @@ internal fun GameScreenContent(
         onPlayerLeft = { playerLeftMessage = it },
     )
 
+    /*
+     * Kurze visuelle Rückmeldung für die ruhigen Phasen: ein Fade-in, wenn der
+     * lokale Spieler Verstärkungen platziert oder eine Fortify-Verschiebung
+     * abschließt. Die Detektoren spiegeln nur vorhandenen State, ohne Spiellogik.
+     */
+    var phaseActionFlash by remember { mutableStateOf<String?>(null) }
+    val reinforcedTemplate = stringResource(id = R.string.game_flash_reinforced)
+    val fortifiedText = stringResource(id = R.string.game_flash_fortified)
+    ReinforcementPlacedDetector(
+        pendingAmount = uiState.reinforcementState.pendingAmount,
+        isOwnReinforcement = uiState.reinforcementState.playerId == localPlayerId,
+        onPlaced = { placed -> phaseActionFlash = reinforcedTemplate.format(placed) },
+    )
+    FortifyMoveDetector(
+        hasMoved = uiState.fortifyState.hasMoved,
+        onMoved = { phaseActionFlash = fortifiedText },
+    )
+
     Box(
         modifier =
             Modifier
@@ -854,6 +873,11 @@ internal fun GameScreenContent(
                 localPlayerId = localPlayerId,
             )
 
+            PhaseActionFlash(
+                message = phaseActionFlash,
+                onDismiss = { phaseActionFlash = null },
+            )
+
             CountdownOverlay(
                 show = showCountdown,
                 value = countdownValue,
@@ -929,6 +953,96 @@ private fun BoxScope.YourTurnBanner(
                 modifier = Modifier.padding(horizontal = 32.dp),
             )
         }
+    }
+}
+
+/**
+ * Kurze "Einblendung" als Rückmeldung für die ruhigeren Phasen. Hält die zuletzt
+ * gesetzte [message] während des Ausblendens und meldet sich nach kurzer Zeit
+ * über [onDismiss] selbst ab.
+ */
+@Composable
+private fun BoxScope.PhaseActionFlash(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    val lastMessage = remember { mutableStateOf("") }
+    LaunchedEffect(message) {
+        if (message != null) {
+            lastMessage.value = message
+            delay(PHASE_ACTION_FLASH_DURATION_MILLIS)
+            onDismiss()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = message != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = PulverfassColors.SurfaceWood.copy(alpha = 0.95f),
+            contentColor = PulverfassColors.TextPrimary,
+            border = BorderStroke(1.dp, HudBorderColor),
+            modifier = Modifier.testTag("phase_action_flash"),
+        ) {
+            Text(
+                text = lastMessage.value,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                fontFamily = PulverfassFonts.CinzelDecorative,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                letterSpacing = 2.sp,
+                color = PulverfassColors.GoldBright,
+            )
+        }
+    }
+}
+
+/**
+ * Meldet über [onPlaced], wenn der lokale Spieler Verstärkungen platziert hat
+ * (sinkender [pendingAmount]). Phasenstart (null -> N) und Bonus-Erhöhungen
+ * lösen bewusst nichts aus.
+ */
+@Composable
+private fun ReinforcementPlacedDetector(
+    pendingAmount: Int?,
+    isOwnReinforcement: Boolean,
+    onPlaced: (Int) -> Unit,
+) {
+    val previousAmount = remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pendingAmount, isOwnReinforcement) {
+        val before = previousAmount.value
+        val placed =
+            if (isOwnReinforcement && pendingAmount != null && before != null) {
+                before - pendingAmount
+            } else {
+                0
+            }
+        if (placed > 0) {
+            onPlaced(placed)
+        }
+        previousAmount.value = if (isOwnReinforcement) pendingAmount else null
+    }
+}
+
+/**
+ * Meldet über [onMoved] genau beim Übergang von "noch nicht verschoben" zu
+ * "verschoben" innerhalb der Fortify-Phase.
+ */
+@Composable
+private fun FortifyMoveDetector(
+    hasMoved: Boolean,
+    onMoved: () -> Unit,
+) {
+    val previousHasMoved = remember { mutableStateOf(false) }
+    LaunchedEffect(hasMoved) {
+        if (hasMoved && !previousHasMoved.value) {
+            onMoved()
+        }
+        previousHasMoved.value = hasMoved
     }
 }
 
