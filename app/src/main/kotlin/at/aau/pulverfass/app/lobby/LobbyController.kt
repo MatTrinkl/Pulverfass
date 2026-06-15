@@ -727,6 +727,14 @@ class LobbyController(
             return
         }
 
+        sendTurnAdvanceRequest(snapshot, lobbyCode, playerId)
+    }
+
+    private fun sendTurnAdvanceRequest(
+        snapshot: LobbyUiState,
+        lobbyCode: String,
+        playerId: PlayerId,
+    ) {
         scope.launch {
             sendCommand(
                 command =
@@ -787,6 +795,8 @@ class LobbyController(
                 maybeAutoConfirmAttack(snapshot, playerId)
             TurnPhase.FORTIFY ->
                 maybeAutoAdvanceFortify(snapshot, playerId, delayBeforeAdvance)
+            TurnPhase.DRAW_CARD ->
+                maybeAutoAdvanceDrawCard(snapshot, playerId, delayBeforeAdvance)
             else -> Unit
         }
     }
@@ -857,6 +867,27 @@ class LobbyController(
         }
         enqueueAutoPhaseNotice(noticeText)
         advanceTurn()
+    }
+
+    private fun maybeAutoAdvanceDrawCard(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
+    ) {
+        val lobbyCode = snapshot.activeLobbyCode ?: return
+        if (
+            LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
+            snapshot.gameState.turnPhase != TurnPhase.DRAW_CARD ||
+            !snapshot.gameState.canUseGameActions(playerId, snapshot.isConnected)
+        ) {
+            return
+        }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
+            return
+        }
+        enqueueAutoPhaseNotice(AUTO_PHASE_DRAW_CARD_DONE_NOTICE)
+        sendTurnAdvanceRequest(snapshot, lobbyCode, playerId)
     }
 
     /**
@@ -2996,5 +3027,7 @@ private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
 private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
+private const val AUTO_PHASE_DRAW_CARD_DONE_NOTICE =
+    "Karte wurde gezogen. Die Kartenphase wird automatisch beendet."
 private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L
 private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 500L

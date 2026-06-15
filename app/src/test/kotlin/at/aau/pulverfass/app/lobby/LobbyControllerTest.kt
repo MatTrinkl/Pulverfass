@@ -3041,6 +3041,92 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `draw card phase advances automatically through auto phase system`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("DC01")
+            val playerId = PlayerId(1)
+            val nextPlayerId = PlayerId(2)
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.DRAW_CARD,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories = emptyList(),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates = emptyList(),
+                                ),
+                            )
+                        }
+                        is TurnAdvanceRequest -> {
+                            outgoing.sendPayload(TurnAdvanceResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.DRAW_CARD,
+                                    nextPhase = TurnPhase.REINFORCEMENTS,
+                                    activePlayerId = nextPlayerId,
+                                    turnCount = 2,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
+                }
+                val request = seenPayloads.filterIsInstance<TurnAdvanceRequest>().single()
+                assertEquals(TurnPhase.DRAW_CARD, request.expectedPhase)
+                assertEquals(
+                    "Karte wurde gezogen. Die Kartenphase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                waitUntil {
+                    controller.state.value.gameState.turnPhase == TurnPhase.REINFORCEMENTS
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `reconnect should reuse old session token and request catch up`() {
         runBlocking {
             val lobbyCode = LobbyCode("RC01")
