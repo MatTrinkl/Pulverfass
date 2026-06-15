@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -2281,7 +2282,10 @@ private fun GameTopBar(
 
         PhaseHeader(
             phase = phase,
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-10).dp),
         )
     }
 }
@@ -2312,6 +2316,8 @@ private fun PhaseHeader(
                     .testTag("game_phase_value")
                     .padding(horizontal = 18.dp),
             style = MaterialTheme.typography.titleSmall,
+            // ~19 % größer als der titleSmall-Default (14sp).
+            fontSize = 16.7.sp,
             color = PhaseHeaderTextColor,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
