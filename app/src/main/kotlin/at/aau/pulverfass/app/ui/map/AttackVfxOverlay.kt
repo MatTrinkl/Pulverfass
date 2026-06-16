@@ -1,6 +1,5 @@
 package at.aau.pulverfass.app.ui.map
 
-import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -55,9 +54,6 @@ private val BurstEdgeColor = Color(0xFFFF7043)
 private val BurstSparkColor = Color(0xFFFFCA28)
 
 private val DamageLabelColor = Color(0xFFFF5252)
-
-/** Log-Tag zur Diagnose der Clash-Animation (siehe [AttackVfxController]). */
-internal const val VFX_LOG_TAG = "AttackVfx"
 
 /**
  * Beschreibt einen abzuspielenden Kampf-Effekt auf der Karte.
@@ -114,21 +110,14 @@ internal class AttackVfxController {
         get() = queue.firstOrNull()
 
     fun enqueue(request: AttackVfxRequest) {
-        val skipReason =
-            when {
-                request.attackId == lastPlayedAttackId -> "zuletzt abgespielt"
-                queue.any { it.attackId == request.attackId } -> "bereits in Queue"
-                else -> null
-            }
-        if (skipReason != null) {
-            Log.d(VFX_LOG_TAG, "skip attackId=${request.attackId}: $skipReason")
+        // Denselben Kampf nie doppelt einreihen: weder den zuletzt abgespielten
+        // noch einen bereits wartenden. Ein echter neuer Angriff läuft durch.
+        val alreadyQueuedOrPlayed =
+            request.attackId == lastPlayedAttackId ||
+                queue.any { it.attackId == request.attackId }
+        if (alreadyQueuedOrPlayed) {
             return
         }
-        Log.d(
-            VFX_LOG_TAG,
-            "enqueue attackId=${request.attackId} " +
-                "${request.fromRegionId}->${request.toRegionId}",
-        )
         queue.add(request)
     }
 

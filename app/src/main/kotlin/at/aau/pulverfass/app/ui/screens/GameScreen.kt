@@ -1042,12 +1042,18 @@ private fun FortifyMoveDetector(
     }
 }
 
+/** Letzter bekannter Anzeigestand eines Mitspielers für die Leave-Erkennung. */
+internal data class PlayerPresence(
+    val name: String,
+    val status: ConnectionStatus,
+)
+
 /**
- * Beobachtet den Verbindungsstatus der Mitspieler und meldet über
- * [onPlayerLeft], sobald ein anderer Spieler von CONNECTED auf DISCONNECTED
- * wechselt (= das Spiel verlässt). Der eigene Spieler ist ausgenommen, weil es
- * dafür bereits das Disconnect-Overlay gibt. Es wird keine Spiel- oder
- * Netzwerklogik verändert -- nur der ohnehin vorhandene Status gespiegelt.
+ * Beobachtet die Mitspieler und meldet über [onPlayerLeft], sobald ein anderer
+ * Spieler das Spiel verlässt -- sei es per CONNECTED->DISCONNECTED-Wechsel oder
+ * weil er (z. B. nach einem PlayerLeftLobbyEvent) ganz aus der Liste entfernt
+ * wurde. Der eigene Spieler ist ausgenommen, weil es dafür bereits das
+ * Disconnect-Overlay gibt. Es wird keine Spiel- oder Netzwerklogik verändert.
  */
 @Composable
 private fun PlayerLeftDetector(
@@ -1056,16 +1062,48 @@ private fun PlayerLeftDetector(
     onPlayerLeft: (String) -> Unit,
 ) {
     val template = stringResource(id = R.string.game_player_left_toast)
-    val previousConnectionStatuses = remember { mutableStateMapOf<PlayerId, ConnectionStatus>() }
+    val previousPresence = remember { mutableStateMapOf<PlayerId, PlayerPresence>() }
     LaunchedEffect(players) {
+        playersThatLeft(previousPresence, players, localPlayerId).forEach { name ->
+            onPlayerLeft(template.format(name))
+        }
+        val currentIds = players.mapTo(mutableSetOf()) { it.playerId }
+        previousPresence.keys.retainAll(currentIds)
         players.forEach { player ->
-            val previous = previousConnectionStatuses[player.playerId]
-            if (hasJustLeft(player, localPlayerId, previous)) {
-                onPlayerLeft(template.format(player.name))
-            }
-            previousConnectionStatuses[player.playerId] = player.connectionStatus
+            previousPresence[player.playerId] =
+                PlayerPresence(player.name, player.connectionStatus)
         }
     }
+}
+
+/**
+ * Ermittelt die Anzeigenamen der Spieler, die seit [previous] das Spiel verlassen
+ * haben: entweder durch einen CONNECTED->DISCONNECTED-Wechsel oder weil sie aus
+ * der Liste entfernt wurden, obwohl sie zuletzt verbunden waren. Der lokale
+ * Spieler ([localPlayerId]) wird nie gemeldet.
+ */
+internal fun playersThatLeft(
+    previous: Map<PlayerId, PlayerPresence>,
+    current: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+): List<String> {
+    val currentIds = current.mapTo(mutableSetOf()) { it.playerId }
+    val removed =
+        previous
+            .filter { (id, presence) ->
+                id != localPlayerId &&
+                    id !in currentIds &&
+                    presence.status == ConnectionStatus.CONNECTED
+            }.values
+            .map { it.name }
+    val disconnected =
+        current
+            .filter {
+                    player ->
+                hasJustLeft(player, localPlayerId, previous[player.playerId]?.status)
+            }
+            .map { it.name }
+    return removed + disconnected
 }
 
 /**
