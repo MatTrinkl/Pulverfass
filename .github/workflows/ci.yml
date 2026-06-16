@@ -347,7 +347,7 @@ jobs:
       - name: Show container logs on failure
         if: failure()
         run: |
-          docker logs se2risiko-server-smoke
+          docker logs se2risiko-server-smoke || true
 
       - name: Cleanup smoke test container
         if: always()
