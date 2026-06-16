@@ -170,6 +170,12 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      - name: Set up Temurin JDK 17 (Android/AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Run app unit tests
         run: >
           ./gradlew
