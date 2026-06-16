@@ -3,6 +3,7 @@ package at.aau.pulverfass.app
 import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -75,6 +76,7 @@ class MainActivity : AppCompatActivity() {
          */
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        configureSoftKeyboardBehavior()
         hideSystemBars()
 
         setContent {
@@ -260,6 +262,18 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
+    }
+
+    /**
+     * Verhindert, dass die Bildschirmgeometrie beim Öffnen der Tastatur
+     * verschoben oder verkleinert wird.
+     *
+     * Die Screens sind als immersive Landscape-Oberflächen aufgebaut. Besonders
+     * zentrierte Formulare in Lobby und Optionen würden sonst beim Fokussieren
+     * eines Eingabefeldes neu ausgerichtet werden.
+     */
+    private fun configureSoftKeyboardBehavior() {
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
     }
 
     /**
