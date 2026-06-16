@@ -297,7 +297,10 @@ class FortifyMoveIntegrationTest {
                         ),
                         receiveAnyPayload(playerOneSession.first),
                     )
-                    assertEquals(nextReinforcementsUpdate, receiveAnyPayload(playerOneSession.first))
+                    assertEquals(
+                        nextReinforcementsUpdate,
+                        receiveAnyPayload(playerOneSession.first),
+                    )
                     assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerOneSession.first))
                     assertEquals(
                         GameStateDeltaEvent(
@@ -337,7 +340,10 @@ class FortifyMoveIntegrationTest {
                         ),
                         receiveAnyPayload(playerTwoSession.first),
                     )
-                    assertEquals(nextReinforcementsUpdate, receiveAnyPayload(playerTwoSession.first))
+                    assertEquals(
+                        nextReinforcementsUpdate,
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
                     assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerTwoSession.first))
 
                     val advancedState =

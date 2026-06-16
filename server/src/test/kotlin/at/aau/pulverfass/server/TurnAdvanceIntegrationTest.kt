@@ -695,7 +695,10 @@ class TurnAdvanceIntegrationTest {
                         GameStateDeltaEvent(lobbyCode, 4, 4, listOf(nextReinforcements)),
                         receiveAnyPayload(playerOneSession.first),
                     )
-                    assertEquals(TurnAdvanceResponse(lobbyCode), receiveAnyPayload(playerOneSession.first))
+                    assertEquals(
+                        TurnAdvanceResponse(lobbyCode),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,

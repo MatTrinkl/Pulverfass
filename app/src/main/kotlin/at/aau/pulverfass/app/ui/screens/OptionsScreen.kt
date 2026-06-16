@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -68,7 +66,10 @@ fun OptionsScreen(
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        // Video-Hintergrund ohne eigene Tonspur; Musik kommt routenbasiert aus der Activity.
+        /*
+         * Video-Hintergrund ohne eigene Tonspur; Musik kommt routenbasiert aus
+         * der Activity.
+         */
         VideoPlayer(
             videoResId = R.raw.video_options_background,
             loop = true,
@@ -76,7 +77,10 @@ fun OptionsScreen(
             muted = true,
             modifier = Modifier.fillMaxSize(),
         )
-        // Dunkles Overlay hält Formular und Titel vor wechselnden Videoframes lesbar.
+        /*
+         * Dunkles Overlay hält Formular und Titel vor wechselnden Videoframes
+         * lesbar.
+         */
         Box(
             modifier =
                 Modifier
@@ -84,12 +88,13 @@ fun OptionsScreen(
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.6f)),
         )
 
-        // Scrollbarer Inhalt, damit kleine Displays nicht von Systemleisten verdeckt werden.
+        /*
+         * Fester Inhalt, damit Tastaturfokus den Screen nicht neu ausrichtet.
+         */
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 48.dp, vertical = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -117,7 +122,10 @@ fun OptionsScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Gemeinsame Audiokarte für Musik und SFX mit sofortiger Persistenz.
+            /*
+             * Gemeinsame Audiokarte für Musik und SFX mit sofortiger
+             * Persistenz.
+             */
             Column(
                 modifier =
                     Modifier
