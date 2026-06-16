@@ -229,7 +229,7 @@ class LobbyPlayerCountIntegrationTest {
                     PlayerJoinedLobbyEvent(
                         lobbyCode = lobbyCode,
                         playerId = PlayerId(1),
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                         isHost = true,
                     ),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(hostSession),
@@ -261,7 +261,7 @@ class LobbyPlayerCountIntegrationTest {
                     PlayerJoinedLobbyEvent(
                         lobbyCode = lobbyCode,
                         playerId = PlayerId(1),
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                         isHost = true,
                     ),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(joinerSession),
@@ -270,7 +270,7 @@ class LobbyPlayerCountIntegrationTest {
                     PlayerJoinedLobbyEvent(
                         lobbyCode = lobbyCode,
                         playerId = PlayerId(2),
-                        playerDisplayName = "Bob",
+                        playerDisplayName = "BOB",
                     ),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(joinerSession),
                 )
@@ -278,7 +278,7 @@ class LobbyPlayerCountIntegrationTest {
                     PlayerJoinedLobbyEvent(
                         lobbyCode = lobbyCode,
                         playerId = PlayerId(2),
-                        playerDisplayName = "Bob",
+                        playerDisplayName = "BOB",
                     ),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(hostSession),
                 )

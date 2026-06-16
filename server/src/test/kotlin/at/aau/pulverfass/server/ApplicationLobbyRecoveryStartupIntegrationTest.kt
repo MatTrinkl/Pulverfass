@@ -303,7 +303,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         success = true,
                         playerId = playerId,
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receiveTestPayloadOfType<ReconnectResponse>(session),
                 )
@@ -378,7 +378,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         success = true,
                         playerId = playerId,
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receiveTestPayloadOfType<ReconnectResponse>(firstSession),
                 )
@@ -401,7 +401,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                             success = true,
                             playerId = playerId,
                             lobbyCode = lobbyCode,
-                            playerDisplayName = "Alice",
+                            playerDisplayName = "ALICE",
                         ),
                         receiveTestPayloadOfType<ReconnectResponse>(reconnectingSession),
                     )
