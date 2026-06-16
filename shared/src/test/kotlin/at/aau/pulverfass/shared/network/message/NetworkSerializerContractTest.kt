@@ -179,11 +179,11 @@ class NetworkSerializerContractTest {
             listOf(
                 JoinLobbyRequest(
                     lobbyCode = LobbyCode("CD34"),
-                    playerDisplayName = "TestPlayer",
+                    playerDisplayName = "TESTPLAY",
                 ),
                 JoinLobbyRequest(
                     lobbyCode = LobbyCode("EF56"),
-                    playerDisplayName = "Player with spaces",
+                    playerDisplayName = "SPACES",
                 ),
             )
 

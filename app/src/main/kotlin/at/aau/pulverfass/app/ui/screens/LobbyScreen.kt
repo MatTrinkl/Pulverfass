@@ -200,7 +200,8 @@ private fun CreateOrJoinForm(
             modifier = Modifier.fillMaxWidth(0.8f),
             keyboardOptions =
                 KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
+                    capitalization = KeyboardCapitalization.Characters,
+                    keyboardType = KeyboardType.Ascii,
                 ),
         )
         Spacer(modifier = Modifier.height(32.dp))
@@ -261,7 +262,8 @@ private fun JoinLobbyForm(
             modifier = Modifier.fillMaxWidth(0.8f),
             keyboardOptions =
                 KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
+                    capitalization = KeyboardCapitalization.Characters,
+                    keyboardType = KeyboardType.Ascii,
                 ),
         )
         Spacer(modifier = Modifier.height(32.dp))

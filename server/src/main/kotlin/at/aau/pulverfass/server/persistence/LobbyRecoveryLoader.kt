@@ -34,6 +34,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.DeckState
@@ -284,7 +285,10 @@ data class PersistedLobbyRecoverySnapshot(
                 players = gameState.players,
                 playerDisplayNames =
                     gameState.playerDisplayNames.entries.map { (playerId, displayName) ->
-                        PersistedPlayerDisplayName(playerId = playerId, displayName = displayName)
+                        PersistedPlayerDisplayName(
+                            playerId = playerId,
+                            displayName = normalizePlayerDisplayNameOrFallback(displayName),
+                        )
                     },
                 activePlayer = gameState.activePlayer,
                 configuredStartPlayerId = gameState.configuredStartPlayerId,
@@ -349,7 +353,10 @@ data class PersistedLobbyRecoverySnapshot(
             lobbyCode = lobbyCode,
             lobbyOwner = lobbyOwner,
             players = players,
-            playerDisplayNames = playerDisplayNames.associate { it.playerId to it.displayName },
+            playerDisplayNames =
+                playerDisplayNames.associate {
+                    it.playerId to normalizePlayerDisplayNameOrFallback(it.displayName)
+                },
             activePlayer = activePlayer,
             configuredStartPlayerId = configuredStartPlayerId,
             turnOrder = turnOrder,
@@ -577,7 +584,10 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
             PlayerJoined(
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
-                playerDisplayName = jsonObject.string("playerDisplayName"),
+                playerDisplayName =
+                    normalizePlayerDisplayNameOrFallback(
+                        jsonObject.string("playerDisplayName"),
+                    ),
             )
         "player_left" ->
             PlayerLeft(

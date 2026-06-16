@@ -412,7 +412,7 @@ class ApplicationTest {
         assertTrue(connection.committed)
         assertEquals(21L, delete.lastParameters[1])
         assertEquals("AB12", insert.lastParameters[3])
-        assertEquals("Alice", insert.lastParameters[4])
+        assertEquals("ALICE", insert.lastParameters[4])
     }
 
     @Test
@@ -695,7 +695,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(1),
-                    playerDisplayName = "Alice",
+                    playerDisplayName = "ALICE",
                     isHost = true,
                 ),
                 receivePayload(hostSession),
@@ -716,7 +716,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(1),
-                    playerDisplayName = "Alice",
+                    playerDisplayName = "ALICE",
                     isHost = true,
                 ),
                 receivePayload(guestSession),
@@ -725,7 +725,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(2),
-                    playerDisplayName = "Bob",
+                    playerDisplayName = "BOB",
                     isHost = false,
                 ),
                 receivePayload(guestSession),
@@ -734,7 +734,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(2),
-                    playerDisplayName = "Bob",
+                    playerDisplayName = "BOB",
                     isHost = false,
                 ),
                 receivePayload(hostSession),

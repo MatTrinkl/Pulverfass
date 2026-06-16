@@ -35,6 +35,10 @@ class GameStateMapperTest {
 
         val result = lobbyPlayersToGamePlayers(players)
 
+        assertEquals("ALICE", result[0].name)
+        assertEquals("A", result[0].avatarText)
+        assertEquals("BOB", result[1].name)
+        assertEquals("B", result[1].avatarText)
         assertEquals(Characters.byId("character_01")!!.color, result[0].color)
         assertEquals(Characters.byId("character_02")!!.color, result[1].color)
     }

@@ -156,12 +156,26 @@ class LobbyControllerTest {
         val playerNameStore = InMemoryPlayerNameStore("Anne Bonny")
         val controller = createController(playerNameStore = playerNameStore)
         try {
-            assertEquals("Anne Bonny", controller.state.value.playerName)
+            assertEquals("ANNEBONN", controller.state.value.playerName)
 
             controller.updatePlayerName("Mary Read")
 
-            assertEquals("Mary Read", controller.state.value.playerName)
-            assertEquals("Mary Read", playerNameStore.readPlayerName())
+            assertEquals("MARYREAD", controller.state.value.playerName)
+            assertEquals("MARYREAD", playerNameStore.readPlayerName())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updatePlayerName filters to eight uppercase ascii letters`() {
+        val playerNameStore = InMemoryPlayerNameStore()
+        val controller = createController(playerNameStore = playerNameStore)
+        try {
+            controller.updatePlayerName("a1 b_😊cdefghiä")
+
+            assertEquals("ABCDEFGH", controller.state.value.playerName)
+            assertEquals("ABCDEFGH", playerNameStore.readPlayerName())
         } finally {
             controller.close()
         }
@@ -267,12 +281,12 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174200"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Alice") }
+                waitUntil { controller.state.value.playerNames.contains("ALICE") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
                 assertTrue(state.isHost)
-                assertEquals(listOf("Alice"), state.playerNames)
+                assertEquals(listOf("ALICE"), state.playerNames)
             } finally {
                 controller.close()
                 server.close()
@@ -327,7 +341,7 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174201"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Bob") }
+                waitUntil { controller.state.value.playerNames.contains("BOB") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
@@ -486,7 +500,7 @@ class LobbyControllerTest {
 
                 val disconnectedPlayer =
                     controller.state.value.players.first { it.playerId == PlayerId(2) }
-                assertEquals("Bob", disconnectedPlayer.displayName)
+                assertEquals("BOB", disconnectedPlayer.displayName)
                 assertTrue(disconnectedPlayer.isDisconnected)
             } finally {
                 controller.close()
@@ -629,7 +643,7 @@ class LobbyControllerTest {
 
                 val state = controller.state.value
                 assertTrue(state.isHost)
-                assertEquals(listOf("Bob"), state.playerNames)
+                assertEquals(listOf("BOB"), state.playerNames)
                 assertTrue(state.players.none { it.playerId == PlayerId(1) })
             } finally {
                 controller.close()

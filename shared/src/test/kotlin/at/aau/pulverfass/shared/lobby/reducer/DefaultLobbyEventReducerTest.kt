@@ -77,6 +77,7 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(listOf(playerId), updatedState.players)
+        assertEquals("ALICE", updatedState.playerDisplayNames.getValue(playerId))
         assertEquals(listOf(playerId), updatedState.turnOrder)
         assertEquals(playerId, updatedState.activePlayer)
         assertEquals(TurnPhase.REINFORCEMENTS, updatedState.turnState?.turnPhase)
@@ -253,13 +254,13 @@ class DefaultLobbyEventReducerTest {
                 activePlayer = playerOne,
             )
         assertThrows(InvalidLobbyEventException::class.java) {
-            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "Player 1"))
+            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "PLAYER"))
         }
 
         val runningState =
             reducer.apply(
                 duplicateState,
-                PlayerJoined(lobbyCode, playerTwo, "Player 2"),
+                PlayerJoined(lobbyCode, playerTwo, "PLAYER"),
             )
         assertEquals(GameStatus.WAITING_FOR_PLAYERS, runningState.status)
         assertEquals(playerOne, runningState.activePlayer)
@@ -270,11 +271,11 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(
             GameStatus.CLOSED,
-            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "PLAYER")).status,
         )
         assertEquals(
             GameStatus.FINISHED,
-            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "PLAYER")).status,
         )
     }
 
@@ -1359,7 +1360,7 @@ class DefaultLobbyEventReducerTest {
                 null,
                 reducer,
                 GameState.initial(lobbyCode),
-                PlayerJoined(lobbyCode, PlayerId(3), "Player 3"),
+                PlayerJoined(lobbyCode, PlayerId(3), "PLAYER"),
                 null,
                 4,
                 null,

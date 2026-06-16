@@ -19,6 +19,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
@@ -149,9 +150,12 @@ class LobbyController(
             run {
                 val savedCharacterId = playerNameStore.readCharacterId()
                 val savedAutoAttackEnabled = playerNameStore.readAutoAttackEnabled()
+                val savedPlayerName =
+                    normalizePlayerDisplayName(playerNameStore.readPlayerName().orEmpty())
+                playerNameStore.savePlayerName(savedPlayerName)
                 LobbyUiState(
                     serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
-                    playerName = playerNameStore.readPlayerName().orEmpty(),
+                    playerName = savedPlayerName,
                     statusText = config.statusNotConnected,
                     sessionToken = reconnectSessionStore.readSessionToken(),
                     gameStarted = wasGameStartedOnLastAppRun,
@@ -269,8 +273,9 @@ class LobbyController(
     }
 
     fun updatePlayerName(playerName: String) {
-        playerNameStore.savePlayerName(playerName)
-        _state.update { it.copy(playerName = playerName) }
+        val normalizedPlayerName = normalizePlayerDisplayName(playerName)
+        playerNameStore.savePlayerName(normalizedPlayerName)
+        _state.update { it.copy(playerName = normalizedPlayerName) }
     }
 
     fun updatePlayerColor(color: Color) {
@@ -2085,9 +2090,9 @@ class LobbyController(
     private fun ReconnectResponse.playerDisplayNameOr(fallback: String): String {
         val restoredPlayerDisplayName = playerDisplayName
         return if (restoredPlayerDisplayName == null) {
-            fallback
+            normalizePlayerDisplayName(fallback)
         } else {
-            restoredPlayerDisplayName
+            normalizePlayerDisplayName(restoredPlayerDisplayName)
         }
     }
 
@@ -2404,10 +2409,11 @@ class LobbyController(
 
     private fun handlePlayerJoined(payload: PlayerJoinedLobbyEvent) {
         val existingPlayer = playersById[payload.playerId.value]
+        val displayName = normalizePlayerDisplayName(payload.playerDisplayName)
         playersById[payload.playerId.value] =
             LobbyPlayerUi(
                 playerId = payload.playerId,
-                displayName = payload.playerDisplayName,
+                displayName = displayName,
                 isHost = payload.isHost,
                 connectionStatus = ConnectionStatus.CONNECTED,
                 characterId = existingPlayer?.characterId,
@@ -2417,7 +2423,7 @@ class LobbyController(
         _state.update { current ->
             val ownPlayerId =
                 current.ownPlayerId
-                    ?: payload.playerId.takeIf { payload.playerDisplayName == current.playerName }
+                    ?: payload.playerId.takeIf { displayName == current.playerName }
             shouldSelectSavedCharacter = current.ownPlayerId == null && ownPlayerId != null
             current.copy(ownPlayerId = ownPlayerId)
         }
@@ -2873,7 +2879,7 @@ class LobbyController(
                         payload =
                             JoinLobbyRequest(
                                 lobbyCode = parseLobbyCode(snapshot.lobbyCode),
-                                playerDisplayName = snapshot.playerName,
+                                playerDisplayName = normalizePlayerDisplayName(snapshot.playerName),
                             ),
                     ),
                 keepPendingUntilResponse = true,
@@ -2906,7 +2912,8 @@ class LobbyController(
                         payload =
                             JoinLobbyRequest(
                                 lobbyCode = payload.lobbyCode,
-                                playerDisplayName = state.value.playerName,
+                                playerDisplayName =
+                                    normalizePlayerDisplayName(state.value.playerName),
                             ),
                     ),
                 keepPendingUntilResponse = true,
@@ -3007,13 +3014,14 @@ class LobbyController(
         currentNames: List<String>,
         ownName: String,
     ): List<String> {
-        if (ownName.isBlank()) {
+        val normalizedOwnName = normalizePlayerDisplayName(ownName)
+        if (normalizedOwnName.isBlank()) {
             return currentNames
         }
-        if (currentNames.contains(ownName)) {
+        if (currentNames.contains(normalizedOwnName)) {
             return currentNames
         }
-        return currentNames + ownName
+        return currentNames + normalizedOwnName
     }
 }
 

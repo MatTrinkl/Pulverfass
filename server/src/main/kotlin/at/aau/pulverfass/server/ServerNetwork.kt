@@ -9,6 +9,7 @@ import at.aau.pulverfass.server.session.SessionManager
 import at.aau.pulverfass.server.transport.ServerWebSocketTransport
 import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.message.connection.request.ReconnectRequest
 import at.aau.pulverfass.shared.message.connection.response.ConnectionResponse
 import at.aau.pulverfass.shared.message.connection.response.ReconnectErrorCode
@@ -316,7 +317,9 @@ class ServerNetwork(
             success = true,
             playerId = context?.playerId,
             lobbyCode = context?.lobbyCode,
-            playerDisplayName = context?.playerDisplayName,
+            playerDisplayName =
+                context?.playerDisplayName
+                    ?.let(::normalizePlayerDisplayNameOrFallback),
         )
     }
 

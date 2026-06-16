@@ -459,7 +459,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
         val persistedSession = sessionStore.loadSession(sessionTokenWithPlayer)
         assertEquals(playerId, persistedSession?.context?.playerId)
         assertEquals(lobbyCode, persistedSession?.context?.lobbyCode)
-        assertEquals("Alice", persistedSession?.context?.playerDisplayName)
+        assertEquals("ALICE", persistedSession?.context?.playerDisplayName)
     }
 
     @Test

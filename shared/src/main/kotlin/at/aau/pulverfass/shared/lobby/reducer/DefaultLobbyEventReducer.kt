@@ -29,6 +29,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.state.CardDeckFactory
 import at.aau.pulverfass.shared.lobby.state.CardSetValidator
 import at.aau.pulverfass.shared.lobby.state.DiscardPileState
@@ -141,10 +142,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val updatedStatus = preserveLobbyStatus(state, updatedPlayers)
         val updatedTurnState =
             synchronizedTurnStateForLobbySetup(state, updatedTurnOrder, state.turnOrder)
+        val normalizedPlayerDisplayName =
+            normalizePlayerDisplayNameOrFallback(playerDisplayName)
         val baseUpdatedState =
             state.copy(
                 players = updatedPlayers,
-                playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
+                playerDisplayNames =
+                    state.playerDisplayNames + (playerId to normalizedPlayerDisplayName),
                 lobbyOwner = updatedLobbyOwner,
                 pendingReinforcements = state.pendingReinforcements,
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),

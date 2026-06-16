@@ -50,7 +50,7 @@ class DefaultNetworkToLobbyEventMapperTest {
         assertEquals(lobbyCode, mapped.lobbyCode)
         assertEquals(request.context, mapped.context)
         assertEquals(1, mapped.events.size)
-        assertEquals(PlayerJoined(lobbyCode, playerId, "Alice"), mapped.events.single())
+        assertEquals(PlayerJoined(lobbyCode, playerId, "ALICE"), mapped.events.single())
     }
 
     @Test

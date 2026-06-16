@@ -39,6 +39,8 @@ import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.state.BaseReinforcementRuleEngine
 import at.aau.pulverfass.shared.lobby.state.CardState
 import at.aau.pulverfass.shared.lobby.state.GameState
@@ -1405,7 +1407,10 @@ class MainServerLobbyRoutingService(
          * übrigen Clients kennen diese Spieler bereits.
          */
         lobbyState.players.forEach { playerId ->
-            val playerDisplayName = lobbyState.playerDisplayNames[playerId] ?: return@forEach
+            val playerDisplayName =
+                lobbyState.playerDisplayNames[playerId]
+                    ?.let(::normalizePlayerDisplayNameOrFallback)
+                    ?: return@forEach
             sendBestEffortPayload(
                 connectionId = connectionId,
                 payload =
@@ -1448,18 +1453,25 @@ class MainServerLobbyRoutingService(
         val playerId = request.context.playerId ?: return
         val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
         val members = lobbyState.players
+        val ownDisplayName =
+            lobbyState.playerDisplayNames[playerId]
+                ?.let(::normalizePlayerDisplayNameOrFallback)
+                ?: normalizePlayerDisplayName(payload.playerDisplayName)
         resolveSessionToken(request.connectionId)?.let { sessionToken ->
             sessionContextRegistry?.updateLobbyContext(
                 sessionToken = sessionToken,
                 lobbyCode = payload.lobbyCode,
-                playerDisplayName = payload.playerDisplayName,
+                playerDisplayName = ownDisplayName,
             )
         }
 
         members
             .filter { existingPlayerId -> existingPlayerId != playerId }
             .forEach { existingPlayerId ->
-                val existingName = lobbyState.playerDisplayNames[existingPlayerId] ?: return@forEach
+                val existingName =
+                    lobbyState.playerDisplayNames[existingPlayerId]
+                        ?.let(::normalizePlayerDisplayNameOrFallback)
+                        ?: return@forEach
                 sendBestEffortPayload(
                     connectionId = request.connectionId,
                     payload =
@@ -1482,7 +1494,7 @@ class MainServerLobbyRoutingService(
             PlayerJoinedLobbyEvent(
                 lobbyCode = payload.lobbyCode,
                 playerId = playerId,
-                playerDisplayName = payload.playerDisplayName,
+                playerDisplayName = ownDisplayName,
                 isHost = lobbyState.lobbyOwner == playerId,
             )
 
