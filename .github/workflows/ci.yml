@@ -113,6 +113,7 @@ jobs:
           ./gradlew
           :shared:assemble
           :server:assemble
+          :server:installDist
           :e2e:assemble
           :shared:test
           :server:test
@@ -127,6 +128,13 @@ jobs:
             **/build/reports/tests/**
             **/build/test-results/**
           if-no-files-found: ignore
+
+      - name: Upload server distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server/**
+          if-no-files-found: error
 
       - name: Cleanup test PostgreSQL
         if: always()
@@ -287,6 +295,15 @@ jobs:
             echo "local_tag=${local_tag}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server
+
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
+
       - name: Build server image
         uses: docker/build-push-action@v6
         with:
@@ -298,7 +315,7 @@ jobs:
             APP_VERSION=${{ steps.metadata.outputs.app_version }}
             COMMIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server,ignore-error=true
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
 
       - name: Verify server image
         run: docker image inspect "${{ steps.metadata.outputs.local_tag }}" >/dev/null
@@ -368,7 +385,7 @@ jobs:
           load: true
           tags: se2risiko-dokka-pr
           cache-from: type=gha,scope=dokka
-          cache-to: type=gha,mode=max,scope=dokka,ignore-error=true
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
 
       - name: Verify Dokka image
         run: docker image inspect se2risiko-dokka-pr >/dev/null
@@ -445,6 +462,15 @@ jobs:
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server
+
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
+
       - name: Build server image
         uses: docker/build-push-action@v6
         with:
@@ -461,7 +487,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server,ignore-error=true
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
 
       - name: Verify server image
         run: docker image inspect "${{ steps.metadata.outputs.server_local_tag }}" >/dev/null
@@ -488,7 +514,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=dokka
-          cache-to: type=gha,mode=max,scope=dokka,ignore-error=true
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
 
       - name: Verify Dokka image
         run: docker image inspect "${{ steps.metadata.outputs.dokka_local_tag }}" >/dev/null
@@ -581,6 +607,15 @@ jobs:
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server
+
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
+
       - name: Build server image
         uses: docker/build-push-action@v6
         with:
@@ -597,7 +632,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server,ignore-error=true
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
 
       - name: Verify server image
         run: docker image inspect "${{ steps.metadata.outputs.server_local_tag }}" >/dev/null
@@ -624,7 +659,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=dokka
-          cache-to: type=gha,mode=max,scope=dokka,ignore-error=true
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
 
       - name: Verify Dokka image
         run: docker image inspect "${{ steps.metadata.outputs.dokka_local_tag }}" >/dev/null
