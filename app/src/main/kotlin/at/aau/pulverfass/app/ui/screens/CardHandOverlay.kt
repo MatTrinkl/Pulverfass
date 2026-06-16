@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -123,108 +124,145 @@ internal fun CardHandOverlay(
         )
 
         // Titel oben mittig.
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            PulverfassTitleText(
-                text = stringResource(id = R.string.game_cards_title),
-                fontSize = 28.sp,
-                letterSpacing = 3.sp,
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = state.playerName,
-                color = PulverfassColors.TextOnDark,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 1.sp,
-            )
-            if (state.privateHandCards.isNotEmpty()) {
-                val canSelectCards = state.showTradeControls && state.canSelectTradeCards
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text =
-                        stringResource(
-                            id =
-                                if (canSelectCards) {
-                                    R.string.game_cards_hint_select
-                                } else {
-                                    R.string.game_cards_hint_locked
-                                },
-                        ),
-                    color =
-                        if (canSelectCards) {
-                            PulverfassColors.GoldBright
-                        } else {
-                            PulverfassColors.TextOnDark
-                        },
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.testTag("card_hand_hint"),
-                )
-            }
-        }
+        CardHandHeader(
+            state = state,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
 
-        /*
-         * Kartenhand als POV-Fächer: am unteren Rand verankert und bewusst ein
-         * Stück aus dem Screen geschoben, damit es wirkt, als hielte man die
-         * Karten selbst in der Hand. Die Typ-Labels sitzen oben auf der Karte,
-         * damit sie auch bei abgeschnittener Unterkante lesbar bleiben.
-         */
-        if (state.privateHandCards.isEmpty()) {
-            Text(
-                text = stringResource(id = R.string.game_cards_empty),
-                color = PulverfassColors.TextOnDark,
-                fontSize = 16.sp,
-                modifier = Modifier.align(Alignment.Center),
-            )
-        } else {
-            FannedHand(
-                cards = state.privateHandCards,
-                selectedCardIds = state.selectedTradeInCardIds,
-                selectable = state.showTradeControls && state.canSelectTradeCards,
-                onToggle = { cardId ->
-                    musicManager?.playSfx(R.raw.sfx_card_select)
-                    actions.onToggleTradeInCard(cardId)
-                },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-        }
+        CardHandBody(
+            state = state,
+            actions = actions,
+            musicManager = musicManager,
+        )
 
         // Aktions-Buttons rechts, vertikal gestapelt -- abseits des Karten-Fächers.
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
-                MainButton(
-                    text = stringResource(id = R.string.game_cards_trade_in),
-                    enabled = state.canTradeInCards,
-                    onClick = {
-                        musicManager?.playSfx(R.raw.sfx_card_select)
-                        actions.onTradeInCards()
+        CardHandActions(
+            state = state,
+            actions = actions,
+            onClose = onClose,
+            musicManager = musicManager,
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
+    }
+}
+
+/** Titel, Spielername und kontextueller Auswahl-Hinweis am oberen Rand. */
+@Composable
+private fun CardHandHeader(
+    state: PrivateHandPanelState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(top = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        PulverfassTitleText(
+            text = stringResource(id = R.string.game_cards_title),
+            fontSize = 28.sp,
+            letterSpacing = 3.sp,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = state.playerName,
+            color = PulverfassColors.TextOnDark,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 1.sp,
+        )
+        if (state.privateHandCards.isNotEmpty()) {
+            CardHandHint(canSelect = state.showTradeControls && state.canSelectTradeCards)
+        }
+    }
+}
+
+/** Hinweistext, der Auswahl/Trade-in als erlaubt (Gold) oder gesperrt anzeigt. */
+@Composable
+private fun CardHandHint(canSelect: Boolean) {
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text =
+            stringResource(
+                id =
+                    if (canSelect) {
+                        R.string.game_cards_hint_select
+                    } else {
+                        R.string.game_cards_hint_locked
                     },
-                    modifier = Modifier.width(210.dp).testTag("trade_in_cards_button"),
-                )
-            }
+            ),
+        color = if (canSelect) PulverfassColors.GoldBright else PulverfassColors.TextOnDark,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.testTag("card_hand_hint"),
+    )
+}
+
+/*
+ * Kartenhand als POV-Fächer: am unteren Rand verankert und bewusst ein
+ * Stück aus dem Screen geschoben, damit es wirkt, als hielte man die
+ * Karten selbst in der Hand. Die Typ-Labels sitzen oben auf der Karte,
+ * damit sie auch bei abgeschnittener Unterkante lesbar bleiben.
+ */
+@Composable
+private fun BoxScope.CardHandBody(
+    state: PrivateHandPanelState,
+    actions: PrivateHandPanelActions,
+    musicManager: BackgroundMusicManager?,
+) {
+    if (state.privateHandCards.isEmpty()) {
+        Text(
+            text = stringResource(id = R.string.game_cards_empty),
+            color = PulverfassColors.TextOnDark,
+            fontSize = 16.sp,
+            modifier = Modifier.align(Alignment.Center),
+        )
+    } else {
+        FannedHand(
+            cards = state.privateHandCards,
+            selectedCardIds = state.selectedTradeInCardIds,
+            selectable = state.showTradeControls && state.canSelectTradeCards,
+            onToggle = { cardId ->
+                musicManager?.playSfx(R.raw.sfx_card_select)
+                actions.onToggleTradeInCard(cardId)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/** Trade-in- und Schließen-Buttons rechts, vertikal gestapelt. */
+@Composable
+private fun CardHandActions(
+    state: PrivateHandPanelState,
+    actions: PrivateHandPanelActions,
+    onClose: () -> Unit,
+    musicManager: BackgroundMusicManager?,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(end = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
             MainButton(
-                text = stringResource(id = R.string.game_cards_close),
+                text = stringResource(id = R.string.game_cards_trade_in),
+                enabled = state.canTradeInCards,
                 onClick = {
-                    musicManager?.playSfx(R.raw.sfx_ui_click)
-                    onClose()
+                    musicManager?.playSfx(R.raw.sfx_card_select)
+                    actions.onTradeInCards()
                 },
-                modifier = Modifier.width(210.dp),
+                modifier = Modifier.width(210.dp).testTag("trade_in_cards_button"),
             )
         }
+        MainButton(
+            text = stringResource(id = R.string.game_cards_close),
+            onClick = {
+                musicManager?.playSfx(R.raw.sfx_ui_click)
+                onClose()
+            },
+            modifier = Modifier.width(210.dp),
+        )
     }
 }
 
