@@ -776,19 +776,42 @@ internal fun GameScreenContent(
             )
         }
 
-        if (showDisconnectOverlay && winningOverlayState == null) {
-            DisconnectOverlay(
-                message = disconnectMessage,
-                onReconnect = onReconnect,
-                onNavigateToMain = onNavigateToMain,
-            )
-        }
-        winningOverlayState?.let { overlayState ->
-            WinningScreenOverlay(
-                state = overlayState,
-                onNavigateToMain = onNavigateToMain,
-            )
-        }
+        GameEndOverlays(
+            showDisconnectOverlay = showDisconnectOverlay,
+            disconnectMessage = disconnectMessage,
+            winningOverlayState = winningOverlayState,
+            onReconnect = onReconnect,
+            onNavigateToMain = onNavigateToMain,
+        )
+    }
+}
+
+/**
+ * Finale Overlay-Schicht über dem Spielinhalt: Disconnect- bzw. Gewinnanzeige.
+ *
+ * Das Gewinn-Overlay hat Vorrang; ein Disconnect-Overlay erscheint nur, solange
+ * das Match noch nicht entschieden ist.
+ */
+@Composable
+private fun GameEndOverlays(
+    showDisconnectOverlay: Boolean,
+    disconnectMessage: String,
+    winningOverlayState: WinningOverlayState?,
+    onReconnect: () -> Unit,
+    onNavigateToMain: () -> Unit,
+) {
+    if (showDisconnectOverlay && winningOverlayState == null) {
+        DisconnectOverlay(
+            message = disconnectMessage,
+            onReconnect = onReconnect,
+            onNavigateToMain = onNavigateToMain,
+        )
+    }
+    winningOverlayState?.let { overlayState ->
+        WinningScreenOverlay(
+            state = overlayState,
+            onNavigateToMain = onNavigateToMain,
+        )
     }
 }
 

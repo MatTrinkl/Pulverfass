@@ -82,14 +82,7 @@ object ClientGameStateReducer {
     ): GameUiState =
         applyFullSnapshot(
             current = current,
-            stateVersion = response.stateVersion,
-            determinism = response.determinism,
-            turnState = response.turnState,
-            definition = response.definition,
-            territoryStates = response.territoryStates,
-            gameStatus = response.gameStatus,
-            matchEndReason = response.matchEndReason,
-            winnerPlayerId = response.winnerPlayerId,
+            snapshot = response.toFullSnapshotData(),
             players = players,
         )
 
@@ -111,14 +104,7 @@ object ClientGameStateReducer {
     ): GameUiState =
         applyFullSnapshot(
             current = current,
-            stateVersion = response.stateVersion,
-            determinism = response.determinism,
-            turnState = response.turnState,
-            definition = response.definition,
-            territoryStates = response.territoryStates,
-            gameStatus = response.gameStatus,
-            matchEndReason = response.matchEndReason,
-            winnerPlayerId = response.winnerPlayerId,
+            snapshot = response.toFullSnapshotData(),
             players = players,
         )
 
@@ -650,6 +636,48 @@ object ClientGameStateReducer {
     }
 
     /**
+     * Gebündelte Eingabedaten eines vollständigen öffentlichen Snapshots.
+     *
+     * Fasst die Felder zusammen, die [GameStateSnapshotBroadcast] und
+     * [GameStateCatchUpResponse] identisch liefern, damit [applyFullSnapshot] nicht
+     * mit einer langen, fehleranfälligen Parameterliste aufgerufen werden muss.
+     */
+    private data class FullSnapshotData(
+        val stateVersion: Long,
+        val determinism: PublicDeterminismMetadataSnapshot,
+        val turnState: PublicTurnStateSnapshot,
+        val definition: MapDefinitionSnapshot,
+        val territoryStates: List<MapTerritoryStateSnapshot>,
+        val gameStatus: GameStatus,
+        val matchEndReason: String?,
+        val winnerPlayerId: PlayerId?,
+    )
+
+    private fun GameStateSnapshotBroadcast.toFullSnapshotData(): FullSnapshotData =
+        FullSnapshotData(
+            stateVersion = stateVersion,
+            determinism = determinism,
+            turnState = turnState,
+            definition = definition,
+            territoryStates = territoryStates,
+            gameStatus = gameStatus,
+            matchEndReason = matchEndReason,
+            winnerPlayerId = winnerPlayerId,
+        )
+
+    private fun GameStateCatchUpResponse.toFullSnapshotData(): FullSnapshotData =
+        FullSnapshotData(
+            stateVersion = stateVersion,
+            determinism = determinism,
+            turnState = turnState,
+            definition = definition,
+            territoryStates = territoryStates,
+            gameStatus = gameStatus,
+            matchEndReason = matchEndReason,
+            winnerPlayerId = winnerPlayerId,
+        )
+
+    /**
      * Ersetzt öffentliche Map-, Turn- und Determinismusdaten vollständig.
      *
      * Full Snapshots sind der sichere Zielzustand nach Spielstart, Reconnect und
@@ -658,16 +686,17 @@ object ClientGameStateReducer {
      */
     private fun applyFullSnapshot(
         current: GameUiState,
-        stateVersion: Long,
-        determinism: PublicDeterminismMetadataSnapshot,
-        turnState: PublicTurnStateSnapshot,
-        definition: MapDefinitionSnapshot,
-        territoryStates: List<MapTerritoryStateSnapshot>,
-        gameStatus: GameStatus,
-        matchEndReason: String?,
-        winnerPlayerId: PlayerId?,
+        snapshot: FullSnapshotData,
         players: List<LobbyPlayerUi>,
     ): GameUiState {
+        val stateVersion = snapshot.stateVersion
+        val determinism = snapshot.determinism
+        val turnState = snapshot.turnState
+        val definition = snapshot.definition
+        val territoryStates = snapshot.territoryStates
+        val gameStatus = snapshot.gameStatus
+        val matchEndReason = snapshot.matchEndReason
+        val winnerPlayerId = snapshot.winnerPlayerId
         if (stateVersion < current.stateVersion) {
             return current.copy(isCatchingUp = false)
         }
