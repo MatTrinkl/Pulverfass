@@ -2,12 +2,21 @@ FROM eclipse-temurin:25-jdk AS builder
 
 WORKDIR /workspace
 
-COPY . .
+COPY gradle/ gradle/
+COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY shared/build.gradle.kts shared/build.gradle.kts
+COPY server/build.gradle.kts server/build.gradle.kts
 
 RUN sed -i '/include(":app")/d' settings.gradle.kts && \
     sed -i '/include(":e2e")/d' settings.gradle.kts && \
     sed -i 's/\r$//' ./gradlew && \
     chmod +x ./gradlew
+
+RUN ./gradlew --no-daemon :server:dependencies
+
+COPY shared/src/ shared/src/
+COPY server/src/ server/src/
+
 RUN ./gradlew --no-daemon :server:installDist
 
 FROM eclipse-temurin:25-jre AS runtime
