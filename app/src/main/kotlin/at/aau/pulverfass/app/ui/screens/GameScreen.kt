@@ -2114,6 +2114,7 @@ private fun CardsScreen(
     if (!isVisible) return
 
     val handCardItems = rememberHandCardItems(state)
+    val showTradeControls = state.showTradeControls && state.privateHandCards.isNotEmpty()
     Box(
         modifier =
             modifier
@@ -2157,28 +2158,42 @@ private fun CardsScreen(
             )
         }
 
-        if (handCardItems.isEmpty()) {
-            Text(
-                text = stringResource(id = R.string.game_cards_empty),
-                color = PulverfassColors.TextOnDark,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.align(Alignment.Center),
-            )
-        } else {
-            CenteredHandCards(
-                items = handCardItems,
-                selectable = state.canSelectTradeCards,
-                onSelected = actions.onToggleTradeInCard,
-                modifier =
-                    Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth()
-                        .testTag("game_cards_panel"),
-                musicManager = musicManager,
-            )
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .padding(
+                        top = 96.dp,
+                        bottom =
+                            if (showTradeControls) {
+                                BottomBarHeight + 128.dp
+                            } else {
+                                BottomBarHeight + 24.dp
+                            },
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (handCardItems.isEmpty()) {
+                Text(
+                    text = stringResource(id = R.string.game_cards_empty),
+                    color = PulverfassColors.TextOnDark,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            } else {
+                CenteredHandCards(
+                    items = handCardItems,
+                    selectable = state.canSelectTradeCards,
+                    onSelected = actions.onToggleTradeInCard,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("game_cards_panel"),
+                    musicManager = musicManager,
+                )
+            }
         }
 
-        if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
+        if (showTradeControls) {
             Column(
                 modifier =
                     Modifier

@@ -275,6 +275,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     val createResponse = assertIs<CreateLobbyResponse>(receivePayload(session))
+                    assertTrue(createResponse.lobbyCode.value.all(Char::isDigit))
 
                     session.send(
                         Frame.Binary(

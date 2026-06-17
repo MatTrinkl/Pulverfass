@@ -1070,6 +1070,91 @@ class ClientGameStateReducerTest {
     }
 
     @Test
+    fun `auto attack result clamps follow up troops after attacker loss`() {
+        val sourceId = TerritoryId("brasilien")
+        val targetId = TerritoryId("argentinien")
+        val result =
+            ClientGameStateReducer.applyDelta(
+                current =
+                    GameUiState(
+                        stateVersion = 1,
+                        activePlayerId = aliceId,
+                        turnPhase = TurnPhase.ATTACK,
+                        selectedRegionId = "argentina",
+                        selectionFromRegionId = "brazil",
+                        selectionToRegionId = "argentina",
+                        adjacentTerritoryIds = mapOf(sourceId to setOf(targetId)),
+                        territoryStates =
+                            mapOf(
+                                sourceId to GameTerritoryUiState(sourceId, aliceId, 5),
+                                targetId to GameTerritoryUiState(targetId, bobId, 3),
+                            ),
+                        attackState =
+                            AttackUiState(
+                                attackTroops = 3,
+                                moveAfterCapture = 3,
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        intent =
+                                            AutoAttackIntent(
+                                                fromTerritoryId = sourceId,
+                                                toTerritoryId = targetId,
+                                                attackTroops = 3,
+                                                moveAfterCapture = 3,
+                                            ),
+                                        isEnabled = true,
+                                        isAwaitingResult = true,
+                                        pendingRequestId = "auto-attack-1",
+                                    ),
+                            ),
+                    ),
+                delta =
+                    GameStateDeltaEvent(
+                        lobbyCode = lobbyCode,
+                        fromVersion = 1,
+                        toVersion = 2,
+                        events =
+                            listOf(
+                                AttackResolvedBroadcastEvent(
+                                    lobbyCode = lobbyCode,
+                                    attackerPlayerId = aliceId,
+                                    defenderPlayerId = bobId,
+                                    fromTerritoryId = sourceId,
+                                    toTerritoryId = targetId,
+                                    attackTroops = 3,
+                                    sourceTroopsBefore = 5,
+                                    targetTroopsBefore = 3,
+                                    requestedAttackDice = 3,
+                                    attackDice = 3,
+                                    defendDice = 2,
+                                    attackerRolls = listOf(3, 2, 1),
+                                    defenderRolls = listOf(6, 5),
+                                    attackerLosses = 2,
+                                    defenderLosses = 0,
+                                    attackerRemaining = 3,
+                                    defenderRemaining = 3,
+                                ),
+                                TerritoryTroopsChangedEvent(
+                                    lobbyCode = lobbyCode,
+                                    territoryId = sourceId,
+                                    troopCount = 3,
+                                    stateVersion = 2,
+                                ),
+                            ),
+                    ),
+                players = players,
+            ).state
+
+        assertEquals("brazil", result.selectionFromRegionId)
+        assertEquals("argentina", result.selectionToRegionId)
+        assertEquals(2, result.attackState.attackTroops)
+        assertEquals(2, result.attackState.moveAfterCapture)
+        assertEquals(2, result.attackState.autoAttack.intent?.attackTroops)
+        assertEquals(2, result.attackState.autoAttack.intent?.moveAfterCapture)
+        assertFalse(result.attackState.autoAttack.isAwaitingResult)
+    }
+
+    @Test
     fun `catch up during auto attack keeps intent ready for next request`() {
         val sourceId = TerritoryId("brasilien")
         val targetId = TerritoryId("argentinien")

@@ -854,16 +854,19 @@ object ClientGameStateReducer {
                 occupyingTroopCount = event.occupyingTroopCount,
             )
         val updatedAutoAttack = attackState.autoAttack.afterAttackResolved(event)
+        val maximumFollowUpAttackTroops = event.attackerRemaining - 1
         val keepAutoSelection =
             updatedAutoAttack.isEnabled &&
                 updatedAutoAttack.intent?.matches(event) == true &&
-                !latestResult.captured
+                !latestResult.captured &&
+                maximumFollowUpAttackTroops >= MIN_ATTACK_TROOPS
         val updatedAttackState =
             if (keepAutoSelection) {
-                attackState.copy(
-                    latestResult = latestResult,
-                    autoAttack = updatedAutoAttack,
-                )
+                attackState
+                    .copy(
+                        latestResult = latestResult,
+                        autoAttack = updatedAutoAttack,
+                    ).withClampedFollowUpAttack(maximumFollowUpAttackTroops)
             } else {
                 AttackUiState(
                     latestResult = latestResult,
@@ -877,6 +880,41 @@ object ClientGameStateReducer {
             selectionToRegionId = if (keepAutoSelection) selectionToRegionId else null,
             selectionMessage = null,
             attackState = updatedAttackState,
+        )
+    }
+
+    /**
+     * Klemmt UI-Werte und Auto-Angriff-Absicht auf die aktuelle Quellgebietsstärke.
+     *
+     * @param maximumAttackTroops höchste aktuell erlaubte Angriffsstärke
+     * @return Angriffsstate mit sofort wieder gültigen Slider- und Auto-Angriff-Werten
+     */
+    private fun AttackUiState.withClampedFollowUpAttack(maximumAttackTroops: Int): AttackUiState {
+        val clampedAttackTroops =
+            attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+        val clampedMoveAfterCapture =
+            moveAfterCapture.coerceIn(
+                minimumOccupyingTroopsForAttack(clampedAttackTroops),
+                clampedAttackTroops,
+            )
+        val clampedIntent =
+            autoAttack.intent?.let { intent ->
+                val intentAttackTroops =
+                    intent.attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+                intent.copy(
+                    attackTroops = intentAttackTroops,
+                    moveAfterCapture =
+                        intent.moveAfterCapture.coerceIn(
+                            minimumOccupyingTroopsForAttack(intentAttackTroops),
+                            intentAttackTroops,
+                        ),
+                )
+            }
+
+        return copy(
+            attackTroops = clampedAttackTroops,
+            moveAfterCapture = clampedMoveAfterCapture,
+            autoAttack = autoAttack.copy(intent = clampedIntent),
         )
     }
 

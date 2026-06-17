@@ -1397,7 +1397,7 @@ class LobbyControllerTest {
                                             MapTerritoryStateSnapshot(
                                                 territoryId = sourceId,
                                                 ownerId = playerId,
-                                                troopCount = 6,
+                                                troopCount = 5,
                                             ),
                                             MapTerritoryStateSnapshot(
                                                 territoryId = targetId,
@@ -1427,7 +1427,7 @@ class LobbyControllerTest {
                                                     fromTerritoryId = sourceId,
                                                     toTerritoryId = targetId,
                                                     attackTroops = 3,
-                                                    sourceTroopsBefore = 6,
+                                                    sourceTroopsBefore = 5,
                                                     targetTroopsBefore = 2,
                                                     requestedAttackDice = 3,
                                                     attackDice = 3,
@@ -1436,13 +1436,13 @@ class LobbyControllerTest {
                                                     defenderRolls = listOf(6, 5),
                                                     attackerLosses = 2,
                                                     defenderLosses = 0,
-                                                    attackerRemaining = 4,
+                                                    attackerRemaining = 3,
                                                     defenderRemaining = 2,
                                                 ),
                                                 TerritoryTroopsChangedEvent(
                                                     lobbyCode = lobbyCode,
                                                     territoryId = sourceId,
-                                                    troopCount = 4,
+                                                    troopCount = 3,
                                                     stateVersion = 2,
                                                 ),
                                                 TerritoryTroopsChangedEvent(
@@ -1475,19 +1475,19 @@ class LobbyControllerTest {
                                                     defenderPlayerId = opponentId,
                                                     fromTerritoryId = sourceId,
                                                     toTerritoryId = targetId,
-                                                    attackTroops = 3,
-                                                    sourceTroopsBefore = 4,
+                                                    attackTroops = 2,
+                                                    sourceTroopsBefore = 3,
                                                     targetTroopsBefore = 2,
-                                                    requestedAttackDice = 3,
-                                                    attackDice = 3,
+                                                    requestedAttackDice = 2,
+                                                    attackDice = 2,
                                                     defendDice = 2,
-                                                    attackerRolls = listOf(6, 5, 3),
+                                                    attackerRolls = listOf(6, 5),
                                                     defenderRolls = listOf(2, 1),
                                                     attackerLosses = 0,
                                                     defenderLosses = 2,
-                                                    attackerRemaining = 4,
+                                                    attackerRemaining = 3,
                                                     defenderRemaining = 0,
-                                                    occupyingTroopCount = 3,
+                                                    occupyingTroopCount = 2,
                                                 ),
                                                 TerritoryTroopsChangedEvent(
                                                     lobbyCode = lobbyCode,
@@ -1504,7 +1504,7 @@ class LobbyControllerTest {
                                                 TerritoryTroopsChangedEvent(
                                                     lobbyCode = lobbyCode,
                                                     territoryId = targetId,
-                                                    troopCount = 3,
+                                                    troopCount = 2,
                                                     stateVersion = 3,
                                                 ),
                                             ),
@@ -1524,9 +1524,11 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
                 controller.selectGameRegion("brazil")
                 controller.selectGameRegion("argentina")
-                // Slider startet auf Maximum (Quelle 6 -> 5); auf die im Test
-                // gescriptete Kampfstärke von 3 herunterregeln.
-                controller.adjustAttackTroops(-2)
+                /*
+                 * Slider startet auf Maximum (Quelle 5 -> 4); auf die im Test
+                 * gescriptete Kampfstärke von 3 herunterregeln.
+                 */
+                controller.adjustAttackTroops(-1)
                 controller.adjustMoveAfterCapture(1)
                 controller.setAutoAttackEnabled(true)
 
@@ -1558,8 +1560,8 @@ class LobbyControllerTest {
                 val requests = seenPayloads.filterIsInstance<AttackRequest>()
                 assertEquals(2, requests.size)
                 assertTrue(requests.all { it.requestId?.startsWith("auto-attack-") == true })
-                assertTrue(requests.all { it.attackTroops == 3 })
-                assertTrue(requests.all { it.moveAfterCapture == 3 })
+                assertEquals(listOf(3, 2), requests.map { it.attackTroops })
+                assertEquals(listOf(3, 2), requests.map { it.moveAfterCapture })
                 assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
                 assertFalse(controller.state.value.gameState.attackState.autoAttack.isRunning)
                 assertTrue(
@@ -3545,6 +3547,44 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `normal connect should replace stale persisted session token`() {
+        runBlocking {
+            val firstToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
+            val freshToken = SessionToken("123e4567-e89b-12d3-a456-426614174213")
+            val store = InMemoryReconnectSessionStore()
+            val firstServer =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(firstToken),
+                ) { _, _ -> }
+            val secondServer =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(freshToken),
+                ) { _, _ -> }
+            val controller = createController(sessionStore = store)
+
+            try {
+                controller.updatePlayerName("Alice")
+                controller.updateServerUrl(firstServer.url)
+                controller.connect()
+                waitUntil { controller.state.value.sessionToken == firstToken.value }
+
+                controller.disconnect()
+                waitUntil { !controller.state.value.isConnected }
+
+                controller.updateServerUrl(secondServer.url)
+                controller.connect()
+
+                waitUntil { controller.state.value.sessionToken == freshToken.value }
+                assertEquals(freshToken.value, store.readSessionToken())
+            } finally {
+                controller.close()
+                firstServer.close()
+                secondServer.close()
+            }
+        }
+    }
+
+    @Test
     fun `failed startup reconnect should clear persisted session token`() {
         runBlocking {
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174220")
@@ -3601,7 +3641,7 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `leave lobby should clear persisted session token`() {
+    fun `leave lobby should clear persisted session token but keep live session token`() {
         runBlocking {
             val lobbyCode = LobbyCode("LV42")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
@@ -3640,7 +3680,7 @@ class LobbyControllerTest {
                 controller.leaveLobby()
 
                 assertNull(store.readSessionToken())
-                assertNull(controller.state.value.sessionToken)
+                assertEquals(originalToken.value, controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
             } finally {
                 controller.close()

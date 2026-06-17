@@ -3680,10 +3680,10 @@ class MainServerLobbyRoutingService(
     }
 
     private fun generateLobbyCodeValue(): String {
-        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        val digits = "0123456789"
         return buildString(4) {
             repeat(4) {
-                append(alphabet[Random.nextInt(alphabet.length)])
+                append(digits[Random.nextInt(digits.length)])
             }
         }
     }

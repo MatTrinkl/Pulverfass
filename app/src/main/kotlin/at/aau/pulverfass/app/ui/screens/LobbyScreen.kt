@@ -254,14 +254,13 @@ private fun JoinLobbyForm(
         MainInputField(
             value = lobbyCode,
             onValueChange = { input ->
-                val uppercase = input.uppercase()
-                if (uppercase.length <= 4 && uppercase.all { it.isLetterOrDigit() }) {
-                    onLobbyCodeChange(uppercase)
+                if (input.length <= 4 && input.all { it.isDigit() }) {
+                    onLobbyCodeChange(input)
                 }
             },
             placeholder = "4-STELLIGER LOBBY-CODE",
             modifier = Modifier.fillMaxWidth(0.8f),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainInputField(

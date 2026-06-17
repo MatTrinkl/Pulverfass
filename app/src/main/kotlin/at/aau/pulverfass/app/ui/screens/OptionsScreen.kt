@@ -3,15 +3,19 @@ package at.aau.pulverfass.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -46,6 +50,8 @@ import at.aau.pulverfass.app.ui.theme.PulverfassFonts
  * @param navController Navigation zurück zum vorherigen Screen.
  * @param playerName aktuell gespeicherter Anzeigename.
  * @param onPlayerNameChange Callback für persistente Namensänderungen.
+ * @param autoAttackEnabled aktuell gespeicherter Auto-Angriff-Schalterzustand.
+ * @param onAutoAttackEnabledChange Callback für persistente Auto-Angriff-Änderungen.
  * @param musicManager gemeinsamer Audio-Manager der Activity.
  */
 @Composable
@@ -88,85 +94,97 @@ fun OptionsScreen(
                     .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.6f)),
         )
 
-        /*
-         * Fester Inhalt, damit Tastaturfokus den Screen nicht neu ausrichtet.
-         */
-        Column(
+        BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(horizontal = 48.dp, vertical = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "OPTIONEN",
-                color = PulverfassColors.GoldBright,
-                fontFamily = PulverfassFonts.CinzelDecorative,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 4.sp,
-            )
-            Spacer(modifier = Modifier.height(40.dp))
-
-            MainInputField(
-                value = playerName,
-                onValueChange = onPlayerNameChange,
-                placeholder = "SPIELERNAME",
-                modifier = Modifier.fillMaxWidth(0.5f),
-                keyboardOptions =
-                    KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        keyboardType = KeyboardType.Ascii,
-                    ),
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
             /*
-             * Gemeinsame Audiokarte für Musik und SFX mit sofortiger
-             * Persistenz.
+             * Scrollbarer Inhalt mit einer Mindesthöhe in Viewport-Größe.
+             * Dadurch bleiben kleine Screens bedienbar, ohne dass Tastaturfokus
+             * den Screen neu ausrichtet.
              */
+            val scrollState = rememberScrollState()
             Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth(0.5f)
-                        .background(
-                            color = PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
-                            shape = RoundedCornerShape(8.dp),
-                        )
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                        .fillMaxWidth()
+                        .heightIn(min = maxHeight)
+                        .verticalScroll(scrollState),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                OptionToggleRow(
-                    label = "MUSIK",
-                    isEnabled = isMusicEnabled,
-                    onToggle = { enabled ->
-                        isMusicEnabled = enabled
-                        musicManager.setMusicMuted(!enabled)
-                    },
+                Text(
+                    text = "OPTIONEN",
+                    color = PulverfassColors.GoldBright,
+                    fontFamily = PulverfassFonts.CinzelDecorative,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 4.sp,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                OptionToggleRow(
-                    label = "SOUND-EFFEKTE",
-                    isEnabled = isSfxEnabled,
-                    onToggle = { enabled ->
-                        isSfxEnabled = enabled
-                        musicManager.setSfxMuted(!enabled)
-                    },
+                Spacer(modifier = Modifier.height(40.dp))
+
+                MainInputField(
+                    value = playerName,
+                    onValueChange = onPlayerNameChange,
+                    placeholder = "SPIELERNAME",
+                    modifier = Modifier.fillMaxWidth(0.5f),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            keyboardType = KeyboardType.Ascii,
+                        ),
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                OptionToggleRow(
-                    label = "AUTO-ANGRIFF",
-                    isEnabled = autoAttackEnabled,
-                    onToggle = onAutoAttackEnabledChange,
+                Spacer(modifier = Modifier.height(24.dp))
+
+                /*
+                 * Gemeinsame Audiokarte für Musik und SFX mit sofortiger
+                 * Persistenz.
+                 */
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.5f)
+                            .background(
+                                color = PulverfassColors.SurfaceDark.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                ) {
+                    OptionToggleRow(
+                        label = "MUSIK",
+                        isEnabled = isMusicEnabled,
+                        onToggle = { enabled ->
+                            isMusicEnabled = enabled
+                            musicManager.setMusicMuted(!enabled)
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OptionToggleRow(
+                        label = "SOUND-EFFEKTE",
+                        isEnabled = isSfxEnabled,
+                        onToggle = { enabled ->
+                            isSfxEnabled = enabled
+                            musicManager.setSfxMuted(!enabled)
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OptionToggleRow(
+                        label = "AUTO-ANGRIFF",
+                        isEnabled = autoAttackEnabled,
+                        onToggle = onAutoAttackEnabledChange,
+                    )
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+
+                MainButton(
+                    text = "ZURÜCK",
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.fillMaxWidth(0.3f),
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
-
-            MainButton(
-                text = "ZURÜCK",
-                onClick = { navController.popBackStack() },
-                modifier = Modifier.fillMaxWidth(0.3f),
-            )
         }
     }
 }

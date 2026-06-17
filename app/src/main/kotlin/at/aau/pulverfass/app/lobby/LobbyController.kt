@@ -519,7 +519,8 @@ class LobbyController(
     }
 
     fun leaveLobby() {
-        val lobbyCode = state.value.activeLobbyCode
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
         suppressNextAttackBoundaryNotice = false
         cancelDelayedAutoPhaseAdvance()
         cancelDelayedAutoAttackContinuation()
@@ -546,7 +547,7 @@ class LobbyController(
                 players = emptyList(),
                 ownPlayerId = null,
                 gameStarted = false,
-                sessionToken = null,
+                sessionToken = snapshot.sessionToken.takeIf { snapshot.isConnected },
                 gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
@@ -1989,7 +1990,7 @@ class LobbyController(
          * fachlichen Token nicht überschreiben, sonst würde der eigentliche
          * ReconnectRequest mit der falschen Session laufen.
          */
-        if (!awaitingReconnectResponse && state.value.sessionToken == null) {
+        if (!awaitingReconnectResponse) {
             val sessionToken = payload.sessionToken.value
             reconnectSessionStore.saveSessionToken(sessionToken)
             _state.update { it.copy(sessionToken = sessionToken) }
@@ -2511,6 +2512,7 @@ class LobbyController(
     }
 
     private fun handleGameStarted(payload: GameStartedEvent) {
+        state.value.sessionToken?.let(reconnectSessionStore::saveSessionToken)
         reconnectSessionStore.saveWasGameStarted(true)
         _state.update {
             it.copy(
