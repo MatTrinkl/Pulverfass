@@ -195,6 +195,7 @@ class MainServerLobbyRoutingService(
         const val CHARACTER_ALREADY_ASSIGNED_ERROR_CODE = "CHARACTER_ALREADY_ASSIGNED"
         const val PLAYER_CONTEXT_MISSING_ERROR_CODE = "PLAYER_CONTEXT_MISSING"
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
+
         /*
          * Cheat-Meldungen haben nur ein kurzes Zeitfenster. Die Idee dahinter:
          * Andere Spieler sollen den Cheat melden können, sobald er sichtbar wird,

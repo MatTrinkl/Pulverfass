@@ -22,16 +22,22 @@ import kotlinx.serialization.encoding.Encoder
 enum class ClaimCheatReinforcementBonusErrorCode {
     /** Die Connection gehört nicht zu dem Spieler, für den der Request gestellt wurde. */
     REQUESTER_MISMATCH,
+
     /** Der Spieler ist gerade nicht am Zug. */
     NOT_ACTIVE_PLAYER,
+
     /** Das Spiel wartet gerade auf einen getrennten Spieler. */
     GAME_PAUSED,
+
     /** Der Bonus ist nur in der Reinforcements-Phase erlaubt. */
     PHASE_MISMATCH,
+
     /** Die angefragte Lobby existiert serverseitig nicht. */
     GAME_NOT_FOUND,
+
     /** Der Spieler hat seinen einmaligen Bonus bereits verbraucht. */
     ALREADY_USED,
+
     /** Vor weiteren Verstärkungen muss wegen zu vieler Karten ein Trade-In passieren. */
     FORCED_TRADE_REQUIRED,
 }

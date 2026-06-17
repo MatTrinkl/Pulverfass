@@ -145,6 +145,7 @@ private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+
 /*
  * Die Cheat-Meldung bleibt länger sichtbar als die automatische Phasenmeldung,
  * weil sie eine echte Spielkonsequenz erklärt: Bonus, Malus oder Strafe in der
@@ -153,6 +154,7 @@ private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
 private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 4_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
+
 /*
  * Für den Lichtsensor-Cheat wird nicht nur "dunkel" geprüft, sondern ein Wechsel
  * von hell nach dunkel. Dadurch lösen normale niedrige Raumhelligkeit oder ein

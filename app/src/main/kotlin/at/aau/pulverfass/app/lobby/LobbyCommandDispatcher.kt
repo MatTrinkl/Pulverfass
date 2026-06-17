@@ -21,6 +21,7 @@ enum class LobbyCommandKey {
     TURN_ADVANCE,
     PLACE_REINFORCEMENTS,
     CLAIM_CHEAT_REINFORCEMENT_BONUS,
+
     /*
      * Eigener Pending-Key für Cheat-Meldungen. Dadurch kann die UI genau diesen
      * Button sperren, ohne andere Spielaktionen unnötig zu blockieren.

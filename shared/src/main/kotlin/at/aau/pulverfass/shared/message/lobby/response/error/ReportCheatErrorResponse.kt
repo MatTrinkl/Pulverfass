@@ -15,14 +15,19 @@ import kotlinx.serialization.Serializable
 enum class ReportCheatErrorCode {
     /** Die angefragte Lobby existiert serverseitig nicht. */
     GAME_NOT_FOUND,
+
     /** Die Connection passt nicht zum Reporter im Payload. */
     REQUESTER_MISMATCH,
+
     /** Vor Spielstart darf noch niemand gemeldet werden. */
     GAME_NOT_RUNNING,
+
     /** Reporter oder beschuldigter Spieler ist nicht Teil der Lobby. */
     UNKNOWN_PLAYER,
+
     /** Spieler dürfen sich nicht selbst melden. */
     SELF_REPORT,
+
     /** Derselbe Spieler hat denselben offenen Cheat bereits gemeldet. */
     ALREADY_REPORTED,
 }
