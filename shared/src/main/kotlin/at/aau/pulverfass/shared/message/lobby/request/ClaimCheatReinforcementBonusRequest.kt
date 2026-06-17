@@ -14,6 +14,11 @@ import kotlinx.serialization.encoding.Encoder
 
 /**
  * Anfrage eines Clients, den einmaligen Schummel-Verstärkungsbonus zu beanspruchen.
+ *
+ * Diese Nachricht wird von der Android-App gesendet, wenn der Lichtsensor-Cheat
+ * ausgelöst wurde. Sie enthält nur die Identität der Lobby und des Spielers.
+ * Ob der Request wirklich erlaubt ist, entscheidet der Server anhand des
+ * aktuellen TurnState und des GameState.
  */
 @Serializable(with = ClaimCheatReinforcementBonusRequestSerializer::class)
 data class ClaimCheatReinforcementBonusRequest(
@@ -23,6 +28,12 @@ data class ClaimCheatReinforcementBonusRequest(
 
 object ClaimCheatReinforcementBonusRequestSerializer :
     KSerializer<ClaimCheatReinforcementBonusRequest> {
+    /*
+     * Für diese Nachricht wird ein expliziter Serializer verwendet, damit das
+     * Netzwerkformat stabil bleibt. Das ist bei Client-Server-Protokollen
+     * wichtig: Beide Seiten müssen dieselben Feldnamen und dieselbe Reihenfolge
+     * verstehen, auch wenn intern später Code umgebaut wird.
+     */
     override val descriptor =
         buildClassSerialDescriptor(
             "at.aau.pulverfass.shared.network.message.ClaimCheatReinforcementBonusRequest",

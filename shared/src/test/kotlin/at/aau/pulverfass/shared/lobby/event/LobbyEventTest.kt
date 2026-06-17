@@ -10,6 +10,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
+/**
+ * Smoke-Test für die wichtigsten LobbyEvent-Datenklassen.
+ *
+ * Der Test prüft keine Spiellogik, sondern stellt sicher, dass die Events mit
+ * realistischen Beispielwerten gebaut werden können. Das ist besonders für neue
+ * Events wie CheatReinforcementBonusUsedEvent nützlich, weil sie später im
+ * Reducer und in der Persistenz wiederverwendet werden.
+ */
 class LobbyEventTest {
     @Test
     fun `should instantiate sample lobby events consistently`() {

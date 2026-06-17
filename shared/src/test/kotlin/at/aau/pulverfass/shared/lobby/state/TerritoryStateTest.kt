@@ -7,6 +7,14 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
+/**
+ * Basistests für den Zustand eines einzelnen Territoriums.
+ *
+ * TerritoryState ist klein, aber sehr zentral: Angriffe, Verstärkungen und
+ * Kartenlogik hängen davon ab, wem ein Gebiet gehört und wie viele Truppen dort
+ * stehen. Darum werden auch einfache Randfälle wie "Besitzer mit 0 Truppen"
+ * explizit abgesichert.
+ */
 class TerritoryStateTest {
     @Test
     fun `should expose default territory state`() {

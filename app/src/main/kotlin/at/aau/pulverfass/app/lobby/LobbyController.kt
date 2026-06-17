@@ -974,6 +974,11 @@ class LobbyController(
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
         val playerId = snapshot.ownPlayerId
+        /*
+         * Die App prüft zuerst den lokalen Zustand, damit offensichtliche Fehler
+         * sofort im UI landen und nicht unnötig über das Netzwerk gehen. Der
+         * Server prüft dieselben Regeln später trotzdem noch einmal verbindlich.
+         */
         if (lobbyCode == null || playerId == null) {
             _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
             return
@@ -984,6 +989,11 @@ class LobbyController(
         }
 
         scope.launch {
+            /*
+             * keepPendingUntilResponse sorgt dafür, dass der Cheat-Button nicht
+             * mehrfach gedrückt werden kann, während die Serverantwort noch
+             * unterwegs ist.
+             */
             sendCommand(
                 command =
                     LobbyCommand(
@@ -1007,6 +1017,11 @@ class LobbyController(
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
         val reporterPlayerId = snapshot.ownPlayerId
+        /*
+         * Für die Meldung braucht die App beide Identitäten:
+         * - activeLobbyCode sagt dem Server, in welcher Lobby geprüft wird.
+         * - ownPlayerId ist der Reporter und muss zur WebSocket-Connection passen.
+         */
         if (lobbyCode == null || reporterPlayerId == null) {
             _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
             return
@@ -1021,6 +1036,11 @@ class LobbyController(
         }
 
         scope.launch {
+            /*
+             * Alte Meldungstexte werden vor dem neuen Request gelöscht. Sonst
+             * könnte während eines neuen Pending-Requests noch das Ergebnis der
+             * vorherigen Meldung sichtbar sein.
+             */
             _state.update { it.copy(cheatReportNoticeText = null) }
             /*
              * Die App schickt nur, wer wen meldet. Ob die Meldung stimmt,
@@ -2147,6 +2167,11 @@ class LobbyController(
             }
             is ReportCheatResponse -> {
                 clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                /*
+                 * Eine ReportCheatResponse bedeutet: Der Server konnte den Report
+                 * auswerten. Das Ergebnis kann trotzdem negativ sein, denn eine
+                 * falsche Verdächtigung ist ein gültiger Spielzug mit Strafe.
+                 */
                 val reportNotice =
                     if (payload.correct) {
                         "Deine Meldung war korrekt. Du erhältst in deiner nächsten " +
@@ -2165,6 +2190,11 @@ class LobbyController(
             }
             is ReportCheatErrorResponse -> {
                 clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                /*
+                 * Eine ErrorResponse bedeutet nicht "falsch verdächtigt", sondern
+                 * "die Meldung war formal ungültig", z.B. Selbstmeldung oder
+                 * falscher Reporter zur Connection.
+                 */
                 updateGameError(payload.reason)
             }
             is JoinLobbyErrorResponse -> {

@@ -12,20 +12,36 @@ import kotlinx.serialization.encoding.Encoder
 
 /**
  * Fehlercodes für das Beanspruchen des einmaligen Schummel-Verstärkungsbonus.
+ *
+ * Jeder Code steht für eine fachlich andere Ablehnung. Für die Prüfung ist hier
+ * wichtig: Der Server schickt nicht nur freien Text zurück, sondern einen
+ * maschinenlesbaren Grund. Die App kann daraus gezielt verständliche
+ * Fehlermeldungen bauen.
  */
 @Serializable
 enum class ClaimCheatReinforcementBonusErrorCode {
+    /** Die Connection gehört nicht zu dem Spieler, für den der Request gestellt wurde. */
     REQUESTER_MISMATCH,
+    /** Der Spieler ist gerade nicht am Zug. */
     NOT_ACTIVE_PLAYER,
+    /** Das Spiel wartet gerade auf einen getrennten Spieler. */
     GAME_PAUSED,
+    /** Der Bonus ist nur in der Reinforcements-Phase erlaubt. */
     PHASE_MISMATCH,
+    /** Die angefragte Lobby existiert serverseitig nicht. */
     GAME_NOT_FOUND,
+    /** Der Spieler hat seinen einmaligen Bonus bereits verbraucht. */
     ALREADY_USED,
+    /** Vor weiteren Verstärkungen muss wegen zu vieler Karten ein Trade-In passieren. */
     FORCED_TRADE_REQUIRED,
 }
 
 /**
  * Fehlantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus.
+ *
+ * `code` ist für Programmlogik und Tests gedacht, `reason` für Logs und UI-nahe
+ * Fehlermeldungen. Diese Trennung macht die Tests stabiler, weil sie den Code
+ * prüfen können, ohne an jeder Formulierung des Textes zu hängen.
  */
 @Serializable(with = ClaimCheatReinforcementBonusErrorResponseSerializer::class)
 data class ClaimCheatReinforcementBonusErrorResponse(
