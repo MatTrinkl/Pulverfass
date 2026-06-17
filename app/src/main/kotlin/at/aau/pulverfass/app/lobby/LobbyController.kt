@@ -1509,40 +1509,79 @@ class LobbyController(
         _state.update {
             val autoAttack = it.gameState.attackState.autoAttack
             val nextIsEnabled = keepEnabled && it.autoAttackEnabled
-            if (
-                !autoAttack.isEnabled &&
-                !autoAttack.isAwaitingResult &&
-                autoAttack.intent == null &&
-                it.autoAttackEnabled == nextIsEnabled &&
-                errorText == null
-            ) {
-                it
-            } else if (
-                !autoAttack.isEnabled &&
-                !autoAttack.isAwaitingResult &&
-                autoAttack.statusText == statusText &&
-                autoAttack.errorText == errorText &&
-                it.autoAttackEnabled == nextIsEnabled
+            if (isAutoAttackStopNoOp(
+                    autoAttack,
+                    it.autoAttackEnabled,
+                    nextIsEnabled,
+                    statusText,
+                    errorText,
+                )
             ) {
                 it
             } else {
-                it.copy(
-                    autoAttackEnabled = nextIsEnabled,
-                    gameState =
-                        it.gameState.copy(
-                            attackState =
-                                it.gameState.attackState.copy(
-                                    autoAttack =
-                                        AutoAttackUiState(
-                                            isEnabled = nextIsEnabled,
-                                            statusText = statusText,
-                                            errorText = errorText,
-                                        ),
-                                ),
-                        ),
-                )
+                it.withStoppedAutoAttack(nextIsEnabled, statusText, errorText)
             }
         }
+    }
+
+    /**
+     * Prüft, ob ein [stopAutoAttack] den Zustand unverändert ließe, um redundante
+     * State-Emissionen zu vermeiden. No-op nur, wenn der Auto-Angriff schon
+     * gestoppt ist (weder aktiv noch auf ein Ergebnis wartend) und entweder kein
+     * Intent/Fehler mehr ansteht oder Status-/Fehlertext bereits identisch sind.
+     */
+    private fun isAutoAttackStopNoOp(
+        autoAttack: AutoAttackUiState,
+        autoAttackEnabled: Boolean,
+        nextIsEnabled: Boolean,
+        statusText: String?,
+        errorText: String?,
+    ): Boolean {
+        if (autoAttack.isEnabled || autoAttack.isAwaitingResult) {
+            return false
+        }
+        val enabledUnchanged = autoAttackEnabled == nextIsEnabled
+        val nothingPending =
+            autoAttack.intent == null && errorText == null && enabledUnchanged
+        val textsUnchanged =
+            autoAttack.statusText == statusText &&
+                autoAttack.errorText == errorText &&
+                enabledUnchanged
+        return nothingPending || textsUnchanged
+    }
+
+    /**
+     * Baut den gestoppten Auto-Angriff-Zustand. Lief gerade eine Sequenz, wird die
+     * (jetzt veraltete) Gebietsauswahl mitgelöscht, damit sich das Angriffspanel
+     * automatisch schließt. Bei einer Eroberung erledigt das bereits der Reducer;
+     * hier werden alle übrigen Stoppgründe (z. B. zu schwache Quelle) abgedeckt.
+     */
+    private fun LobbyUiState.withStoppedAutoAttack(
+        nextIsEnabled: Boolean,
+        statusText: String?,
+        errorText: String?,
+    ): LobbyUiState {
+        val autoAttack = gameState.attackState.autoAttack
+        // Bei laufender Sequenz die veraltete Gebietsauswahl verwerfen.
+        val keep = autoAttack.intent == null && !autoAttack.isAwaitingResult
+        return copy(
+            autoAttackEnabled = nextIsEnabled,
+            gameState =
+                gameState.copy(
+                    selectedRegionId = gameState.selectedRegionId.takeIf { keep },
+                    selectionFromRegionId = gameState.selectionFromRegionId.takeIf { keep },
+                    selectionToRegionId = gameState.selectionToRegionId.takeIf { keep },
+                    attackState =
+                        gameState.attackState.copy(
+                            autoAttack =
+                                AutoAttackUiState(
+                                    isEnabled = nextIsEnabled,
+                                    statusText = statusText,
+                                    errorText = errorText,
+                                ),
+                        ),
+                ),
+        )
     }
 
     private fun shouldStopAutoAttackForError(requestId: String?): Boolean {

@@ -92,7 +92,6 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.Json
 
 /**
  * Verwaltet die zentrale Zuordnung zwischen MessageTypes und ihren konkreten
@@ -520,7 +519,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (NetworkMessagePayload) -> String {
         return { payload ->
-            Json.encodeToString(serializer, payload as T)
+            NetworkJson.encodeToString(serializer, payload as T)
         }
     }
 
@@ -528,7 +527,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (String) -> NetworkMessagePayload {
         return { json ->
-            Json.decodeFromString(serializer, json)
+            NetworkJson.decodeFromString(serializer, json)
         }
     }
 

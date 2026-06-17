@@ -36,6 +36,7 @@ import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -276,6 +277,58 @@ class ClientGameStateReducerTest {
         assertEquals(8, result.state.regionStates.getValue("brazil").troopCount)
         assertEquals(bobId, result.state.activePlayerId)
         assertEquals(TurnPhase.ATTACK, result.state.turnPhase)
+    }
+
+    @Test
+    fun `same version attack delta is applied so the vfx result is exposed`() {
+        /*
+         * Der Server kodiert Single-Event-Deltas mit fromVersion == toVersion
+         * (PublicGameStateBuilder.buildDelta). Liegt ein solches Delta genau eine
+         * Version vor dem lokalen Stand, muss der Client es regulär anwenden --
+         * sonst löst es fälschlich einen Catch-up aus und das
+         * AttackResolvedBroadcastEvent samt Kampf-VFX geht verloren.
+         */
+        val base = GameUiState(stateVersion = 1)
+        val delta =
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = 2,
+                toVersion = 2,
+                events =
+                    listOf(
+                        AttackResolvedBroadcastEvent(
+                            lobbyCode = lobbyCode,
+                            attackerPlayerId = aliceId,
+                            defenderPlayerId = bobId,
+                            fromTerritoryId = TerritoryId("ozeanien"),
+                            toTerritoryId = TerritoryId("australien"),
+                            attackTroops = 4,
+                            sourceTroopsBefore = 5,
+                            targetTroopsBefore = 2,
+                            requestedAttackDice = 3,
+                            attackDice = 3,
+                            defendDice = 2,
+                            attackerRolls = listOf(6, 5, 4),
+                            defenderRolls = listOf(3, 2),
+                            attackerLosses = 0,
+                            defenderLosses = 2,
+                            attackerRemaining = 5,
+                            defenderRemaining = 0,
+                            occupyingTroopCount = 4,
+                            stateVersion = 2,
+                        ),
+                    ),
+            )
+
+        val result = ClientGameStateReducer.applyDelta(base, delta, players)
+
+        assertFalse(result.needsCatchUp)
+        assertEquals(2, result.state.stateVersion)
+        val latest = assertNotNull(result.state.attackState.latestResult)
+        assertEquals(2L, latest.attackId)
+        assertEquals(5, latest.sourceTroopsBefore)
+        assertEquals(2, latest.targetTroopsBefore)
+        assertEquals(TerritoryId("ozeanien"), latest.fromTerritoryId)
     }
 
     @Test

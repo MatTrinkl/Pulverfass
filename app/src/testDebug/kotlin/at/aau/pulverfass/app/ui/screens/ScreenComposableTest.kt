@@ -2,6 +2,10 @@ package at.aau.pulverfass.app.ui.screens
 
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.semantics.SemanticsActions
@@ -638,7 +642,7 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun cards_screen_shows_centered_typed_cards_and_submits_trade_in() {
+    fun card_hand_overlay_shows_typed_cards_and_submits_trade_in() {
         val playerId = PlayerId(1)
         val cardIds =
             listOf(
@@ -651,6 +655,9 @@ class ScreenComposableTest {
         var closed = false
 
         composeTestRule.setContent {
+            var selectedTradeInCardIds by remember {
+                mutableStateOf(setOf(cardIds[1], cardIds[2]))
+            }
             AndroidAppTheme {
                 GameScreenContent(
                     contentState =
@@ -677,7 +684,7 @@ class ScreenComposableTest {
                                             PrivateHandCardUi(cardIds[2], CardType.C),
                                             PrivateHandCardUi(CardId("joker:1"), CardType.JOKER),
                                         ),
-                                    selectedTradeInCardIds = cardIds.toSet(),
+                                    selectedTradeInCardIds = selectedTradeInCardIds,
                                 ),
                             isConnected = true,
                             pendingCommandKeys = emptySet(),
@@ -688,7 +695,15 @@ class ScreenComposableTest {
                             onRegionSelected = {},
                             onToggleCards = { closed = true },
                             onAdvanceTurn = {},
-                            onToggleTradeInCard = { selectedCardId = it },
+                            onToggleTradeInCard = { cardId ->
+                                selectedCardId = cardId
+                                selectedTradeInCardIds =
+                                    if (cardId in selectedTradeInCardIds) {
+                                        selectedTradeInCardIds - cardId
+                                    } else {
+                                        selectedTradeInCardIds + cardId
+                                    }
+                            },
                             onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
@@ -697,17 +712,14 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("game_cards_screen").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_cards_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("card_hand_overlay").assertIsDisplayed()
         composeTestRule.onNodeWithText("Galeone Sahara").assertIsDisplayed()
         composeTestRule.onNodeWithText("Kanone Brasilien").assertIsDisplayed()
         composeTestRule.onNodeWithText("Pirat Japan").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Gewaehlte Karten: 3/3").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("game_hand_card_territory:sahara:a").performClick()
+        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a").performClick()
         composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
-        composeTestRule.onAllNodesWithTag("game_cards_close").assertCountEquals(0)
-        composeTestRule.onNodeWithTag("cards_toggle_button").performClick()
+        composeTestRule.onNodeWithTag("close_cards_button").performClick()
 
         assertEquals(cardIds[0], selectedCardId)
         assertTrue(traded)

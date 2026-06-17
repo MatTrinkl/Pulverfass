@@ -521,6 +521,12 @@ data class FortifyUiState(
 
 /**
  * Präsentationsmodell eines einzelnen serverseitig ausgewürfelten Kampfes.
+ *
+ * [attackId] identifiziert den Kampf eindeutig, damit die Clash-Animation pro
+ * Ergebnis genau einmal abgespielt wird. [sourceTroopsBefore] und
+ * [targetTroopsBefore] erlauben der Karte, die Truppen-Chips während der
+ * Animation noch kurz auf dem Vorkampfstand anzuzeigen, ohne den
+ * autoritativen Spielzustand zu verzögern.
  */
 data class AttackResultUiState(
     val fromTerritoryId: TerritoryId,
@@ -532,6 +538,9 @@ data class AttackResultUiState(
     val attackerRemaining: Int,
     val defenderRemaining: Int,
     val occupyingTroopCount: Int?,
+    val attackId: Long = 0L,
+    val sourceTroopsBefore: Int = 0,
+    val targetTroopsBefore: Int = 0,
 ) {
     val captured: Boolean
         get() = defenderRemaining == 0
