@@ -15,4 +15,8 @@ local.properties
 !build/documentation/
 !build/documentation/html/
 !build/documentation/html/**
+!server/build/
+!server/build/install/
+!server/build/install/server/
+!server/build/install/server/**
 !.env.example

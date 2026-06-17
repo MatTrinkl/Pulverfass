@@ -356,6 +356,112 @@ class ScreenComposableTest {
     }
 
     @Test
+    fun game_screen_shows_cheat_report_notice_for_four_seconds() {
+        composeTestRule.mainClock.autoAdvance = false
+        var dismissed = false
+        val noticeText =
+            "Deine Meldung war korrekt. Du erhältst in deiner nächsten " +
+                "Verstärkungsphase +3 Truppen."
+
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreenContent(
+                        contentState =
+                            GameScreenContentState(
+                                players = emptyList(),
+                                localPlayerId = PlayerId(1),
+                                uiState = GameUiState(),
+                                isConnected = true,
+                                pendingCommandKeys = emptySet(),
+                                mapPainter = ColorPainter(Color.White),
+                                cheatReportNoticeText = noticeText,
+                            ),
+                        actions =
+                            GameScreenActions(
+                                onRegionSelected = {},
+                                onToggleCards = {},
+                                onAdvanceTurn = {},
+                                onRefreshGameState = {},
+                                onClearCheatReportNotice = { dismissed = true },
+                            ),
+                        countdownState = false to 0,
+                    )
+                }
+            }
+
+            composeTestRule.onNodeWithTag("cheat_report_notice_popup").assertIsDisplayed()
+            composeTestRule.onNodeWithText("CHEAT-MELDUNG").assertIsDisplayed()
+            composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
+            composeTestRule.mainClock.advanceTimeBy(3_100)
+            composeTestRule.waitForIdle()
+            assertTrue(!dismissed)
+
+            composeTestRule.mainClock.advanceTimeBy(1_000)
+            composeTestRule.waitForIdle()
+
+            assertTrue(dismissed)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun game_screen_options_reports_selected_cheat_player() {
+        val localPlayerId = PlayerId(1)
+        val accusedPlayerId = PlayerId(2)
+        var reportedPlayerId: PlayerId? = null
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = localPlayerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                    GamePlayerUi(
+                                        playerId = accusedPlayerId,
+                                        name = "Bob",
+                                        avatarText = "B",
+                                        color = Color(0xFFA6342B),
+                                    ),
+                                ),
+                            localPlayerId = localPlayerId,
+                            uiState = GameUiState(),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onReportCheat = { reportedPlayerId = it },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("game_options_button").performClick()
+        composeTestRule.onNodeWithText("CHEAT MELDEN").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("SPIELER AUSWÄHLEN").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("cheat_report_player_${accusedPlayerId.value}")
+            .performClick()
+
+        assertEquals(accusedPlayerId, reportedPlayerId)
+        composeTestRule.onAllNodesWithText("SPIELER AUSWÄHLEN").assertCountEquals(0)
+    }
+
+    @Test
     fun private_hand_panel_shows_own_cards_with_duplicate_labels() {
         composeTestRule.setContent {
             AndroidAppTheme {

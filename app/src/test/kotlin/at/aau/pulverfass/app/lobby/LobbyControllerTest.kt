@@ -44,6 +44,7 @@ import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -65,6 +66,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
@@ -75,6 +77,10 @@ import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCod
 import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -1051,8 +1057,126 @@ class LobbyControllerTest {
 
             controller.fortifyMove()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.reportCheat(PlayerId(2))
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
         } finally {
             controller.close()
+        }
+    }
+
+    @Test
+    fun `report cheat response should show result notice`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("RC42")
+            val playerId = PlayerId(1)
+            val accusedPlayerId = PlayerId(2)
+            var nextReportIsCorrect = true
+            var nextReportErrorReason: String? = null
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174250"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                    isHost = true,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = accusedPlayerId,
+                                    playerDisplayName = "Bob",
+                                ),
+                            )
+                        }
+                        is ReportCheatRequest -> {
+                            val errorReason = nextReportErrorReason
+                            if (errorReason != null) {
+                                outgoing.sendPayload(
+                                    ReportCheatErrorResponse(
+                                        code = ReportCheatErrorCode.SELF_REPORT,
+                                        reason = errorReason,
+                                    ),
+                                )
+                            } else {
+                                outgoing.sendPayload(
+                                    ReportCheatResponse(
+                                        lobbyCode = payload.lobbyCode,
+                                        accusedPlayerId = payload.accusedPlayerId,
+                                        correct = nextReportIsCorrect,
+                                        modifierDelta = if (nextReportIsCorrect) 3 else -3,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    controller.state.value.ownPlayerId == playerId &&
+                        controller.state.value.players.any {
+                            it.playerId == accusedPlayerId
+                        }
+                }
+
+                controller.reportCheat(playerId)
+                assertEquals(
+                    "Du kannst dich nicht selbst melden.",
+                    controller.state.value.errorText,
+                )
+
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.cheatReportNoticeText
+                        ?.contains("Meldung war korrekt") == true
+                }
+                assertNull(controller.state.value.errorText)
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+
+                controller.clearCheatReportNotice()
+                assertNull(controller.state.value.cheatReportNoticeText)
+
+                nextReportIsCorrect = false
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.cheatReportNoticeText
+                        ?.contains("falsch verdächtigt") == true
+                }
+                assertNull(controller.state.value.errorText)
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+
+                nextReportErrorReason = "Meldung nicht erlaubt."
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.errorText == "Meldung nicht erlaubt."
+                }
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+            } finally {
+                controller.close()
+                server.close()
+            }
         }
     }
 
