@@ -71,10 +71,10 @@ private fun cardDrawableFor(type: CardType): Int =
 private const val FAN_PIVOT_Y = 2.4f
 private const val FAN_MAX_ANGLE_PER_CARD = 11f
 private const val FAN_TOTAL_ANGLE = 60f
-private const val SELECTED_SCALE = 1.1f
+private const val SELECTED_SCALE = 1.06f
 
 /** Anteil der Kartenhöhe, um den der Fächer unter den Screenrand rutscht. */
-private const val CARD_OFFSCREEN_FRACTION = 0.30f
+private const val CARD_OFFSCREEN_FRACTION = 0.22f
 
 /**
  * Vollbild-Kartenscreen im Stil der Charakterauswahl.
@@ -132,7 +132,7 @@ internal fun CardHandOverlay(
                             }
                         }
                     }
-                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)),
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.46f)),
         )
 
         // Titel oben mittig.
@@ -165,7 +165,7 @@ private fun CardHandHeader(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.padding(top = 20.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         PulverfassTitleText(
@@ -176,10 +176,15 @@ private fun CardHandHeader(
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = state.playerName,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
             color = PulverfassColors.TextOnDark,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             letterSpacing = 1.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
+            textAlign = TextAlign.Center,
         )
         if (state.privateHandCards.isNotEmpty()) {
             CardHandHint(canSelect = state.showTradeControls && state.canSelectTradeCards)
@@ -253,10 +258,22 @@ private fun CardHandActions(
 ) {
     Column(
         modifier = modifier.padding(end = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.End,
     ) {
         if (state.showTradeControls && state.privateHandCards.isNotEmpty()) {
+            Text(
+                text =
+                    stringResource(
+                        id = R.string.game_cards_selected_count,
+                        state.selectedTradeInCardIds.size.coerceAtMost(3),
+                    ),
+                modifier = Modifier.width(210.dp),
+                color = PulverfassColors.TextOnDark,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+            )
             MainButton(
                 text = stringResource(id = R.string.game_cards_trade_in),
                 enabled = state.canTradeInCards,
@@ -297,9 +314,9 @@ private fun FannedHand(
     val density = LocalDensity.current
 
     val cardHeight =
-        minOf(300.dp, (configuration.screenHeightDp * 0.78f).dp).coerceAtLeast(140.dp)
+        minOf(280.dp, (configuration.screenHeightDp * 0.72f).dp).coerceAtLeast(140.dp)
     val cardWidth = cardHeight * CARD_ASPECT_RATIO
-    val liftPx = with(density) { 36.dp.toPx() }
+    val liftPx = with(density) { 30.dp.toPx() }
     // Karten ein Stück unter den Screenrand schieben (POV-Hand-Gefühl).
     val offscreenOffset = cardHeight * CARD_OFFSCREEN_FRACTION
 
@@ -337,7 +354,7 @@ private fun FannedHand(
                         .then(
                             if (isSelected) {
                                 Modifier.border(
-                                    width = 3.dp,
+                                    width = 2.dp,
                                     color = PulverfassColors.GoldBright,
                                     shape = RoundedCornerShape(12.dp),
                                 )
@@ -371,7 +388,7 @@ private fun FannedHand(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.55f))
+                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.42f))
                             .padding(vertical = 3.dp),
                 )
             }

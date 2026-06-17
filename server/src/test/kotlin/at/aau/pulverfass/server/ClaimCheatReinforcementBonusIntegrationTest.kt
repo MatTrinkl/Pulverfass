@@ -334,7 +334,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
         }
 
     @Test
-    fun `reporting cheat before visible reinforcement placement penalizes reporter`() =
+    fun `reporting cheat before visible reinforcement placement rewards reporter`() =
         testApplication {
             val lobbyCode = LobbyCode("CHR3")
             val playerOne = PlayerId(1)
@@ -436,8 +436,8 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ReportCheatResponse(
                             lobbyCode = lobbyCode,
                             accusedPlayerId = playerOne,
-                            correct = false,
-                            modifierDelta = -3,
+                            correct = true,
+                            modifierDelta = 3,
                         ),
                         receiveRelevantTestPayload(
                             session = reporterSession.first,

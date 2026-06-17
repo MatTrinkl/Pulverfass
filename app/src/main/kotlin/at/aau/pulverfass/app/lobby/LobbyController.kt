@@ -541,7 +541,9 @@ class LobbyController(
                                 LeaveLobbyRequest(
                                     lobbyCode = parseLobbyCode(lobbyCode),
                                 ),
+                            retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
                         ),
+                        trackPending = false,
                     )
                 }
             }

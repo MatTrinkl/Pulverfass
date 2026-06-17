@@ -46,6 +46,7 @@
     <string name="game_cards_unknown">Unbekannte Karte</string>
     <string name="game_cards_trade_in">Set eintauschen</string>
     <string name="game_cards_close">Schließen</string>
+    <string name="game_cards_selected_count">%1$d/3 ausgewählt</string>
     <string name="game_cards_hint_select">Wähle 3 Karten für ein gültiges Set (Joker zählt als Wildcard)</string>
     <string name="game_cards_hint_locked">Karten kannst du nur in deiner Verstärkungsphase eintauschen</string>
     <string name="game_your_turn">Du bist dran</string>

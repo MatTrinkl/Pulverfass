@@ -953,8 +953,9 @@ class MainServerLobbyRoutingService(
             val events = buildClaimCheatReinforcementBonusEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
             /*
-             * Der Cheat wird hier nur vorgemerkt. Das Meldefenster startet erst,
-             * wenn die zusätzlichen Truppen durch eine Platzierung sichtbar werden.
+             * Der Cheat ist fachlich sofort aktiv. Die Platzierung öffnet das
+             * normale sichtbare Meldefenster, eine frühe Meldung darf aber nicht
+             * als falsch bestraft werden.
              */
             markCheatReportWindowPending(payload.lobbyCode, payload.playerId)
             network.send(
@@ -1527,6 +1528,10 @@ class MainServerLobbyRoutingService(
                         lobbyCode = lobbyCode,
                         previousTurnState = previousTurnState,
                         force = request.payload is StartGameRequest,
+                    )
+                    broadcastFullSnapshotAfterMembershipChangeIfNeeded(
+                        lobbyCode = lobbyCode,
+                        payload = request.payload,
                     )
                 }
                 hooks.onRouted(request.connectionId)
@@ -2468,8 +2473,9 @@ class MainServerLobbyRoutingService(
         accusedPlayerId: PlayerId,
     ) {
         /*
-         * Der Spieler hat den Cheat ausgelöst, aber noch nichts Sichtbares gemacht.
-         * Darum wird hier nur vorgemerkt und noch kein Meldefenster geöffnet.
+         * Der Spieler hat den Cheat ausgelöst, aber eventuell noch nichts
+         * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt, während
+         * die sichtbare Platzierung später weiterhin das reguläre Fenster öffnet.
          */
         synchronized(cheatReportLock) {
             pendingVisibleCheatByLobby
@@ -2487,30 +2493,35 @@ class MainServerLobbyRoutingService(
             if (pendingPlayers?.remove(accusedPlayerId) != true) {
                 return@synchronized
             }
-            /*
-             * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist.
-             * Wartet der Cheater vorher ab, verliert dadurch niemand die Chance zu melden.
-             */
             if (pendingPlayers.isEmpty()) {
                 pendingVisibleCheatByLobby.remove(lobbyCode)
             }
-            openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
+            /*
+             * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist,
+             * sofern nicht bereits eine frühe korrekte Meldung ein Fenster
+             * geöffnet hat. So bleibt dieselbe Cheat-Aktion eindeutig.
+             */
+            if (cheatReportWindowsByLobby[lobbyCode]?.containsKey(accusedPlayerId) != true) {
+                openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
+            }
         }
     }
 
     private fun openCheatReportWindowLocked(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
-    ) {
+    ): CheatReportWindow {
         /*
          * Statt einen Timer laufen zu lassen, speichere ich nur den Zeitpunkt,
          * bis wann eine Meldung noch gültig ist. Das ist einfacher und robuster.
          */
-        cheatReportWindowsByLobby
-            .getOrPut(lobbyCode) { mutableMapOf() }[accusedPlayerId] =
+        val window =
             CheatReportWindow(
                 expiresAtMillis = nowEpochMillis() + CHEAT_REPORT_WINDOW_MILLIS,
             )
+        cheatReportWindowsByLobby
+            .getOrPut(lobbyCode) { mutableMapOf() }[accusedPlayerId] = window
+        return window
     }
 
     private fun resolveCheatReport(
@@ -2521,23 +2532,34 @@ class MainServerLobbyRoutingService(
         synchronized(cheatReportLock) {
             /*
              * Hier entscheidet ausschließlich der Server, ob eine Meldung korrekt ist.
-             * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch ein
-             * gültiges Cheat-Meldefenster offen ist.
+             * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch
+             * ein gültiges Meldefenster offen ist oder ein Cheat bereits
+             * serverseitig vorgemerkt wurde, aber noch nicht sichtbar platziert ist.
              */
             val window = cheatReportWindowsByLobby[lobbyCode]?.get(accusedPlayerId)
             val now = nowEpochMillis()
-            val correct = window != null && now <= window.expiresAtMillis
+            val pendingCheat =
+                pendingVisibleCheatByLobby[lobbyCode]?.contains(accusedPlayerId) == true
+            val activeWindow =
+                if (window != null && now <= window.expiresAtMillis) {
+                    window
+                } else if (pendingCheat) {
+                    openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
+                } else {
+                    null
+                }
+            val correct = activeWindow != null
 
             if (window != null && !correct) {
                 cheatReportWindowsByLobby[lobbyCode]?.remove(accusedPlayerId)
             }
 
-            if (correct) {
+            if (activeWindow != null) {
                 val key =
                     CheatReportKey(
                         reporterPlayerId = reporterPlayerId,
                         accusedPlayerId = accusedPlayerId,
-                        expiresAtMillis = window.expiresAtMillis,
+                        expiresAtMillis = activeWindow.expiresAtMillis,
                     )
                 require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
                     "ALREADY_REPORTED"
@@ -3790,6 +3812,60 @@ class MainServerLobbyRoutingService(
             return
         }
 
+        broadcastFullSnapshot(
+            lobbyCode = lobbyCode,
+            currentState = currentState,
+            trigger = RoundSnapshotTrigger.TURN_CHANGE_BROADCAST,
+            logContext = "turn change",
+        )
+    }
+
+    /**
+     * Sendet nach Leave/Kick einen vollständigen öffentlichen State.
+     *
+     * PlayerLeft/PlayerKicked-Events aktualisieren nur die Spielerliste. Der
+     * zusätzliche Snapshot stellt sicher, dass alle Clients verlassene
+     * Territorien, Host-Wechsel und private/öffentliche Ableitungen auf derselben
+     * Version sehen.
+     *
+     * @param lobbyCode Lobby, deren Spielerliste geändert wurde.
+     * @param payload Request, der den möglichen Membership-Wechsel ausgelöst hat.
+     */
+    private suspend fun broadcastFullSnapshotAfterMembershipChangeIfNeeded(
+        lobbyCode: LobbyCode,
+        payload: NetworkMessagePayload,
+    ) {
+        if (payload !is LeaveLobbyRequest && payload !is KickPlayerRequest) {
+            return
+        }
+
+        val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        if (!currentState.hasMap() || currentState.status != GameStatus.RUNNING) {
+            return
+        }
+
+        broadcastFullSnapshot(
+            lobbyCode = lobbyCode,
+            currentState = currentState,
+            trigger = RoundSnapshotTrigger.MEMBERSHIP_CHANGE_BROADCAST,
+            logContext = "membership change",
+        )
+    }
+
+    /**
+     * Baut, prüft und sendet einen öffentlichen Vollsnapshot.
+     *
+     * @param lobbyCode Lobby, an deren Mitglieder der Snapshot gesendet wird.
+     * @param currentState bereits geladener, aktueller GameState.
+     * @param trigger Diagnosemarker für den Snapshot-History-Buffer.
+     * @param logContext kurzer Kontext für das technische Server-Log.
+     */
+    private suspend fun broadcastFullSnapshot(
+        lobbyCode: LobbyCode,
+        currentState: GameState,
+        trigger: RoundSnapshotTrigger,
+        logContext: String,
+    ) {
         val payload = publicGameStateBuilder.buildSnapshotBroadcast(currentState)
         val encodedPayloadSize =
             runCatching { requirePublicStatePayloadWithinLimit(payload) }
@@ -3807,10 +3883,11 @@ class MainServerLobbyRoutingService(
                     throw cause
                 }
         logger.info(
-            "Public snapshot broadcast: lobbyCode={} playerId={} stateVersion={} " +
+            "Public snapshot broadcast: context={} lobbyCode={} playerId={} stateVersion={} " +
                 "turnCount={} mapHash={} payloadBytes={}",
+            logContext,
             lobbyCode.value,
-            currentTurnState.activePlayerId.value,
+            payload.turnState.activePlayerId.value,
             payload.stateVersion,
             payload.turnState.turnCount,
             payload.determinism.mapHash,
@@ -3823,7 +3900,7 @@ class MainServerLobbyRoutingService(
         roundHistoryBuffer(lobbyCode).recordSnapshot(
             roundIndex = payload.turnState.turnCount,
             stateVersion = payload.stateVersion,
-            trigger = RoundSnapshotTrigger.TURN_CHANGE_BROADCAST,
+            trigger = trigger,
         )
         persistenceCallbacks.onSnapshotBroadcast(
             currentState = currentState,

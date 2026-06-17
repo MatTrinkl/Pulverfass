@@ -36,7 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-private const val MIN_LOAD_GAME_SCREEN_MILLIS = 1_600L
+private const val MIN_LOAD_GAME_SCREEN_MILLIS = 900L
 
 /**
  * Lädt die Kartenassets vor dem eigentlichen Spielscreen.
@@ -44,9 +44,9 @@ private const val MIN_LOAD_GAME_SCREEN_MILLIS = 1_600L
  * Der fachliche GameState kommt bereits über den wiederverwendeten
  * [at.aau.pulverfass.app.lobby.LobbyController].
  *
- * @param minDisplayTimeMillis minimale sichtbare Dauer des Ladebildschirms
- * vor der Navigation; Tests setzen den Wert auf `0`, damit keine künstliche
- * Wartezeit nötig ist
+ * @param minDisplayTimeMillis kurze Mindestdauer des Ladebildschirms nach dem
+ * dynamischen Asset-Preload; Tests setzen den Wert auf `0`, damit keine
+ * künstliche Wartezeit nötig ist
  */
 @Composable
 fun LoadGameScreen(

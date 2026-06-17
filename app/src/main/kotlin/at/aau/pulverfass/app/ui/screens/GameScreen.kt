@@ -184,6 +184,7 @@ private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
 private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 4_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
+private const val ATTACK_RESULT_VISIBLE_MILLIS = 5_000L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
 private const val CHEAT_LIGHT_COVERED_LUX = 5f
 
@@ -699,8 +700,8 @@ internal fun GameScreenContent(
                             Brush.radialGradient(
                                 colorStops =
                                     arrayOf(
-                                        0.62f to Color.Transparent,
-                                        1f to Color.Black.copy(alpha = 0.62f),
+                                        0.76f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.26f),
                                     ),
                             ),
                         ),
@@ -2112,10 +2113,23 @@ private fun BoxScope.AttackPanelHost(
     state: AttackPanelHostState,
     actions: AttackPanelHostActions,
 ) {
+    if (state.showResult) {
+        val bottomPadding =
+            if (state.selection == null) {
+                BottomBarHeight + 8.dp
+            } else {
+                BottomBarHeight + 164.dp
+            }
+        AttackResultHost(
+            result = state.uiState.attackState.latestResult,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomPadding),
+        )
+    }
+
     if (state.selection == null) {
-        if (state.showResult) {
-            AttackResultHost(result = state.uiState.attackState.latestResult)
-        }
         return
     }
 
@@ -2204,17 +2218,35 @@ private fun BoxScope.FortifyPanelHost(
     )
 }
 
+/**
+ * Zeigt das letzte Kampfergebnis nur temporär.
+ *
+ * @param result neuestes vom Server bestätigtes Kampfergebnis.
+ * @param modifier Position des Panels über Bottom-Bar oder Angriffspanel.
+ */
 @Composable
-private fun BoxScope.AttackResultHost(result: AttackResultUiState?) {
-    if (result == null) {
-        return
+private fun AttackResultHost(
+    result: AttackResultUiState?,
+    modifier: Modifier = Modifier,
+) {
+    var visibleResult by remember { mutableStateOf<AttackResultUiState?>(null) }
+
+    LaunchedEffect(result?.attackId) {
+        if (result == null) {
+            visibleResult = null
+            return@LaunchedEffect
+        }
+        visibleResult = result
+        delay(ATTACK_RESULT_VISIBLE_MILLIS)
+        if (visibleResult?.attackId == result.attackId) {
+            visibleResult = null
+        }
     }
+
+    val displayedResult = visibleResult ?: return
     AttackResultPanel(
-        result = result,
-        modifier =
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = BottomBarHeight + 8.dp),
+        result = displayedResult,
+        modifier = modifier,
     )
 }
 
@@ -2611,26 +2643,32 @@ private fun PhaseHeader(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier,
+        modifier =
+            modifier
+                .width(232.dp)
+                .height(PhaseImageHeight),
         contentAlignment = Alignment.Center,
     ) {
         Image(
             painter = painterResource(id = R.drawable.hud_phase_badge),
             contentDescription = null,
             contentScale = ContentScale.Fit,
-            modifier = Modifier.height(PhaseImageHeight),
+            modifier = Modifier.matchParentSize(),
         )
         Text(
             text = stringResource(id = phase.labelRes()),
             modifier =
                 Modifier
+                    .fillMaxWidth()
                     .testTag("game_phase_value")
-                    .padding(horizontal = 18.dp),
+                    .padding(horizontal = 28.dp),
             style = MaterialTheme.typography.titleSmall,
             fontSize = 16.7.sp,
             color = PhaseHeaderTextColor,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -2763,9 +2801,9 @@ private fun PlayerSidebarRow(
 
     /*
      * Hochwertiger, gleichmäßiger Eintrag mit klarer Hierarchie: Avatar, Name
-     * (+ Host-Marker) und Verbindungs-Statuspunkt sitzen als zentrierte Gruppe in
-     * der Zeile -- mit bewusst großzügigem Abstand vor dem Statuspunkt, der aber
-     * mittig bleibt. Eine konstante Mindesthöhe sorgt für ruhige, gleich hohe
+     * (+ Host-Marker) und Verbindungs-Statuspunkt teilen sich eine feste Zeile.
+     * Der Name darf nie umbrechen, sondern nutzt Ellipsis im freien Restplatz.
+     * Eine konstante Mindesthöhe sorgt für ruhige, gleich hohe
      * Zeilen. Der aktive Spieler wird nicht mehr durch Rahmen/Tint, sondern
      * ausschließlich durch das aktive Spieler-Marker-Icon links gekennzeichnet.
      */
@@ -2777,35 +2815,43 @@ private fun PlayerSidebarRow(
                 .heightIn(min = 52.dp)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.Start,
     ) {
-        if (isActive) {
-            Image(
-                painter = painterResource(id = R.drawable.hud_active_player_marker),
-                contentDescription = null,
-                modifier = Modifier.size(width = 18.dp, height = 20.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier.size(width = 26.dp, height = 20.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (isActive) {
+                Image(
+                    painter = painterResource(id = R.drawable.hud_active_player_marker),
+                    contentDescription = null,
+                    modifier = Modifier.size(width = 18.dp, height = 20.dp),
+                )
+            }
         }
         PlayerAvatar(player = player, size = 36.dp)
         Spacer(modifier = Modifier.width(10.dp))
         Column(
+            modifier =
+                Modifier
+                    .weight(1f, fill = true)
+                    .padding(end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
                 text = player.name,
-                modifier = Modifier.widthIn(max = 100.dp),
+                modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.labelLarge,
                 color = if (isActive) HudAccentColor else HudContentColor,
                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
             if (player.isHost) {
                 HostIndicator()
             }
         }
-        Spacer(modifier = Modifier.width(22.dp))
         ConnectionStatusIndicator(
             status = player.connectionStatus,
             modifier =

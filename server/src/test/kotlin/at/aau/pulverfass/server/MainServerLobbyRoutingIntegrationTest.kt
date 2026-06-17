@@ -33,6 +33,7 @@ import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
@@ -1465,11 +1466,18 @@ class MainServerLobbyRoutingIntegrationTest {
                             session = nextSessionAndConnection.first,
                             maxMessages = 10,
                         )
+                    val membershipSnapshot =
+                        receivePayloadOfType<GameStateSnapshotBroadcast>(
+                            session = nextSessionAndConnection.first,
+                            maxMessages = 10,
+                        )
 
                     assertEquals(nextPlayer, grantedReinforcements.playerId)
                     assertTrue(grantedReinforcements.amount >= 3)
                     assertEquals(nextPlayer, turnUpdate.activePlayerId)
                     assertEquals(TurnPhase.REINFORCEMENTS, turnUpdate.turnPhase)
+                    assertEquals(nextPlayer, membershipSnapshot.turnState.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, membershipSnapshot.turnState.turnPhase)
 
                     waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 2)
                     val updatedState =

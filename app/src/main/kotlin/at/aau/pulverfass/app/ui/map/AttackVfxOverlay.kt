@@ -40,14 +40,14 @@ private const val BURST_DURATION_MS = 500
 private const val LABEL_DELAY_MS = 150
 private const val LABEL_DURATION_MS = 700
 
-private val BurstMaxRadius = 42.dp
+private val BurstMaxRadius = 34.dp
 private val LineWidth = 3.dp
 private val LabelRiseDistance = 34.dp
 private val LabelSideOffset = 18.dp
 
 /** Maße und Farben des vollständig im Code gezeichneten Explosions-Bursts. */
-private val BurstRingWidth = 3.dp
-private val BurstSparkRadius = 3.dp
+private val BurstRingWidth = 2.dp
+private val BurstSparkRadius = 2.dp
 private const val BURST_SPARK_COUNT = 8
 private val BurstCoreColor = Color(0xFFFFF3E0)
 private val BurstEdgeColor = Color(0xFFFF7043)
@@ -300,8 +300,8 @@ private fun DrawScope.drawClashBurst(
             Brush.radialGradient(
                 colors =
                     listOf(
-                        BurstCoreColor.copy(alpha = fade),
-                        BurstEdgeColor.copy(alpha = fade * 0.5f),
+                        BurstCoreColor.copy(alpha = fade * 0.36f),
+                        BurstEdgeColor.copy(alpha = fade * 0.18f),
                         Color.Transparent,
                     ),
                 center = midpoint,
@@ -314,7 +314,7 @@ private fun DrawScope.drawClashBurst(
     // Schockwelle: dünner werdender Ring, der nach außen läuft.
     val ringRadius = maxRadius * (0.3f + progress)
     drawCircle(
-        color = BurstCoreColor.copy(alpha = fade * 0.9f),
+        color = BurstCoreColor.copy(alpha = fade * 0.45f),
         radius = ringRadius,
         center = midpoint,
         style = Stroke(width = (BurstRingWidth.toPx() * scale) * (1f - progress * 0.5f)),
@@ -329,7 +329,7 @@ private fun DrawScope.drawClashBurst(
             val sparkCenter =
                 midpoint + Offset(cos(angle), sin(angle)) * sparkDistance
             drawCircle(
-                color = BurstSparkColor.copy(alpha = fade),
+                color = BurstSparkColor.copy(alpha = fade * 0.55f),
                 radius = sparkRadius,
                 center = sparkCenter,
             )
