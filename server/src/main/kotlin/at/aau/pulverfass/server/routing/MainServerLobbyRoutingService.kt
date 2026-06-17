@@ -1327,6 +1327,32 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    /**
+     * Entscheidet, ob nach dem Routing noch Basisverstärkungen vergeben werden müssen.
+     *
+     * Start, Verlassen und Kick können eine laufende Partie direkt in eine neue
+     * Verstärkungsphase bringen. Ohne diese Prüfung würde der nächste aktive Spieler
+     * zwar die Phase sehen, aber keine offenen Truppen zum Platzieren erhalten.
+     *
+     * @param lobbyCode Code der Lobby, deren aktueller Zustand nach dem Routing geprüft wird.
+     * @param payload Verarbeitete Anfrage, die den möglichen Phasenwechsel ausgelöst hat.
+     * @return `true`, wenn der nachgelagerte Verstärkungsgrant ausgeführt werden soll.
+     */
+    private fun shouldGrantBaseReinforcementsAfterRouting(
+        lobbyCode: LobbyCode,
+        payload: NetworkMessagePayload,
+    ): Boolean =
+        when (payload) {
+            is StartGameRequest -> true
+            is LeaveLobbyRequest,
+            is KickPlayerRequest,
+            -> {
+                val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return false
+                currentState.status == GameStatus.RUNNING && currentState.hasMap()
+            }
+            else -> false
+        }
+
     private suspend fun routeStartPlayerSetRequest(request: DecodedNetworkRequest) {
         val payload = request.payload as StartPlayerSetRequest
         val previousTurnState = currentTurnState(payload.lobbyCode)
@@ -1489,12 +1515,12 @@ class MainServerLobbyRoutingService(
                     )
                 }
                 if (lobbyCode != null) {
-                    if (request.payload is StartGameRequest) {
+                    if (shouldGrantBaseReinforcementsAfterRouting(lobbyCode, request.payload)) {
                         grantBaseReinforcementsOnPhaseStart(
                             lobbyCode = lobbyCode,
                             previousTurnState = previousTurnState,
                             context = request.context,
-                            grantForGameStart = true,
+                            grantForGameStart = request.payload is StartGameRequest,
                         )
                     }
                     broadcastTurnStateIfChanged(

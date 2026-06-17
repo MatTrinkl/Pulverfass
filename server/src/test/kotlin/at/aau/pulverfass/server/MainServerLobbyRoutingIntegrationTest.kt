@@ -38,6 +38,7 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
@@ -1363,6 +1364,127 @@ class MainServerLobbyRoutingIntegrationTest {
                     sessionA1AndConnection.first.close()
                     sessionA2AndConnection.first.close()
                     sessionB1AndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `active leave in running game grants reinforcements to next player`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("LF12")
+            val leavingPlayer = PlayerId(1)
+            val nextPlayer = PlayerId(2)
+            val thirdPlayer = PlayerId(3)
+            val players = listOf(leavingPlayer, nextPlayer, thirdPlayer)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = players,
+                        activePlayerId = leavingPlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val leavingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = leavingPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val nextSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = nextPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val thirdSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = thirdPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    leavingSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+
+                    assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
+                        receivePayload(leavingSessionAndConnection.first),
+                    )
+                    val grantedReinforcements =
+                        receiveReinforcementsGrantedEvent(nextSessionAndConnection.first)
+                    val turnUpdate =
+                        receivePayloadOfType<TurnStateUpdatedEvent>(
+                            session = nextSessionAndConnection.first,
+                            maxMessages = 10,
+                        )
+
+                    assertEquals(nextPlayer, grantedReinforcements.playerId)
+                    assertTrue(grantedReinforcements.amount >= 3)
+                    assertEquals(nextPlayer, turnUpdate.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, turnUpdate.turnPhase)
+
+                    waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 2)
+                    val updatedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("Expected lobby state after leave.")
+                    assertEquals(nextPlayer, updatedState.activePlayer)
+                    assertEquals(
+                        grantedReinforcements.amount,
+                        updatedState.pendingReinforcementsFor(nextPlayer),
+                    )
+                    assertEquals(GameStatus.RUNNING, updatedState.status)
+
+                    leavingSessionAndConnection.first.close()
+                    nextSessionAndConnection.first.close()
+                    thirdSessionAndConnection.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -2762,6 +2884,36 @@ class MainServerLobbyRoutingIntegrationTest {
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload = receiveRelevantTestPayload(session)
 
+    /**
+     * Liest den Verstärkungsgrant aus den Game-State-Deltas einer Testverbindung.
+     *
+     * Leave- und Kick-Routen liefern die eigentliche Verstärkungsinformation nicht
+     * als direkte Antwort, sondern als synchronisiertes Delta an die betroffenen
+     * Spieler. Dieser Helper hält den Test dadurch an der echten Serverkommunikation.
+     *
+     * @param session WebSocket-Verbindung des Spielers, der die Verstärkungen erhalten soll.
+     * @param maxMessages Maximale Anzahl eingehender Nachrichten, die nach dem Delta durchsucht wird.
+     * @return Gefundenes Verstärkungsereignis für den neuen aktiven Spieler.
+     */
+    private suspend fun receiveReinforcementsGrantedEvent(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+        maxMessages: Int = 10,
+    ): ReinforcementsGrantedEvent {
+        repeat(maxMessages) {
+            val payload = receiveAnyPayload(session)
+            if (payload is GameStateDeltaEvent) {
+                val grant =
+                    payload.events
+                        .filterIsInstance<ReinforcementsGrantedEvent>()
+                        .singleOrNull()
+                if (grant != null) {
+                    return grant
+                }
+            }
+        }
+        throw AssertionError("Expected ReinforcementsGrantedEvent within $maxMessages messages.")
+    }
+
     private suspend fun waitUntilProcessed(
         manager: LobbyManager,
         lobbyCode: LobbyCode,
@@ -2846,6 +2998,46 @@ class MainServerLobbyRoutingIntegrationTest {
                 turnOrder = players,
                 status = GameStatus.WAITING_FOR_PLAYERS,
             )
+
+    /**
+     * Erstellt einen laufenden Spielzustand für Routing-Tests ohne vollständigen Lobby-Flow.
+     *
+     * Der Zustand enthält eine Karte, feste Zugreihenfolge und verteilte Gebiete,
+     * damit ein Leave während eines echten Spielzugs denselben Phasenwechsel auslöst
+     * wie in einer produktiven Partie.
+     *
+     * @param lobbyCode Code der Testlobby, die den Zustand erhält.
+     * @param players Spieler in der gewünschten Zugreihenfolge.
+     * @param activePlayerId Spieler, der beim Startzustand am Zug ist.
+     * @param turnPhase Phase, in der der aktive Spieler den Test beginnt.
+     * @return Laufender Spielzustand mit Karte und angreifbaren Gebieten.
+     */
+    private fun createRunningGameState(
+        lobbyCode: LobbyCode,
+        players: List<PlayerId>,
+        activePlayerId: PlayerId,
+        turnPhase: TurnPhase,
+    ): GameState =
+        GameState
+            .initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = players,
+                playerDisplayNames = players.associateWith { "Player ${it.value}" },
+            ).copy(
+                lobbyOwner = players.firstOrNull(),
+                activePlayer = activePlayerId,
+                turnOrder = players,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = activePlayerId,
+                        turnPhase = turnPhase,
+                        turnCount = 1,
+                        startPlayerId = players.first(),
+                    ),
+                status = GameStatus.RUNNING,
+            ).withAttackableTerritories(players)
 
     private fun createMappedGameState(
         lobbyCode: LobbyCode,

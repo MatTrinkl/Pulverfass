@@ -79,8 +79,6 @@ import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcements
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install

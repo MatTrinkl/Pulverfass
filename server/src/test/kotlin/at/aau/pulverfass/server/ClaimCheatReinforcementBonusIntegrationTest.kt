@@ -310,25 +310,13 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
-                    // Ich gehe einmal bis zur nächsten Runde, damit die 0-Truppen-Strafe greift.
-                    advanceTurn(
-                        cheaterSession.first,
-                        lobbyCode,
-                        playerOne,
-                        TurnPhase.REINFORCEMENTS,
+                    advanceUntilCheaterReinforcementPenaltyApplies(
+                        cheaterSession = cheaterSession.first,
+                        reporterSession = reporterSession.first,
+                        lobbyCode = lobbyCode,
+                        cheaterId = playerOne,
+                        reporterId = playerTwo,
                     )
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.ATTACK)
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.FORTIFY)
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.DRAW_CARD)
-                    advanceTurn(
-                        reporterSession.first,
-                        lobbyCode,
-                        playerTwo,
-                        TurnPhase.REINFORCEMENTS,
-                    )
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.ATTACK)
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.FORTIFY)
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.DRAW_CARD)
 
                     val penalizedState =
                         lobbyManager.getLobby(lobbyCode)?.currentState()
@@ -1062,6 +1050,34 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             ),
         )
         assertEquals(TurnAdvanceResponse(lobbyCode), receivePayloadOf<TurnAdvanceResponse>(session))
+    }
+
+    /**
+     * Führt die Runde bis zur nächsten Verstärkungsphase des Cheaters fort.
+     *
+     * Fortify beendet den Zug direkt und setzt den nächsten Spieler in die
+     * Verstärkungsphase. Die 0-Truppen-Strafe ist daher erst sichtbar, nachdem
+     * der meldende Spieler seinen vollständigen Zug beendet hat.
+     *
+     * @param cheaterSession WebSocket-Verbindung des Spielers, dessen Cheat bestätigt wurde.
+     * @param reporterSession WebSocket-Verbindung des Spielers, der den Cheat korrekt gemeldet hat.
+     * @param lobbyCode Code der laufenden Lobby, in der die Phasen weitergeschaltet werden.
+     * @param cheaterId Spieler, dessen nächste Verstärkungsphase auf 0 Truppen gesetzt werden soll.
+     * @param reporterId Spieler, der vor der Strafprüfung seinen vollständigen Zug beendet.
+     */
+    private suspend fun advanceUntilCheaterReinforcementPenaltyApplies(
+        cheaterSession: DefaultClientWebSocketSession,
+        reporterSession: DefaultClientWebSocketSession,
+        lobbyCode: LobbyCode,
+        cheaterId: PlayerId,
+        reporterId: PlayerId,
+    ) {
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.REINFORCEMENTS)
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.ATTACK)
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.FORTIFY)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.REINFORCEMENTS)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.ATTACK)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.FORTIFY)
     }
 
     private suspend inline fun <reified T> receivePayloadOf(
