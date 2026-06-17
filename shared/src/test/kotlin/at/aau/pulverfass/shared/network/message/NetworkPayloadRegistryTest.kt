@@ -38,6 +38,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -59,6 +60,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
@@ -79,6 +81,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -644,6 +648,50 @@ class NetworkPayloadRegistryTest {
         assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE, responseType)
         assertEquals(response, responseDeserialized)
         assertEquals(MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE, errorType)
+        assertEquals(error, errorDeserialized)
+    }
+
+    @Test
+    fun `should resolve message type and serialization for report cheat messages`() {
+        val request =
+            ReportCheatRequest(
+                lobbyCode = LobbyCode("RC12"),
+                reporterPlayerId = PlayerId(2),
+                accusedPlayerId = PlayerId(1),
+            )
+        val response =
+            ReportCheatResponse(
+                lobbyCode = LobbyCode("RC12"),
+                accusedPlayerId = PlayerId(1),
+                correct = true,
+                modifierDelta = 3,
+            )
+        val error =
+            ReportCheatErrorResponse(
+                code = ReportCheatErrorCode.ALREADY_REPORTED,
+                reason = "Dieser Cheat wurde bereits gemeldet.",
+            )
+
+        val requestType = NetworkPayloadRegistry.messageTypeFor(request)
+        val requestSerialized = NetworkPayloadRegistry.serializePayload(request)
+        val requestDeserialized =
+            NetworkPayloadRegistry.deserializePayload(requestType, requestSerialized)
+
+        val responseType = NetworkPayloadRegistry.messageTypeFor(response)
+        val responseSerialized = NetworkPayloadRegistry.serializePayload(response)
+        val responseDeserialized =
+            NetworkPayloadRegistry.deserializePayload(responseType, responseSerialized)
+
+        val errorType = NetworkPayloadRegistry.messageTypeFor(error)
+        val errorSerialized = NetworkPayloadRegistry.serializePayload(error)
+        val errorDeserialized =
+            NetworkPayloadRegistry.deserializePayload(errorType, errorSerialized)
+
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_REQUEST, requestType)
+        assertEquals(request, requestDeserialized)
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_RESPONSE, responseType)
+        assertEquals(response, responseDeserialized)
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE, errorType)
         assertEquals(error, errorDeserialized)
     }
 

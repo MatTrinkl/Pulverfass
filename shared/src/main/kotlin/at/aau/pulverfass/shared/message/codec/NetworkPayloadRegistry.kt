@@ -39,6 +39,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -59,6 +60,7 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
@@ -78,6 +80,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResp
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
@@ -147,6 +150,10 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE,
             ClaimCheatReinforcementBonusErrorResponse::class.java to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE,
+            ReportCheatRequest::class.java to MessageType.LOBBY_REPORT_CHEAT_REQUEST,
+            ReportCheatResponse::class.java to MessageType.LOBBY_REPORT_CHEAT_RESPONSE,
+            ReportCheatErrorResponse::class.java to
+                MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE,
             PendingReinforcementsChangedEvent::class.java to
                 MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
             ReinforcementsGrantedEvent::class.java to
@@ -275,6 +282,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(ClaimCheatReinforcementBonusResponse.serializer()),
             ClaimCheatReinforcementBonusErrorResponse::class.java to
                 encodeWith(ClaimCheatReinforcementBonusErrorResponse.serializer()),
+            ReportCheatRequest::class.java to encodeWith(ReportCheatRequest.serializer()),
+            ReportCheatResponse::class.java to encodeWith(ReportCheatResponse.serializer()),
+            ReportCheatErrorResponse::class.java to
+                encodeWith(ReportCheatErrorResponse.serializer()),
             PendingReinforcementsChangedEvent::class.java to
                 encodeWith(PendingReinforcementsChangedEvent.serializer()),
             ReinforcementsGrantedEvent::class.java to
@@ -410,6 +421,12 @@ internal object NetworkPayloadRegistry {
                 decodeWith(ClaimCheatReinforcementBonusResponse.serializer()),
             MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE to
                 decodeWith(ClaimCheatReinforcementBonusErrorResponse.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_REQUEST to
+                decodeWith(ReportCheatRequest.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_RESPONSE to
+                decodeWith(ReportCheatResponse.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE to
+                decodeWith(ReportCheatErrorResponse.serializer()),
             MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST to
                 decodeWith(PendingReinforcementsChangedEvent.serializer()),
             MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST to

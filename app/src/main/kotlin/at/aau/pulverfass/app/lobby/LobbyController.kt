@@ -52,6 +52,7 @@ import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -69,6 +70,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetRespon
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
@@ -85,6 +87,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.GameStatePrivateGet
 import at.aau.pulverfass.shared.message.lobby.response.error.JoinLobbyErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
@@ -199,7 +202,7 @@ class LobbyController(
             /*
              * Transportevents beschreiben nur Socket-Lifecycle. Fachliche
              * Entscheidungen wie "Reconnect starten" oder "Pending Create senden"
-             * liegen bewusst hier im Controller.
+             * liegen hier im Controller.
              */
             network.transport.events.collect { event ->
                 when (event) {
@@ -330,6 +333,10 @@ class LobbyController(
         if (shouldCheckNextPhase) {
             maybeAdvanceCurrentPhaseAutomatically()
         }
+    }
+
+    fun clearCheatReportNotice() {
+        _state.update { it.copy(cheatReportNoticeText = null) }
     }
 
     /**
@@ -991,6 +998,51 @@ class LobbyController(
             ).onFailure { error ->
                 _state.update {
                     it.copy(errorText = error.message ?: config.errorReinforcementsNotAllowed)
+                }
+            }
+        }
+    }
+
+    fun reportCheat(accusedPlayerId: PlayerId) {
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        val reporterPlayerId = snapshot.ownPlayerId
+        if (lobbyCode == null || reporterPlayerId == null) {
+            _state.update { it.copy(errorText = config.errorPlayerIdMissing) }
+            return
+        }
+        /*
+         * Selbstmeldungen blockiere ich schon in der App. Der Server prüft das
+         * später trotzdem noch einmal, damit manipulierte Requests nicht durchkommen.
+         */
+        if (reporterPlayerId == accusedPlayerId) {
+            _state.update { it.copy(errorText = "Du kannst dich nicht selbst melden.") }
+            return
+        }
+
+        scope.launch {
+            _state.update { it.copy(cheatReportNoticeText = null) }
+            /*
+             * Die App schickt nur, wer wen meldet. Ob die Meldung stimmt,
+             * entscheidet der Server anhand des aktuellen Meldefensters.
+             */
+            sendCommand(
+                command =
+                    LobbyCommand(
+                        key = LobbyCommandKey.REPORT_CHEAT,
+                        payload =
+                            ReportCheatRequest(
+                                lobbyCode = parseLobbyCode(lobbyCode),
+                                reporterPlayerId = reporterPlayerId,
+                                accusedPlayerId = accusedPlayerId,
+                            ),
+                    ),
+                keepPendingUntilResponse = true,
+            ).onFailure { error ->
+                _state.update {
+                    it.copy(
+                        errorText = error.message ?: "Cheat-Meldung konnte nicht gesendet werden.",
+                    )
                 }
             }
         }
@@ -2132,6 +2184,28 @@ class LobbyController(
                     handleJoinLobbyResponse(payload)
                 }
             }
+            is ReportCheatResponse -> {
+                clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                val reportNotice =
+                    if (payload.correct) {
+                        "Deine Meldung war korrekt. Du erhältst in deiner nächsten " +
+                            "Verstärkungsphase +3 Truppen. Der gemeldete Spieler erhält " +
+                            "dann 0 Truppen."
+                    } else {
+                        "Du hast jemanden falsch verdächtigt. In deiner nächsten " +
+                            "Verstärkungsphase werden dir 3 Truppen abgezogen."
+                    }
+                _state.update {
+                    it.copy(
+                        errorText = null,
+                        cheatReportNoticeText = reportNotice,
+                    )
+                }
+            }
+            is ReportCheatErrorResponse -> {
+                clearPendingCommand(LobbyCommandKey.REPORT_CHEAT)
+                updateGameError(payload.reason)
+            }
             is JoinLobbyErrorResponse -> {
                 val isPendingJoin =
                     state.value.pendingCommandKeys.contains(LobbyCommandKey.JOIN_LOBBY)
@@ -2561,7 +2635,7 @@ class LobbyController(
      * Topbar beim aktiven Angreifer bereits auf Fortify springen, bevor die
      * lokale Auto-Skip-Notice sichtbar wird.
      *
-     * Manuelle Bestätigungen werden bewusst ausgeschlossen, weil der Spieler in
+     * Manuelle Bestätigungen werden hier ausgeschlossen, weil der Spieler in
      * diesem Fall selbst auf "Phase beenden" geklickt hat und kein Auto-Popup
      * erwartet.
      *
@@ -2594,7 +2668,7 @@ class LobbyController(
     }
 
     /**
-     * Übernimmt einen im Attack-Delta bewusst zurückgehaltenen Phasenwechsel.
+     * Übernimmt einen im Attack-Delta zurückgehaltenen Phasenwechsel.
      *
      * Der Server kann das Kampfergebnis und den Wechsel auf Fortify im selben
      * Delta liefern. Für den angreifenden Client bleibt die sichtbare Phase
