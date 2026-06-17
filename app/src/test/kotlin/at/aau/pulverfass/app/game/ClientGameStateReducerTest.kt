@@ -1038,15 +1038,15 @@ class ClientGameStateReducerTest {
                                     defendDice = 2,
                                     attackerRolls = listOf(6, 3, 1),
                                     defenderRolls = listOf(5, 2),
-                                    attackerLosses = 1,
+                                    attackerLosses = 0,
                                     defenderLosses = 1,
-                                    attackerRemaining = 4,
+                                    attackerRemaining = 5,
                                     defenderRemaining = 2,
                                 ),
                                 TerritoryTroopsChangedEvent(
                                     lobbyCode = lobbyCode,
                                     territoryId = sourceId,
-                                    troopCount = 4,
+                                    troopCount = 5,
                                     stateVersion = 2,
                                 ),
                                 TerritoryTroopsChangedEvent(
@@ -1067,10 +1067,11 @@ class ClientGameStateReducerTest {
         assertTrue(result.attackState.autoAttack.isEnabled)
         assertFalse(result.attackState.autoAttack.isAwaitingResult)
         assertEquals(null, result.attackState.autoAttack.pendingRequestId)
+        assertEquals(3, result.attackState.autoAttack.intent?.attackTroops)
     }
 
     @Test
-    fun `auto attack result clamps follow up troops after attacker loss`() {
+    fun `auto attack result stops after attacker loss and keeps manual attack ready`() {
         val sourceId = TerritoryId("brasilien")
         val targetId = TerritoryId("argentinien")
         val result =
@@ -1147,11 +1148,13 @@ class ClientGameStateReducerTest {
 
         assertEquals("brazil", result.selectionFromRegionId)
         assertEquals("argentina", result.selectionToRegionId)
+        assertEquals("argentina", result.selectedRegionId)
         assertEquals(2, result.attackState.attackTroops)
         assertEquals(2, result.attackState.moveAfterCapture)
-        assertEquals(2, result.attackState.autoAttack.intent?.attackTroops)
-        assertEquals(2, result.attackState.autoAttack.intent?.moveAfterCapture)
+        assertTrue(result.attackState.autoAttack.isEnabled)
+        assertNull(result.attackState.autoAttack.intent)
         assertFalse(result.attackState.autoAttack.isAwaitingResult)
+        assertFalse(result.attackState.autoAttack.isRunning)
     }
 
     @Test
@@ -1622,6 +1625,36 @@ class ClientGameStateReducerTest {
                 .selectedTradeInCardIds
                 .contains(CardId("missing")),
         )
+    }
+
+    @Test
+    fun `card trade requires active player and valid selected set`() {
+        val selectedIds = setOf(CardId("a"), CardId("b"), CardId("c"))
+        val invalidSet =
+            GameUiState(
+                activePlayerId = aliceId,
+                turnPhase = TurnPhase.REINFORCEMENTS,
+                privateHandCards =
+                    listOf(
+                        PrivateHandCardUi(CardId("a"), CardType.A),
+                        PrivateHandCardUi(CardId("b"), CardType.A),
+                        PrivateHandCardUi(CardId("c"), CardType.B),
+                    ),
+                selectedTradeInCardIds = selectedIds,
+            )
+        val validSet =
+            invalidSet.copy(
+                privateHandCards =
+                    listOf(
+                        PrivateHandCardUi(CardId("a"), CardType.A),
+                        PrivateHandCardUi(CardId("b"), CardType.B),
+                        PrivateHandCardUi(CardId("c"), CardType.C),
+                    ),
+            )
+
+        assertFalse(invalidSet.canTradeInCards(aliceId))
+        assertTrue(validSet.canTradeInCards(aliceId))
+        assertFalse(validSet.canTradeInCards(bobId))
     }
 
     @Test

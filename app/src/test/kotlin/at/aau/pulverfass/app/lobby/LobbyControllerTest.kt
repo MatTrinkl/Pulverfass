@@ -75,8 +75,6 @@ import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCod
 import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -720,7 +718,6 @@ class LobbyControllerTest {
             val config = LobbyControllerConfig()
             val seenPayloads = CopyOnWriteArrayList<Any>()
             var placeAttempts = 0
-            var tradeInAttempts = 0
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -911,40 +908,25 @@ class LobbyControllerTest {
                             }
                         }
                         is TradeInCardsRequest -> {
-                            tradeInAttempts += 1
-                            if (tradeInAttempts == 1) {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            TradeInCardsErrorResponse(
-                                                TradeInCardsErrorCode.INVALID_SET,
-                                                "invalid set",
-                                            ),
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerHandUpdatedEvent(
+                                            lobbyCode = lobbyCode,
+                                            recipientPlayerId = playerId,
+                                            stateVersion = 3,
+                                            handCards = emptyList(),
                                         ),
                                     ),
-                                )
-                            } else {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
-                                    ),
-                                )
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            PlayerHandUpdatedEvent(
-                                                lobbyCode = lobbyCode,
-                                                recipientPlayerId = playerId,
-                                                stateVersion = 3,
-                                                handCards = emptyList(),
-                                            ),
-                                        ),
-                                    ),
-                                )
-                            }
+                                ),
+                            )
                         }
                         is ConfirmReinforcementsDoneRequest -> {
                             outgoing.sendPayload(ConfirmReinforcementsDoneResponse(lobbyCode))
@@ -1021,12 +1003,7 @@ class LobbyControllerTest {
 
                 cardIds.forEach(controller::toggleTradeInCard)
                 controller.tradeInCards()
-                waitUntil {
-                    controller.state.value.errorText ==
-                        "Die gewählten Karten bilden kein gültiges Set."
-                }
-                controller.tradeInCards()
-                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 2 }
+                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 1 }
                 assertEquals(
                     cardIds.toSet(),
                     seenPayloads.filterIsInstance<TradeInCardsRequest>().last().cardIds.toSet(),
@@ -1332,7 +1309,7 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `auto attack toggle arms and continues after attacker loses first battle`() {
+    fun `auto attack toggle arms and stops after attacker loses first battle`() {
         runBlocking {
             val lobbyCode = LobbyCode("AA12")
             val playerId = PlayerId(1)
@@ -1543,30 +1520,24 @@ class LobbyControllerTest {
                 assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
                 assertTrue(controller.state.value.gameState.attackState.autoAttack.isAwaitingResult)
                 assertTrue(LobbyCommandKey.ATTACK !in controller.state.value.pendingCommandKeys)
-                val firstResultReleasedAt = System.currentTimeMillis()
                 releaseFirstDelta.complete(Unit)
-                /*
-                 * Auf den zweiten Angriff warten und die verstrichene Zeit als
-                 * Untergrenze prüfen. Eine "noch nicht gefeuert"-Prüfung zu einem festen
-                 * Zeitpunkt rennt gegen den 500-ms-Timer und flackert unter Last.
-                 */
-                waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
-                assertTrue(System.currentTimeMillis() - firstResultReleasedAt >= 500L)
                 waitUntil {
-                    controller.state.value.gameState.attackState.autoAttack.statusText ==
-                        LobbyControllerConfig().autoAttackStoppedCaptured
+                    controller.state.value.gameState.attackState.latestResult != null
                 }
+                delay(700)
 
                 val requests = seenPayloads.filterIsInstance<AttackRequest>()
-                assertEquals(2, requests.size)
-                assertTrue(requests.all { it.requestId?.startsWith("auto-attack-") == true })
-                assertEquals(listOf(3, 2), requests.map { it.attackTroops })
-                assertEquals(listOf(3, 2), requests.map { it.moveAfterCapture })
+                assertEquals(1, requests.size)
+                assertTrue(requests.single().requestId?.startsWith("auto-attack-") == true)
+                assertEquals(3, requests.single().attackTroops)
+                assertEquals(3, requests.single().moveAfterCapture)
                 assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
                 assertFalse(controller.state.value.gameState.attackState.autoAttack.isRunning)
-                assertTrue(
-                    controller.state.value.gameState.attackState.latestResult?.captured == true,
-                )
+                assertNull(controller.state.value.gameState.attackState.autoAttack.intent)
+                assertEquals("brazil", controller.state.value.gameState.selectionFromRegionId)
+                assertEquals("argentina", controller.state.value.gameState.selectionToRegionId)
+                assertEquals(2, controller.state.value.gameState.attackState.attackTroops)
+                assertEquals(2, controller.state.value.gameState.attackState.moveAfterCapture)
             } finally {
                 controller.close()
                 server.close()

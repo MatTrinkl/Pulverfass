@@ -854,42 +854,76 @@ object ClientGameStateReducer {
                 occupyingTroopCount = event.occupyingTroopCount,
             )
         val updatedAutoAttack = attackState.autoAttack.afterAttackResolved(event)
-        val maximumFollowUpAttackTroops = event.attackerRemaining - 1
-        val keepAutoSelection =
+        val shouldStopAutoAttackAfterLoss =
             updatedAutoAttack.isEnabled &&
                 updatedAutoAttack.intent?.matches(event) == true &&
+                event.attackerLosses > 0
+        val nextAutoAttack =
+            if (shouldStopAutoAttackAfterLoss) {
+                updatedAutoAttack.afterAttackerLoss()
+            } else {
+                updatedAutoAttack
+            }
+        val maximumFollowUpAttackTroops = event.attackerRemaining - 1
+        val canKeepSelection =
+            nextAutoAttack.isEnabled &&
+                (
+                    nextAutoAttack.intent?.matches(event) == true ||
+                        shouldStopAutoAttackAfterLoss
+                ) &&
                 !latestResult.captured &&
                 maximumFollowUpAttackTroops >= MIN_ATTACK_TROOPS
+        val canContinueAutoAttack =
+            canKeepSelection &&
+                !shouldStopAutoAttackAfterLoss &&
+                nextAutoAttack.intent != null
         val updatedAttackState =
-            if (keepAutoSelection) {
-                attackState
-                    .copy(
+            when {
+                canContinueAutoAttack ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = true,
+                        )
+                canKeepSelection ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = false,
+                        )
+                else ->
+                    AttackUiState(
                         latestResult = latestResult,
-                        autoAttack = updatedAutoAttack,
-                    ).withClampedFollowUpAttack(maximumFollowUpAttackTroops)
-            } else {
-                AttackUiState(
-                    latestResult = latestResult,
-                    autoAttack = updatedAutoAttack,
-                )
+                        autoAttack = nextAutoAttack,
+                    )
             }
 
         return copy(
-            selectedRegionId = if (keepAutoSelection) selectionToRegionId else null,
-            selectionFromRegionId = if (keepAutoSelection) selectionFromRegionId else null,
-            selectionToRegionId = if (keepAutoSelection) selectionToRegionId else null,
+            selectedRegionId = if (canKeepSelection) selectionToRegionId else null,
+            selectionFromRegionId = if (canKeepSelection) selectionFromRegionId else null,
+            selectionToRegionId = if (canKeepSelection) selectionToRegionId else null,
             selectionMessage = null,
             attackState = updatedAttackState,
         )
     }
 
     /**
-     * Klemmt UI-Werte und Auto-Angriff-Absicht auf die aktuelle Quellgebietsstärke.
+     * Klemmt UI-Werte und optional die Auto-Angriff-Absicht auf die aktuelle Quellgebietsstärke.
      *
      * @param maximumAttackTroops höchste aktuell erlaubte Angriffsstärke
+     * @param keepAutoIntent ob eine passende Auto-Angriff-Absicht erhalten bleibt
      * @return Angriffsstate mit sofort wieder gültigen Slider- und Auto-Angriff-Werten
      */
-    private fun AttackUiState.withClampedFollowUpAttack(maximumAttackTroops: Int): AttackUiState {
+    private fun AttackUiState.withClampedFollowUpAttack(
+        maximumAttackTroops: Int,
+        keepAutoIntent: Boolean,
+    ): AttackUiState {
         val clampedAttackTroops =
             attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
         val clampedMoveAfterCapture =
@@ -897,24 +931,30 @@ object ClientGameStateReducer {
                 minimumOccupyingTroopsForAttack(clampedAttackTroops),
                 clampedAttackTroops,
             )
-        val clampedIntent =
-            autoAttack.intent?.let { intent ->
-                val intentAttackTroops =
-                    intent.attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
-                intent.copy(
-                    attackTroops = intentAttackTroops,
-                    moveAfterCapture =
-                        intent.moveAfterCapture.coerceIn(
-                            minimumOccupyingTroopsForAttack(intentAttackTroops),
-                            intentAttackTroops,
-                        ),
-                )
+        val nextAutoAttack =
+            if (keepAutoIntent) {
+                val clampedIntent =
+                    autoAttack.intent?.let { intent ->
+                        val intentAttackTroops =
+                            intent.attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+                        intent.copy(
+                            attackTroops = intentAttackTroops,
+                            moveAfterCapture =
+                                intent.moveAfterCapture.coerceIn(
+                                    minimumOccupyingTroopsForAttack(intentAttackTroops),
+                                    intentAttackTroops,
+                                ),
+                        )
+                    }
+                autoAttack.copy(intent = clampedIntent)
+            } else {
+                autoAttack.afterAttackerLoss()
             }
 
         return copy(
             attackTroops = clampedAttackTroops,
             moveAfterCapture = clampedMoveAfterCapture,
-            autoAttack = autoAttack.copy(intent = clampedIntent),
+            autoAttack = nextAutoAttack,
         )
     }
 
@@ -931,6 +971,15 @@ object ClientGameStateReducer {
         } else {
             this
         }
+
+    private fun AutoAttackUiState.afterAttackerLoss(): AutoAttackUiState =
+        copy(
+            intent = null,
+            isAwaitingResult = false,
+            pendingRequestId = null,
+            statusText = null,
+            errorText = null,
+        )
 
     private fun AttackUiState.afterFullSnapshot(turnPhase: TurnPhase): AttackUiState =
         if (turnPhase == TurnPhase.ATTACK) {

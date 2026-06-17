@@ -1509,21 +1509,26 @@ private fun privateHandPanelState(
     isConnected: Boolean,
     isReinforcementCommandPending: Boolean,
     pendingCommandKeys: Set<LobbyCommandKey>,
-): PrivateHandPanelState =
-    PrivateHandPanelState(
+): PrivateHandPanelState {
+    val canUseTradeControls =
+        uiState.canUseGameActions(localPlayerId, isConnected) &&
+            uiState.turnPhase == TurnPhase.REINFORCEMENTS
+
+    return PrivateHandPanelState(
         playerName = player.name,
         handCards = uiState.handCards,
         privateHandCards = uiState.privateHandCards,
         selectedTradeInCardIds = uiState.selectedTradeInCardIds,
-        showTradeControls = uiState.turnPhase == TurnPhase.REINFORCEMENTS,
+        showTradeControls = canUseTradeControls,
         canSelectTradeCards =
-            uiState.canUseGameActions(localPlayerId, isConnected) &&
+            canUseTradeControls &&
                 !isReinforcementCommandPending,
         canTradeInCards =
             uiState.canTradeInCards(localPlayerId, isConnected) &&
                 !isReinforcementCommandPending,
         isTradePending = pendingCommandKeys.contains(LobbyCommandKey.TRADE_IN_CARDS),
     )
+}
 
 /**
  * Rendert das Verstärkungspanel nur, wenn ein gültiges Zielgebiet sichtbar ist.

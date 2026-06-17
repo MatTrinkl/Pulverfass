@@ -4,6 +4,7 @@ import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.state.CardSetValidator
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
@@ -143,19 +144,33 @@ data class GameUiState(
             reinforcementState.pendingAmount == 0
 
     /**
-     * Prüft, ob drei private Karten zum Eintausch ausgewählt wurden.
+     * Prüft, ob drei eigene private Karten ein gültiges Eintausch-Set bilden.
      *
-     * Ob die konkrete Kombination gültig oder ein erzwungener Trade nötig ist,
-     * entscheidet weiterhin der Server. Die UI beschränkt lediglich die
-     * Auswahlmenge, damit kein offensichtlich ungültiger Request entsteht.
+     * Die Serverprüfung bleibt autoritativ. Die UI sperrt den Button aber
+     * bereits bei ungültigen lokalen Kombinationen, damit kein sicher
+     * abgelehnter Request entsteht.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn der aktive Spieler ein gültiges Dreier-Set ausgewählt hat
      */
     fun canTradeInCards(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
-    ): Boolean =
-        canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
-            turnPhase == TurnPhase.REINFORCEMENTS &&
-            selectedTradeInCardIds.size == 3
+    ): Boolean {
+        if (
+            !canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) ||
+            turnPhase != TurnPhase.REINFORCEMENTS ||
+            selectedTradeInCardIds.size != 3
+        ) {
+            return false
+        }
+
+        val selectedCards =
+            privateHandCards.filter { card -> card.cardId in selectedTradeInCardIds }
+        return selectedCards.size == 3 &&
+            CardSetValidator.isValidSet(selectedCards.map { card -> card.type })
+    }
 
     /**
      * Prüft, ob ein Angriff in der aktuellen Phase vorbereitet werden kann.
@@ -185,7 +200,7 @@ data class GameUiState(
             minimumOccupyingTroopsForAttack(attackState.attackTroops)..attackState.attackTroops
 
     /**
-     * Prueft, ob fuer die aktuelle Auswahl ein Auto-Angriff vorgemerkt oder
+     * Prüft, ob für die aktuelle Auswahl ein Auto-Angriff vorgemerkt oder
      * gestartet werden darf.
      *
      * Ein bereits laufender Auto-Angriff darf nicht noch einmal gestartet werden;
