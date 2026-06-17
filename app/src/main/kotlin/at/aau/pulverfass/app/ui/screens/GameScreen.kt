@@ -145,6 +145,7 @@ private val CardsSidebarWidth = SidebarWidth
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 4_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -192,6 +193,7 @@ fun GameScreen(
                 character = character,
                 playerName = lobbyState.playerName,
                 autoPhaseNoticeText = lobbyState.autoPhaseNoticeText,
+                cheatReportNoticeText = lobbyState.cheatReportNoticeText,
             ),
         actions =
             GameScreenActions(
@@ -202,6 +204,7 @@ fun GameScreen(
                     controller::adjustReinforcementPlacementAmount,
                 onPlaceReinforcements = controller::placeReinforcements,
                 onClaimCheatReinforcementBonus = controller::claimCheatReinforcementBonus,
+                onReportCheat = controller::reportCheat,
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
@@ -214,6 +217,7 @@ fun GameScreen(
                 onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
                 onClearAutoPhaseNotice = controller::clearAutoPhaseNotice,
+                onClearCheatReportNotice = controller::clearCheatReportNotice,
             ),
         musicManager = musicManager,
         onNavigateToMain = onLeaveGame,
@@ -237,6 +241,7 @@ fun GameScreen(
  * @param character eigener Charakter für den Header.
  * @param playerName lokaler Anzeigename.
  * @param autoPhaseNoticeText aktuell sichtbare Auto-Phasenmeldung.
+ * @param cheatReportNoticeText aktuell sichtbare Rückmeldung zur Cheat-Meldung.
  */
 internal data class GameScreenContentState(
     val players: List<GamePlayerUi>,
@@ -248,6 +253,7 @@ internal data class GameScreenContentState(
     val character: CharacterDefinition? = null,
     val playerName: String = "",
     val autoPhaseNoticeText: String? = null,
+    val cheatReportNoticeText: String? = null,
 )
 
 /**
@@ -262,6 +268,7 @@ internal data class GameScreenContentState(
  * @param onAdjustReinforcementPlacementAmount ändert den Verstärkungs-Slider.
  * @param onPlaceReinforcements sendet eine Verstärkungsplatzierung.
  * @param onClaimCheatReinforcementBonus fordert den Lichtsensor-Cheatbonus an.
+ * @param onReportCheat meldet einen vermuteten Cheat eines anderen Spielers.
  * @param onConfirmReinforcementsDone bestätigt das Ende der Verstärkungsphase.
  * @param onToggleTradeInCard markiert oder demarkiert eine private Karte.
  * @param onTradeInCards sendet den Kartentausch.
@@ -273,6 +280,7 @@ internal data class GameScreenContentState(
  * @param onFortifyMove sendet die einmalige Truppenverschiebung.
  * @param onRefreshGameState fordert einen Catch-up-Snapshot an.
  * @param onClearAutoPhaseNotice schließt die sichtbare Auto-Phasenmeldung.
+ * @param onClearCheatReportNotice schließt die sichtbare Cheat-Melde-Rückmeldung.
  */
 internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
@@ -281,6 +289,7 @@ internal data class GameScreenActions(
     val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
     val onPlaceReinforcements: () -> Unit = {},
     val onClaimCheatReinforcementBonus: () -> Unit = {},
+    val onReportCheat: (PlayerId) -> Unit = {},
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
@@ -293,6 +302,7 @@ internal data class GameScreenActions(
     val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
     val onClearAutoPhaseNotice: () -> Unit = {},
+    val onClearCheatReportNotice: () -> Unit = {},
 )
 
 /**
@@ -465,6 +475,7 @@ internal fun GameScreenContent(
     val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
     val onPlaceReinforcements = actions.onPlaceReinforcements
     val onClaimCheatReinforcementBonus = actions.onClaimCheatReinforcementBonus
+    val onReportCheat = actions.onReportCheat
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
@@ -484,6 +495,7 @@ internal fun GameScreenContent(
     val isAttackRequestPending = LobbyCommandKey.ATTACK in pendingCommandKeys
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
     val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
+    val isReportCheatPending = LobbyCommandKey.REPORT_CHEAT in pendingCommandKeys
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
     val canManageFortify = uiState.canManageFortify(localPlayerId, isConnected)
@@ -739,6 +751,9 @@ internal fun GameScreenContent(
                         isMusicEnabled = isMusicEnabled,
                         isSfxEnabled = isSfxEnabled,
                         autoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
+                        players = players,
+                        localPlayerId = localPlayerId,
+                        isReportCheatPending = isReportCheatPending,
                         onMusicToggle = { enabled ->
                             isMusicEnabled = enabled
                             musicManager?.setMusicMuted(!enabled)
@@ -748,6 +763,7 @@ internal fun GameScreenContent(
                             musicManager?.setSfxMuted(!enabled)
                         },
                         onAutoAttackToggle = onSetAutoAttackEnabled,
+                        onReportCheat = onReportCheat,
                     ),
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
@@ -758,6 +774,11 @@ internal fun GameScreenContent(
             AutoPhaseNoticeOverlay(
                 message = contentState.autoPhaseNoticeText,
                 onDismiss = actions.onClearAutoPhaseNotice,
+            )
+
+            CheatReportNoticeOverlay(
+                message = contentState.cheatReportNoticeText,
+                onDismiss = actions.onClearCheatReportNotice,
             )
 
             CountdownOverlay(
@@ -862,6 +883,40 @@ private fun AutoPhaseNoticeOverlay(
     }
 }
 
+@Composable
+private fun CheatReportNoticeOverlay(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    if (message == null) return
+
+    LaunchedEffect(message) {
+        delay(CHEAT_REPORT_NOTICE_DURATION_MILLIS)
+        onDismiss()
+    }
+
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.62f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .widthIn(max = 520.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.84f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+                .testTag("cheat_report_notice_popup"),
+    ) {
+        PulverfassTitleText(text = "CHEAT-MELDUNG", fontSize = 28.sp, letterSpacing = 2.sp)
+        Text(
+            text = message,
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
 /**
  * Bündelt Schalterzustände und Callbacks des Ingame-Optionsmenüs, damit
  * [OptionsOverlay] mit wenigen Parametern auskommt.
@@ -869,17 +924,25 @@ private fun AutoPhaseNoticeOverlay(
  * @property isMusicEnabled aktueller Musik-Schalterzustand.
  * @property isSfxEnabled aktueller SFX-Schalterzustand.
  * @property autoAttackEnabled aktueller Auto-Angriff-Schalterzustand.
+ * @property players Spieler, die als mögliche Cheat-Verdächtige angezeigt werden.
+ * @property localPlayerId eigener Spieler, damit Selbstmeldungen in der UI ausgeblendet werden.
+ * @property isReportCheatPending `true`, solange eine Cheat-Meldung auf Antwort wartet.
  * @property onMusicToggle setzt Musik sofort an oder aus.
  * @property onSfxToggle setzt SFX sofort an oder aus.
  * @property onAutoAttackToggle setzt den Auto-Angriff sofort an oder aus.
+ * @property onReportCheat sendet die Meldung für den ausgewählten Spieler.
  */
 private data class InGameOptionsState(
     val isMusicEnabled: Boolean,
     val isSfxEnabled: Boolean,
     val autoAttackEnabled: Boolean,
+    val players: List<GamePlayerUi>,
+    val localPlayerId: PlayerId?,
+    val isReportCheatPending: Boolean,
     val onMusicToggle: (Boolean) -> Unit,
     val onSfxToggle: (Boolean) -> Unit,
     val onAutoAttackToggle: (Boolean) -> Unit,
+    val onReportCheat: (PlayerId) -> Unit,
 )
 
 /**
@@ -903,6 +966,11 @@ private fun OptionsOverlay(
 ) {
     if (!show) return
     val scrollState = rememberScrollState()
+    var showCheatReportPlayers by remember { mutableStateOf(false) }
+    /*
+     * Der eigene Spieler wird nicht angeboten, weil man sich nicht selbst melden darf.
+     */
+    val reportablePlayers = options.players.filter { it.playerId != options.localPlayerId }
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
         arrangement = Arrangement.spacedBy(12.dp),
@@ -933,6 +1001,48 @@ private fun OptionsOverlay(
             isEnabled = options.autoAttackEnabled,
             onToggle = options.onAutoAttackToggle,
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        /*
+         * Die Meldefunktion liegt in den Optionen, weil sie nur selten gebraucht wird.
+         * So bleibt die Karte frei für die normalen Spielaktionen.
+         */
+        MainButton(
+            text = "CHEAT MELDEN",
+            onClick = { showCheatReportPlayers = !showCheatReportPlayers },
+            modifier = Modifier.fillMaxWidth(),
+            enabled =
+                options.localPlayerId != null &&
+                    reportablePlayers.isNotEmpty() &&
+                    !options.isReportCheatPending,
+        )
+        if (showCheatReportPlayers) {
+            /*
+             * Erst nach dem Klick auf "CHEAT MELDEN" zeige ich die Spielerliste an.
+             * Dadurch nimmt die Funktion im normalen Optionsmenü wenig Platz weg.
+             */
+            Text(
+                text = "SPIELER AUSWÄHLEN",
+                color = PulverfassColors.TextOnDark,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            reportablePlayers.forEach { player ->
+                MainButton(
+                    text = player.name,
+                    onClick = {
+                        options.onReportCheat(player.playerId)
+                        showCheatReportPlayers = false
+                        onClose()
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("cheat_report_player_${player.playerId.value}"),
+                    enabled = !options.isReportCheatPending,
+                    fontSize = 14,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
             text = "SCHLIESSEN",
