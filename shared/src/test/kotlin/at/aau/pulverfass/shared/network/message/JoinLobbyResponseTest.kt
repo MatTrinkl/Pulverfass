@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponseSerializer
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
@@ -9,6 +10,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.lang.reflect.InvocationTargetException
@@ -21,6 +23,7 @@ class JoinLobbyResponseTest {
         val response = JoinLobbyResponse(LobbyCode("AB12"))
 
         assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertNull(response.playerId)
     }
 
     @Test
@@ -43,23 +46,44 @@ class JoinLobbyResponseTest {
     }
 
     @Test
+    fun `should serialize and deserialize join lobby response with player id`() {
+        val response = JoinLobbyResponse(LobbyCode("IJ90"), PlayerId(4))
+
+        val serialized = json.encodeToString(JoinLobbyResponse.serializer(), response)
+        val deserialized = json.decodeFromString<JoinLobbyResponse>(serialized)
+
+        assertEquals("""{"lobbyCode":"IJ90","playerId":4}""", serialized)
+        assertEquals(response, deserialized)
+    }
+
+    @Test
     fun `should reject null lobby code at constructor boundary`() {
         val constructor =
             JoinLobbyResponse::class.java.declaredConstructors.first {
-                it.parameterTypes.contentEquals(
-                    arrayOf(
-                        String::class.java,
-                        kotlin.jvm.internal.DefaultConstructorMarker::class.java,
-                    ),
-                )
+                it.parameterTypes.firstOrNull() == String::class.java &&
+                    it.parameterTypes.lastOrNull() ==
+                    kotlin.jvm.internal.DefaultConstructorMarker::class.java
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", null) as JoinLobbyResponse
+        val validArgs: Array<Any?> =
+            constructor.parameterTypes
+                .mapIndexed { index, parameterType ->
+                    when {
+                        index == 0 -> "GH78"
+                        index == constructor.parameterCount - 1 -> null
+                        parameterType == Int::class.javaPrimitiveType -> 0
+                        parameterType == Long::class.javaPrimitiveType -> 1L
+                        else -> null
+                    }
+                }.toTypedArray()
+        val valid = constructor.newInstance(*validArgs) as JoinLobbyResponse
 
         assertEquals(LobbyCode("GH78"), valid.lobbyCode)
 
         assertThrows(InvocationTargetException::class.java) {
-            constructor.newInstance(null, null)
+            val invalidArgs = validArgs.copyOf()
+            invalidArgs[0] = null
+            constructor.newInstance(*invalidArgs)
         }
     }
 

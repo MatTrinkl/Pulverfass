@@ -1692,9 +1692,16 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: JoinLobbyRequest,
     ) {
-        network.send(request.connectionId, JoinLobbyResponse(payload.lobbyCode))
+        val playerId = request.context.playerId
+        network.send(
+            request.connectionId,
+            JoinLobbyResponse(
+                lobbyCode = payload.lobbyCode,
+                playerId = playerId,
+            ),
+        )
 
-        val playerId = request.context.playerId ?: return
+        playerId ?: return
         val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
         val members = lobbyState.players
         val ownDisplayName =

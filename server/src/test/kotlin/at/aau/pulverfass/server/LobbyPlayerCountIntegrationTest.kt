@@ -222,7 +222,7 @@ class LobbyPlayerCountIntegrationTest {
                     ),
                 )
                 assertEquals(
-                    JoinLobbyResponse(lobbyCode),
+                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
                     receivePayloadOfType<JoinLobbyResponse>(hostSession),
                 )
                 assertEquals(
@@ -254,7 +254,7 @@ class LobbyPlayerCountIntegrationTest {
                     ),
                 )
                 assertEquals(
-                    JoinLobbyResponse(lobbyCode),
+                    JoinLobbyResponse(lobbyCode, PlayerId(2)),
                     receivePayloadOfType<JoinLobbyResponse>(joinerSession),
                 )
                 assertEquals(

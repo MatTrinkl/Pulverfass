@@ -2537,10 +2537,20 @@ class LobbyController(
 
         var shouldSelectSavedCharacter = false
         _state.update { current ->
-            val ownPlayerId =
-                current.ownPlayerId
-                    ?: payload.playerId.takeIf { displayName == current.playerName }
-            shouldSelectSavedCharacter = current.ownPlayerId == null && ownPlayerId != null
+            val sameNamePlayersBeforeJoin =
+                playersById.values.count { player ->
+                    player.playerId != payload.playerId &&
+                        player.displayName == displayName
+                }
+            val legacyOwnPlayerId =
+                payload.playerId.takeIf {
+                    displayName == current.playerName &&
+                        sameNamePlayersBeforeJoin == 0
+                }
+            val ownPlayerId = current.ownPlayerId ?: legacyOwnPlayerId
+            shouldSelectSavedCharacter =
+                ownPlayerId == payload.playerId &&
+                    (current.ownPlayerId == null || existingPlayer == null)
             current.copy(ownPlayerId = ownPlayerId)
         }
         publishPlayers()
@@ -3049,6 +3059,7 @@ class LobbyController(
             it.copy(
                 activeLobbyCode = joinedCode,
                 lobbyCode = joinedCode,
+                ownPlayerId = payload.playerId ?: it.ownPlayerId,
                 playerNames = ensureOwnPlayerName(it.playerNames, it.playerName),
                 errorText = null,
             )

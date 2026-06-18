@@ -690,7 +690,7 @@ class ApplicationTest {
                 ),
             )
 
-            assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(hostSession))
+            assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(1)), receivePayload(hostSession))
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
@@ -711,7 +711,7 @@ class ApplicationTest {
                 ),
             )
 
-            assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(guestSession))
+            assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(2)), receivePayload(guestSession))
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
@@ -781,7 +781,7 @@ class ApplicationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(session))
+                assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(1)), receivePayload(session))
                 assertIs<PlayerJoinedLobbyEvent>(receivePayload(session))
 
                 session.send(

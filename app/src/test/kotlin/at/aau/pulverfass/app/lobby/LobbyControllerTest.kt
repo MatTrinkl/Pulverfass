@@ -4186,6 +4186,71 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `saved character auto selection uses join response player id when names are duplicated`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC47")
+            val ownPlayerId = PlayerId(22)
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174227"),
+                        ),
+                ) { payload, outgoing ->
+                    seenPayloads += payload
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(
+                            JoinLobbyResponse(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(21),
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                    }
+                }
+            val playerNameStore =
+                InMemoryPlayerNameStore()
+                    .also { it.saveCharacterId("character_04") }
+            val controller = createController(playerNameStore = playerNameStore)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alex")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+                waitUntil {
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .any { it.characterId == "character_04" }
+                }
+
+                val request =
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .single()
+                assertEquals(ownPlayerId, request.playerId)
+                assertEquals(lobbyCode, request.lobbyCode)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `saved character auto selection falls back when preferred character is taken`() {
         runBlocking {
             val lobbyCode = LobbyCode("CC46")

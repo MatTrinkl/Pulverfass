@@ -290,7 +290,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
 
                     assertEquals(
-                        JoinLobbyResponse(createResponse.lobbyCode),
+                        JoinLobbyResponse(createResponse.lobbyCode, PlayerId(1)),
                         receivePayload(session),
                     )
                     assertEquals(
@@ -1140,7 +1140,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
-                        JoinLobbyResponse(lobbyA),
+                        JoinLobbyResponse(lobbyA, PlayerId(1)),
                         receivePayload(sessionA1AndConnection.first),
                     )
                     assertEquals(
@@ -1165,7 +1165,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
-                        JoinLobbyResponse(lobbyB),
+                        JoinLobbyResponse(lobbyB, PlayerId(3)),
                         receivePayload(sessionB1AndConnection.first),
                     )
                     assertEquals(
@@ -1197,7 +1197,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val otherLobbyPayload = receivePayloadOrNull(sessionB1AndConnection.first)
 
                     assertIs<JoinLobbyResponse>(joinerResponse)
-                    assertEquals(JoinLobbyResponse(lobbyA), joinerResponse)
+                    assertEquals(JoinLobbyResponse(lobbyA, PlayerId(2)), joinerResponse)
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                         joinerExistingMemberEvent,
@@ -1675,7 +1675,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                        JoinLobbyResponse(lobbyCode, joinerAId),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
@@ -1698,7 +1698,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                        JoinLobbyResponse(lobbyCode, leavePlayerId),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -1729,7 +1729,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                        JoinLobbyResponse(lobbyCode, kickedPlayerId),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -1951,7 +1951,10 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                         ),
                     )
-                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                    assertEquals(
+                        JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                        receivePayload(aliceSession),
+                    )
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(aliceSession),
@@ -2008,7 +2011,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
 
-                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                    assertEquals(
+                        JoinLobbyResponse(lobbyCode, PlayerId(2)),
+                        receivePayload(bobSession),
+                    )
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(bobSession),
@@ -2065,7 +2071,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(aliceSession))
+                assertEquals(JoinLobbyResponse(lobbyA, PlayerId(1)), receivePayload(aliceSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -2079,7 +2085,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(bobSession))
+                assertEquals(JoinLobbyResponse(lobbyA, PlayerId(2)), receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
@@ -2111,7 +2117,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyB, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyB), receivePayload(carolSession))
+                assertEquals(JoinLobbyResponse(lobbyB, PlayerId(3)), receivePayload(carolSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "CAROL", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
@@ -2146,7 +2152,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Dave")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(daveSession))
+                assertEquals(JoinLobbyResponse(lobbyA, PlayerId(4)), receivePayload(daveSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(daveSession),
@@ -2207,7 +2213,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                    receivePayload(aliceSession),
+                )
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -2222,7 +2231,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(2)), receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
@@ -2244,7 +2253,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode, PlayerId(3)),
+                    receivePayload(carolSession),
+                )
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(carolSession),
@@ -2557,7 +2569,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                    receivePayload(aliceSession),
+                )
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -2572,7 +2587,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(2)), receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
@@ -2594,7 +2609,10 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertEquals(
+                    JoinLobbyResponse(lobbyCode, PlayerId(3)),
+                    receivePayload(carolSession),
+                )
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(carolSession),

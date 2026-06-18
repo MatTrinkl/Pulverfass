@@ -205,7 +205,10 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                     ),
                 )
 
-                assertEquals(JoinLobbyResponse(openLobbyCode), receiveRelevantTestPayload(session))
+                assertEquals(
+                    JoinLobbyResponse(openLobbyCode, PlayerId(10)),
+                    receiveRelevantTestPayload(session),
+                )
 
                 val firstPlayerEvent =
                     receiveRelevantTestPayload(session) as PlayerJoinedLobbyEvent
