@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
@@ -334,20 +335,24 @@ class ClaimCheatReinforcementBonusIntegrationTest {
         }
 
     @Test
-    fun `reporting cheat before visible reinforcement placement rewards reporter`() =
+    fun `cheat report window expires twenty seconds after visible placement`() =
         testApplication {
             val lobbyCode = LobbyCode("CHR3")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
+            val playerThree = PlayerId(3)
+            val playerFour = PlayerId(4)
+            val nowMillis = AtomicLong(1_000L)
             val baseState =
                 reinforcementGame(
                     lobbyCode = lobbyCode,
-                    players = listOf(playerOne, playerTwo),
+                    players = listOf(playerOne, playerTwo, playerThree, playerFour),
                     activePlayerId = playerOne,
                     turnPhase = TurnPhase.REINFORCEMENTS,
                     pendingPlayerId = playerOne,
                     pendingAmount = 2,
                 )
+            val placementTerritoryId = baseState.allTerritoryStates().first().territoryId
 
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -366,6 +371,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                     lobbyManager = lobbyManager,
                     playerIdResolver = { connectionId -> playersByConnection[connectionId] },
                     connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    nowEpochMillis = nowMillis::get,
                     hooks = MainServerLobbyRoutingServiceHooks(),
                 )
 
@@ -398,6 +404,22 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
+                    val lateReporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerThree,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val expiredReporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerFour,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
 
                     cheaterSession.first.send(
                         Frame.Binary(
@@ -418,6 +440,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         receiveRelevantTestPayload(cheaterSession.first),
                     )
 
+                    nowMillis.addAndGet(30_000L)
                     reporterSession.first.send(
                         Frame.Binary(
                             fin = true,
@@ -432,6 +455,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    // Auch lange vor der sichtbaren Platzierung bleibt der Cheat meldbar.
                     assertEquals(
                         ReportCheatResponse(
                             lobbyCode = lobbyCode,
@@ -445,8 +469,111 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    val placementMillis = nowMillis.get()
+                    cheaterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    PlaceReinforcementsRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        placements =
+                                            listOf(
+                                                TerritoryPlacement(
+                                                    territoryId = placementTerritoryId,
+                                                    amount = 1,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertEquals(
+                        PlaceReinforcementsResponse(lobbyCode),
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = lateReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = expiredReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    nowMillis.set(placementMillis + 19_999L)
+                    lateReporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerThree,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = true,
+                            modifierDelta = 3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = lateReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    nowMillis.set(placementMillis + 20_001L)
+                    expiredReporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerFour,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = false,
+                            modifierDelta = -3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = expiredReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
                     cheaterSession.first.close()
                     reporterSession.first.close()
+                    lateReporterSession.first.close()
+                    expiredReporterSession.first.close()
                 }
             } finally {
                 routingService.stop()

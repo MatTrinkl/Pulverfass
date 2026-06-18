@@ -209,7 +209,6 @@ class MainServerLobbyRoutingService(
     private data class CheatReportKey(
         val reporterPlayerId: PlayerId,
         val accusedPlayerId: PlayerId,
-        val expiresAtMillis: Long,
     )
 
     private data class CheatReportResult(
@@ -2481,8 +2480,8 @@ class MainServerLobbyRoutingService(
     ) {
         /*
          * Der Spieler hat den Cheat ausgelöst, aber eventuell noch nichts
-         * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt, während
-         * die sichtbare Platzierung später weiterhin das reguläre Fenster öffnet.
+         * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt; die
+         * sichtbare Platzierung setzt später die Ablaufzeit des Meldefensters.
          */
         synchronized(cheatReportLock) {
             pendingVisibleCheatByLobby
@@ -2505,8 +2504,8 @@ class MainServerLobbyRoutingService(
             }
             /*
              * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist,
-             * sofern nicht bereits eine frühe korrekte Meldung ein Fenster
-             * geöffnet hat. So bleibt dieselbe Cheat-Aktion eindeutig.
+             * damit das Fenster immer 20 Sekunden nach der sichtbaren
+             * Platzierung endet.
              */
             if (cheatReportWindowsByLobby[lobbyCode]?.containsKey(accusedPlayerId) != true) {
                 openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
@@ -2541,39 +2540,33 @@ class MainServerLobbyRoutingService(
              * Hier entscheidet ausschließlich der Server, ob eine Meldung korrekt ist.
              * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch
              * ein gültiges Meldefenster offen ist oder ein Cheat bereits
-             * serverseitig vorgemerkt wurde, aber noch nicht sichtbar platziert ist.
+             * serverseitig vorgemerkt wurde. Vorgemerkte Cheats haben noch
+             * keine Ablaufzeit; diese entsteht erst beim Platzieren.
              */
             val window = cheatReportWindowsByLobby[lobbyCode]?.get(accusedPlayerId)
             val now = nowEpochMillis()
             val pendingCheat =
                 pendingVisibleCheatByLobby[lobbyCode]?.contains(accusedPlayerId) == true
-            val activeWindow =
-                if (window != null && now <= window.expiresAtMillis) {
-                    window
-                } else if (pendingCheat) {
-                    openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
-                } else {
-                    null
-                }
-            val correct = activeWindow != null
+            val activeWindow = window?.takeIf { now <= it.expiresAtMillis }
+            val correct = activeWindow != null || pendingCheat
 
             if (window != null && !correct) {
                 cheatReportWindowsByLobby[lobbyCode]?.remove(accusedPlayerId)
             }
 
-            if (activeWindow != null) {
+            if (correct) {
                 val key =
                     CheatReportKey(
                         reporterPlayerId = reporterPlayerId,
                         accusedPlayerId = accusedPlayerId,
-                        expiresAtMillis = activeWindow.expiresAtMillis,
                     )
                 require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
                     "ALREADY_REPORTED"
                 }
                 /*
-                 * Dieser Schlüssel enthält auch das Ablaufdatum des Fensters.
-                 * Bei einem späteren Cheat desselben Spielers ist es dadurch wieder eine neue Meldung.
+                 * Der Schummel-Verstärkungsbonus ist pro Spieler einmalig.
+                 * Reporter dürfen dieselbe Cheat-Aktion deshalb nur einmal melden,
+                 * egal ob vor oder nach der sichtbaren Platzierung.
                  */
             }
 
