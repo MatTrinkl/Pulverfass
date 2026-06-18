@@ -205,7 +205,10 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                     ),
                 )
 
-                assertEquals(JoinLobbyResponse(openLobbyCode), receiveRelevantTestPayload(session))
+                assertEquals(
+                    JoinLobbyResponse(openLobbyCode, PlayerId(10)),
+                    receiveRelevantTestPayload(session),
+                )
 
                 val firstPlayerEvent =
                     receiveRelevantTestPayload(session) as PlayerJoinedLobbyEvent
@@ -303,7 +306,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         success = true,
                         playerId = playerId,
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receiveTestPayloadOfType<ReconnectResponse>(session),
                 )
@@ -378,7 +381,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                         success = true,
                         playerId = playerId,
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receiveTestPayloadOfType<ReconnectResponse>(firstSession),
                 )
@@ -401,7 +404,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                             success = true,
                             playerId = playerId,
                             lobbyCode = lobbyCode,
-                            playerDisplayName = "Alice",
+                            playerDisplayName = "ALICE",
                         ),
                         receiveTestPayloadOfType<ReconnectResponse>(reconnectingSession),
                     )
@@ -459,7 +462,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
         val persistedSession = sessionStore.loadSession(sessionTokenWithPlayer)
         assertEquals(playerId, persistedSession?.context?.playerId)
         assertEquals(lobbyCode, persistedSession?.context?.lobbyCode)
-        assertEquals("Alice", persistedSession?.context?.playerDisplayName)
+        assertEquals("ALICE", persistedSession?.context?.playerDisplayName)
     }
 
     @Test

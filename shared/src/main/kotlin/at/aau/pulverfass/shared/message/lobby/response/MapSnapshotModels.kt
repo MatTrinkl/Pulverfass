@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.ids.ContinentId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.map.config.ContinentDefinition
@@ -166,4 +167,7 @@ data class PublicGameStateSnapshot(
     val turnState: PublicTurnStateSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
+    val gameStatus: GameStatus = GameStatus.RUNNING,
+    val matchEndReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
 )

@@ -196,12 +196,6 @@ class LobbyPersistenceHooksIntegrationTest {
                         fixture.hostId,
                         TurnPhase.FORTIFY,
                     )
-                    advanceTurn(
-                        hostSession,
-                        fixture.lobbyCode,
-                        fixture.hostId,
-                        TurnPhase.DRAW_CARD,
-                    )
 
                     val snapshotPayload =
                         receiveRelevantTestPayload(

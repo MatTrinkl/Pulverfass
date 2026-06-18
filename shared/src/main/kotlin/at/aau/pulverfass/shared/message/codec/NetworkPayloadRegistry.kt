@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
@@ -91,7 +92,6 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.Json
 
 /**
  * Verwaltet die zentrale Zuordnung zwischen MessageTypes und ihren konkreten
@@ -175,6 +175,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class.java to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class.java to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            MatchEndedBroadcastEvent::class.java to MessageType.LOBBY_ENDED_BROADCAST,
             PlayerHandUpdatedEvent::class.java to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
             GameStateDeltaEvent::class.java to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
             PhaseBoundaryEvent::class.java to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
@@ -308,6 +309,8 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class.java to encodeWith(StartGameResponse.serializer()),
             StartGameErrorResponse::class.java to encodeWith(StartGameErrorResponse.serializer()),
             GameStartedEvent::class.java to encodeWith(GameStartedEvent.serializer()),
+            MatchEndedBroadcastEvent::class.java to
+                encodeWith(MatchEndedBroadcastEvent.serializer()),
             PlayerHandUpdatedEvent::class.java to encodeWith(PlayerHandUpdatedEvent.serializer()),
             GameStateDeltaEvent::class.java to encodeWith(GameStateDeltaEvent.serializer()),
             PhaseBoundaryEvent::class.java to encodeWith(PhaseBoundaryEvent.serializer()),
@@ -452,6 +455,8 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_START_ERROR_RESPONSE to
                 decodeWith(StartGameErrorResponse.serializer()),
             MessageType.LOBBY_GAME_STARTED_BROADCAST to decodeWith(GameStartedEvent.serializer()),
+            MessageType.LOBBY_ENDED_BROADCAST to
+                decodeWith(MatchEndedBroadcastEvent.serializer()),
             MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT to
                 decodeWith(PlayerHandUpdatedEvent.serializer()),
             MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST to
@@ -519,7 +524,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (NetworkMessagePayload) -> String {
         return { payload ->
-            Json.encodeToString(serializer, payload as T)
+            NetworkJson.encodeToString(serializer, payload as T)
         }
     }
 
@@ -527,7 +532,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (String) -> NetworkMessagePayload {
         return { json ->
-            Json.decodeFromString(serializer, json)
+            NetworkJson.decodeFromString(serializer, json)
         }
     }
 

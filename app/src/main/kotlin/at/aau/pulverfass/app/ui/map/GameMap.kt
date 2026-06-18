@@ -363,6 +363,7 @@ object PulverfassMapDefaults {
  * @param modifier Compose-Modifier der Kartenfläche
  * @param regionStates serverbasierter Zustand pro Android-Region-ID
  * @param options Render- und Hitmap-Konfiguration
+ * @param attackVfx zuletzt aufgelöstes Kampfergebnis für die Clash-Animation
  */
 @Composable
 fun InteractiveGameMap(
@@ -372,6 +373,7 @@ fun InteractiveGameMap(
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
     options: InteractiveGameMapOptions = InteractiveGameMapOptions(),
+    attackVfx: AttackVfxRequest? = null,
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -430,6 +432,10 @@ fun InteractiveGameMap(
         remember(viewportSize, options.aspectRatio) {
             createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = options.aspectRatio)
         }
+
+    val attackVfxController = rememberAttackVfxController(attackVfx)
+    val activeAttackVfx = attackVfxController.activeRequest
+    val regionsById = remember(regions) { regions.associateBy(GameMapRegion::id) }
 
     Box(
         modifier =
@@ -520,7 +526,12 @@ fun InteractiveGameMap(
                      * Test-Tags für UI-Tests stabil bleiben.
                      */
                     RegionTroopCounter(
-                        state = regionStates[region.id],
+                        state =
+                            visibleRegionState(
+                                baseState = regionStates[region.id],
+                                regionId = region.id,
+                                activeAttackVfx = activeAttackVfx,
+                            ),
                         isSelected = region.id == selectedRegionId,
                         modifier =
                             Modifier
@@ -536,7 +547,87 @@ fun InteractiveGameMap(
                     )
                 }
             }
+
+            if (activeAttackVfx != null) {
+                ActiveAttackVfx(
+                    request = activeAttackVfx,
+                    controller = attackVfxController,
+                    anchors = territoryMaskData.anchors,
+                    regionsById = regionsById,
+                    regionStates = regionStates,
+                    layoutMetrics = layoutMetrics,
+                    viewportState = viewportState,
+                )
+            }
         }
+    }
+}
+
+/**
+ * Rendert die Clash-Animation für den aktuell aktiven [request].
+ *
+ * Wie bei den Truppen-Bubbles fällt der Anker auf
+ * [GameMapRegion.fallbackAnchor] zurück, falls eine Maske nicht dekodiert werden
+ * konnte. Fehlt auch dieser, entfällt die Animation, ohne den restlichen
+ * Kartenzustand zu beeinflussen.
+ */
+@Composable
+private fun ActiveAttackVfx(
+    request: AttackVfxRequest,
+    controller: AttackVfxController,
+    anchors: Map<String, MapPoint>,
+    regionsById: Map<String, GameMapRegion>,
+    regionStates: Map<String, GameMapRegionState>,
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+) {
+    val fromAnchor =
+        anchors[request.fromRegionId]
+            ?: regionsById[request.fromRegionId]?.fallbackAnchor
+            ?: return
+    val toAnchor =
+        anchors[request.toRegionId]
+            ?: regionsById[request.toRegionId]?.fallbackAnchor
+            ?: return
+    AttackVfxOverlay(
+        controller = controller,
+        fromAnchor = fromAnchor,
+        toAnchor = toAnchor,
+        colors =
+            ClashColors(
+                attacker = regionStates[request.fromRegionId]?.accentColor ?: NeutralRegionColor,
+                defender = regionStates[request.toRegionId]?.accentColor ?: NeutralRegionColor,
+            ),
+        layoutMetrics = layoutMetrics,
+        viewportState = viewportState,
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/**
+ * Hält die Truppen-Chips der beiden Kampfparteien während der Clash-Animation
+ * auf dem Vorkampfstand.
+ *
+ * Nur die Anzeige wird überbrückt; [regionStates][GameMapRegionState] selbst
+ * bleibt der unveränderte, autoritative Stand. Nach Ende der Animation liefert
+ * [AttackVfxController.activeRequest] wieder `null` und die Chips springen
+ * automatisch auf den echten Wert.
+ */
+private fun visibleRegionState(
+    baseState: GameMapRegionState?,
+    regionId: String,
+    activeAttackVfx: AttackVfxRequest?,
+): GameMapRegionState? {
+    if (baseState == null || activeAttackVfx == null) {
+        return baseState
+    }
+
+    return when (regionId) {
+        activeAttackVfx.fromRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.sourceTroopsBefore)
+        activeAttackVfx.toRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.targetTroopsBefore)
+        else -> baseState
     }
 }
 

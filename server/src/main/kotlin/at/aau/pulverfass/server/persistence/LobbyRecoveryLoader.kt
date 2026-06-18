@@ -34,6 +34,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.DeckState
@@ -222,6 +223,7 @@ class LobbyRecoveryLoader(
  * @property gameStarted Kennzeichen, ob die Partie gestartet wurde
  * @property status serialisierter [GameStatus]-Name
  * @property closedReason optionaler Schließgrund einer beendeten Lobby
+ * @property winnerPlayerId Gewinner eines beendeten Matches, falls eindeutig bestimmbar
  * @property lastInvalidActionReason letzte fachliche Fehlermeldung
  * @property fortifyUsedThisTurn Marker für bereits verbrauchte Fortify-Aktion
  * @property determinism determinismusrelevante Metadaten der Karte
@@ -252,6 +254,7 @@ data class PersistedLobbyRecoverySnapshot(
     val gameStarted: Boolean,
     val status: String,
     val closedReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
     val territoryCapturedThisTurn: Boolean = false,
@@ -282,7 +285,10 @@ data class PersistedLobbyRecoverySnapshot(
                 players = gameState.players,
                 playerDisplayNames =
                     gameState.playerDisplayNames.entries.map { (playerId, displayName) ->
-                        PersistedPlayerDisplayName(playerId = playerId, displayName = displayName)
+                        PersistedPlayerDisplayName(
+                            playerId = playerId,
+                            displayName = normalizePlayerDisplayNameOrFallback(displayName),
+                        )
                     },
                 activePlayer = gameState.activePlayer,
                 configuredStartPlayerId = gameState.configuredStartPlayerId,
@@ -292,6 +298,7 @@ data class PersistedLobbyRecoverySnapshot(
                 gameStarted = gameState.gameStarted,
                 status = gameState.status.name,
                 closedReason = gameState.closedReason,
+                winnerPlayerId = gameState.winnerPlayerId,
                 lastInvalidActionReason = gameState.lastInvalidActionReason,
                 fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
                 territoryCapturedThisTurn = gameState.territoryCapturedThisTurn,
@@ -346,7 +353,10 @@ data class PersistedLobbyRecoverySnapshot(
             lobbyCode = lobbyCode,
             lobbyOwner = lobbyOwner,
             players = players,
-            playerDisplayNames = playerDisplayNames.associate { it.playerId to it.displayName },
+            playerDisplayNames =
+                playerDisplayNames.associate {
+                    it.playerId to normalizePlayerDisplayNameOrFallback(it.displayName)
+                },
             activePlayer = activePlayer,
             configuredStartPlayerId = configuredStartPlayerId,
             turnOrder = turnOrder,
@@ -360,6 +370,7 @@ data class PersistedLobbyRecoverySnapshot(
             gameRandomState = gameRandomState ?: gameRandomSeed ?: determinism.seed,
             lastEventContext = null,
             closedReason = closedReason,
+            winnerPlayerId = winnerPlayerId,
             lastInvalidActionReason = lastInvalidActionReason,
             fortifyUsedThisTurn = fortifyUsedThisTurn,
             territoryCapturedThisTurn = territoryCapturedThisTurn,
@@ -572,12 +583,16 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
             MatchEndedEvent(
                 lobbyCode = lobbyCode,
                 reason = MatchEndReason.valueOf(jsonObject.string("reason")),
+                winnerPlayerId = jsonObject.nullableLong("winnerPlayerId")?.let(::PlayerId),
             )
         "player_joined" ->
             PlayerJoined(
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
-                playerDisplayName = jsonObject.string("playerDisplayName"),
+                playerDisplayName =
+                    normalizePlayerDisplayNameOrFallback(
+                        jsonObject.string("playerDisplayName"),
+                    ),
             )
         "player_left" ->
             PlayerLeft(

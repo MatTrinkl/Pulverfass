@@ -35,6 +35,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property gameRandomState optionaler, persistierter RNG-Cursor des aktuellen Spiels
  * @property lastEventContext optionaler Kontext des zuletzt verarbeiteten Events
  * @property closedReason optionale Schließursache, falls die Lobby geschlossen wurde
+ * @property winnerPlayerId Gewinner eines beendeten Matches, falls eindeutig bestimmbar
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
  * @property territoryCapturedThisTurn signalisiert, ob im aktuellen Zug mindestens ein Gebiet erobert wurde
  * @property usedCheatReinforcementBonusByPlayer Spieler, die ihren einmaligen
@@ -70,6 +71,7 @@ data class GameState(
     val gameRandomState: Long? = null,
     val lastEventContext: EventContext? = null,
     val closedReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
     val territoryCapturedThisTurn: Boolean = false,
@@ -152,6 +154,9 @@ data class GameState(
         }
         require(lobbyOwner == null || players.contains(lobbyOwner)) {
             "GameState.lobbyOwner muss Teil der Spielerliste sein oder null."
+        }
+        require(winnerPlayerId == null || players.contains(winnerPlayerId)) {
+            "GameState.winnerPlayerId muss Teil der Spielerliste sein oder null."
         }
         require(turnState == null || turnOrder.contains(turnState.activePlayerId)) {
             "GameState.turnState.activePlayerId muss Teil der TurnOrder sein."
@@ -392,6 +397,29 @@ data class GameState(
      * Liefert die Anzahl aller aktuell vom Spieler kontrollierten Territorien.
      */
     fun ownedTerritoryCount(playerId: PlayerId): Int = territoriesOwnedBy(playerId).size
+
+    /**
+     * Liefert den Gewinner, wenn alle Territorien vollständig von einem Spieler kontrolliert werden.
+     *
+     * Unbesetzte Gebiete oder ein nicht gestartetes Match ergeben noch keinen Gewinner.
+     *
+     * @return kontrollierender Spieler oder `null`, wenn keine Siegbedingung erfüllt ist
+     */
+    fun territoryDominationWinner(): PlayerId? {
+        if (!hasStartedMatch() || !hasMap()) {
+            return null
+        }
+
+        val territoryStates = allTerritoryStates()
+        if (
+            territoryStates.isEmpty() ||
+            territoryStates.any { territory -> territory.ownerId == null }
+        ) {
+            return null
+        }
+
+        return territoryStates.mapNotNull { territory -> territory.ownerId }.toSet().singleOrNull()
+    }
 
     /**
      * Prüft, ob ein Spieler von einem Territorium aus legal angreifen kann.

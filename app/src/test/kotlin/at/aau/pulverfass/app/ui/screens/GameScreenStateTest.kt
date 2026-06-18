@@ -6,6 +6,7 @@ import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -88,6 +89,42 @@ class GameScreenStateTest {
                 fromRegionId = "siberia",
                 toRegionId = "japan",
                 troopCount = 3,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `createWinningOverlayState returns null for running match`() {
+        val result =
+            createWinningOverlayState(
+                uiState = GameUiState(gameStatus = GameStatus.RUNNING),
+                players = listOf(gamePlayer()),
+                localPlayerId = PlayerId(1),
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `createWinningOverlayState resolves local winner`() {
+        val player = gamePlayer()
+        val result =
+            createWinningOverlayState(
+                uiState =
+                    GameUiState(
+                        gameStatus = GameStatus.FINISHED,
+                        winnerPlayerId = player.playerId,
+                    ),
+                players = listOf(player),
+                localPlayerId = player.playerId,
+            )
+
+        assertEquals(
+            WinningOverlayState(
+                winnerPlayer = player,
+                winnerName = "Alice",
+                isLocalWinner = true,
             ),
             result,
         )

@@ -72,6 +72,7 @@ data class RoundSnapshotMetadata(
 /** Auslöser, der zur Speicherung eines Snapshot-Markers geführt hat. */
 enum class RoundSnapshotTrigger {
     TURN_CHANGE_BROADCAST,
+    MEMBERSHIP_CHANGE_BROADCAST,
     CATCH_UP_RESPONSE,
 }
 

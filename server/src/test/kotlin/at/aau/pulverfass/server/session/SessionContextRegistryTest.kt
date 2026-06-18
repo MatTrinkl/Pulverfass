@@ -31,7 +31,7 @@ class SessionContextRegistryTest {
             SessionReconnectContext(
                 playerId = PlayerId(2),
                 lobbyCode = LobbyCode("AB12"),
-                playerDisplayName = "Alice",
+                playerDisplayName = "ALICE",
             ),
             registry.contextFor(sessionToken),
         )
@@ -108,7 +108,7 @@ class SessionContextRegistryTest {
             SessionReconnectContext(
                 playerId = PlayerId(6),
                 lobbyCode = LobbyCode("IJ90"),
-                playerDisplayName = "Eve",
+                playerDisplayName = "EVE",
             ),
             registry.contextFor(sessionToken),
         )

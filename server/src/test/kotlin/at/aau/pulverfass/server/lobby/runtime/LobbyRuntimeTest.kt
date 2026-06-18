@@ -241,7 +241,7 @@ class LobbyRuntimeTest {
                     runtime.submitAll(
                         listOf(
                             PlayerJoined(lobbyCode, PlayerId(1), "Alice"),
-                            PlayerJoined(lobbyCode, PlayerId(1), "Alice again"),
+                            PlayerJoined(lobbyCode, PlayerId(1), "ALICE"),
                         ),
                         context,
                     )

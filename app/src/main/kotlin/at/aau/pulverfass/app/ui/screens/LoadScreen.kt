@@ -47,7 +47,7 @@ private const val DEFAULT_LOADING_TEXT_INTERVAL_MS = 2200L
 internal val LoadingTexts =
     listOf(
         "Hisse die Segel...",
-        "Schartnerbomb wird gebaut...",
+        "Schartnerbombe laden...",
         "Pulver ins Fass laden...",
         "Karten entrollen...",
         "Würfel polieren...",

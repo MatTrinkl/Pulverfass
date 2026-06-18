@@ -58,7 +58,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(hostId, guestId),
-                playerDisplayNames = mapOf(hostId to "Alice", guestId to "Bob"),
+                playerDisplayNames = mapOf(hostId to "ALICE", guestId to "BOB"),
             ).copy(
                 lobbyOwner = hostId,
                 status = GameStatus.RUNNING,
@@ -144,7 +144,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(PlayerId(1)),
-                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+                playerDisplayNames = mapOf(PlayerId(1) to "ALICE"),
             ).copy(
                 status = GameStatus.RUNNING,
                 gameStarted = true,
@@ -171,7 +171,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(PlayerId(1)),
-                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+                playerDisplayNames = mapOf(PlayerId(1) to "ALICE"),
             ).copy(
                 status = GameStatus.RUNNING,
                 gameStarted = true,
@@ -341,7 +341,20 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
-            PlayerJoined(lobbyCode, PlayerId(1), "Alice"),
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = PlayerId(1),
+            ),
+            record(
+                eventType = "match_ended",
+                eventJson =
+                    """{"lobbyCode":"LR11","reason":"TERRITORY_DOMINATION","winnerPlayerId":1}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            PlayerJoined(lobbyCode, PlayerId(1), "ALICE"),
             record(
                 "player_joined",
                 """{"lobbyCode":"LR11","playerId":1,"playerDisplayName":"Alice"}""",

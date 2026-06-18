@@ -25,7 +25,9 @@ import at.aau.pulverfass.shared.map.config.MapDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
 import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
@@ -52,7 +54,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class FortifyMoveIntegrationTest {
     @Test
-    fun `active player can fortify and finish phase manually afterwards`() =
+    fun `active player can fortify and finish phase automatically afterwards`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -227,21 +229,56 @@ class FortifyMoveIntegrationTest {
                         ),
                     )
 
+                    val drawCardUpdate =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerOne,
+                            turnPhase = TurnPhase.DRAW_CARD,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+                    val nextReinforcementsUpdate =
+                        TurnStateUpdatedEvent(
+                            lobbyCode = lobbyCode,
+                            activePlayerId = playerTwo,
+                            turnPhase = TurnPhase.REINFORCEMENTS,
+                            turnCount = 1,
+                            startPlayerId = playerOne,
+                        )
+                    val nextReinforcementsGrant =
+                        ReinforcementsGrantedEvent(
+                            lobbyCode = lobbyCode,
+                            playerId = playerTwo,
+                            amount = 3,
+                            territoryBonus = 3,
+                            continentBonus = 0,
+                            cardBonus = 0,
+                        )
+
                     assertEquals(
                         GameStateDeltaEvent(
                             lobbyCode = lobbyCode,
                             fromVersion = 9,
                             toVersion = 9,
-                            events =
-                                listOf(
-                                    TurnStateUpdatedEvent(
-                                        lobbyCode = lobbyCode,
-                                        activePlayerId = playerOne,
-                                        turnPhase = TurnPhase.DRAW_CARD,
-                                        turnCount = 1,
-                                        startPlayerId = playerOne,
-                                    ),
-                                ),
+                            events = listOf(drawCardUpdate),
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 10,
+                            toVersion = 10,
+                            events = listOf(nextReinforcementsUpdate),
+                        ),
+                        receiveAnyPayload(playerOneSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 11,
+                            toVersion = 11,
+                            events = listOf(nextReinforcementsGrant),
                         ),
                         receiveAnyPayload(playerOneSession.first),
                     )
@@ -252,68 +289,69 @@ class FortifyMoveIntegrationTest {
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 9,
+                            stateVersion = 11,
                             previousPhase = TurnPhase.FORTIFY,
-                            nextPhase = TurnPhase.DRAW_CARD,
-                            activePlayerId = playerOne,
+                            nextPhase = TurnPhase.REINFORCEMENTS,
+                            activePlayerId = playerTwo,
                             turnCount = 1,
                         ),
                         receiveAnyPayload(playerOneSession.first),
                     )
                     assertEquals(
-                        TurnStateUpdatedEvent(
-                            lobbyCode = lobbyCode,
-                            activePlayerId = playerOne,
-                            turnPhase = TurnPhase.DRAW_CARD,
-                            turnCount = 1,
-                            startPlayerId = playerOne,
-                        ),
+                        nextReinforcementsUpdate,
                         receiveAnyPayload(playerOneSession.first),
                     )
+                    assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerOneSession.first))
                     assertEquals(
                         GameStateDeltaEvent(
                             lobbyCode = lobbyCode,
                             fromVersion = 9,
                             toVersion = 9,
-                            events =
-                                listOf(
-                                    TurnStateUpdatedEvent(
-                                        lobbyCode = lobbyCode,
-                                        activePlayerId = playerOne,
-                                        turnPhase = TurnPhase.DRAW_CARD,
-                                        turnCount = 1,
-                                        startPlayerId = playerOne,
-                                    ),
-                                ),
+                            events = listOf(drawCardUpdate),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 10,
+                            toVersion = 10,
+                            events = listOf(nextReinforcementsUpdate),
+                        ),
+                        receiveAnyPayload(playerTwoSession.first),
+                    )
+                    assertEquals(
+                        GameStateDeltaEvent(
+                            lobbyCode = lobbyCode,
+                            fromVersion = 11,
+                            toVersion = 11,
+                            events = listOf(nextReinforcementsGrant),
                         ),
                         receiveAnyPayload(playerTwoSession.first),
                     )
                     assertEquals(
                         PhaseBoundaryEvent(
                             lobbyCode = lobbyCode,
-                            stateVersion = 9,
+                            stateVersion = 11,
                             previousPhase = TurnPhase.FORTIFY,
-                            nextPhase = TurnPhase.DRAW_CARD,
-                            activePlayerId = playerOne,
+                            nextPhase = TurnPhase.REINFORCEMENTS,
+                            activePlayerId = playerTwo,
                             turnCount = 1,
                         ),
                         receiveAnyPayload(playerTwoSession.first),
                     )
                     assertEquals(
-                        TurnStateUpdatedEvent(
-                            lobbyCode = lobbyCode,
-                            activePlayerId = playerOne,
-                            turnPhase = TurnPhase.DRAW_CARD,
-                            turnCount = 1,
-                            startPlayerId = playerOne,
-                        ),
+                        nextReinforcementsUpdate,
                         receiveAnyPayload(playerTwoSession.first),
                     )
+                    assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(playerTwoSession.first))
 
                     val advancedState =
                         lobbyManager.getLobby(lobbyCode)?.currentState()
                             ?: error("snapshot missing")
-                    assertEquals(TurnPhase.DRAW_CARD, advancedState.activeTurnPhase)
+                    assertEquals(TurnPhase.REINFORCEMENTS, advancedState.activeTurnPhase)
+                    assertEquals(playerTwo, advancedState.activePlayer)
+                    assertEquals(3, advancedState.pendingReinforcementsFor(playerTwo))
 
                     playerOneSession.first.close()
                     playerTwoSession.first.close()

@@ -13,6 +13,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -28,6 +29,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.state.CardDeckFactory
 import at.aau.pulverfass.shared.lobby.state.CardSetValidator
 import at.aau.pulverfass.shared.lobby.state.DiscardPileState
@@ -81,6 +83,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     state.copy(
                         status = GameStatus.WAITING_FOR_PLAYERS,
                         closedReason = null,
+                        winnerPlayerId = null,
                         pendingReinforcements = null,
                     )
 
@@ -139,10 +142,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val updatedStatus = preserveLobbyStatus(state, updatedPlayers)
         val updatedTurnState =
             synchronizedTurnStateForLobbySetup(state, updatedTurnOrder, state.turnOrder)
+        val normalizedPlayerDisplayName =
+            normalizePlayerDisplayNameOrFallback(playerDisplayName)
         val baseUpdatedState =
             state.copy(
                 players = updatedPlayers,
-                playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
+                playerDisplayNames =
+                    state.playerDisplayNames + (playerId to normalizedPlayerDisplayName),
                 lobbyOwner = updatedLobbyOwner,
                 pendingReinforcements = state.pendingReinforcements,
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),
@@ -335,8 +341,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 ownerId = event.ownerId,
             )
 
-        return if (hasWinningPlayer(updatedState)) {
-            updatedState.copy(status = GameStatus.FINISHED)
+        val winnerPlayerId = updatedState.territoryDominationWinner()
+        return if (winnerPlayerId != null) {
+            finishMatch(
+                state = updatedState,
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = winnerPlayerId,
+            )
         } else {
             updatedState
         }
@@ -460,6 +471,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 gameRandomState = event.randomSeed,
                 pendingReinforcements = null,
                 status = GameStatus.RUNNING,
+                closedReason = null,
+                winnerPlayerId = null,
                 territoryCapturedThisTurn = false,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,
@@ -820,20 +833,39 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         state: GameState,
         event: MatchEndedEvent,
     ): GameState {
-        if (state.status != GameStatus.RUNNING) {
+        val mayEnrichFinishedState =
+            state.status == GameStatus.FINISHED &&
+                state.closedReason == null &&
+                state.winnerPlayerId == null
+        if (state.status != GameStatus.RUNNING && !mayEnrichFinishedState) {
             throw InvalidLobbyEventException(
                 "MatchEndedEvent kann nur im Status RUNNING verarbeitet werden, " +
                     "war aber '${state.status}'.",
             )
         }
+        if (event.winnerPlayerId != null) {
+            requireKnownPlayer(state, event.winnerPlayerId)
+        }
 
-        return state.copy(
+        return finishMatch(
+            state = state,
+            reason = event.reason,
+            winnerPlayerId = event.winnerPlayerId,
+        )
+    }
+
+    private fun finishMatch(
+        state: GameState,
+        reason: MatchEndReason,
+        winnerPlayerId: PlayerId?,
+    ): GameState =
+        state.copy(
             status = GameStatus.FINISHED,
-            closedReason = event.reason.name,
+            closedReason = reason.name,
+            winnerPlayerId = winnerPlayerId,
             pendingReinforcements = null,
             territoryCapturedThisTurn = false,
         )
-    }
 
     private fun onPlayerCardsRemoved(
         state: GameState,
@@ -1017,18 +1049,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
     private fun hasStartedGame(state: GameState): Boolean =
         state.gameStarted || state.status == GameStatus.RUNNING
-
-    private fun hasWinningPlayer(state: GameState): Boolean {
-        if (!hasStartedGame(state) || !state.hasMap()) {
-            return false
-        }
-
-        val territoryStates = state.allTerritoryStates()
-        val owners = territoryStates.mapNotNull { territoryState -> territoryState.ownerId }.toSet()
-        return territoryStates.isNotEmpty() &&
-            owners.size == 1 &&
-            territoryStates.all { territoryState -> territoryState.ownerId != null }
-    }
 
     private fun requireMapLoaded(state: GameState) {
         if (!state.hasMap()) {

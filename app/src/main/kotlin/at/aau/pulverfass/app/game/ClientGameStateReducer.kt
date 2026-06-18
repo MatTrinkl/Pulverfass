@@ -8,11 +8,13 @@ import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
@@ -85,6 +87,9 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
@@ -111,14 +116,17 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
     /**
      * Wendet ein öffentliches Delta auf den lokalen State an.
      *
-     * Deltas dürfen nur angewendet werden, wenn ihre `fromVersion` exakt zur
-     * lokalen [GameUiState.stateVersion] passt. Bei jeder Lücke wird bewusst kein
+     * Deltas dürfen nur angewendet werden, wenn sie direkt an die lokale
+     * [GameUiState.stateVersion] anschließen. Bei jeder Lücke wird bewusst kein
      * Teilupdate geraten, sondern Catch-up angefordert, damit die Karte wieder
      * vollständig serverautoritativen Zustand bekommt.
      *
@@ -135,7 +143,22 @@ object ClientGameStateReducer {
         if (delta.toVersion <= current.stateVersion) {
             return DeltaApplyResult(state = current, needsCatchUp = false)
         }
-        if (!canApplyDelta(localVersion = current.stateVersion, delta = delta)) {
+        /*
+         * Der Server kodiert Single-Event-Deltas mit fromVersion == toVersion (die
+         * Version enthält das Event bereits, siehe PublicGameStateBuilder.buildDelta).
+         * Solche Deltas erfüllen canApplyDelta nie und würden sonst fälschlich als
+         * Lücke einen Catch-up auslösen, der ihre flüchtigen Events -- etwa das
+         * AttackResolvedBroadcastEvent fürs Kampf-VFX -- verschluckt. Liegt ein
+         * solches Delta genau eine Version vor uns, ist es der nächste Schritt und
+         * wird regulär angewandt; echte Lücken laufen weiterhin über den Catch-up.
+         */
+        val isSameVersionNextStep =
+            delta.fromVersion == delta.toVersion &&
+                delta.toVersion == current.stateVersion + 1
+        if (
+            !isSameVersionNextStep &&
+            !canApplyDelta(localVersion = current.stateVersion, delta = delta)
+        ) {
             return DeltaApplyResult(
                 state =
                     current.copy(
@@ -162,6 +185,29 @@ object ClientGameStateReducer {
                 ),
             needsCatchUp = false,
         )
+    }
+
+    /**
+     * Wendet ein direkt gesendetes Match-Ende auf den lokalen State an.
+     *
+     * Der reguläre Pfad läuft über [GameStateDeltaEvent]. Diese Methode hält den
+     * Controller zusätzlich robust, falls ein Server das Ende als einzelnes
+     * Broadcast-Payload sendet.
+     *
+     * @param current bisheriger lokaler GameState
+     * @param event serverseitiges Match-Ende
+     * @return aktualisierter UI-State
+     */
+    fun applyMatchEndedBroadcast(
+        current: GameUiState,
+        event: MatchEndedBroadcastEvent,
+    ): GameUiState {
+        val eventVersion = event.stateVersion ?: current.stateVersion
+        if (eventVersion < current.stateVersion) {
+            return current
+        }
+
+        return current.applyMatchEnded(event)
     }
 
     /**
@@ -632,6 +678,9 @@ object ClientGameStateReducer {
         turnState: PublicTurnStateSnapshot,
         definition: MapDefinitionSnapshot,
         territoryStates: List<MapTerritoryStateSnapshot>,
+        gameStatus: GameStatus,
+        matchEndReason: String?,
+        winnerPlayerId: PlayerId?,
         players: List<LobbyPlayerUi>,
     ): GameUiState {
         if (stateVersion < current.stateVersion) {
@@ -642,6 +691,9 @@ object ClientGameStateReducer {
             current =
                 current.copy(
                     isStarted = true,
+                    gameStatus = gameStatus,
+                    matchEndReason = matchEndReason,
+                    winnerPlayerId = winnerPlayerId,
                     activePlayerId = turnState.activePlayerId,
                     turnPhase = turnState.turnPhase,
                     turnCount = turnState.turnCount,
@@ -718,7 +770,14 @@ object ClientGameStateReducer {
     ): GameUiState =
         when (event) {
             is GameStartedEvent ->
-                current.copy(isStarted = true, isCatchingUp = true, lastSyncError = null)
+                current.copy(
+                    isStarted = true,
+                    gameStatus = GameStatus.RUNNING,
+                    matchEndReason = null,
+                    winnerPlayerId = null,
+                    isCatchingUp = true,
+                    lastSyncError = null,
+                )
             is TurnStateUpdatedEvent ->
                 current.copy(
                     activePlayerId = event.activePlayerId,
@@ -772,8 +831,29 @@ object ClientGameStateReducer {
             is AttackResolvedBroadcastEvent -> current.applyAttackResolved(event)
             is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
             is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
+            is MatchEndedBroadcastEvent -> current.applyMatchEnded(event)
             else -> current
         }
+
+    private fun GameUiState.applyMatchEnded(event: MatchEndedBroadcastEvent): GameUiState =
+        copy(
+            stateVersion = maxOf(stateVersion, event.stateVersion ?: stateVersion),
+            gameStatus = GameStatus.FINISHED,
+            matchEndReason = event.reason.name,
+            winnerPlayerId = event.winnerPlayerId,
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            reinforcementState = ReinforcementUiState(),
+            reinforcementPlacementAmount = 1,
+            attackState = AttackUiState(),
+            fortifyState = FortifyUiState(),
+            selectedTradeInCardIds = emptySet(),
+            isCatchingUp = false,
+            isDesynced = false,
+            lastSyncError = null,
+        )
 
     private fun GameUiState.applyAttackResolved(event: AttackResolvedBroadcastEvent): GameUiState {
         val latestResult =
@@ -787,31 +867,114 @@ object ClientGameStateReducer {
                 attackerRemaining = event.attackerRemaining,
                 defenderRemaining = event.defenderRemaining,
                 occupyingTroopCount = event.occupyingTroopCount,
+                attackId =
+                    event.stateVersion
+                        ?: ((attackState.latestResult?.attackId ?: 0L) + 1L),
+                sourceTroopsBefore = event.sourceTroopsBefore,
+                targetTroopsBefore = event.targetTroopsBefore,
             )
         val updatedAutoAttack = attackState.autoAttack.afterAttackResolved(event)
-        val keepAutoSelection =
+        val shouldStopAutoAttackAfterLoss =
             updatedAutoAttack.isEnabled &&
                 updatedAutoAttack.intent?.matches(event) == true &&
-                !latestResult.captured
-        val updatedAttackState =
-            if (keepAutoSelection) {
-                attackState.copy(
-                    latestResult = latestResult,
-                    autoAttack = updatedAutoAttack,
-                )
+                event.attackerLosses > 0
+        val nextAutoAttack =
+            if (shouldStopAutoAttackAfterLoss) {
+                updatedAutoAttack.afterAttackerLoss()
             } else {
-                AttackUiState(
-                    latestResult = latestResult,
-                    autoAttack = updatedAutoAttack,
-                )
+                updatedAutoAttack
+            }
+        val maximumFollowUpAttackTroops = event.attackerRemaining - 1
+        val canKeepSelection =
+            nextAutoAttack.isEnabled &&
+                (
+                    nextAutoAttack.intent?.matches(event) == true ||
+                        shouldStopAutoAttackAfterLoss
+                ) &&
+                !latestResult.captured &&
+                maximumFollowUpAttackTroops >= MIN_ATTACK_TROOPS
+        val canContinueAutoAttack =
+            canKeepSelection &&
+                !shouldStopAutoAttackAfterLoss &&
+                nextAutoAttack.intent != null
+        val updatedAttackState =
+            when {
+                canContinueAutoAttack ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = true,
+                        )
+                canKeepSelection ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = false,
+                        )
+                else ->
+                    AttackUiState(
+                        latestResult = latestResult,
+                        autoAttack = nextAutoAttack,
+                    )
             }
 
         return copy(
-            selectedRegionId = if (keepAutoSelection) selectionToRegionId else null,
-            selectionFromRegionId = if (keepAutoSelection) selectionFromRegionId else null,
-            selectionToRegionId = if (keepAutoSelection) selectionToRegionId else null,
+            selectedRegionId = if (canKeepSelection) selectionToRegionId else null,
+            selectionFromRegionId = if (canKeepSelection) selectionFromRegionId else null,
+            selectionToRegionId = if (canKeepSelection) selectionToRegionId else null,
             selectionMessage = null,
             attackState = updatedAttackState,
+        )
+    }
+
+    /**
+     * Klemmt UI-Werte und optional die Auto-Angriff-Absicht auf die aktuelle Quellgebietsstärke.
+     *
+     * @param maximumAttackTroops höchste aktuell erlaubte Angriffsstärke
+     * @param keepAutoIntent ob eine passende Auto-Angriff-Absicht erhalten bleibt
+     * @return Angriffsstate mit sofort wieder gültigen Slider- und Auto-Angriff-Werten
+     */
+    private fun AttackUiState.withClampedFollowUpAttack(
+        maximumAttackTroops: Int,
+        keepAutoIntent: Boolean,
+    ): AttackUiState {
+        val clampedAttackTroops =
+            attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+        val clampedMoveAfterCapture =
+            moveAfterCapture.coerceIn(
+                minimumOccupyingTroopsForAttack(clampedAttackTroops),
+                clampedAttackTroops,
+            )
+        val nextAutoAttack =
+            if (keepAutoIntent) {
+                val clampedIntent =
+                    autoAttack.intent?.let { intent ->
+                        val intentAttackTroops =
+                            intent.attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+                        intent.copy(
+                            attackTroops = intentAttackTroops,
+                            moveAfterCapture =
+                                intent.moveAfterCapture.coerceIn(
+                                    minimumOccupyingTroopsForAttack(intentAttackTroops),
+                                    intentAttackTroops,
+                                ),
+                        )
+                    }
+                autoAttack.copy(intent = clampedIntent)
+            } else {
+                autoAttack.afterAttackerLoss()
+            }
+
+        return copy(
+            attackTroops = clampedAttackTroops,
+            moveAfterCapture = clampedMoveAfterCapture,
+            autoAttack = nextAutoAttack,
         )
     }
 
@@ -828,6 +991,15 @@ object ClientGameStateReducer {
         } else {
             this
         }
+
+    private fun AutoAttackUiState.afterAttackerLoss(): AutoAttackUiState =
+        copy(
+            intent = null,
+            isAwaitingResult = false,
+            pendingRequestId = null,
+            statusText = null,
+            errorText = null,
+        )
 
     private fun AttackUiState.afterFullSnapshot(turnPhase: TurnPhase): AttackUiState =
         if (turnPhase == TurnPhase.ATTACK) {
@@ -1181,9 +1353,16 @@ object ClientGameStateReducer {
     private fun canApplyDelta(
         localVersion: Long,
         delta: GameStateDeltaEvent,
-    ): Boolean =
-        delta.fromVersion == localVersion &&
-            delta.toVersion > localVersion
+    ): Boolean {
+        val rangeDeltaFollowsLocalVersion =
+            delta.fromVersion == localVersion &&
+                delta.toVersion > localVersion
+        val singleEventDeltaFollowsLocalVersion =
+            delta.fromVersion == delta.toVersion &&
+                delta.fromVersion == localVersion + 1
+
+        return rangeDeltaFollowsLocalVersion || singleEventDeltaFollowsLocalVersion
+    }
 }
 
 /**

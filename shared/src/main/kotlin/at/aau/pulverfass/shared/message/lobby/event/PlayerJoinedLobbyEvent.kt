@@ -13,8 +13,8 @@ import kotlinx.serialization.Serializable
  *
  * @property lobbyCode betroffene Lobby
  * @property playerId Spieler, der der Lobby beigetreten ist
- * @property playerDisplayName Anzeigename des Players fuer die Lobby-UI;
- * darf nicht leer sein und ist auf 32 Zeichen begrenzt
+ * @property playerDisplayName Anzeigename des Players für die Lobby-UI;
+ * darf nicht leer sein, ist auf 8 Zeichen begrenzt und enthält nur A bis Z.
  */
 @Serializable
 data class PlayerJoinedLobbyEvent(

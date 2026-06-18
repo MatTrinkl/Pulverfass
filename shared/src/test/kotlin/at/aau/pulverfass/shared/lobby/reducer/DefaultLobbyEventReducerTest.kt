@@ -86,6 +86,7 @@ class DefaultLobbyEventReducerTest {
             )
 
         assertEquals(listOf(playerId), updatedState.players)
+        assertEquals("ALICE", updatedState.playerDisplayNames.getValue(playerId))
         assertEquals(listOf(playerId), updatedState.turnOrder)
         assertEquals(playerId, updatedState.activePlayer)
         assertEquals(TurnPhase.REINFORCEMENTS, updatedState.turnState?.turnPhase)
@@ -262,13 +263,13 @@ class DefaultLobbyEventReducerTest {
                 activePlayer = playerOne,
             )
         assertThrows(InvalidLobbyEventException::class.java) {
-            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "Player 1"))
+            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "PLAYER"))
         }
 
         val runningState =
             reducer.apply(
                 duplicateState,
-                PlayerJoined(lobbyCode, playerTwo, "Player 2"),
+                PlayerJoined(lobbyCode, playerTwo, "PLAYER"),
             )
         assertEquals(GameStatus.WAITING_FOR_PLAYERS, runningState.status)
         assertEquals(playerOne, runningState.activePlayer)
@@ -279,11 +280,11 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(
             GameStatus.CLOSED,
-            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "PLAYER")).status,
         )
         assertEquals(
             GameStatus.FINISHED,
-            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "PLAYER")).status,
         )
     }
 
@@ -828,8 +829,31 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(GameStatus.FINISHED, updatedState.status)
         assertEquals(MatchEndReason.DECK_EMPTY.name, updatedState.closedReason)
+        assertNull(updatedState.winnerPlayerId)
         assertEquals(null, updatedState.pendingReinforcements)
         assertEquals(false, updatedState.territoryCapturedThisTurn)
+    }
+
+    @Test
+    fun `match ended event stores territory domination winner`() {
+        val lobbyCode = LobbyCode("ME13")
+        val playerOne = PlayerId(1)
+        val playerTwo = PlayerId(2)
+        val runningState = runningAttackState(lobbyCode, playerOne, playerTwo)
+
+        val updatedState =
+            reducer.apply(
+                runningState,
+                MatchEndedEvent(
+                    lobbyCode = lobbyCode,
+                    reason = MatchEndReason.TERRITORY_DOMINATION,
+                    winnerPlayerId = playerOne,
+                ),
+            )
+
+        assertEquals(GameStatus.FINISHED, updatedState.status)
+        assertEquals(MatchEndReason.TERRITORY_DOMINATION.name, updatedState.closedReason)
+        assertEquals(playerOne, updatedState.winnerPlayerId)
     }
 
     @Test
@@ -843,6 +867,51 @@ class DefaultLobbyEventReducerTest {
                 MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
             )
         }
+    }
+
+    @Test
+    fun `territory owner changed finishes match when one player controls all territories`() {
+        val lobbyCode = LobbyCode("ME14")
+        val winner = PlayerId(1)
+        val defender = PlayerId(2)
+        val baseState =
+            GameState.initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = sampleMapDefinition(),
+                players = listOf(winner, defender),
+            ).copy(
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                territoryStates =
+                    GameState.initial(
+                        lobbyCode = lobbyCode,
+                        mapDefinition = sampleMapDefinition(),
+                        players = listOf(winner, defender),
+                    ).allTerritoryStates().associate { territoryState ->
+                        val ownerId =
+                            if (territoryState.territoryId == TerritoryId("alpha")) {
+                                defender
+                            } else {
+                                winner
+                            }
+                        territoryState.territoryId to
+                            TerritoryState(
+                                territoryId = territoryState.territoryId,
+                                ownerId = ownerId,
+                                troopCount = 1,
+                            )
+                    },
+            )
+
+        val updatedState =
+            reducer.apply(
+                baseState,
+                TerritoryOwnerChangedEvent(lobbyCode, TerritoryId("alpha"), winner),
+            )
+
+        assertEquals(GameStatus.FINISHED, updatedState.status)
+        assertEquals(MatchEndReason.TERRITORY_DOMINATION.name, updatedState.closedReason)
+        assertEquals(winner, updatedState.winnerPlayerId)
     }
 
     @Test
@@ -1300,7 +1369,7 @@ class DefaultLobbyEventReducerTest {
                 null,
                 reducer,
                 GameState.initial(lobbyCode),
-                PlayerJoined(lobbyCode, PlayerId(3), "Player 3"),
+                PlayerJoined(lobbyCode, PlayerId(3), "PLAYER"),
                 null,
                 4,
                 null,

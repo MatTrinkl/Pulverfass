@@ -177,7 +177,7 @@ class GameStateTransportIntegrationTest {
                         watcher = playerTwoSocket,
                         request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.FORTIFY),
                         expectedVersion = 3,
-                        expectedUpdate =
+                        intermediateUpdate =
                             TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
                                 activePlayerId = playerOne,
@@ -185,12 +185,6 @@ class GameStateTransportIntegrationTest {
                                 turnCount = 1,
                                 startPlayerId = playerOne,
                             ),
-                    )
-                    assertAdvanceSequence(
-                        actor = playerOneSocket,
-                        watcher = playerTwoSocket,
-                        request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.DRAW_CARD),
-                        expectedVersion = 4,
                         expectedUpdate =
                             TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
@@ -395,7 +389,7 @@ class GameStateTransportIntegrationTest {
                         watcher = playerTwoSocket,
                         request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.FORTIFY),
                         expectedVersion = 10,
-                        expectedUpdate =
+                        intermediateUpdate =
                             TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
                                 activePlayerId = playerOne,
@@ -403,12 +397,6 @@ class GameStateTransportIntegrationTest {
                                 turnCount = 1,
                                 startPlayerId = playerOne,
                             ),
-                    )
-                    assertAdvanceSequence(
-                        actor = playerOneSocket,
-                        watcher = playerTwoSocket,
-                        request = TurnAdvanceRequest(lobbyCode, playerOne, TurnPhase.DRAW_CARD),
-                        expectedVersion = 11,
                         expectedUpdate =
                             TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
@@ -485,6 +473,7 @@ class GameStateTransportIntegrationTest {
         request: TurnAdvanceRequest,
         expectedVersion: Long,
         expectedUpdate: TurnStateUpdatedEvent,
+        intermediateUpdate: TurnStateUpdatedEvent? = null,
         expectSnapshot: Boolean = false,
         expectedGrantedEvent: ReinforcementsGrantedEvent? = null,
     ) {
@@ -495,21 +484,19 @@ class GameStateTransportIntegrationTest {
             ),
         )
 
-        assertEquals(
-            GameStateDeltaEvent(
-                lobbyCode = request.lobbyCode,
-                fromVersion = expectedVersion,
-                toVersion = expectedVersion,
-                events = listOf(expectedUpdate),
-            ),
-            receiveAnyPayload(actor),
-        )
+        val turnStateUpdates = listOfNotNull(intermediateUpdate, expectedUpdate)
+        turnStateUpdates.forEachIndexed { index, update ->
+            assertTurnStateDelta(actor, request.lobbyCode, expectedVersion + index, update)
+        }
+        val lastTurnStateVersion = expectedVersion + turnStateUpdates.size - 1
+        val finalStateVersion =
+            lastTurnStateVersion + if (expectedGrantedEvent == null) 0 else 1
         if (expectedGrantedEvent != null) {
             assertEquals(
                 GameStateDeltaEvent(
                     lobbyCode = request.lobbyCode,
-                    fromVersion = expectedVersion + 1,
-                    toVersion = expectedVersion + 1,
+                    fromVersion = finalStateVersion,
+                    toVersion = finalStateVersion,
                     events = listOf(expectedGrantedEvent),
                 ),
                 receiveAnyPayload(actor),
@@ -519,8 +506,7 @@ class GameStateTransportIntegrationTest {
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion =
-                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                stateVersion = finalStateVersion,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,
@@ -531,29 +517,20 @@ class GameStateTransportIntegrationTest {
         assertEquals(expectedUpdate, receiveAnyPayload(actor))
         if (expectSnapshot) {
             val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(actor))
-            assertEquals(
-                if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
-                snapshot.stateVersion,
-            )
+            assertEquals(finalStateVersion, snapshot.stateVersion)
             assertEquals(expectedUpdate.activePlayerId, snapshot.turnState.activePlayerId)
             assertEquals(expectedUpdate.turnPhase, snapshot.turnState.turnPhase)
         }
 
-        assertEquals(
-            GameStateDeltaEvent(
-                lobbyCode = request.lobbyCode,
-                fromVersion = expectedVersion,
-                toVersion = expectedVersion,
-                events = listOf(expectedUpdate),
-            ),
-            receiveAnyPayload(watcher),
-        )
+        turnStateUpdates.forEachIndexed { index, update ->
+            assertTurnStateDelta(watcher, request.lobbyCode, expectedVersion + index, update)
+        }
         if (expectedGrantedEvent != null) {
             assertEquals(
                 GameStateDeltaEvent(
                     lobbyCode = request.lobbyCode,
-                    fromVersion = expectedVersion + 1,
-                    toVersion = expectedVersion + 1,
+                    fromVersion = finalStateVersion,
+                    toVersion = finalStateVersion,
                     events = listOf(expectedGrantedEvent),
                 ),
                 receiveAnyPayload(watcher),
@@ -562,8 +539,7 @@ class GameStateTransportIntegrationTest {
         assertEquals(
             PhaseBoundaryEvent(
                 lobbyCode = request.lobbyCode,
-                stateVersion =
-                    if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
+                stateVersion = finalStateVersion,
                 previousPhase = request.expectedPhase ?: error("expectedPhase required in test"),
                 nextPhase = expectedUpdate.turnPhase,
                 activePlayerId = expectedUpdate.activePlayerId,
@@ -574,13 +550,27 @@ class GameStateTransportIntegrationTest {
         assertEquals(expectedUpdate, receiveAnyPayload(watcher))
         if (expectSnapshot) {
             val snapshot = assertIs<GameStateSnapshotBroadcast>(receiveAnyPayload(watcher))
-            assertEquals(
-                if (expectedGrantedEvent == null) expectedVersion else expectedVersion + 1,
-                snapshot.stateVersion,
-            )
+            assertEquals(finalStateVersion, snapshot.stateVersion)
             assertEquals(expectedUpdate.activePlayerId, snapshot.turnState.activePlayerId)
             assertEquals(expectedUpdate.turnPhase, snapshot.turnState.turnPhase)
         }
+    }
+
+    private suspend fun assertTurnStateDelta(
+        session: DefaultClientWebSocketSession,
+        lobbyCode: LobbyCode,
+        version: Long,
+        expectedUpdate: TurnStateUpdatedEvent,
+    ) {
+        assertEquals(
+            GameStateDeltaEvent(
+                lobbyCode = lobbyCode,
+                fromVersion = version,
+                toVersion = version,
+                events = listOf(expectedUpdate),
+            ),
+            receiveAnyPayload(session),
+        )
     }
 
     private fun runningTurnStateGame(

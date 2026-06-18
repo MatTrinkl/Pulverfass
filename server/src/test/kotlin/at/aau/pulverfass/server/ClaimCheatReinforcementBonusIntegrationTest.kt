@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Integrationstests für den kompletten Serverpfad des Cheatbonus.
@@ -325,25 +326,13 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
-                    // Ich gehe einmal bis zur nächsten Runde, damit die 0-Truppen-Strafe greift.
-                    advanceTurn(
-                        cheaterSession.first,
-                        lobbyCode,
-                        playerOne,
-                        TurnPhase.REINFORCEMENTS,
+                    advanceUntilCheaterReinforcementPenaltyApplies(
+                        cheaterSession = cheaterSession.first,
+                        reporterSession = reporterSession.first,
+                        lobbyCode = lobbyCode,
+                        cheaterId = playerOne,
+                        reporterId = playerTwo,
                     )
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.ATTACK)
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.FORTIFY)
-                    advanceTurn(cheaterSession.first, lobbyCode, playerOne, TurnPhase.DRAW_CARD)
-                    advanceTurn(
-                        reporterSession.first,
-                        lobbyCode,
-                        playerTwo,
-                        TurnPhase.REINFORCEMENTS,
-                    )
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.ATTACK)
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.FORTIFY)
-                    advanceTurn(reporterSession.first, lobbyCode, playerTwo, TurnPhase.DRAW_CARD)
 
                     val penalizedState =
                         lobbyManager.getLobby(lobbyCode)?.currentState()
@@ -361,7 +350,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
         }
 
     @Test
-    fun `reporting cheat before visible reinforcement placement penalizes reporter`() =
+    fun `cheat report window expires twenty seconds after visible placement`() =
         testApplication {
             /*
              * Der Cheat ist direkt nach dem Claim noch nicht sichtbar. Dieser Test
@@ -372,15 +361,19 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             val lobbyCode = LobbyCode("CHR3")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
+            val playerThree = PlayerId(3)
+            val playerFour = PlayerId(4)
+            val nowMillis = AtomicLong(1_000L)
             val baseState =
                 reinforcementGame(
                     lobbyCode = lobbyCode,
-                    players = listOf(playerOne, playerTwo),
+                    players = listOf(playerOne, playerTwo, playerThree, playerFour),
                     activePlayerId = playerOne,
                     turnPhase = TurnPhase.REINFORCEMENTS,
                     pendingPlayerId = playerOne,
                     pendingAmount = 2,
                 )
+            val placementTerritoryId = baseState.allTerritoryStates().first().territoryId
 
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -399,6 +392,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                     lobbyManager = lobbyManager,
                     playerIdResolver = { connectionId -> playersByConnection[connectionId] },
                     connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    nowEpochMillis = nowMillis::get,
                     hooks = MainServerLobbyRoutingServiceHooks(),
                 )
 
@@ -431,6 +425,22 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                             playersByConnection = playersByConnection,
                             connectionsByPlayer = connectionsByPlayer,
                         )
+                    val lateReporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerThree,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val expiredReporterSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerFour,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
 
                     cheaterSession.first.send(
                         Frame.Binary(
@@ -451,6 +461,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         receiveRelevantTestPayload(cheaterSession.first),
                     )
 
+                    nowMillis.addAndGet(30_000L)
                     reporterSession.first.send(
                         Frame.Binary(
                             fin = true,
@@ -465,6 +476,108 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                         ),
                     )
 
+                    // Auch lange vor der sichtbaren Platzierung bleibt der Cheat meldbar.
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = true,
+                            modifierDelta = 3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = reporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    val placementMillis = nowMillis.get()
+                    cheaterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    PlaceReinforcementsRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = playerOne,
+                                        placements =
+                                            listOf(
+                                                TerritoryPlacement(
+                                                    territoryId = placementTerritoryId,
+                                                    amount = 1,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertEquals(
+                        PlaceReinforcementsResponse(lobbyCode),
+                        receiveRelevantTestPayload(
+                            session = cheaterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = lateReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+                    assertIs<TerritoryTroopsChangedEvent>(
+                        receiveRelevantTestPayload(
+                            session = expiredReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    nowMillis.set(placementMillis + 19_999L)
+                    lateReporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerThree,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
+                    assertEquals(
+                        ReportCheatResponse(
+                            lobbyCode = lobbyCode,
+                            accusedPlayerId = playerOne,
+                            correct = true,
+                            modifierDelta = 3,
+                        ),
+                        receiveRelevantTestPayload(
+                            session = lateReporterSession.first,
+                            skipGameSync = true,
+                        ),
+                    )
+
+                    nowMillis.set(placementMillis + 20_001L)
+                    expiredReporterSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    ReportCheatRequest(
+                                        lobbyCode = lobbyCode,
+                                        reporterPlayerId = playerFour,
+                                        accusedPlayerId = playerOne,
+                                    ),
+                                ),
+                        ),
+                    )
                     assertEquals(
                         ReportCheatResponse(
                             lobbyCode = lobbyCode,
@@ -473,13 +586,15 @@ class ClaimCheatReinforcementBonusIntegrationTest {
                             modifierDelta = -3,
                         ),
                         receiveRelevantTestPayload(
-                            session = reporterSession.first,
+                            session = expiredReporterSession.first,
                             skipGameSync = true,
                         ),
                     )
 
                     cheaterSession.first.close()
                     reporterSession.first.close()
+                    lateReporterSession.first.close()
+                    expiredReporterSession.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -1087,6 +1202,34 @@ class ClaimCheatReinforcementBonusIntegrationTest {
             ),
         )
         assertEquals(TurnAdvanceResponse(lobbyCode), receivePayloadOf<TurnAdvanceResponse>(session))
+    }
+
+    /**
+     * Führt die Runde bis zur nächsten Verstärkungsphase des Cheaters fort.
+     *
+     * Fortify beendet den Zug direkt und setzt den nächsten Spieler in die
+     * Verstärkungsphase. Die 0-Truppen-Strafe ist daher erst sichtbar, nachdem
+     * der meldende Spieler seinen vollständigen Zug beendet hat.
+     *
+     * @param cheaterSession WebSocket-Verbindung des Spielers, dessen Cheat bestätigt wurde.
+     * @param reporterSession WebSocket-Verbindung des Spielers, der den Cheat korrekt gemeldet hat.
+     * @param lobbyCode Code der laufenden Lobby, in der die Phasen weitergeschaltet werden.
+     * @param cheaterId Spieler, dessen nächste Verstärkungsphase auf 0 Truppen gesetzt werden soll.
+     * @param reporterId Spieler, der vor der Strafprüfung seinen vollständigen Zug beendet.
+     */
+    private suspend fun advanceUntilCheaterReinforcementPenaltyApplies(
+        cheaterSession: DefaultClientWebSocketSession,
+        reporterSession: DefaultClientWebSocketSession,
+        lobbyCode: LobbyCode,
+        cheaterId: PlayerId,
+        reporterId: PlayerId,
+    ) {
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.REINFORCEMENTS)
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.ATTACK)
+        advanceTurn(cheaterSession, lobbyCode, cheaterId, TurnPhase.FORTIFY)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.REINFORCEMENTS)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.ATTACK)
+        advanceTurn(reporterSession, lobbyCode, reporterId, TurnPhase.FORTIFY)
     }
 
     private suspend inline fun <reified T> receivePayloadOf(

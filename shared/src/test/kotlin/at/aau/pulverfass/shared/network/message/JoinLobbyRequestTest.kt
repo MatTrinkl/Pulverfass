@@ -55,13 +55,23 @@ class JoinLobbyRequestTest {
     }
 
     @Test
-    fun `should reject player display name longer than 32 characters`() {
+    fun `should reject player display name longer than eight characters`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(33))
+                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(9))
             }
 
-        assertTrue(exception.message.orEmpty().contains("32"))
+        assertTrue(exception.message.orEmpty().contains("8"))
+    }
+
+    @Test
+    fun `should reject player display name with non latin letters`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                JoinLobbyRequest(LobbyCode("AB12"), "ALICE1")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
     }
 
     @Test

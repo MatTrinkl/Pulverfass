@@ -1,6 +1,8 @@
 package at.aau.pulverfass.shared.message.lobby.event
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.message.lobby.PublicGameStateWireSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
@@ -24,6 +26,9 @@ data class GameStateSnapshotBroadcast(
     val turnState: PublicTurnStateSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
+    val gameStatus: GameStatus = GameStatus.RUNNING,
+    val matchEndReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
 ) : PublicGameStatePayload {
     companion object {
         fun from(snapshot: PublicGameStateSnapshot): GameStateSnapshotBroadcast =
@@ -34,6 +39,9 @@ data class GameStateSnapshotBroadcast(
                 turnState = snapshot.turnState,
                 definition = snapshot.definition,
                 territoryStates = snapshot.territoryStates,
+                gameStatus = snapshot.gameStatus,
+                matchEndReason = snapshot.matchEndReason,
+                winnerPlayerId = snapshot.winnerPlayerId,
             )
     }
 }
@@ -53,6 +61,9 @@ object GameStateSnapshotBroadcastSerializer :
                 turnState = value.turnState,
                 definition = value.definition,
                 territoryStates = value.territoryStates,
+                gameStatus = value.gameStatus,
+                matchEndReason = value.matchEndReason,
+                winnerPlayerId = value.winnerPlayerId,
             )
         },
         fromWire = { wire ->
@@ -63,6 +74,9 @@ object GameStateSnapshotBroadcastSerializer :
                 turnState = wire.turnState,
                 definition = wire.definition,
                 territoryStates = wire.territoryStates,
+                gameStatus = wire.gameStatus,
+                matchEndReason = wire.matchEndReason,
+                winnerPlayerId = wire.winnerPlayerId,
             )
         },
     )

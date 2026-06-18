@@ -349,7 +349,7 @@ class ServerNetworkIntegrationTest {
                                 SessionReconnectContext(
                                     playerId = PlayerId(7),
                                     lobbyCode = LobbyCode("ZX12"),
-                                    playerDisplayName = "Restarted Alice",
+                                    playerDisplayName = "RESTART",
                                 ),
                             expiresAtEpochMillis = System.currentTimeMillis() + 60_000,
                         )
@@ -385,7 +385,7 @@ class ServerNetworkIntegrationTest {
                         success = true,
                         playerId = PlayerId(7),
                         lobbyCode = LobbyCode("ZX12"),
-                        playerDisplayName = "Restarted Alice",
+                        playerDisplayName = "RESTART",
                     ),
                     response,
                 )

@@ -19,6 +19,7 @@ import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import at.aau.pulverfass.shared.message.connection.event.GlobalPlayerCountEvent
@@ -31,6 +32,7 @@ import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
@@ -151,9 +153,12 @@ class LobbyController(
             run {
                 val savedCharacterId = playerNameStore.readCharacterId()
                 val savedAutoAttackEnabled = playerNameStore.readAutoAttackEnabled()
+                val savedPlayerName =
+                    normalizePlayerDisplayName(playerNameStore.readPlayerName().orEmpty())
+                playerNameStore.savePlayerName(savedPlayerName)
                 LobbyUiState(
                     serverUrl = reconnectSessionStore.readServerUrl() ?: config.defaultServerUrl,
-                    playerName = playerNameStore.readPlayerName().orEmpty(),
+                    playerName = savedPlayerName,
                     statusText = config.statusNotConnected,
                     sessionToken = reconnectSessionStore.readSessionToken(),
                     gameStarted = wasGameStartedOnLastAppRun,
@@ -271,8 +276,9 @@ class LobbyController(
     }
 
     fun updatePlayerName(playerName: String) {
-        playerNameStore.savePlayerName(playerName)
-        _state.update { it.copy(playerName = playerName) }
+        val normalizedPlayerName = normalizePlayerDisplayName(playerName)
+        playerNameStore.savePlayerName(normalizedPlayerName)
+        _state.update { it.copy(playerName = normalizedPlayerName) }
     }
 
     fun updatePlayerColor(color: Color) {
@@ -414,6 +420,54 @@ class LobbyController(
         }
     }
 
+    /**
+     * Stößt die Wiederverbindung aus dem laufenden Spiel heraus erneut an.
+     *
+     * Der Button im Spiel darf keinen normalen Verbindungsaufbau starten, weil
+     * dieser ohne alte Session nicht sicher zur laufenden Lobby zurückfindet.
+     */
+    fun retryReconnect() {
+        manualDisconnectRequested = false
+        val snapshot = state.value
+
+        if (snapshot.isConnected) {
+            if (snapshot.gameState.isDesynced || snapshot.gameState.lastSyncError != null) {
+                requestGameCatchUp(
+                    reason = GameStateCatchUpReason.AFTER_RECONNECT,
+                    syncMessage = "Spielstand wird synchronisiert.",
+                )
+            }
+            return
+        }
+
+        if (snapshot.isConnecting || snapshot.isReconnecting || awaitingReconnectResponse) {
+            _state.update {
+                it.copy(
+                    isReconnecting = true,
+                    statusText = config.statusReconnecting,
+                    errorText = null,
+                )
+            }
+            return
+        }
+
+        if (canReconnect(snapshot)) {
+            beginReconnect(snapshot)
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isConnected = false,
+                isConnecting = false,
+                isReconnecting = false,
+                statusText = config.statusReconnectFailed,
+                errorText = config.errorReconnectTokenMissing,
+            )
+        }
+        clearPendingLobbyAction()
+    }
+
     fun disconnect() {
         manualDisconnectRequested = true
         cancelReconnect()
@@ -472,7 +526,9 @@ class LobbyController(
     }
 
     fun leaveLobby() {
-        val lobbyCode = state.value.activeLobbyCode
+        val snapshot = state.value
+        val lobbyCode = snapshot.activeLobbyCode
+        manualDisconnectRequested = true
         suppressNextAttackBoundaryNotice = false
         cancelDelayedAutoPhaseAdvance()
         cancelDelayedAutoAttackContinuation()
@@ -486,7 +542,9 @@ class LobbyController(
                                 LeaveLobbyRequest(
                                     lobbyCode = parseLobbyCode(lobbyCode),
                                 ),
+                            retryPolicy = LobbyRetryPolicy.SAFE_ONCE,
                         ),
+                        trackPending = false,
                     )
                 }
             }
@@ -499,7 +557,7 @@ class LobbyController(
                 players = emptyList(),
                 ownPlayerId = null,
                 gameStarted = false,
-                sessionToken = null,
+                sessionToken = snapshot.sessionToken.takeIf { snapshot.isConnected },
                 gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
@@ -685,6 +743,14 @@ class LobbyController(
             return
         }
 
+        sendTurnAdvanceRequest(snapshot, lobbyCode, playerId)
+    }
+
+    private fun sendTurnAdvanceRequest(
+        snapshot: LobbyUiState,
+        lobbyCode: String,
+        playerId: PlayerId,
+    ) {
         scope.launch {
             sendCommand(
                 command =
@@ -745,6 +811,8 @@ class LobbyController(
                 maybeAutoConfirmAttack(snapshot, playerId)
             TurnPhase.FORTIFY ->
                 maybeAutoAdvanceFortify(snapshot, playerId, delayBeforeAdvance)
+            TurnPhase.DRAW_CARD ->
+                maybeAutoAdvanceDrawCard(snapshot, playerId, delayBeforeAdvance)
             else -> Unit
         }
     }
@@ -815,6 +883,27 @@ class LobbyController(
         }
         enqueueAutoPhaseNotice(noticeText)
         advanceTurn()
+    }
+
+    private fun maybeAutoAdvanceDrawCard(
+        snapshot: LobbyUiState,
+        playerId: PlayerId,
+        delayBeforeAdvance: Boolean,
+    ) {
+        val lobbyCode = snapshot.activeLobbyCode ?: return
+        if (
+            LobbyCommandKey.TURN_ADVANCE in snapshot.pendingCommandKeys ||
+            snapshot.gameState.turnPhase != TurnPhase.DRAW_CARD ||
+            !snapshot.gameState.canUseGameActions(playerId, snapshot.isConnected)
+        ) {
+            return
+        }
+        if (delayBeforeAdvance) {
+            scheduleAutoPhaseAdvanceAfterVisualDelay()
+            return
+        }
+        enqueueAutoPhaseNotice(AUTO_PHASE_DRAW_CARD_DONE_NOTICE)
+        sendTurnAdvanceRequest(snapshot, lobbyCode, playerId)
     }
 
     /**
@@ -1443,40 +1532,79 @@ class LobbyController(
         _state.update {
             val autoAttack = it.gameState.attackState.autoAttack
             val nextIsEnabled = keepEnabled && it.autoAttackEnabled
-            if (
-                !autoAttack.isEnabled &&
-                !autoAttack.isAwaitingResult &&
-                autoAttack.intent == null &&
-                it.autoAttackEnabled == nextIsEnabled &&
-                errorText == null
-            ) {
-                it
-            } else if (
-                !autoAttack.isEnabled &&
-                !autoAttack.isAwaitingResult &&
-                autoAttack.statusText == statusText &&
-                autoAttack.errorText == errorText &&
-                it.autoAttackEnabled == nextIsEnabled
+            if (isAutoAttackStopNoOp(
+                    autoAttack,
+                    it.autoAttackEnabled,
+                    nextIsEnabled,
+                    statusText,
+                    errorText,
+                )
             ) {
                 it
             } else {
-                it.copy(
-                    autoAttackEnabled = nextIsEnabled,
-                    gameState =
-                        it.gameState.copy(
-                            attackState =
-                                it.gameState.attackState.copy(
-                                    autoAttack =
-                                        AutoAttackUiState(
-                                            isEnabled = nextIsEnabled,
-                                            statusText = statusText,
-                                            errorText = errorText,
-                                        ),
-                                ),
-                        ),
-                )
+                it.withStoppedAutoAttack(nextIsEnabled, statusText, errorText)
             }
         }
+    }
+
+    /**
+     * Prüft, ob ein [stopAutoAttack] den Zustand unverändert ließe, um redundante
+     * State-Emissionen zu vermeiden. No-op nur, wenn der Auto-Angriff schon
+     * gestoppt ist (weder aktiv noch auf ein Ergebnis wartend) und entweder kein
+     * Intent/Fehler mehr ansteht oder Status-/Fehlertext bereits identisch sind.
+     */
+    private fun isAutoAttackStopNoOp(
+        autoAttack: AutoAttackUiState,
+        autoAttackEnabled: Boolean,
+        nextIsEnabled: Boolean,
+        statusText: String?,
+        errorText: String?,
+    ): Boolean {
+        if (autoAttack.isEnabled || autoAttack.isAwaitingResult) {
+            return false
+        }
+        val enabledUnchanged = autoAttackEnabled == nextIsEnabled
+        val nothingPending =
+            autoAttack.intent == null && errorText == null && enabledUnchanged
+        val textsUnchanged =
+            autoAttack.statusText == statusText &&
+                autoAttack.errorText == errorText &&
+                enabledUnchanged
+        return nothingPending || textsUnchanged
+    }
+
+    /**
+     * Baut den gestoppten Auto-Angriff-Zustand. Lief gerade eine Sequenz, wird die
+     * (jetzt veraltete) Gebietsauswahl mitgelöscht, damit sich das Angriffspanel
+     * automatisch schließt. Bei einer Eroberung erledigt das bereits der Reducer;
+     * hier werden alle übrigen Stoppgründe (z. B. zu schwache Quelle) abgedeckt.
+     */
+    private fun LobbyUiState.withStoppedAutoAttack(
+        nextIsEnabled: Boolean,
+        statusText: String?,
+        errorText: String?,
+    ): LobbyUiState {
+        val autoAttack = gameState.attackState.autoAttack
+        // Bei laufender Sequenz die veraltete Gebietsauswahl verwerfen.
+        val keep = autoAttack.intent == null && !autoAttack.isAwaitingResult
+        return copy(
+            autoAttackEnabled = nextIsEnabled,
+            gameState =
+                gameState.copy(
+                    selectedRegionId = gameState.selectedRegionId.takeIf { keep },
+                    selectionFromRegionId = gameState.selectionFromRegionId.takeIf { keep },
+                    selectionToRegionId = gameState.selectionToRegionId.takeIf { keep },
+                    attackState =
+                        gameState.attackState.copy(
+                            autoAttack =
+                                AutoAttackUiState(
+                                    isEnabled = nextIsEnabled,
+                                    statusText = statusText,
+                                    errorText = errorText,
+                                ),
+                        ),
+                ),
+        )
     }
 
     private fun shouldStopAutoAttackForError(requestId: String?): Boolean {
@@ -1976,7 +2104,7 @@ class LobbyController(
          * fachlichen Token nicht überschreiben, sonst würde der eigentliche
          * ReconnectRequest mit der falschen Session laufen.
          */
-        if (!awaitingReconnectResponse && state.value.sessionToken == null) {
+        if (!awaitingReconnectResponse) {
             val sessionToken = payload.sessionToken.value
             reconnectSessionStore.saveSessionToken(sessionToken)
             _state.update { it.copy(sessionToken = sessionToken) }
@@ -2077,9 +2205,9 @@ class LobbyController(
     private fun ReconnectResponse.playerDisplayNameOr(fallback: String): String {
         val restoredPlayerDisplayName = playerDisplayName
         return if (restoredPlayerDisplayName == null) {
-            fallback
+            normalizePlayerDisplayName(fallback)
         } else {
-            restoredPlayerDisplayName
+            normalizePlayerDisplayName(restoredPlayerDisplayName)
         }
     }
 
@@ -2270,6 +2398,10 @@ class LobbyController(
                 applyGameState { current, players ->
                     ClientGameStateReducer.applySnapshotBroadcast(current, payload, players)
                 }
+            is MatchEndedBroadcastEvent ->
+                applyGameState { current, _ ->
+                    ClientGameStateReducer.applyMatchEndedBroadcast(current, payload)
+                }
             is GameStateDeltaEvent -> handleGameStateDelta(payload)
             is PhaseBoundaryEvent -> handlePhaseBoundary(payload)
             is TurnStateGetResponse -> {
@@ -2424,10 +2556,11 @@ class LobbyController(
 
     private fun handlePlayerJoined(payload: PlayerJoinedLobbyEvent) {
         val existingPlayer = playersById[payload.playerId.value]
+        val displayName = normalizePlayerDisplayName(payload.playerDisplayName)
         playersById[payload.playerId.value] =
             LobbyPlayerUi(
                 playerId = payload.playerId,
-                displayName = payload.playerDisplayName,
+                displayName = displayName,
                 isHost = payload.isHost,
                 connectionStatus = ConnectionStatus.CONNECTED,
                 characterId = existingPlayer?.characterId,
@@ -2435,10 +2568,20 @@ class LobbyController(
 
         var shouldSelectSavedCharacter = false
         _state.update { current ->
-            val ownPlayerId =
-                current.ownPlayerId
-                    ?: payload.playerId.takeIf { payload.playerDisplayName == current.playerName }
-            shouldSelectSavedCharacter = current.ownPlayerId == null && ownPlayerId != null
+            val sameNamePlayersBeforeJoin =
+                playersById.values.count { player ->
+                    player.playerId != payload.playerId &&
+                        player.displayName == displayName
+                }
+            val legacyOwnPlayerId =
+                payload.playerId.takeIf {
+                    displayName == current.playerName &&
+                        sameNamePlayersBeforeJoin == 0
+                }
+            val ownPlayerId = current.ownPlayerId ?: legacyOwnPlayerId
+            shouldSelectSavedCharacter =
+                ownPlayerId == payload.playerId &&
+                (current.ownPlayerId == null || existingPlayer == null)
             current.copy(ownPlayerId = ownPlayerId)
         }
         publishPlayers()
@@ -2525,6 +2668,7 @@ class LobbyController(
     }
 
     private fun handleGameStarted(payload: GameStartedEvent) {
+        state.value.sessionToken?.let(reconnectSessionStore::saveSessionToken)
         reconnectSessionStore.saveWasGameStarted(true)
         _state.update {
             it.copy(
@@ -2893,7 +3037,7 @@ class LobbyController(
                         payload =
                             JoinLobbyRequest(
                                 lobbyCode = parseLobbyCode(snapshot.lobbyCode),
-                                playerDisplayName = snapshot.playerName,
+                                playerDisplayName = normalizePlayerDisplayName(snapshot.playerName),
                             ),
                     ),
                 keepPendingUntilResponse = true,
@@ -2926,7 +3070,8 @@ class LobbyController(
                         payload =
                             JoinLobbyRequest(
                                 lobbyCode = payload.lobbyCode,
-                                playerDisplayName = state.value.playerName,
+                                playerDisplayName =
+                                    normalizePlayerDisplayName(state.value.playerName),
                             ),
                     ),
                 keepPendingUntilResponse = true,
@@ -2945,6 +3090,7 @@ class LobbyController(
             it.copy(
                 activeLobbyCode = joinedCode,
                 lobbyCode = joinedCode,
+                ownPlayerId = payload.playerId ?: it.ownPlayerId,
                 playerNames = ensureOwnPlayerName(it.playerNames, it.playerName),
                 errorText = null,
             )
@@ -3027,13 +3173,14 @@ class LobbyController(
         currentNames: List<String>,
         ownName: String,
     ): List<String> {
-        if (ownName.isBlank()) {
+        val normalizedOwnName = normalizePlayerDisplayName(ownName)
+        if (normalizedOwnName.isBlank()) {
             return currentNames
         }
-        if (currentNames.contains(ownName)) {
+        if (currentNames.contains(normalizedOwnName)) {
             return currentNames
         }
-        return currentNames + ownName
+        return currentNames + normalizedOwnName
     }
 }
 
@@ -3047,5 +3194,7 @@ private const val AUTO_PHASE_FORTIFY_MOVED_NOTICE =
 private const val AUTO_PHASE_FORTIFY_EMPTY_NOTICE =
     "Keine Truppenverschiebung möglich. Die Verschiebephase wird " +
         "automatisch beendet."
+private const val AUTO_PHASE_DRAW_CARD_DONE_NOTICE =
+    "Karte wurde gezogen. Die Kartenphase wird automatisch beendet."
 private const val AUTO_PHASE_ADVANCE_DELAY_MILLIS = 2_500L
 private const val AUTO_ATTACK_CONTINUATION_DELAY_MILLIS = 500L

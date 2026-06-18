@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
 import at.aau.pulverfass.shared.lobby.event.PlayerLeft
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
 import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
@@ -83,7 +84,12 @@ class DefaultNetworkToLobbyEventMapper(
             request.context.playerId
                 ?: throw MissingPlayerContextMappingException(request.header.type)
 
-        val event = PlayerJoined(lobbyCode, playerId, playerDisplayName)
+        val event =
+            PlayerJoined(
+                lobbyCode = lobbyCode,
+                playerId = playerId,
+                playerDisplayName = normalizePlayerDisplayName(playerDisplayName),
+            )
         return MappedLobbyEvents(
             lobbyCode = lobbyCode,
             events = listOf(event),

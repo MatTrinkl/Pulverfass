@@ -154,8 +154,18 @@ class LobbyPersistenceGatewayUnitTest {
         assertEquals("drawn-card", drawPayload.getValue("cardId").jsonPrimitive.content)
 
         val matchEndedPayload =
-            persistedPayloadOf(MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY)).payload
-        assertEquals("DECK_EMPTY", matchEndedPayload.getValue("reason").jsonPrimitive.content)
+            persistedPayloadOf(
+                MatchEndedEvent(
+                    lobbyCode = lobbyCode,
+                    reason = MatchEndReason.TERRITORY_DOMINATION,
+                    winnerPlayerId = hostId,
+                ),
+            ).payload
+        assertEquals(
+            "TERRITORY_DOMINATION",
+            matchEndedPayload.getValue("reason").jsonPrimitive.content,
+        )
+        assertEquals("1", matchEndedPayload.getValue("winnerPlayerId").jsonPrimitive.content)
 
         val invalidPayload =
             persistedPayloadOf(InvalidActionDetected(lobbyCode, null, "invalid")).payload

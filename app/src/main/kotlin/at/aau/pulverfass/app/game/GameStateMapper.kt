@@ -6,6 +6,7 @@ import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
 private val NeutralTerritoryColor = Color(0xFFC2C2C2)
@@ -85,10 +86,11 @@ fun lobbyPlayersToGamePlayers(
 ): List<GamePlayerUi> =
     players.map { player ->
         val characterId = player.gameCharacterId(ownPlayerId, ownCharacterId)
+        val displayName = normalizePlayerDisplayName(player.displayName).ifBlank { "?" }
         GamePlayerUi(
             playerId = player.playerId,
-            name = player.displayName,
-            avatarText = player.displayName.toAvatarText(),
+            name = displayName,
+            avatarText = displayName.toAvatarText(),
             characterId = characterId,
             color = playerColorFor(characterId),
             isHost = player.isHost,
