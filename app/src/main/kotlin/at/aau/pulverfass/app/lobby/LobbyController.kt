@@ -547,13 +547,6 @@ class LobbyController(
                         trackPending = false,
                     )
                 }
-                if (snapshot.isConnected) {
-                    runCatching { network.disconnect(config.disconnectReason) }
-                }
-            }
-        } else if (snapshot.isConnected) {
-            scope.launch {
-                runCatching { network.disconnect(config.disconnectReason) }
             }
         }
         _state.update {
