@@ -344,6 +344,11 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 "playerId" to playerId.value,
                 "delta" to delta,
             )
+        /*
+         * Der verbrauchte Cheatbonus muss im Eventlog landen. Sonst könnte ein
+         * Spieler nach einem Server-Neustart denselben einmaligen Bonus erneut
+         * benutzen, obwohl der GameState ihn vor dem Neustart schon verbraucht hatte.
+         */
         is CheatReinforcementBonusUsedEvent ->
             persistedPayload(
                 type = "cheat_reinforcement_bonus_used",

@@ -640,6 +640,14 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         state: GameState,
         event: CheatReinforcementBonusUsedEvent,
     ): GameState {
+        /*
+         * Der Reducer speichert nur, dass der Bonus verbraucht wurde.
+         * Die fachliche Prüfung, ob der Spieler gerade aktiv ist, in der
+         * Reinforcements-Phase steht und keinen Pflicht-Kartentausch offen hat,
+         * passiert vorher im Server-Routing. Diese Trennung ist wichtig:
+         * - Routing entscheidet, ob ein Request erlaubt ist.
+         * - Reducer macht aus einem gültigen Event deterministisch neuen State.
+         */
         requireKnownPlayer(state, event.playerId)
         if (event.playerId in state.usedCheatReinforcementBonusByPlayer) {
             throw InvalidLobbyEventException(
@@ -649,6 +657,11 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
 
         return state.copy(
+            /*
+             * Set statt Boolean pro Spieler: So bleibt die Information klein und
+             * lässt sich beim Entfernen eines Spielers einfach wieder aus dem
+             * State herausnehmen.
+             */
             usedCheatReinforcementBonusByPlayer =
                 state.usedCheatReinforcementBonusByPlayer + event.playerId,
         )

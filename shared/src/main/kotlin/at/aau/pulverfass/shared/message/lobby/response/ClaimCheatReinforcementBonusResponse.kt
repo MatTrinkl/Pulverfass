@@ -13,6 +13,11 @@ import kotlinx.serialization.encoding.Encoder
 
 /**
  * Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus.
+ *
+ * Die Antwort bestätigt nur, dass der Request angenommen wurde. Die sichtbare
+ * Spieländerung kommt zusätzlich über die normalen Game-State-Events beim
+ * Client an. Dadurch bleibt der Client immer auf dem serverautoritativen
+ * Zustand und muss den Bonus nicht selbst in den lokalen State hineinrechnen.
  */
 @Serializable(with = ClaimCheatReinforcementBonusResponseSerializer::class)
 data class ClaimCheatReinforcementBonusResponse(
@@ -21,6 +26,11 @@ data class ClaimCheatReinforcementBonusResponse(
 
 object ClaimCheatReinforcementBonusResponseSerializer :
     KSerializer<ClaimCheatReinforcementBonusResponse> {
+    /*
+     * Der explizite Serializer hält das Wire-Format der Erfolgsantwort klein
+     * und eindeutig: Es wird nur der LobbyCode übertragen, weil der konkrete
+     * State über die Event-/Snapshot-Schiene synchronisiert wird.
+     */
     override val descriptor =
         buildClassSerialDescriptor(
             "at.aau.pulverfass.shared.network.message.ClaimCheatReinforcementBonusResponse",

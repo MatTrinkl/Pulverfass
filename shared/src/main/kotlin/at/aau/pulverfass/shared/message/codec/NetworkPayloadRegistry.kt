@@ -151,6 +151,11 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE,
             ClaimCheatReinforcementBonusErrorResponse::class.java to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE,
+            /*
+             * Drei Einträge gehören immer zusammen: Request, Erfolgsantwort und
+             * Fehlerantwort. Fehlt einer davon, kann MessageCodec die Payload
+             * entweder nicht typisieren oder nicht wieder dekodieren.
+             */
             ReportCheatRequest::class.java to MessageType.LOBBY_REPORT_CHEAT_REQUEST,
             ReportCheatResponse::class.java to MessageType.LOBBY_REPORT_CHEAT_RESPONSE,
             ReportCheatErrorResponse::class.java to

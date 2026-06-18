@@ -39,7 +39,11 @@ import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
  * @property lastInvalidActionReason zuletzt erkannte ungültige Aktion, falls vorhanden
  * @property territoryCapturedThisTurn signalisiert, ob im aktuellen Zug mindestens ein Gebiet erobert wurde
  * @property usedCheatReinforcementBonusByPlayer Spieler, die ihren einmaligen
- * Schummel-Verstärkungsbonus bereits verwendet haben
+ * Schummel-Verstärkungsbonus bereits verwendet haben. Diese Information liegt
+ * im gemeinsamen Domain-State, weil sowohl Server-Regeln als auch Replays aus
+ * Events eindeutig wissen müssen, ob ein Spieler den Bonus noch benutzen darf.
+ * Die eigentliche Sensor-Auslösung passiert in der App, die Autorität über
+ * "schon benutzt oder nicht" bleibt aber im Spielzustand.
  * @property mapDefinition readonly Definition der Spielmap, falls bereits gesetzt
  * @property territoryStates mutierbarer Laufzeitzustand aller Territorien
  * @property setupTroopsToPlaceByPlayer verbleibende Starttruppen pro Spieler nach der initialen Gebietsverteilung
@@ -130,6 +134,12 @@ data class GameState(
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
         }
+        /*
+         * Der Cheatbonus ist an einen echten Lobby-Spieler gebunden. Wenn hier
+         * eine fremde PlayerId erlaubt wäre, könnten spätere Reducer- oder
+         * Routing-Schritte nicht mehr sauber unterscheiden, ob ein Spieler den
+         * Bonus wirklich schon verbraucht hat.
+         */
         require(usedCheatReinforcementBonusByPlayer.all(players::contains)) {
             "GameState.usedCheatReinforcementBonusByPlayer darf nur bekannte Spieler enthalten."
         }

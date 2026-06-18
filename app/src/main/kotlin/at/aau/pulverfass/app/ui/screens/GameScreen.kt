@@ -182,10 +182,22 @@ private const val PHASE_ACTION_FLASH_DURATION_MILLIS = 1_600L
 
 /** Seitenverhältnis des ui_lobby_roster_panel-Assets (908x550). */
 private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
+
+/*
+ * Die Cheat-Meldung bleibt länger sichtbar als die automatische Phasenmeldung,
+ * weil sie eine echte Spielkonsequenz erklärt: Bonus, Malus oder Strafe in der
+ * nächsten Verstärkungsphase.
+ */
 private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 4_000L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val ATTACK_RESULT_VISIBLE_MILLIS = 5_000L
+
+/*
+ * Für den Lichtsensor-Cheat wird nicht nur "dunkel" geprüft, sondern ein Wechsel
+ * von hell nach dunkel. Dadurch lösen normale niedrige Raumhelligkeit oder ein
+ * schon verdeckter Sensor beim Start des Screens nicht sofort den Bonus aus.
+ */
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
 private const val CHEAT_LIGHT_COVERED_LUX = 5f
 
@@ -1415,6 +1427,10 @@ private fun CheatReportNoticeOverlay(
     if (message == null) return
 
     LaunchedEffect(message) {
+        /*
+         * Das Overlay räumt sich selbst wieder weg. Der Text kommt aus dem
+         * LobbyController, weil dort die Serverantwort verarbeitet wird.
+         */
         delay(CHEAT_REPORT_NOTICE_DURATION_MILLIS)
         onDismiss()
     }
@@ -1534,7 +1550,9 @@ private fun OptionsOverlay(
         Spacer(modifier = Modifier.height(8.dp))
         /*
          * Die Meldefunktion liegt in den Optionen, weil sie nur selten gebraucht wird.
-         * So bleibt die Karte frei für die normalen Spielaktionen.
+         * So bleibt die Karte frei für die normalen Spielaktionen. Außerdem wird
+         * sie nur aktiviert, wenn es überhaupt einen anderen Spieler gibt und
+         * gerade keine Meldung auf Serverantwort wartet.
          */
         MainButton(
             text = "CHEAT MELDEN",
@@ -1549,6 +1567,8 @@ private fun OptionsOverlay(
             /*
              * Erst nach dem Klick auf "CHEAT MELDEN" zeige ich die Spielerliste an.
              * Dadurch nimmt die Funktion im normalen Optionsmenü wenig Platz weg.
+             * Der eigene Spieler wurde vorher aus reportablePlayers entfernt,
+             * damit Selbstmeldungen gar nicht erst auswählbar sind.
              */
             Text(
                 text = "SPIELER AUSWÄHLEN",
@@ -1836,6 +1856,11 @@ private fun LightSensorCheatTrigger(
         previousLux = null
         var triggered = false
 
+        /*
+         * Der Sensor wird nur registriert, solange der Cheat gerade fachlich
+         * erlaubt ist. Sobald die Phase wechselt oder der Spieler nicht mehr am
+         * Zug ist, räumt DisposableEffect den Listener wieder auf.
+         */
         val sensorManager =
             context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
@@ -1851,6 +1876,11 @@ private fun LightSensorCheatTrigger(
                     val wasBright = previousLux?.let { it >= CHEAT_LIGHT_BASELINE_LUX } ?: false
                     val isCovered = lux <= CHEAT_LIGHT_COVERED_LUX
 
+                    /*
+                     * Der Bonus wird nur einmal pro Aktivierung ausgelöst. Danach
+                     * bleibt triggered=true, bis der Effekt durch enabled/context
+                     * neu gestartet wird.
+                     */
                     if (wasBright && isCovered && !triggered) {
                         triggered = true
                         currentOnTriggered.value()

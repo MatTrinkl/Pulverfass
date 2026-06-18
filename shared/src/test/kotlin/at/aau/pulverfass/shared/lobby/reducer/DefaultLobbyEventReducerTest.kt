@@ -55,6 +55,15 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import kotlin.random.Random
 
+/**
+ * Tests für den Domain-Reducer.
+ *
+ * Der Reducer ist die Stelle, an der aus einem gültigen LobbyEvent ein neuer
+ * GameState entsteht. Für die Prüfung ist die Grundidee wichtig: Regeln wie
+ * "darf der Spieler den Request senden?" liegen im Routing, aber ein bereits
+ * akzeptiertes Event muss hier deterministisch und reproduzierbar angewendet
+ * werden.
+ */
 class DefaultLobbyEventReducerTest {
     private val reducer = DefaultLobbyEventReducer()
 
@@ -1819,6 +1828,10 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
+        /*
+         * Der Reducer trägt den Spieler in das Set der bereits verwendeten
+         * Cheatboni ein. Genau dieses Set verhindert später eine zweite Nutzung.
+         */
         assertEquals(
             setOf(playerOne),
             updated.usedCheatReinforcementBonusByPlayer,
@@ -1842,6 +1855,11 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
+        /*
+         * Auch wenn die Hauptprüfung im Server-Routing sitzt, schützt der Reducer
+         * den State zusätzlich davor, dass dasselbe Event fachlich zweimal
+         * angewendet wird.
+         */
         val exception =
             assertThrows(InvalidLobbyEventException::class.java) {
                 reducer.apply(
