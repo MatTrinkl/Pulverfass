@@ -42,6 +42,7 @@ import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
 import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
@@ -59,6 +60,7 @@ import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
@@ -3739,10 +3741,12 @@ class LobbyControllerTest {
             val lobbyCode = LobbyCode("LV42")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
             val store = InMemoryReconnectSessionStore()
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
                 ) { payload, outgoing ->
+                    seenPayloads += payload
                     when (payload) {
                         CreateLobbyRequest ->
                             outgoing.send(
@@ -3758,6 +3762,8 @@ class LobbyControllerTest {
                                     MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
                                 ),
                             )
+                        is LeaveLobbyRequest ->
+                            outgoing.sendPayload(LeaveLobbyResponse(payload.lobbyCode))
                     }
                 }
 
@@ -3771,10 +3777,15 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
 
                 controller.leaveLobby()
+                waitUntil { seenPayloads.any { it is LeaveLobbyRequest } }
 
                 assertNull(store.readSessionToken())
                 assertEquals(originalToken.value, controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
+                assertEquals(
+                    lobbyCode,
+                    seenPayloads.filterIsInstance<LeaveLobbyRequest>().single().lobbyCode,
+                )
             } finally {
                 controller.close()
                 server.close()

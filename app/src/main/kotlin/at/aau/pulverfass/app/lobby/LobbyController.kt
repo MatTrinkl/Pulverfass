@@ -528,6 +528,7 @@ class LobbyController(
     fun leaveLobby() {
         val snapshot = state.value
         val lobbyCode = snapshot.activeLobbyCode
+        manualDisconnectRequested = true
         suppressNextAttackBoundaryNotice = false
         cancelDelayedAutoPhaseAdvance()
         cancelDelayedAutoAttackContinuation()
@@ -546,6 +547,13 @@ class LobbyController(
                         trackPending = false,
                     )
                 }
+                if (snapshot.isConnected) {
+                    runCatching { network.disconnect(config.disconnectReason) }
+                }
+            }
+        } else if (snapshot.isConnected) {
+            scope.launch {
+                runCatching { network.disconnect(config.disconnectReason) }
             }
         }
         _state.update {
