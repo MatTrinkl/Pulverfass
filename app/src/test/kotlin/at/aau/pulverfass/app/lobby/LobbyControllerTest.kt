@@ -1041,6 +1041,11 @@ class LobbyControllerTest {
 
     @Test
     fun `reinforcement actions require a local player context`() {
+        /*
+         * Ohne ownPlayerId kann der Controller keine spielbezogenen Requests
+         * sinnvoll adressieren. Der Test stellt sicher, dass diese Fehler lokal
+         * abgefangen werden, statt kaputte Payloads an den Server zu schicken.
+         */
         val config = LobbyControllerConfig()
         val controller = createController(config = config)
         try {
@@ -1075,6 +1080,13 @@ class LobbyControllerTest {
     @Test
     fun `report cheat response should show result notice`() {
         runBlocking {
+            /*
+             * Dieser Test deckt die App-Seite der Cheat-Meldung ab:
+             * - Selbstmeldung wird lokal blockiert.
+             * - Korrekte Serverantwort erzeugt einen positiven Hinweis.
+             * - Falsche Serverantwort erzeugt einen Malus-Hinweis.
+             * - Formale Serverfehler landen als errorText.
+             */
             val lobbyCode = LobbyCode("RC42")
             val playerId = PlayerId(1)
             val accusedPlayerId = PlayerId(2)

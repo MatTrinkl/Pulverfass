@@ -21,6 +21,14 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * Tests für die Invarianten des zentralen GameState.
+ *
+ * Diese Tests sind wichtig, weil GameState von Server, Reducer und Clients als
+ * gemeinsame Wahrheit gelesen wird. Wenn hier ungültige Kombinationen erlaubt
+ * wären, würden Fehler später an ganz anderen Stellen im Netzwerk- oder UI-Code
+ * auftauchen.
+ */
 class GameStateTest {
     @Test
     fun `should expose consistent initial state`() {

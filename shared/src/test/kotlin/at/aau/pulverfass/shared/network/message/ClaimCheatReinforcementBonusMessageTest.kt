@@ -11,6 +11,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * Prüft den reinen Netzwerkvertrag des Schummel-Verstärkungsbonus.
+ *
+ * Diese Tests laufen ohne Server und ohne App-UI. Sie stellen nur sicher, dass
+ * Request, Erfolgsantwort und Fehlerantwort verlustfrei zu JSON serialisiert
+ * und wieder zurückgelesen werden können.
+ */
 class ClaimCheatReinforcementBonusMessageTest {
     private val json = Json
 

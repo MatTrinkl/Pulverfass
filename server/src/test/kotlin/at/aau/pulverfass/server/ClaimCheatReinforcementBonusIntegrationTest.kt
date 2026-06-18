@@ -49,6 +49,14 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Integrationstests für den kompletten Serverpfad des Cheatbonus.
+ *
+ * Diese Tests gehen bewusst über WebSocket-Pakete und nicht direkt über private
+ * Methoden. Damit wird derselbe Weg geprüft, den ein echter Android-Client geht:
+ * Payload kodieren, Server routen lassen, Domain-Events anwenden und Antwort
+ * wieder als Netzwerkpayload empfangen.
+ */
 class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `valid request grants three pending reinforcements and marks bonus as used`() =
@@ -157,6 +165,13 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `correct cheat report rewards reporter and zeroes cheater reinforcements`() =
         testApplication {
+            /*
+             * Hauptszenario der Meldefunktion:
+             * 1. Spieler 1 nutzt den Cheatbonus.
+             * 2. Die zusätzlichen Truppen werden sichtbar platziert.
+             * 3. Spieler 2 meldet rechtzeitig.
+             * 4. Spieler 2 bekommt später +3, Spieler 1 bekommt später 0.
+             */
             val lobbyCode = LobbyCode("CHR1")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
@@ -348,6 +363,12 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `reporting cheat before visible reinforcement placement penalizes reporter`() =
         testApplication {
+            /*
+             * Der Cheat ist direkt nach dem Claim noch nicht sichtbar. Dieser Test
+             * beweist, dass das Meldefenster erst nach der ersten Platzierung der
+             * zusätzlichen Truppen geöffnet wird. Wer vorher meldet, liegt falsch
+             * und bekommt den -3-Malus.
+             */
             val lobbyCode = LobbyCode("CHR3")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
@@ -470,6 +491,10 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `reporting player without open cheat window penalizes reporter`() =
         testApplication {
+            /*
+             * Falschmeldung ohne offenen Cheat: Der Server behandelt das nicht als
+             * technischen Fehler, sondern als gültige falsche Meldung mit Malus.
+             */
             val lobbyCode = LobbyCode("CHR2")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)

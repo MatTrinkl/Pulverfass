@@ -11,6 +11,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * Prüft den Netzwerkvertrag für Cheat-Meldungen.
+ *
+ * Besonders wichtig sind hier reporterPlayerId und accusedPlayerId: Beide IDs
+ * müssen über das Netzwerk erhalten bleiben, weil der Server daraus ableitet,
+ * wer meldet und wer beschuldigt wird.
+ */
 class ReportCheatMessageTest {
     private val json = Json
 

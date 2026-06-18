@@ -354,6 +354,11 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_shows_cheat_report_notice_for_four_seconds() {
+        /*
+         * Das Overlay soll nicht sofort verschwinden: Die Meldung erklärt eine
+         * spätere Konsequenz im Spiel. Mit deaktivierter Auto-Advance-Clock kann
+         * der Test exakt prüfen, dass es nach ca. vier Sekunden geschlossen wird.
+         */
         composeTestRule.mainClock.autoAdvance = false
         var dismissed = false
         val noticeText =
@@ -405,6 +410,11 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_options_reports_selected_cheat_player() {
+        /*
+         * Dieser UI-Test prüft nicht die Serverlogik, sondern nur die Bedienung:
+         * Optionsmenü öffnen, "CHEAT MELDEN" anklicken, Gegner auswählen und
+         * sicherstellen, dass dessen PlayerId an den Callback geht.
+         */
         val localPlayerId = PlayerId(1)
         val accusedPlayerId = PlayerId(2)
         var reportedPlayerId: PlayerId? = null
