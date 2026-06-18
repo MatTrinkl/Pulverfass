@@ -2558,7 +2558,7 @@ class LobbyController(
             val ownPlayerId = current.ownPlayerId ?: legacyOwnPlayerId
             shouldSelectSavedCharacter =
                 ownPlayerId == payload.playerId &&
-                    (current.ownPlayerId == null || existingPlayer == null)
+                (current.ownPlayerId == null || existingPlayer == null)
             current.copy(ownPlayerId = ownPlayerId)
         }
         publishPlayers()
