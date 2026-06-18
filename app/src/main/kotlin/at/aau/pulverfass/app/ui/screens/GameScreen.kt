@@ -163,6 +163,7 @@ private val TopBarHorizontalPadding = 16.dp
 
 /** Höhe des mittigen HUD-Phasen-Badges. */
 private val PhaseImageHeight = 69.dp
+private val PhaseLabelVerticalOffset = (-4).dp
 
 /** Abstand der Spielerliste vom oberen Screenrand ("Runde X" + Liste). */
 private val PlayerListTopInset = 76.dp
@@ -2660,6 +2661,7 @@ private fun PhaseHeader(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .offset(y = PhaseLabelVerticalOffset)
                     .testTag("game_phase_value")
                     .padding(horizontal = 28.dp),
             style = MaterialTheme.typography.titleSmall,
