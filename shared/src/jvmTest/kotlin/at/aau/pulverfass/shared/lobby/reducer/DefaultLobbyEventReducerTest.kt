@@ -248,13 +248,13 @@ class DefaultLobbyEventReducerTest {
                 activePlayer = playerOne,
             )
         assertThrows(InvalidLobbyEventException::class.java) {
-            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "Player 1"))
+            reducer.apply(duplicateState, PlayerJoined(lobbyCode, playerOne, "ALICE"))
         }
 
         val runningState =
             reducer.apply(
                 duplicateState,
-                PlayerJoined(lobbyCode, playerTwo, "Player 2"),
+                PlayerJoined(lobbyCode, playerTwo, "BOB"),
             )
         assertEquals(GameStatus.WAITING_FOR_PLAYERS, runningState.status)
         assertEquals(playerOne, runningState.activePlayer)
@@ -265,11 +265,11 @@ class DefaultLobbyEventReducerTest {
 
         assertEquals(
             GameStatus.CLOSED,
-            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(closedState, PlayerJoined(lobbyCode, playerTwo, "BOB")).status,
         )
         assertEquals(
             GameStatus.FINISHED,
-            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "Player 2")).status,
+            reducer.apply(finishedState, PlayerJoined(lobbyCode, playerTwo, "BOB")).status,
         )
     }
 
@@ -1068,7 +1068,7 @@ class DefaultLobbyEventReducerTest {
                 null,
                 reducer,
                 GameState.initial(lobbyCode),
-                PlayerJoined(lobbyCode, PlayerId(3), "Player 3"),
+                PlayerJoined(lobbyCode, PlayerId(3), "CAROL"),
                 null,
                 4,
                 null,

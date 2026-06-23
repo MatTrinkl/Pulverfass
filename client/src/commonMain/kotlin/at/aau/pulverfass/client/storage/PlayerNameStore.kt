@@ -32,6 +32,19 @@ interface PlayerNameStore {
      * @param characterId stabile ID aus `Characters`.
      */
     fun saveCharacterId(characterId: String)
+
+    /**
+     * Liefert, ob Auto-Angriff als globale Voreinstellung aktiviert ist.
+     */
+    fun readAutoAttackEnabled(): Boolean
+
+    /**
+     * Speichert die globale Auto-Angriff-Voreinstellung.
+     *
+     * @param enabled `true`, wenn neue Angriffsauswahlen den Auto-Angriff
+     * voraktiviert anzeigen sollen.
+     */
+    fun saveAutoAttackEnabled(enabled: Boolean)
 }
 
 /**
@@ -45,4 +58,8 @@ object NoOpPlayerNameStore : PlayerNameStore {
     override fun readCharacterId(): String? = null
 
     override fun saveCharacterId(characterId: String) = Unit
+
+    override fun readAutoAttackEnabled(): Boolean = false
+
+    override fun saveAutoAttackEnabled(enabled: Boolean) = Unit
 }

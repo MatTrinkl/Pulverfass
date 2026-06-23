@@ -78,6 +78,7 @@ object Characters {
                 Color(0xFF1565C0),
                 "Charakter 02",
                 wallpaperImage = Res.drawable.character_wallpaper_02,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_02,
             ),
             CharacterDefinition(
                 "character_03",
@@ -85,6 +86,7 @@ object Characters {
                 Color(0xFF00897B),
                 "Charakter 03",
                 wallpaperImage = Res.drawable.character_wallpaper_03,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_03,
             ),
             CharacterDefinition(
                 "character_04",
@@ -108,6 +110,7 @@ object Characters {
                 Color(0xFFD81B60),
                 "Charakter 06",
                 wallpaperImage = Res.drawable.character_wallpaper_06,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_06,
             ),
             CharacterDefinition(
                 "character_07",
@@ -115,6 +118,7 @@ object Characters {
                 Color(0xFFC62828),
                 "Charakter 07",
                 wallpaperImage = Res.drawable.character_wallpaper_07,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_07,
             ),
             CharacterDefinition(
                 "character_08",
@@ -129,6 +133,7 @@ object Characters {
                 Color(0xFF8E24AA),
                 "Charakter 09",
                 wallpaperImage = Res.drawable.character_wallpaper_09,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_09,
             ),
             CharacterDefinition(
                 "character_10",
@@ -144,6 +149,7 @@ object Characters {
                 Color(0xFF43A047),
                 "Charakter 11",
                 wallpaperImage = Res.drawable.character_wallpaper_11,
+                wallpaperVideo = VideoAsset.CHARACTER_WALLPAPER_11,
             ),
         )
 

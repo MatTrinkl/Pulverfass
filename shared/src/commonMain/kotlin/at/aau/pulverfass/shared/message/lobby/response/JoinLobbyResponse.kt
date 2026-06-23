@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.message.lobby.response
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -9,10 +10,13 @@ import kotlinx.serialization.Serializable
  * Erfolgsantwort des Servers auf eine Join-Anfrage.
  *
  * @property lobbyCode Lobby, der der Client beigetreten ist
+ * @property playerId stabile ID des beigetretenen Spielers; ältere Server können
+ *     dieses Feld weglassen.
  */
 @Serializable
 data class JoinLobbyResponse(
     val lobbyCode: LobbyCode,
+    val playerId: PlayerId? = null,
 ) : NetworkMessagePayload
 
 /**

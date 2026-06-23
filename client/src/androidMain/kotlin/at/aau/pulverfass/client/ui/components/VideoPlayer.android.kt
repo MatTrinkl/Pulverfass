@@ -65,11 +65,21 @@ private fun VideoAsset.toRawRes(): Int =
         VideoAsset.OPTIONS_BACKGROUND -> R.raw.video_options_background
         VideoAsset.CHARACTER_PICKER_BACKGROUND -> R.raw.video_character_picker_background
         VideoAsset.BATTLE_INTRO -> R.raw.video_battle_intro
+        VideoAsset.GAME_LOADING_BACKGROUND -> R.raw.video_game_loading_background
+        VideoAsset.CARD_HAND_BACKGROUND -> R.raw.video_card_hand_background
+        VideoAsset.VICTORY -> R.raw.video_victory
+        VideoAsset.LOSS -> R.raw.video_loss
         VideoAsset.CHARACTER_WALLPAPER_01 -> R.raw.character_wallpaper_01_video
+        VideoAsset.CHARACTER_WALLPAPER_02 -> R.raw.character_wallpaper_02_video
+        VideoAsset.CHARACTER_WALLPAPER_03 -> R.raw.character_wallpaper_03_video
         VideoAsset.CHARACTER_WALLPAPER_04 -> R.raw.character_wallpaper_04_video
         VideoAsset.CHARACTER_WALLPAPER_05 -> R.raw.character_wallpaper_05_video
+        VideoAsset.CHARACTER_WALLPAPER_06 -> R.raw.character_wallpaper_06_video
+        VideoAsset.CHARACTER_WALLPAPER_07 -> R.raw.character_wallpaper_07_video
         VideoAsset.CHARACTER_WALLPAPER_08 -> R.raw.character_wallpaper_08_video
+        VideoAsset.CHARACTER_WALLPAPER_09 -> R.raw.character_wallpaper_09_video
         VideoAsset.CHARACTER_WALLPAPER_10 -> R.raw.character_wallpaper_10_video
+        VideoAsset.CHARACTER_WALLPAPER_11 -> R.raw.character_wallpaper_11_video
     }
 
 @Composable

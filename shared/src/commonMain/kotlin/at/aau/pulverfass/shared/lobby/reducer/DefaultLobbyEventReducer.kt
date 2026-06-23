@@ -12,6 +12,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -81,6 +82,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
                 is AttackResolvedEvent -> onAttackResolved(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
+                is MatchEndedEvent -> onMatchEnded(state, event)
                 is CheatReinforcementBonusUsedEvent -> onCheatReinforcementBonusUsed(state, event)
                 is PendingReinforcementsChangedEvent ->
                     onPendingReinforcementsChanged(state, event)
@@ -305,6 +307,25 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         return applyTurnStateUpdate(
             state = state,
             event = turnStateUpdatedEvent(state, updatedTurnState),
+        )
+    }
+
+    private fun onMatchEnded(
+        state: GameState,
+        event: MatchEndedEvent,
+    ): GameState {
+        if (state.status != GameStatus.RUNNING) {
+            throw InvalidLobbyEventException(
+                "MatchEndedEvent kann nur im Status RUNNING verarbeitet werden, " +
+                    "war aber '${state.status}'.",
+            )
+        }
+
+        return state.copy(
+            status = GameStatus.FINISHED,
+            activePlayer = null,
+            pendingReinforcements = null,
+            turnState = null,
         )
     }
 

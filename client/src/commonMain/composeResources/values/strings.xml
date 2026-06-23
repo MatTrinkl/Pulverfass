@@ -37,6 +37,10 @@
     <string name="game_sync_desynced">Spielstand nicht synchron</string>
     <string name="game_sync_reload">Neu laden</string>
     <string name="game_sync_reload_pending">Lädt</string>
+    <string name="game_your_turn">Du bist dran</string>
+    <string name="game_player_left_toast">%1$s hat das Spiel verlassen</string>
+    <string name="game_flash_reinforced">+%1$d Truppen platziert</string>
+    <string name="game_flash_fortified">Truppen verschoben</string>
     <string name="game_cards_button">Karten</string>
     <string name="game_cards_hide">Karten zu</string>
     <string name="game_end_round_button">Phase beenden</string>
@@ -44,6 +48,10 @@
     <string name="game_cards_empty">Keine Karten</string>
     <string name="game_cards_unknown">Unbekannte Karte</string>
     <string name="game_cards_trade_in">Set eintauschen</string>
+    <string name="game_cards_close">Schließen</string>
+    <string name="game_cards_hint_select">Wähle drei Karten für ein gültiges Set</string>
+    <string name="game_cards_hint_locked">Kartentausch ist nur in deiner Verstärkungsphase möglich</string>
+    <string name="game_cards_selected_count">%1$d/3 ausgewählt</string>
     <string name="game_card_type_a">Infanterie</string>
     <string name="game_card_type_b">Kavallerie</string>
     <string name="game_card_type_c">Artillerie</string>

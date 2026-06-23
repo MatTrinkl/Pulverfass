@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.lobby.MAX_PLAYER_DISPLAY_NAME_LENGTH
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequestSerializer
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
@@ -55,13 +56,13 @@ class JoinLobbyRequestTest {
     }
 
     @Test
-    fun `should reject player display name longer than 32 characters`() {
+    fun `should reject player display name longer than max length`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(33))
+                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(MAX_PLAYER_DISPLAY_NAME_LENGTH + 1))
             }
 
-        assertTrue(exception.message.orEmpty().contains("32"))
+        assertTrue(exception.message.orEmpty().contains(MAX_PLAYER_DISPLAY_NAME_LENGTH.toString()))
     }
 
     @Test

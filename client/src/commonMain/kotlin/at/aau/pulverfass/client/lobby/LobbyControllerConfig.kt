@@ -48,6 +48,21 @@ data class LobbyControllerConfig(
     val errorAttackSelectionMissing: String =
         "Wähle ein eigenes und ein benachbartes fremdes Gebiet",
     val errorAttackFailed: String = "Angriff fehlgeschlagen",
+    val autoAttackStarted: String = "Auto-Angriff gestartet.",
+    val autoAttackPending: String = "Auto-Angriff wartet auf das Serverergebnis.",
+    val autoAttackStoppedCaptured: String =
+        "Zielgebiet erobert. Auto-Angriff bleibt aktiviert.",
+    val autoAttackStoppedSourceWeak: String =
+        "Ausgangsgebiet hat nicht mehr genug Truppen für die gewählte Angriffsstärke.",
+    val autoAttackStoppedPhaseChanged: String =
+        "Auto-Angriff beendet, weil die Angriffsphase nicht mehr aktiv ist.",
+    val autoAttackStoppedActivePlayerChanged: String =
+        "Auto-Angriff beendet, weil ein anderer Spieler am Zug ist.",
+    val autoAttackStoppedInvalidTarget: String =
+        "Auto-Angriff beendet, weil das Ziel nicht mehr angreifbar ist.",
+    val autoAttackStoppedConnectionLost: String =
+        "Auto-Angriff beendet, weil die Verbindung unterbrochen wurde.",
+    val autoAttackStoppedRejected: String = "Auto-Angriff durch Serverfehler beendet.",
     val errorConfirmAttackFailed: String = "Angriffsphase konnte nicht beendet werden",
     val errorFortifyNotAllowed: String = "Truppen können gerade nicht verschoben werden",
     val errorFortifySelectionMissing: String =

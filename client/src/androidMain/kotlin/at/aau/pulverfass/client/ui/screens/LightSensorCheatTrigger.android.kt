@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 
 private const val CHEAT_LIGHT_BASELINE_LUX = 8f
@@ -28,6 +29,7 @@ private const val CHEAT_LIGHT_COVERED_LUX = 2f
 actual fun LightSensorCheatTrigger(
     enabled: Boolean,
     onTriggered: () -> Unit,
+    modifier: Modifier,
 ) {
     val context = LocalContext.current
     val currentOnTriggered = rememberUpdatedState(onTriggered)

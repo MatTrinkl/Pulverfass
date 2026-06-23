@@ -619,7 +619,7 @@ class ApplicationTest {
                 ),
             )
 
-            assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(hostSession))
+            assertJoinLobbyResponse(lobbyCode, receivePayload(hostSession))
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
@@ -640,7 +640,7 @@ class ApplicationTest {
                 ),
             )
 
-            assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(guestSession))
+            assertJoinLobbyResponse(lobbyCode, receivePayload(guestSession))
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
@@ -700,6 +700,14 @@ class ApplicationTest {
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
         return value as T
+    }
+
+    private fun assertJoinLobbyResponse(
+        lobbyCode: LobbyCode,
+        payload: NetworkMessagePayload,
+    ) {
+        val response = assertIs<JoinLobbyResponse>(payload)
+        assertEquals(lobbyCode, response.lobbyCode)
     }
 
     private fun requireExternalTestDatabaseConfig(): DatabaseRuntimeConfig {

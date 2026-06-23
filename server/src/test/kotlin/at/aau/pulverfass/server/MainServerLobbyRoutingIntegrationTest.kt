@@ -286,10 +286,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
 
-                    assertEquals(
-                        JoinLobbyResponse(createResponse.lobbyCode),
-                        receivePayload(session),
-                    )
+                    assertJoinLobbyResponse(createResponse.lobbyCode, receivePayload(session))
                     assertEquals(
                         PlayerJoinedLobbyEvent(
                             lobbyCode = createResponse.lobbyCode,
@@ -1136,10 +1133,7 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Alice")),
                         ),
                     )
-                    assertEquals(
-                        JoinLobbyResponse(lobbyA),
-                        receivePayload(sessionA1AndConnection.first),
-                    )
+                    assertJoinLobbyResponse(lobbyA, receivePayload(sessionA1AndConnection.first))
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                         receivePayload(sessionA1AndConnection.first),
@@ -1161,10 +1155,7 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyB, "Carol")),
                         ),
                     )
-                    assertEquals(
-                        JoinLobbyResponse(lobbyB),
-                        receivePayload(sessionB1AndConnection.first),
-                    )
+                    assertJoinLobbyResponse(lobbyB, receivePayload(sessionB1AndConnection.first))
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
                         receivePayload(sessionB1AndConnection.first),
@@ -1194,7 +1185,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val otherLobbyPayload = receivePayloadOrNull(sessionB1AndConnection.first)
 
                     assertIs<JoinLobbyResponse>(joinerResponse)
-                    assertEquals(JoinLobbyResponse(lobbyA), joinerResponse)
+                    assertJoinLobbyResponse(lobbyA, joinerResponse)
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                         joinerExistingMemberEvent,
@@ -1543,8 +1534,8 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "JoinerA")),
                         ),
                     )
-                    assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                    assertJoinLobbyResponse(
+                        lobbyCode,
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
@@ -1566,8 +1557,8 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Leaver")),
                         ),
                     )
-                    assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                    assertJoinLobbyResponse(
+                        lobbyCode,
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -1597,8 +1588,8 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "KickMe")),
                         ),
                     )
-                    assertEquals(
-                        JoinLobbyResponse(lobbyCode),
+                    assertJoinLobbyResponse(
+                        lobbyCode,
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
@@ -1820,7 +1811,7 @@ class MainServerLobbyRoutingIntegrationTest {
                             data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                         ),
                     )
-                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                    assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                         receivePayload(aliceSession),
@@ -1877,7 +1868,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
 
-                    assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                    assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
                     assertEquals(
                         PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                         receivePayload(bobSession),
@@ -1934,7 +1925,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(aliceSession))
+                assertJoinLobbyResponse(lobbyA, receivePayload(aliceSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -1948,7 +1939,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(bobSession))
+                assertJoinLobbyResponse(lobbyA, receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                     receivePayload(bobSession),
@@ -1980,7 +1971,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyB, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyB), receivePayload(carolSession))
+                assertJoinLobbyResponse(lobbyB, receivePayload(carolSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
@@ -2015,7 +2006,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyA, "Dave")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyA), receivePayload(daveSession))
+                assertJoinLobbyResponse(lobbyA, receivePayload(daveSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
                     receivePayload(daveSession),
@@ -2076,7 +2067,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -2091,7 +2082,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayload(bobSession),
@@ -2113,7 +2104,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(carolSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayload(carolSession),
@@ -2426,7 +2417,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(aliceSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
@@ -2441,7 +2432,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(bobSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayload(bobSession),
@@ -2463,7 +2454,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
                     ),
                 )
-                assertEquals(JoinLobbyResponse(lobbyCode), receivePayload(carolSession))
+                assertJoinLobbyResponse(lobbyCode, receivePayload(carolSession))
                 assertEquals(
                     PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
                     receivePayload(carolSession),
@@ -2790,6 +2781,14 @@ class MainServerLobbyRoutingIntegrationTest {
     private inline fun <reified T> assertIs(value: Any?): T {
         assertTrue(value is T)
         return value as T
+    }
+
+    private fun assertJoinLobbyResponse(
+        lobbyCode: LobbyCode,
+        payload: Any?,
+    ) {
+        val response = assertIs<JoinLobbyResponse>(payload)
+        assertEquals(lobbyCode, response.lobbyCode)
     }
 
     private suspend fun discardConnectionHandshake(

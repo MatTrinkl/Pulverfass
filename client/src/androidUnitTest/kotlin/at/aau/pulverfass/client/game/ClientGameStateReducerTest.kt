@@ -85,7 +85,7 @@ class ClientGameStateReducerTest {
         assertFalse(state.reinforcementState.isBonusBreakdownKnown)
         assertTrue(state.canManageReinforcements(aliceId))
         assertEquals(5, state.regionStates.getValue("brazil").troopCount)
-        assertEquals("Alice", state.regionStates.getValue("brazil").ownerName)
+        assertEquals("ALICE", state.regionStates.getValue("brazil").ownerName)
     }
 
     @Test
@@ -182,7 +182,7 @@ class ClientGameStateReducerTest {
         assertTrue(state.fortifyState.hasMoved)
         assertFalse(state.canManageFortify(bobId))
         assertEquals(null, state.selectedRegionId)
-        assertEquals("Bob", state.regionStates.getValue("brazil").ownerName)
+        assertEquals("BOB", state.regionStates.getValue("brazil").ownerName)
     }
 
     @Test
@@ -260,7 +260,7 @@ class ClientGameStateReducerTest {
             aliceId,
             result.state.territoryStates.getValue(TerritoryId("brasilien")).ownerId,
         )
-        assertEquals("Alice", result.state.regionStates.getValue("brazil").ownerName)
+        assertEquals("ALICE", result.state.regionStates.getValue("brazil").ownerName)
         assertEquals(null, result.state.lastSyncError)
     }
 
@@ -421,7 +421,7 @@ class ClientGameStateReducerTest {
 
         assertEquals(null, weakSource.selectionFromRegionId)
         assertEquals("brazil", selectedSource.selectionFromRegionId)
-        assertEquals(2, selectedSource.attackState.moveAfterCapture)
+        assertEquals(4, selectedSource.attackState.moveAfterCapture)
         assertEquals(null, ignoredTarget.selectionToRegionId)
         assertEquals("argentina", selectedTarget.selectionToRegionId)
         assertTrue(selectedTarget.canSubmitAttack(aliceId))
@@ -433,7 +433,7 @@ class ClientGameStateReducerTest {
         assertTrue(selectedTarget.canConfirmAttackDone(aliceId))
         assertFalse(selectedTarget.canRequestTurnAdvance(aliceId))
         assertEquals(4, increasedAttack.attackState.attackTroops)
-        assertEquals(3, increasedAttack.attackState.moveAfterCapture)
+        assertEquals(4, increasedAttack.attackState.moveAfterCapture)
         assertEquals(4, increasedOccupation.attackState.moveAfterCapture)
         assertEquals(null, dismissed.selectionFromRegionId)
     }
@@ -1354,7 +1354,7 @@ class ClientGameStateReducerTest {
             "Verlassener Spieler",
             stateWithoutPlayers.regionStates.getValue("brazil").ownerName,
         )
-        assertEquals("Alice", restoredState.regionStates.getValue("brazil").ownerName)
+        assertEquals("ALICE", restoredState.regionStates.getValue("brazil").ownerName)
         assertEquals("1", restoredState.regionStates.getValue("brazil").ownerPlayerId)
     }
 

@@ -2,7 +2,6 @@ package at.aau.pulverfass.client.game
 
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.client.lobby.LobbyPlayerUi
-import at.aau.pulverfass.client.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.message.connection.ConnectionStatus
@@ -26,8 +25,8 @@ class GameStateMapperTest {
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(playerColorFor(null), result[0].color)
+        assertEquals(playerColorFor(null), result[1].color)
     }
 
     @Test
@@ -46,8 +45,8 @@ class GameStateMapperTest {
                 ownCharacterId = "character_04",
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(playerColorFor(null), result[0].color)
+        assertEquals(playerColorFor("character_04"), result[1].color)
         assertEquals("character_04", result[1].characterId)
     }
 
@@ -91,8 +90,8 @@ class GameStateMapperTest {
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
-        assertEquals(PulverfassColors.playerColors[1], result[1].color)
+        assertEquals(playerColorFor("character_03"), result[0].color)
+        assertEquals(playerColorFor("character_07"), result[1].color)
         assertEquals("character_03", result[0].characterId)
         assertEquals("character_07", result[1].characterId)
     }
@@ -107,8 +106,8 @@ class GameStateMapperTest {
 
         val result = lobbyPlayersToGamePlayers(players)
 
-        assertEquals(PulverfassColors.playerColors[1], result[0].color)
-        assertEquals(PulverfassColors.playerColors[0], result[1].color)
+        assertEquals(playerColorFor(null), result[0].color)
+        assertEquals(playerColorFor(null), result[1].color)
     }
 
     @Test
@@ -135,7 +134,7 @@ class GameStateMapperTest {
 
         val result = buildRegionStates(territoryStates = territories, players = players)
 
-        assertEquals(PulverfassColors.playerColors[0], result.getValue("brazil").accentColor)
+        assertEquals(playerColorFor("character_01"), result.getValue("brazil").accentColor)
     }
 
     @Test
@@ -157,7 +156,7 @@ class GameStateMapperTest {
 
         assertEquals("99", region.ownerPlayerId)
         assertEquals("Verlassener Spieler", region.ownerName)
-        assertEquals(Color(0xFF5E6268), region.accentColor)
+        assertEquals(Color(0xFFC2C2C2), region.accentColor)
     }
 
     @Test
@@ -171,7 +170,7 @@ class GameStateMapperTest {
                 ownCharacterId = "character_03",
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(playerColorFor(null), result[0].color)
         assertEquals(null, result[0].characterId)
     }
 
@@ -194,7 +193,7 @@ class GameStateMapperTest {
                 ownCharacterId = null,
             )
 
-        assertEquals(PulverfassColors.playerColors[0], result[0].color)
+        assertEquals(playerColorFor("character_01"), result[0].color)
         assertEquals("character_01", result[0].characterId)
     }
 }

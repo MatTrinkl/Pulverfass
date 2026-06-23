@@ -103,7 +103,11 @@ val generateDokkaProductDocs by tasks.registering {
                         appendLine("""<a id="$anchorId"></a>""")
                         appendLine("### `$relativePath`")
                         appendLine()
-                        appendLine(file.readText(Charsets.UTF_8).trim())
+                        val dokkaSafeMarkdown =
+                            file.readText(Charsets.UTF_8)
+                                .trim()
+                                .replace(Regex("(?m)^@"), "&#64;")
+                        appendLine(dokkaSafeMarkdown)
                         appendLine()
                     }
                 }

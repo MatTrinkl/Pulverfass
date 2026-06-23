@@ -152,15 +152,15 @@ class LobbyControllerTest {
 
     @Test
     fun `controller should restore and persist configured player name`() {
-        val playerNameStore = InMemoryPlayerNameStore("Anne Bonny")
+        val playerNameStore = InMemoryPlayerNameStore("AnneBonny")
         val controller = createController(playerNameStore = playerNameStore)
         try {
-            assertEquals("Anne Bonny", controller.state.value.playerName)
+            assertEquals("ANNEBONN", controller.state.value.playerName)
 
-            controller.updatePlayerName("Mary Read")
+            controller.updatePlayerName("MaryRead")
 
-            assertEquals("Mary Read", controller.state.value.playerName)
-            assertEquals("Mary Read", playerNameStore.readPlayerName())
+            assertEquals("MARYREAD", controller.state.value.playerName)
+            assertEquals("MARYREAD", playerNameStore.readPlayerName())
         } finally {
             controller.close()
         }
@@ -205,7 +205,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -239,12 +239,12 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174200"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Alice") }
+                waitUntil { controller.state.value.playerNames.contains("ALICE") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
                 assertTrue(state.isHost)
-                assertEquals(listOf("Alice"), state.playerNames)
+                assertEquals(listOf("ALICE"), state.playerNames)
             } finally {
                 controller.close()
                 server.close()
@@ -267,7 +267,7 @@ class LobbyControllerTest {
                         outgoing.send(
                             Frame.Binary(
                                 true,
-                                MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                MessageCodec.encode(payload.joinResponse(PlayerId(2))),
                             ),
                         )
                         outgoing.send(
@@ -299,7 +299,7 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174201"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Bob") }
+                waitUntil { controller.state.value.playerNames.contains("BOB") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
@@ -331,7 +331,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -400,7 +400,7 @@ class LobbyControllerTest {
                         outgoing.send(
                             Frame.Binary(
                                 true,
-                                MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                MessageCodec.encode(payload.joinResponse()),
                             ),
                         )
                         outgoing.send(
@@ -458,7 +458,7 @@ class LobbyControllerTest {
 
                 val disconnectedPlayer =
                     controller.state.value.players.first { it.playerId == PlayerId(2) }
-                assertEquals("Bob", disconnectedPlayer.displayName)
+                assertEquals("BOB", disconnectedPlayer.displayName)
                 assertTrue(disconnectedPlayer.isDisconnected)
             } finally {
                 controller.close()
@@ -479,7 +479,7 @@ class LobbyControllerTest {
                         ),
                 ) { payload, outgoing ->
                     if (payload is JoinLobbyRequest) {
-                        outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                        outgoing.sendPayload(payload.joinResponse())
                         outgoing.sendPayload(
                             PlayerJoinedLobbyEvent(
                                 lobbyCode = payload.lobbyCode,
@@ -561,7 +561,7 @@ class LobbyControllerTest {
                         ),
                 ) { payload, outgoing ->
                     if (payload is JoinLobbyRequest) {
-                        outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                        outgoing.sendPayload(payload.joinResponse(PlayerId(2)))
                         outgoing.sendPayload(
                             PlayerJoinedLobbyEvent(
                                 lobbyCode = payload.lobbyCode,
@@ -601,7 +601,7 @@ class LobbyControllerTest {
 
                 val state = controller.state.value
                 assertTrue(state.isHost)
-                assertEquals(listOf("Bob"), state.playerNames)
+                assertEquals(listOf("BOB"), state.playerNames)
                 assertTrue(state.players.none { it.playerId == PlayerId(1) })
             } finally {
                 controller.close()
@@ -630,7 +630,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -687,7 +687,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -1054,7 +1054,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -1267,7 +1267,7 @@ class LobbyControllerTest {
                 val request = seenPayloads.filterIsInstance<AttackRequest>().last()
                 assertEquals(TerritoryId("brasilien"), request.fromTerritoryId)
                 assertEquals(TerritoryId("argentinien"), request.toTerritoryId)
-                assertEquals(3, request.attackTroops)
+                assertEquals(4, request.attackTroops)
                 assertEquals(3, request.moveAfterCapture)
                 assertTrue(
                     controller.state.value.gameState.attackState.latestResult?.captured == true,
@@ -1299,7 +1299,7 @@ class LobbyControllerTest {
                 startProtocolServer { payload, outgoing ->
                     when (payload) {
                         is JoinLobbyRequest -> {
-                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(payload.joinResponse())
                             outgoing.sendPayload(
                                 PlayerJoinedLobbyEvent(
                                     lobbyCode = lobbyCode,
@@ -1496,7 +1496,7 @@ class LobbyControllerTest {
                     seenPayloads += payload
                     when (payload) {
                         is JoinLobbyRequest -> {
-                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(payload.joinResponse())
                             outgoing.sendPayload(
                                 PlayerJoinedLobbyEvent(
                                     lobbyCode = lobbyCode,
@@ -1680,7 +1680,7 @@ class LobbyControllerTest {
                     seenPayloads += payload
                     when (payload) {
                         is JoinLobbyRequest -> {
-                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(payload.joinResponse())
                             outgoing.sendPayload(
                                 PlayerJoinedLobbyEvent(
                                     lobbyCode = lobbyCode,
@@ -1847,7 +1847,7 @@ class LobbyControllerTest {
             val server =
                 startProtocolServer { payload, outgoing ->
                     if (payload is JoinLobbyRequest) {
-                        outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                        outgoing.sendPayload(payload.joinResponse(observerId))
                         outgoing.sendPayload(
                             PlayerJoinedLobbyEvent(
                                 lobbyCode = lobbyCode,
@@ -1986,7 +1986,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(playerId)),
                                 ),
                             )
                             outgoing.send(
@@ -2207,7 +2207,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(playerId)),
                                 ),
                             )
                             outgoing.send(
@@ -2355,7 +2355,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(playerId)),
                                 ),
                             )
                             outgoing.send(
@@ -2502,7 +2502,7 @@ class LobbyControllerTest {
                     seenPayloads += payload
                     when (payload) {
                         is JoinLobbyRequest -> {
-                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(payload.joinResponse())
                             outgoing.sendPayload(
                                 PlayerJoinedLobbyEvent(
                                     lobbyCode = lobbyCode,
@@ -2658,7 +2658,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -2783,7 +2783,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -3007,7 +3007,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                     }
@@ -3124,7 +3124,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -3190,7 +3190,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -3255,7 +3255,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -3327,7 +3327,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(PlayerId(13))),
                                 ),
                             )
                             outgoing.send(
@@ -3399,7 +3399,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(PlayerId(15))),
                                 ),
                             )
                             outgoing.send(
@@ -3462,7 +3462,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse(PlayerId(22))),
                                 ),
                             )
                             outgoing.send(
@@ -3553,7 +3553,7 @@ class LobbyControllerTest {
                             outgoing.send(
                                 Frame.Binary(
                                     true,
-                                    MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
+                                    MessageCodec.encode(payload.joinResponse()),
                                 ),
                             )
                             outgoing.send(
@@ -3693,6 +3693,10 @@ class LobbyControllerTest {
         )
     }
 
+    private fun JoinLobbyRequest.joinResponse(
+        playerId: PlayerId = PlayerId(1),
+    ): JoinLobbyResponse = JoinLobbyResponse(lobbyCode, playerId)
+
     /**
      * Hält den lokalen Testserver und seine aktiven Sessions zusammen.
      *
@@ -3783,6 +3787,7 @@ class LobbyControllerTest {
         private var playerName: String? = null,
     ) : PlayerNameStore {
         private var characterId: String? = null
+        private var autoAttackEnabled: Boolean = false
 
         override fun readPlayerName(): String? = playerName
 
@@ -3794,6 +3799,12 @@ class LobbyControllerTest {
 
         override fun saveCharacterId(characterId: String) {
             this.characterId = characterId
+        }
+
+        override fun readAutoAttackEnabled(): Boolean = autoAttackEnabled
+
+        override fun saveAutoAttackEnabled(enabled: Boolean) {
+            autoAttackEnabled = enabled
         }
     }
 }

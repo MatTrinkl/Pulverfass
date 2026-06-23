@@ -1,6 +1,7 @@
 package at.aau.pulverfass.shared.network.message
 
 import at.aau.pulverfass.shared.ids.LobbyCode
+import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponseSerializer
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
@@ -49,17 +50,19 @@ class JoinLobbyResponseTest {
                 it.parameterTypes.contentEquals(
                     arrayOf(
                         String::class.java,
+                        PlayerId::class.java,
                         kotlin.jvm.internal.DefaultConstructorMarker::class.java,
                     ),
                 )
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", null) as JoinLobbyResponse
+        val valid = constructor.newInstance("GH78", PlayerId(1), null) as JoinLobbyResponse
 
         assertEquals(LobbyCode("GH78"), valid.lobbyCode)
+        assertEquals(PlayerId(1), valid.playerId)
 
         assertThrows(InvocationTargetException::class.java) {
-            constructor.newInstance(null, null)
+            constructor.newInstance(null, PlayerId(1), null)
         }
     }
 

@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  *
  * @property lobbyCode Ziel-Lobby der Join-Anfrage
  * @property playerDisplayName Anzeigename des Players fuer die Lobby-UI;
- * darf nicht leer sein und ist auf 32 Zeichen begrenzt
+ * darf nicht leer sein und ist auf acht ASCII-Buchstaben begrenzt
  */
 @Serializable
 data class JoinLobbyRequest(

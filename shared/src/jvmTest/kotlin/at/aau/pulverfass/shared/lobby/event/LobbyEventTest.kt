@@ -69,6 +69,11 @@ class LobbyEventTest {
                     playerId = PlayerId(8),
                     eliminatedByPlayerId = playerId,
                 ),
+                MatchEndedEvent(
+                    lobbyCode = lobbyCode,
+                    reason = MatchEndReason.TERRITORY_DOMINATION,
+                    winnerPlayerId = playerId,
+                ),
                 PendingReinforcementsSetEvent(lobbyCode, playerId, 5),
                 PendingReinforcementsChangedEvent(lobbyCode, playerId, 2),
                 PlayerCardsRemovedEvent(
@@ -90,7 +95,7 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(21, events.size)
+        assertEquals(22, events.size)
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
@@ -134,6 +139,7 @@ class LobbyEventTest {
                 is InvalidActionDetected -> event.reason
                 is LobbyClosed -> event.reason.orEmpty()
                 is LobbyCreated -> "created"
+                is MatchEndedEvent -> event.reason.name
                 is PendingReinforcementsChangedEvent -> event.delta.toString()
                 is PendingReinforcementsSetEvent -> event.amount.toString()
                 is PlayerEliminatedEvent -> event.eliminatedByPlayerId.value.toString()

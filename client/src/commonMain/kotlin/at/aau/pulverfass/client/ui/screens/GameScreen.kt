@@ -1,5 +1,6 @@
 package at.aau.pulverfass.client.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,6 +10,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -30,12 +33,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -57,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,21 +67,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import at.aau.pulverfass.client.audio.BackgroundMusicManager
 import at.aau.pulverfass.client.audio.SfxSound
 import at.aau.pulverfass.client.game.AttackResultUiState
@@ -129,32 +137,53 @@ import at.aau.pulverfass.client.resources.game_cards_unknown
 import at.aau.pulverfass.client.resources.game_connection_connected
 import at.aau.pulverfass.client.resources.game_connection_disconnected
 import at.aau.pulverfass.client.resources.game_end_round_button
+import at.aau.pulverfass.client.resources.game_flash_fortified
+import at.aau.pulverfass.client.resources.game_flash_reinforced
 import at.aau.pulverfass.client.resources.game_fortify_close
 import at.aau.pulverfass.client.resources.game_fortify_route
 import at.aau.pulverfass.client.resources.game_fortify_submit
 import at.aau.pulverfass.client.resources.game_fortify_troops
 import at.aau.pulverfass.client.resources.game_host_indicator
 import at.aau.pulverfass.client.resources.game_personal_player_label
-import at.aau.pulverfass.client.resources.game_phase_label
+import at.aau.pulverfass.client.resources.game_player_left_toast
 import at.aau.pulverfass.client.resources.game_reinforcements_amount
 import at.aau.pulverfass.client.resources.game_reinforcements_bonus
 import at.aau.pulverfass.client.resources.game_reinforcements_close
 import at.aau.pulverfass.client.resources.game_reinforcements_place
 import at.aau.pulverfass.client.resources.game_reinforcements_remaining
 import at.aau.pulverfass.client.resources.game_reinforcements_target
-import at.aau.pulverfass.client.resources.game_round_label
 import at.aau.pulverfass.client.resources.game_round_value
 import at.aau.pulverfass.client.resources.game_sync_catching_up
 import at.aau.pulverfass.client.resources.game_sync_desynced
 import at.aau.pulverfass.client.resources.game_sync_reconnecting
 import at.aau.pulverfass.client.resources.game_sync_reload
 import at.aau.pulverfass.client.resources.game_sync_reload_pending
+import at.aau.pulverfass.client.resources.game_your_turn
+import at.aau.pulverfass.client.resources.hud_action_attack_active
+import at.aau.pulverfass.client.resources.hud_action_attack_inactive
+import at.aau.pulverfass.client.resources.hud_action_cards
+import at.aau.pulverfass.client.resources.hud_action_end_phase
+import at.aau.pulverfass.client.resources.hud_action_fortify_active
+import at.aau.pulverfass.client.resources.hud_action_fortify_inactive
+import at.aau.pulverfass.client.resources.hud_action_reinforce_active
+import at.aau.pulverfass.client.resources.hud_action_reinforce_inactive
+import at.aau.pulverfass.client.resources.hud_active_player_marker
+import at.aau.pulverfass.client.resources.hud_host_marker
+import at.aau.pulverfass.client.resources.hud_options_button
+import at.aau.pulverfass.client.resources.hud_phase_badge
+import at.aau.pulverfass.client.resources.hud_player_list_background
 import at.aau.pulverfass.client.resources.loading
 import at.aau.pulverfass.client.resources.map_world
+import at.aau.pulverfass.client.resources.ui_button_wood
+import at.aau.pulverfass.client.resources.ui_lobby_roster_panel
 import at.aau.pulverfass.client.ui.components.CharacterCoin
+import at.aau.pulverfass.client.ui.components.GameActionButton
+import at.aau.pulverfass.client.ui.components.GameActionButtonStyle
 import at.aau.pulverfass.client.ui.components.MainButton
 import at.aau.pulverfass.client.ui.components.PulverfassTitleText
+import at.aau.pulverfass.client.ui.components.VideoAsset
 import at.aau.pulverfass.client.ui.components.VideoPlayer
+import at.aau.pulverfass.client.ui.map.AttackVfxRequest
 import at.aau.pulverfass.client.ui.map.InteractiveGameMap
 import at.aau.pulverfass.client.ui.map.InteractiveGameMapOptions
 import at.aau.pulverfass.client.ui.map.PulverfassMapDefaults
@@ -163,6 +192,7 @@ import at.aau.pulverfass.client.ui.theme.cinzelDecorative
 import at.aau.pulverfass.client.ui.theme.cormorantGaramond
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.connection.ConnectionStatus
@@ -172,18 +202,31 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
-private val HudSurfaceColor = Color.White
-private val HudSurfaceMutedColor = Color(0xFFF1F1F1)
-private val HudBorderColor = Color.Black
-private val HudContentColor = Color.Black
-private val HudInverseColor = Color.White
-private val TopBarHeight = 52.dp
-private val BottomBarHeight = 54.dp
-private val SidebarWidth = 156.dp
-private val CardsSidebarWidth = SidebarWidth
+private val HudSurfaceColor = PulverfassColors.SurfaceDark.copy(alpha = 0.92f)
+private val HudSurfaceMutedColor = PulverfassColors.SurfaceVoid.copy(alpha = 0.55f)
+private val HudBorderColor = PulverfassColors.GoldDark
+private val HudContentColor = PulverfassColors.TextOnDark
+private val HudInverseColor = PulverfassColors.SurfaceDark
+private val HudAccentColor = PulverfassColors.GoldBright
+private val HudSelectedCardColor = PulverfassColors.Gold.copy(alpha = 0.30f)
+private val PhaseHeaderTextColor = PulverfassColors.TextOnParchment
+private val PhaseButtonWidth = 132.dp
+private const val ACTION_PANEL_Z_INDEX = 35f
+private val TopBarHeight = 78.dp
+private val BottomBarHeight = 76.dp
+private val TopBarHorizontalPadding = 16.dp
+private val PhaseImageHeight = 69.dp
+private val PhaseLabelVerticalOffset = (-4).dp
+private val PlayerListTopInset = 76.dp
+private val PlayerSidebarWidth = 210.dp
+private val CardsSidebarWidth = 156.dp
 private const val SYNC_FEEDBACK_DELAY_MILLIS = 500L
 private const val DISCONNECT_FEEDBACK_DELAY_MILLIS = 900L
 private const val AUTO_PHASE_NOTICE_DURATION_MILLIS = 2_000L
+private const val CHEAT_REPORT_NOTICE_DURATION_MILLIS = 3_000L
+private const val YOUR_TURN_BANNER_DURATION_MILLIS = 2_000L
+private const val PLAYER_LEFT_TOAST_DURATION_MILLIS = 2_800L
+private const val PHASE_ACTION_FLASH_DURATION_MILLIS = 1_600L
 private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 
@@ -229,6 +272,7 @@ fun GameScreen(
                 character = character,
                 playerName = lobbyState.playerName,
                 autoPhaseNoticeText = lobbyState.autoPhaseNoticeText,
+                cheatReportNoticeText = lobbyState.cheatReportNoticeText,
             ),
         actions =
             GameScreenActions(
@@ -239,17 +283,20 @@ fun GameScreen(
                     controller::adjustReinforcementPlacementAmount,
                 onPlaceReinforcements = controller::placeReinforcements,
                 onClaimCheatReinforcementBonus = controller::claimCheatReinforcementBonus,
+                onReportCheat = controller::reportCheat,
                 onConfirmReinforcementsDone = controller::confirmReinforcementsDone,
                 onToggleTradeInCard = controller::toggleTradeInCard,
                 onTradeInCards = controller::tradeInCards,
                 onAdjustAttackTroops = controller::adjustAttackTroops,
                 onAdjustMoveAfterCapture = controller::adjustMoveAfterCapture,
+                onSetAutoAttackEnabled = controller::setAutoAttackEnabled,
                 onAttack = controller::attack,
                 onConfirmAttackDone = controller::confirmAttackDone,
                 onAdjustFortifyTroops = controller::adjustFortifyTroops,
                 onFortifyMove = controller::fortifyMove,
                 onRefreshGameState = controller::refreshGameState,
                 onClearAutoPhaseNotice = controller::clearAutoPhaseNotice,
+                onClearCheatReportNotice = controller::clearCheatReportNotice,
             ),
         musicManager = musicManager,
         onNavigateToMain = onLeaveGame,
@@ -284,7 +331,44 @@ internal data class GameScreenContentState(
     val character: CharacterDefinition? = null,
     val playerName: String = "",
     val autoPhaseNoticeText: String? = null,
+    val cheatReportNoticeText: String? = null,
 )
+
+private fun effectiveLocalPlayerId(contentState: GameScreenContentState): PlayerId? {
+    val players = contentState.players
+    val configuredPlayerId = contentState.localPlayerId
+    val configuredPlayer = players.firstOrNull { it.playerId == configuredPlayerId }
+    val normalizedLocalName = normalizePlayerDisplayName(contentState.playerName)
+    val playerByCharacter =
+        contentState.character
+            ?.id
+            ?.let { characterId ->
+                players.singleOrNull { player -> player.characterId == characterId }
+            }
+    val playerByName =
+        players.singleOrNull { player -> player.name == normalizedLocalName }
+    val recoveredPlayer = playerByName ?: playerByCharacter
+
+    if (recoveredPlayer == null) {
+        return configuredPlayerId
+    }
+    if (configuredPlayerId == null || configuredPlayer == null) {
+        return recoveredPlayer.playerId
+    }
+    if (
+        configuredPlayer.name != normalizedLocalName &&
+        normalizedLocalName.isNotBlank()
+    ) {
+        return recoveredPlayer.playerId
+    }
+    if (
+        contentState.uiState.activePlayerId == recoveredPlayer.playerId &&
+        configuredPlayerId != recoveredPlayer.playerId
+    ) {
+        return recoveredPlayer.playerId
+    }
+    return configuredPlayerId
+}
 
 /**
  * Controller-Callbacks, die vom Spielscreen ausgelöst werden dürfen.
@@ -298,6 +382,7 @@ internal data class GameScreenContentState(
  * @param onAdjustReinforcementPlacementAmount ändert den Verstärkungs-Slider.
  * @param onPlaceReinforcements sendet eine Verstärkungsplatzierung.
  * @param onClaimCheatReinforcementBonus fordert den Lichtsensor-Cheatbonus an.
+ * @param onReportCheat meldet einen vermuteten Cheat eines anderen Spielers.
  * @param onConfirmReinforcementsDone bestätigt das Ende der Verstärkungsphase.
  * @param onToggleTradeInCard markiert oder demarkiert eine private Karte.
  * @param onTradeInCards sendet den Kartentausch.
@@ -309,6 +394,7 @@ internal data class GameScreenContentState(
  * @param onFortifyMove sendet die einmalige Truppenverschiebung.
  * @param onRefreshGameState fordert einen Catch-up-Snapshot an.
  * @param onClearAutoPhaseNotice schließt die sichtbare Auto-Phasenmeldung.
+ * @param onClearCheatReportNotice schließt die sichtbare Cheat-Meldungsrückmeldung.
  */
 internal data class GameScreenActions(
     val onRegionSelected: (String) -> Unit,
@@ -317,17 +403,20 @@ internal data class GameScreenActions(
     val onAdjustReinforcementPlacementAmount: (Int) -> Unit = {},
     val onPlaceReinforcements: () -> Unit = {},
     val onClaimCheatReinforcementBonus: () -> Unit = {},
+    val onReportCheat: (PlayerId) -> Unit = {},
     val onConfirmReinforcementsDone: () -> Unit = {},
     val onToggleTradeInCard: (CardId) -> Unit = {},
     val onTradeInCards: () -> Unit = {},
     val onAdjustAttackTroops: (Int) -> Unit = {},
     val onAdjustMoveAfterCapture: (Int) -> Unit = {},
+    val onSetAutoAttackEnabled: (Boolean) -> Unit = {},
     val onAttack: () -> Unit = {},
     val onConfirmAttackDone: () -> Unit = {},
     val onAdjustFortifyTroops: (Int) -> Unit = {},
     val onFortifyMove: () -> Unit = {},
     val onRefreshGameState: () -> Unit,
     val onClearAutoPhaseNotice: () -> Unit = {},
+    val onClearCheatReportNotice: () -> Unit = {},
 )
 
 /**
@@ -399,12 +488,15 @@ private data class AttackPanelState(
     val maximumAttackTroops: Int,
     val canAdjust: Boolean,
     val canAttack: Boolean,
+    val canToggleAutoAttack: Boolean,
+    val canDismiss: Boolean,
 )
 
 private data class AttackPanelActions(
     val onDismiss: () -> Unit,
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
+    val onSetAutoAttackEnabled: (Boolean) -> Unit,
     val onAttack: () -> Unit,
 )
 
@@ -422,6 +514,7 @@ private data class AttackPanelHostActions(
     val onRegionSelected: (String) -> Unit,
     val onAdjustAttackTroops: (Int) -> Unit,
     val onAdjustMoveAfterCapture: (Int) -> Unit,
+    val onSetAutoAttackEnabled: (Boolean) -> Unit,
     val onAttack: () -> Unit,
 )
 
@@ -485,7 +578,7 @@ internal fun GameScreenContent(
     countdownState: Pair<Boolean, Int>? = null,
 ) {
     val players = contentState.players
-    val localPlayerId = contentState.localPlayerId
+    val localPlayerId = effectiveLocalPlayerId(contentState)
     val uiState = contentState.uiState
     val isConnected = contentState.isConnected
     val pendingCommandKeys = contentState.pendingCommandKeys
@@ -496,11 +589,13 @@ internal fun GameScreenContent(
     val onAdjustReinforcementPlacementAmount = actions.onAdjustReinforcementPlacementAmount
     val onPlaceReinforcements = actions.onPlaceReinforcements
     val onClaimCheatReinforcementBonus = actions.onClaimCheatReinforcementBonus
+    val onReportCheat = actions.onReportCheat
     val onConfirmReinforcementsDone = actions.onConfirmReinforcementsDone
     val onToggleTradeInCard = actions.onToggleTradeInCard
     val onTradeInCards = actions.onTradeInCards
     val onAdjustAttackTroops = actions.onAdjustAttackTroops
     val onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture
+    val onSetAutoAttackEnabled = actions.onSetAutoAttackEnabled
     val onAttack = actions.onAttack
     val onConfirmAttackDone = actions.onConfirmAttackDone
     val onAdjustFortifyTroops = actions.onAdjustFortifyTroops
@@ -514,6 +609,8 @@ internal fun GameScreenContent(
     val isAttackRequestPending = LobbyCommandKey.ATTACK in pendingCommandKeys
     val isAttackCommandPending = pendingCommandKeys.hasAttackRequest()
     val isFortifyCommandPending = pendingCommandKeys.hasFortifyRequest()
+    val isReportCheatPending = LobbyCommandKey.REPORT_CHEAT in pendingCommandKeys
+    val isAutoAttackRunning = uiState.attackState.autoAttack.isRunning
     val canManageReinforcements = uiState.canManageReinforcements(localPlayerId, isConnected)
     val canManageAttacks = uiState.canManageAttacks(localPlayerId, isConnected)
     val canManageFortify = uiState.canManageFortify(localPlayerId, isConnected)
@@ -521,6 +618,15 @@ internal fun GameScreenContent(
     val canClaimCheatReinforcementBonus =
         uiState.canManageReinforcements(localPlayerId, isConnected) &&
             !isReinforcementCommandPending
+    val privateHandState =
+        privateHandPanelState(
+            player = personalPlayer,
+            uiState = uiState,
+            localPlayerId = localPlayerId,
+            isConnected = isConnected,
+            isReinforcementCommandPending = isReinforcementCommandPending,
+            pendingCommandKeys = pendingCommandKeys,
+        )
 
     val reinforcementPanelRegionId =
         visibleReinforcementTarget(uiState, canManageReinforcements, remainingReinforcementAmount)
@@ -534,6 +640,12 @@ internal fun GameScreenContent(
             isAttackRequestPending = isAttackRequestPending,
         )
     val isActionResolutionPending = attackResolutionState != null
+    val canSelectRegion =
+        isConnected &&
+            !uiState.isCatchingUp &&
+            !uiState.isDesynced &&
+            !isAutoAttackRunning &&
+            !isActionResolutionPending
     val fortifyPanelSelection = visibleFortifySelection(uiState, canManageFortify)
     val canEndCurrentPhase =
         canEndCurrentPhase(
@@ -557,6 +669,12 @@ internal fun GameScreenContent(
     val (showCountdown, countdownValue) = countdownState ?: rememberCountdownState(musicManager)
     val statusMessage =
         gameStatusMessage(uiState, isConnected, showCatchUpFeedback)
+    val winningOverlayState =
+        winningOverlayState(
+            uiState = uiState,
+            players = players,
+            localPlayerId = localPlayerId,
+        )
 
     val desyncedText = stringResource(Res.string.game_sync_desynced)
     val isDisconnectState = !isConnected || uiState.isDesynced
@@ -566,6 +684,28 @@ internal fun GameScreenContent(
     var showOptionsOverlay by remember { mutableStateOf(false) }
     var isMusicEnabled by remember { mutableStateOf(musicManager?.isMusicMuted?.not() ?: true) }
     var isSfxEnabled by remember { mutableStateOf(musicManager?.isSfxMuted?.not() ?: true) }
+    var playerLeftMessage by remember { mutableStateOf<String?>(null) }
+    PlayerLeftDetector(
+        players = players,
+        localPlayerId = localPlayerId,
+        onPlayerLeft = { playerLeftMessage = it },
+    )
+
+    var phaseActionFlash by remember { mutableStateOf<String?>(null) }
+    val reinforcedTemplate = stringResource(Res.string.game_flash_reinforced)
+    val fortifiedText = stringResource(Res.string.game_flash_fortified)
+    ReinforcementPlacedDetector(
+        pendingAmount = uiState.reinforcementState.pendingAmount,
+        isOwnReinforcement = uiState.reinforcementState.playerId == localPlayerId,
+        onPlaced = { placed ->
+            phaseActionFlash = reinforcedTemplate.replace("%1\$d", placed.toString())
+        },
+    )
+    FortifyMoveDetector(
+        hasMoved = uiState.fortifyState.hasMoved,
+        onMoved = { phaseActionFlash = fortifiedText },
+    )
+    val showMapHud = !showCountdown && !showOptionsOverlay
 
     Box(
         modifier =
@@ -595,169 +735,188 @@ internal fun GameScreenContent(
                 onRegionSelected = { region ->
                 /*
                  * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
-                 * werden aber nur weitergereicht, wenn der lokale Spieler gerade
-                 * handeln darf und der Client synchron verbunden ist.
+                 * werden aber nur weitergereicht, wenn der Client synchron ist.
+                 * Der Reducer entscheidet anschließend phasen- und spielerabhängig,
+                 * ob der Tap eine gültige Auswahl ist.
                  */
-                    if (canUseGameActions && !isActionResolutionPending) {
+                    if (canSelectRegion) {
                         onRegionSelected(region.id)
                     }
                 },
                 options = InteractiveGameMapOptions(backgroundPainter = mapPainter),
+                attackVfx = uiState.attackState.latestResult?.toAttackVfxRequest(),
                 modifier = Modifier.fillMaxSize(),
             )
 
-            GameTopBar(
-                personalPlayer = personalPlayer,
-                phase = uiState.turnPhase,
-                round = uiState.turnCount.coerceAtLeast(1),
-                onOptionsClick = { showOptionsOverlay = true },
+            Box(
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth(),
+                        .matchParentSize()
+                        .background(
+                            Brush.radialGradient(
+                                colorStops =
+                                    arrayOf(
+                                        0.76f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.26f),
+                                    ),
+                            ),
+                        ),
             )
 
-            CatchUpProgressOverlay(
-                isCatchingUp = uiState.isCatchingUp,
-                showFeedback = showCatchUpFeedback,
-                modifier = Modifier.align(Alignment.Center),
-            )
+            if (showMapHud) {
+                GameTopBar(
+                    personalPlayer = personalPlayer,
+                    phase = uiState.turnPhase,
+                    onOptionsClick = { showOptionsOverlay = true },
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .zIndex(20f)
+                            .fillMaxWidth(),
+                )
 
-            OptionalGameStatusBanner(
-                message = statusMessage,
-                canRefresh = isConnected && !isRefreshPending,
-                isRefreshPending = isRefreshPending,
-                onRefreshGameState = onRefreshGameState,
+                CatchUpProgressOverlay(
+                    isCatchingUp = uiState.isCatchingUp,
+                    showFeedback = showCatchUpFeedback,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+
+                OptionalGameStatusBanner(
+                    message = statusMessage,
+                    canRefresh = isConnected && !isRefreshPending,
+                    isRefreshPending = isRefreshPending,
+                    onRefreshGameState = onRefreshGameState,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = TopBarHeight)
+                            .fillMaxWidth(),
+                )
+            }
+
+            LightSensorCheatTrigger(
+                enabled = canClaimCheatReinforcementBonus && showMapHud,
+                onTriggered = onClaimCheatReinforcementBonus,
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = TopBarHeight)
-                        .fillMaxWidth(),
+                        .align(Alignment.BottomStart)
+                        .padding(start = 20.dp, bottom = BottomBarHeight + 14.dp)
+                        .width(108.dp)
+                        .zIndex(30f),
             )
 
-            CardsSidebar(
-                state =
-                    privateHandPanelState(
-                        player = personalPlayer,
-                        uiState = uiState,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                        isReinforcementCommandPending = isReinforcementCommandPending,
-                        pendingCommandKeys = pendingCommandKeys,
-                    ),
+            if (showMapHud) {
+                PlayerSidebar(
+                    players = players,
+                    activePlayerId = uiState.activePlayerId,
+                    round = uiState.turnCount.coerceAtLeast(1),
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .zIndex(15f)
+                            .padding(top = PlayerListTopInset, bottom = BottomBarHeight)
+                            .width(PlayerSidebarWidth)
+                            .fillMaxHeight(),
+                )
+
+                ReinforcementPanelHost(
+                    state =
+                        ReinforcementPanelHostState(
+                            selectedRegionId = reinforcementPanelRegionId,
+                            uiState = uiState,
+                            remainingAmount = remainingReinforcementAmount,
+                            canManageReinforcements = canManageReinforcements,
+                            isCommandPending = isReinforcementCommandPending,
+                            localPlayerId = localPlayerId,
+                            isConnected = isConnected,
+                        ),
+                    actions =
+                        ReinforcementPanelHostActions(
+                            onRegionSelected = onRegionSelected,
+                            onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
+                            onPlace = onPlaceReinforcements,
+                        ),
+                )
+
+                AttackPanelHost(
+                    state =
+                        AttackPanelHostState(
+                            selection = attackPanelSelection,
+                            uiState = uiState,
+                            canManageAttacks = canManageAttacks,
+                            isCommandPending = isAttackCommandPending,
+                            localPlayerId = localPlayerId,
+                            isConnected = isConnected,
+                            showResult = fortifyPanelSelection == null,
+                        ),
+                    actions =
+                        AttackPanelHostActions(
+                            onRegionSelected = onRegionSelected,
+                            onAdjustAttackTroops = onAdjustAttackTroops,
+                            onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
+                            onSetAutoAttackEnabled = onSetAutoAttackEnabled,
+                            onAttack = onAttack,
+                        ),
+                )
+
+                FortifyPanelHost(
+                    state =
+                        FortifyPanelHostState(
+                            selection = fortifyPanelSelection,
+                            uiState = uiState,
+                            canManageFortify = canManageFortify,
+                            isCommandPending = isFortifyCommandPending,
+                            localPlayerId = localPlayerId,
+                            isConnected = isConnected,
+                        ),
+                    actions =
+                        FortifyPanelHostActions(
+                            onRegionSelected = onRegionSelected,
+                            onAdjustFortifyTroops = onAdjustFortifyTroops,
+                            onMove = onFortifyMove,
+                        ),
+                )
+
+                BottomActionClusters(
+                    state =
+                        BottomBarState(
+                            currentPhase = uiState.turnPhase,
+                            canEndPhase = canEndCurrentPhase,
+                            cardsVisible = uiState.cardsVisible,
+                        ),
+                    onToggleCards = onToggleCards,
+                    onEndPhase = onEndCurrentPhase,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .zIndex(20f)
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
+                    musicManager = musicManager,
+                )
+            }
+
+            CardHandOverlay(
+                state = privateHandState,
                 actions =
                     PrivateHandPanelActions(
                         onToggleTradeInCard = onToggleTradeInCard,
                         onTradeInCards = onTradeInCards,
                     ),
-                isVisible = uiState.cardsVisible,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                        .requiredWidth(CardsSidebarWidth)
-                        .fillMaxHeight(),
-            )
-
-            LightSensorCheatTrigger(
-                enabled = canClaimCheatReinforcementBonus,
-                onTriggered = onClaimCheatReinforcementBonus,
-            )
-
-            PlayerSidebar(
-                players = players,
-                activePlayerId = uiState.activePlayerId,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(top = TopBarHeight, bottom = BottomBarHeight)
-                        .width(SidebarWidth)
-                        .fillMaxHeight(),
-            )
-
-            ReinforcementPanelHost(
-                state =
-                    ReinforcementPanelHostState(
-                        selectedRegionId = reinforcementPanelRegionId,
-                        uiState = uiState,
-                        remainingAmount = remainingReinforcementAmount,
-                        canManageReinforcements = canManageReinforcements,
-                        isCommandPending = isReinforcementCommandPending,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                    ),
-                actions =
-                    ReinforcementPanelHostActions(
-                        onRegionSelected = onRegionSelected,
-                        onAdjustPlacementAmount = onAdjustReinforcementPlacementAmount,
-                        onPlace = onPlaceReinforcements,
-                    ),
-            )
-
-            AttackPanelHost(
-                state =
-                    AttackPanelHostState(
-                        selection = attackPanelSelection,
-                        uiState = uiState,
-                        canManageAttacks = canManageAttacks,
-                        isCommandPending = isAttackCommandPending,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                        showResult = fortifyPanelSelection == null,
-                    ),
-                actions =
-                    AttackPanelHostActions(
-                        onRegionSelected = onRegionSelected,
-                        onAdjustAttackTroops = onAdjustAttackTroops,
-                        onAdjustMoveAfterCapture = onAdjustMoveAfterCapture,
-                        onAttack = onAttack,
-                    ),
-            )
-
-            FortifyPanelHost(
-                state =
-                    FortifyPanelHostState(
-                        selection = fortifyPanelSelection,
-                        uiState = uiState,
-                        canManageFortify = canManageFortify,
-                        isCommandPending = isFortifyCommandPending,
-                        localPlayerId = localPlayerId,
-                        isConnected = isConnected,
-                    ),
-                actions =
-                    FortifyPanelHostActions(
-                        onRegionSelected = onRegionSelected,
-                        onAdjustFortifyTroops = onAdjustFortifyTroops,
-                        onMove = onFortifyMove,
-                    ),
-            )
-
-            BottomActionClusters(
-                state =
-                    BottomBarState(
-                        currentPhase = uiState.turnPhase,
-                        canUseLocalInput =
-                            isConnected &&
-                                !uiState.isCatchingUp &&
-                                !uiState.isDesynced &&
-                                !isActionResolutionPending,
-                        canEndPhase = canEndCurrentPhase,
-                        cardsVisible = uiState.cardsVisible,
-                    ),
-                onToggleCards = onToggleCards,
-                onEndPhase = onEndCurrentPhase,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
+                isVisible = showMapHud && uiState.cardsVisible,
+                onClose = onToggleCards,
                 musicManager = musicManager,
+                modifier = Modifier.zIndex(40f),
             )
 
             OptionsOverlay(
                 show = showOptionsOverlay,
                 isMusicEnabled = isMusicEnabled,
                 isSfxEnabled = isSfxEnabled,
+                isAutoAttackEnabled = uiState.attackState.autoAttack.isEnabled,
+                players = players,
+                localPlayerId = localPlayerId,
+                isReportCheatPending = isReportCheatPending,
                 onMusicToggle = { enabled ->
                     isMusicEnabled = enabled
                     musicManager?.setMusicMuted(!enabled)
@@ -766,16 +925,57 @@ internal fun GameScreenContent(
                     isSfxEnabled = enabled
                     musicManager?.setSfxMuted(!enabled)
                 },
+                onAutoAttackToggle = onSetAutoAttackEnabled,
+                onReportCheat = onReportCheat,
                 onNavigateToMain = onNavigateToMain,
                 onClose = { showOptionsOverlay = false },
             )
 
-            AttackResolutionOverlay(state = attackResolutionState)
+            if (showMapHud) {
+                AttackResolutionOverlay(state = attackResolutionState)
 
-            AutoPhaseNoticeOverlay(
-                message = contentState.autoPhaseNoticeText,
-                onDismiss = actions.onClearAutoPhaseNotice,
+                AutoPhaseNoticeOverlay(
+                    message = contentState.autoPhaseNoticeText,
+                    onDismiss = actions.onClearAutoPhaseNotice,
+                )
+
+                CheatReportNoticeOverlay(
+                    message = contentState.cheatReportNoticeText,
+                    onDismiss = actions.onClearCheatReportNotice,
+                )
+
+                PlayerLeftToast(
+                    message = playerLeftMessage,
+                    onDismiss = { playerLeftMessage = null },
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = TopBarHeight + 12.dp)
+                            .zIndex(42f),
+                )
+
+                PhaseActionFlash(
+                    message = phaseActionFlash,
+                    onDismiss = { phaseActionFlash = null },
+                )
+            }
+
+            YourTurnBanner(
+                activePlayerId = uiState.activePlayerId,
+                localPlayerId = localPlayerId,
+                isHudVisible = showMapHud && winningOverlayState == null,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .zIndex(45f),
             )
+
+            if (winningOverlayState != null) {
+                WinningScreenOverlay(
+                    state = winningOverlayState,
+                    onNavigateToMain = onNavigateToMain,
+                )
+            }
 
             CountdownOverlay(
                 show = showCountdown,
@@ -889,8 +1089,12 @@ private fun AutoPhaseNoticeOverlay(
  * @param show `true`, wenn das Menü sichtbar sein soll.
  * @param isMusicEnabled aktueller Musik-Schalterzustand.
  * @param isSfxEnabled aktueller SFX-Schalterzustand.
+ * @param players mögliche Cheat-Meldeziele.
+ * @param localPlayerId eigener Spieler, damit Selbstmeldungen ausgeblendet werden.
+ * @param isReportCheatPending `true`, solange eine Meldung auf Antwort wartet.
  * @param onMusicToggle setzt Musik sofort an oder aus.
  * @param onSfxToggle setzt SFX sofort an oder aus.
+ * @param onReportCheat sendet die Meldung für den ausgewählten Spieler.
  * @param onNavigateToMain verlässt Spiel und Lobby zurück ins Hauptmenü.
  * @param onClose schließt nur das Optionsmenü.
  */
@@ -899,13 +1103,24 @@ private fun OptionsOverlay(
     show: Boolean,
     isMusicEnabled: Boolean,
     isSfxEnabled: Boolean,
+    isAutoAttackEnabled: Boolean,
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+    isReportCheatPending: Boolean,
     onMusicToggle: (Boolean) -> Unit,
     onSfxToggle: (Boolean) -> Unit,
+    onAutoAttackToggle: (Boolean) -> Unit,
+    onReportCheat: (PlayerId) -> Unit,
     onNavigateToMain: () -> Unit,
     onClose: () -> Unit,
 ) {
     if (!show) return
     val scrollState = rememberScrollState()
+    var showCheatReportPlayers by remember { mutableStateOf(false) }
+    val reportablePlayers =
+        players
+            .filter { it.playerId != localPlayerId }
+            .sortedBy { it.name }
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
         arrangement = Arrangement.spacedBy(12.dp),
@@ -927,6 +1142,32 @@ private fun OptionsOverlay(
             isEnabled = isSfxEnabled,
             onToggle = onSfxToggle,
         )
+        InGameAudioToggleRow(
+            label = "AUTO ATTACK",
+            isEnabled = isAutoAttackEnabled,
+            onToggle = onAutoAttackToggle,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        MainButton(
+            text = "CHEAT MELDEN",
+            onClick = { showCheatReportPlayers = true },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (showCheatReportPlayers) {
+            reportablePlayers.forEach { player ->
+                MainButton(
+                    text = player.name,
+                    onClick = {
+                        onReportCheat(player.playerId)
+                        showCheatReportPlayers = false
+                        onClose()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isReportCheatPending,
+                    fontSize = 14,
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         MainButton(
             text = "SCHLIESSEN",
@@ -967,6 +1208,373 @@ private fun rememberCountdownState(musicManager: BackgroundMusicManager?): Pair<
         show = false
     }
     return show to value
+}
+
+private data class WinningOverlayState(
+    val winnerName: String,
+    val isLocalWinner: Boolean,
+)
+
+private fun winningOverlayState(
+    uiState: GameUiState,
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+): WinningOverlayState? {
+    if (!uiState.isFinished) {
+        return null
+    }
+    val winnerName =
+        players.firstOrNull { it.playerId == uiState.winnerPlayerId }?.name
+            ?: "UNBEKANNT"
+    return WinningOverlayState(
+        winnerName = winnerName,
+        isLocalWinner = uiState.winnerPlayerId != null && uiState.winnerPlayerId == localPlayerId,
+    )
+}
+
+/**
+ * Kurze Turn-Einblendung, wenn der aktive Spieler auf den lokalen Spieler
+ * wechselt. Wenn Countdown oder Optionsmenü sichtbar sind, wird der Trigger
+ * gehalten und erst beim wieder sichtbaren HUD angezeigt.
+ */
+@Composable
+private fun YourTurnBanner(
+    activePlayerId: PlayerId?,
+    localPlayerId: PlayerId?,
+    isHudVisible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var visible by remember { mutableStateOf(false) }
+    var announcedActivePlayerId by remember { mutableStateOf<PlayerId?>(null) }
+
+    LaunchedEffect(activePlayerId, localPlayerId, isHudVisible) {
+        if (activePlayerId == null || activePlayerId != localPlayerId) {
+            visible = false
+            announcedActivePlayerId = null
+            return@LaunchedEffect
+        }
+        if (!isHudVisible) {
+            visible = false
+            return@LaunchedEffect
+        }
+        if (announcedActivePlayerId == activePlayerId) {
+            return@LaunchedEffect
+        }
+
+        announcedActivePlayerId = activePlayerId
+        visible = true
+        delay(YOUR_TURN_BANNER_DURATION_MILLIS)
+        visible = false
+    }
+
+    AnimatedVisibility(
+        visible = visible && isHudVisible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .width(320.dp)
+                    .height(194.dp)
+                    .testTag("your_turn_banner"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(Res.drawable.ui_lobby_roster_panel),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            Text(
+                text = stringResource(Res.string.game_your_turn),
+                fontFamily = cinzelDecorative(),
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                letterSpacing = 3.sp,
+                color = PulverfassColors.TextOnParchment,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Kurze Rueckmeldung fuer ruhige Phasen wie Reinforcements und Fortify.
+ */
+@Composable
+private fun BoxScope.PhaseActionFlash(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    val lastMessage = remember { mutableStateOf("") }
+    LaunchedEffect(message) {
+        if (message != null) {
+            lastMessage.value = message
+            delay(PHASE_ACTION_FLASH_DURATION_MILLIS)
+            onDismiss()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = message != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier =
+            Modifier
+                .align(Alignment.Center)
+                .zIndex(43f),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = PulverfassColors.SurfaceWood.copy(alpha = 0.95f),
+            contentColor = PulverfassColors.TextPrimary,
+            border = BorderStroke(1.dp, HudBorderColor),
+            modifier = Modifier.testTag("phase_action_flash"),
+        ) {
+            Text(
+                text = lastMessage.value,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                fontFamily = cinzelDecorative(),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                letterSpacing = 2.sp,
+                color = PulverfassColors.GoldBright,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReinforcementPlacedDetector(
+    pendingAmount: Int?,
+    isOwnReinforcement: Boolean,
+    onPlaced: (Int) -> Unit,
+) {
+    val previousAmount = remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pendingAmount, isOwnReinforcement) {
+        val before = previousAmount.value
+        val placed =
+            if (isOwnReinforcement && pendingAmount != null && before != null) {
+                before - pendingAmount
+            } else {
+                0
+            }
+        if (placed > 0) {
+            onPlaced(placed)
+        }
+        previousAmount.value = if (isOwnReinforcement) pendingAmount else null
+    }
+}
+
+@Composable
+private fun FortifyMoveDetector(
+    hasMoved: Boolean,
+    onMoved: () -> Unit,
+) {
+    val previousHasMoved = remember { mutableStateOf(false) }
+    LaunchedEffect(hasMoved) {
+        if (hasMoved && !previousHasMoved.value) {
+            onMoved()
+        }
+        previousHasMoved.value = hasMoved
+    }
+}
+
+internal data class PlayerPresence(
+    val name: String,
+    val status: ConnectionStatus,
+)
+
+@Composable
+private fun PlayerLeftDetector(
+    players: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+    onPlayerLeft: (String) -> Unit,
+) {
+    val template = stringResource(Res.string.game_player_left_toast)
+    val previousPresence = remember { mutableStateMapOf<PlayerId, PlayerPresence>() }
+    LaunchedEffect(players) {
+        playersThatLeft(previousPresence, players, localPlayerId).forEach { name ->
+            onPlayerLeft(template.replace("%1\$s", name))
+        }
+        val currentIds = players.mapTo(mutableSetOf()) { it.playerId }
+        previousPresence.keys.retainAll(currentIds)
+        players.forEach { player ->
+            previousPresence[player.playerId] =
+                PlayerPresence(player.name, player.connectionStatus)
+        }
+    }
+}
+
+internal fun playersThatLeft(
+    previous: Map<PlayerId, PlayerPresence>,
+    current: List<GamePlayerUi>,
+    localPlayerId: PlayerId?,
+): List<String> {
+    val currentIds = current.mapTo(mutableSetOf()) { it.playerId }
+    val removed =
+        previous
+            .filter { (id, presence) ->
+                id != localPlayerId &&
+                    id !in currentIds &&
+                    presence.status == ConnectionStatus.CONNECTED
+            }.values
+            .map { it.name }
+    val disconnected =
+        current
+            .filter { player ->
+                hasJustLeft(player, localPlayerId, previous[player.playerId]?.status)
+            }
+            .map { it.name }
+    return removed + disconnected
+}
+
+private fun hasJustLeft(
+    player: GamePlayerUi,
+    localPlayerId: PlayerId?,
+    previousStatus: ConnectionStatus?,
+): Boolean =
+    player.playerId != localPlayerId &&
+        previousStatus == ConnectionStatus.CONNECTED &&
+        player.connectionStatus == ConnectionStatus.DISCONNECTED
+
+@Composable
+private fun PlayerLeftToast(
+    message: String?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LaunchedEffect(message) {
+        if (message != null) {
+            delay(PLAYER_LEFT_TOAST_DURATION_MILLIS)
+            onDismiss()
+        }
+    }
+    if (message == null) return
+    Surface(
+        modifier = modifier.testTag("player_left_toast"),
+        shape = RoundedCornerShape(10.dp),
+        color = PulverfassColors.SurfaceWood.copy(alpha = 0.95f),
+        contentColor = PulverfassColors.TextPrimary,
+        tonalElevation = 0.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, HudBorderColor),
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = PulverfassColors.TextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun WinningScreenOverlay(
+    state: WinningOverlayState,
+    onNavigateToMain: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.88f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        VideoPlayer(
+            asset = if (state.isLocalWinner) VideoAsset.VICTORY else VideoAsset.LOSS,
+            loop = true,
+            cover = true,
+            muted = true,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes
+                                    .forEach { it.consume() }
+                            }
+                        }
+                    }
+                    .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.62f)),
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.82f)
+                    .widthIn(max = 460.dp)
+                    .background(
+                        PulverfassColors.SurfaceDark.copy(alpha = 0.82f),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .padding(horizontal = 30.dp, vertical = 28.dp)
+                    .testTag("winning_screen_overlay"),
+        ) {
+            PulverfassTitleText(
+                text = if (state.isLocalWinner) "SIEG" else "SPIEL BEENDET",
+                fontSize = 34.sp,
+                letterSpacing = 3.sp,
+            )
+            Text(
+                text = "GEWINNER: ${state.winnerName}",
+                color = PulverfassColors.TextOnDark,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            MainButton(
+                text = "ZURÜCK ZUM HAUPTMENÜ",
+                onClick = onNavigateToMain,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CheatReportNoticeOverlay(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    if (message == null) return
+
+    LaunchedEffect(message) {
+        delay(CHEAT_REPORT_NOTICE_DURATION_MILLIS)
+        onDismiss()
+    }
+
+    GameScreenOverlayContainer(
+        overlayAlpha = 0.62f,
+        arrangement = Arrangement.spacedBy(14.dp),
+        columnModifier =
+            Modifier
+                .widthIn(max = 520.dp)
+                .background(
+                    PulverfassColors.SurfaceDark.copy(alpha = 0.84f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+                .testTag("cheat_report_notice_popup"),
+    ) {
+        PulverfassTitleText(text = "CHEAT-MELDUNG", fontSize = 28.sp, letterSpacing = 2.sp)
+        Text(
+            text = message,
+            color = PulverfassColors.TextOnDark,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
 }
 
 /**
@@ -1041,20 +1649,22 @@ private fun CinematicCountdown(
         }
     }
     Box(modifier = modifier.fillMaxSize()) {
+        val fallbackImageRes =
+            character.wallpaperImage
+                ?: character.fallbackImageResId
+                ?: character.drawableRes
+        Image(
+            painter = painterResource(fallbackImageRes),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(radius = 6.dp),
+        )
         if (character.isVideoWallpaper) {
             VideoPlayer(
                 asset = requireNotNull(character.wallpaperVideo),
                 loop = true,
                 cover = true,
                 muted = true,
-                modifier = Modifier.fillMaxSize().blur(radius = 6.dp),
-            )
-        } else {
-            val imageRes = requireNotNull(character.wallpaperImage ?: character.fallbackImageResId)
-            Image(
-                painter = painterResource(imageRes),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().blur(radius = 6.dp),
             )
         }
@@ -1381,6 +1991,7 @@ private fun BoxScope.ReinforcementPanelHost(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -1398,12 +2009,20 @@ private fun BoxScope.AttackPanelHost(
 ) {
     if (state.selection == null) {
         if (state.showResult) {
-            AttackResultHost(result = state.uiState.attackState.latestResult)
+            AttackResultHost(
+                result = state.uiState.attackState.latestResult,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(ACTION_PANEL_Z_INDEX)
+                        .padding(bottom = BottomBarHeight + 8.dp),
+            )
         }
         return
     }
 
     val (fromRegionId, toRegionId) = state.selection
+    val isAutoAttackRunning = state.uiState.attackState.autoAttack.isRunning
     AttackPanel(
         state =
             AttackPanelState(
@@ -1411,21 +2030,38 @@ private fun BoxScope.AttackPanelHost(
                 fromRegionId = fromRegionId,
                 toRegionId = toRegionId,
                 maximumAttackTroops = maximumAttackTroops(state.uiState, fromRegionId),
-                canAdjust = state.canManageAttacks && !state.isCommandPending,
+                canAdjust =
+                    state.canManageAttacks &&
+                        !state.isCommandPending &&
+                        !isAutoAttackRunning,
                 canAttack =
                     state.uiState.canSubmitAttack(state.localPlayerId, state.isConnected) &&
-                        !state.isCommandPending,
+                        !state.isCommandPending &&
+                        !isAutoAttackRunning,
+                canToggleAutoAttack =
+                    state.uiState.attackState.autoAttack.isEnabled ||
+                        (
+                            state.uiState.canStartAutoAttack(
+                                state.localPlayerId,
+                                state.isConnected,
+                            ) &&
+                                !state.isCommandPending &&
+                                !isAutoAttackRunning
+                        ),
+                canDismiss = !state.isCommandPending && !isAutoAttackRunning,
             ),
         actions =
             AttackPanelActions(
                 onDismiss = { actions.onRegionSelected(fromRegionId) },
                 onAdjustAttackTroops = actions.onAdjustAttackTroops,
                 onAdjustMoveAfterCapture = actions.onAdjustMoveAfterCapture,
+                onSetAutoAttackEnabled = actions.onSetAutoAttackEnabled,
                 onAttack = actions.onAttack,
             ),
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -1466,21 +2102,22 @@ private fun BoxScope.FortifyPanelHost(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
 
 @Composable
-private fun BoxScope.AttackResultHost(result: AttackResultUiState?) {
+private fun BoxScope.AttackResultHost(
+    result: AttackResultUiState?,
+    modifier: Modifier = Modifier,
+) {
     if (result == null) {
         return
     }
     AttackResultPanel(
         result = result,
-        modifier =
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = BottomBarHeight + 8.dp),
+        modifier = modifier,
     )
 }
 
@@ -1577,7 +2214,11 @@ private fun visibleAttackSelection(
     uiState: GameUiState,
     canManageAttacks: Boolean,
 ): Pair<String, String>? {
-    if (uiState.turnPhase != TurnPhase.ATTACK || !canManageAttacks) {
+    if (
+        uiState.turnPhase != TurnPhase.ATTACK ||
+        !canManageAttacks ||
+        uiState.attackState.autoAttack.isRunning
+    ) {
         return null
     }
     val fromRegionId = uiState.selectionFromRegionId ?: return null
@@ -1602,7 +2243,7 @@ internal fun createAttackResolutionOverlayState(
     fallbackPlayerName: String,
     isAttackRequestPending: Boolean,
 ): AttackResolutionOverlayState? {
-    if (!isAttackRequestPending) {
+    if (!isAttackRequestPending || uiState.attackState.autoAttack.isRunning) {
         return null
     }
     val (fromRegionId, toRegionId) = selection ?: return null
@@ -1651,7 +2292,8 @@ private fun canEndCurrentPhase(
                 !isReinforcementCommandPending
         TurnPhase.ATTACK ->
             uiState.canConfirmAttackDone(localPlayerId, isConnected) &&
-                !isAttackCommandPending
+                !isAttackCommandPending &&
+                !uiState.attackState.autoAttack.isRunning
         TurnPhase.FORTIFY ->
             uiState.canRequestTurnAdvance(localPlayerId, isConnected) &&
                 !isFortifyCommandPending &&
@@ -1673,6 +2315,17 @@ private fun endCurrentPhaseAction(
         else -> onAdvanceTurn
     }
 
+/*
+ * Nachschlagetabelle Region-ID -> lesbarer Gebietsname. Die technischen IDs wie
+ * "central_europe" tauchen nur intern auf; in den Auswahl-Panels und im
+ * Kampfergebnis sollen Spieler den Namen ("Mitteleuropa") sehen.
+ */
+private val regionDisplayNamesById: Map<String, String> =
+    PulverfassMapDefaults.regions.associate { region -> region.id to region.name }
+
+private fun regionDisplayName(regionId: String): String =
+    regionDisplayNamesById[regionId] ?: regionId
+
 /**
  * Priorisiert Verbindungs- und Synchronisationszustände vor Bedienhinweisen.
  * Sehr kurze Catch-ups bleiben unsichtbar, damit reguläre Antworten nicht flackern.
@@ -1690,6 +2343,10 @@ private fun gameStatusMessage(
             stringResource(Res.string.game_sync_catching_up)
         uiState.isCatchingUp -> null
         uiState.lastSyncError != null -> uiState.lastSyncError
+        uiState.attackState.autoAttack.errorText != null ->
+            uiState.attackState.autoAttack.errorText
+        uiState.attackState.autoAttack.statusText != null ->
+            uiState.attackState.autoAttack.statusText
         uiState.selectionMessage != null -> uiState.selectionMessage
         else -> null
     }
@@ -1770,117 +2427,99 @@ private fun SyncProgressOverlay(modifier: Modifier = Modifier) {
 private fun GameTopBar(
     personalPlayer: GamePlayerUi,
     phase: TurnPhase?,
-    round: Int,
     onOptionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.testTag("game_top_bar"),
-        shape = RoundedCornerShape(0.dp),
-        color = PulverfassColors.SurfaceDark.copy(alpha = 0.92f),
-        contentColor = PulverfassColors.TextOnDark,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, PulverfassColors.GoldDark),
+    Box(
+        modifier =
+            modifier
+                .testTag("game_top_bar")
+                .height(TopBarHeight)
+                .displayCutoutPadding()
+                .padding(horizontal = TopBarHorizontalPadding),
     ) {
         Row(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .height(TopBarHeight)
-                    .displayCutoutPadding(),
+                    .align(Alignment.TopStart)
+                    .padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
+            val optionsDescription = "Optionen"
+            Image(
+                painter = painterResource(Res.drawable.hud_options_button),
+                contentDescription = optionsDescription,
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp, end = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val optionsDescription = "Optionen"
-                FilledTonalButton(
-                    onClick = onOptionsClick,
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .semantics { contentDescription = optionsDescription }
-                            .testTag("game_options_button"),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp),
-                    colors =
-                        ButtonDefaults.filledTonalButtonColors(
-                            containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.65f),
-                            contentColor = PulverfassColors.TextOnDark,
-                        ),
-                ) {
-                    Text(
-                        text = "⚙",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = PulverfassColors.TextOnDark,
-                    )
-                }
-                PlayerAvatar(player = personalPlayer, size = 28.dp)
-                Column {
-                    Text(
-                        text = stringResource(Res.string.game_personal_player_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = PulverfassColors.TextOnDark,
-                    )
-                    Text(
-                        text = personalPlayer.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = PulverfassColors.GoldBright,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
+                        .size(46.dp)
+                        .testTag("game_options_button")
+                        .clickable(role = Role.Button, onClick = onOptionsClick),
+            )
+            PlayerAvatar(player = personalPlayer, size = 38.dp)
+            Column {
                 Text(
-                    text = stringResource(Res.string.game_phase_label),
+                    text = stringResource(Res.string.game_personal_player_label),
                     style = MaterialTheme.typography.labelSmall,
-                    color = PulverfassColors.TextOnDark,
+                    fontSize = 13.sp,
+                    color = HudContentColor,
                 )
                 Text(
-                    text = stringResource(phase.labelRes()),
-                    modifier = Modifier.testTag("game_phase_value"),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = PulverfassColors.GoldBright,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = stringResource(Res.string.game_round_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PulverfassColors.TextOnDark,
-                )
-                Text(
-                    text = stringResource(Res.string.game_round_value, round),
-                    modifier = Modifier.testTag("game_round_value"),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = PulverfassColors.GoldBright,
-                    fontWeight = FontWeight.Bold,
+                    text = personalPlayer.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 17.sp,
+                    color = HudAccentColor,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
+
+        PhaseHeader(
+            phase = phase,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-10).dp),
+        )
+    }
+}
+
+@Composable
+private fun PhaseHeader(
+    phase: TurnPhase?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .width(232.dp)
+                .height(PhaseImageHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(Res.drawable.hud_phase_badge),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.matchParentSize(),
+        )
+        Text(
+            text = stringResource(phase.labelRes()),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset(y = PhaseLabelVerticalOffset)
+                    .testTag("game_phase_value")
+                    .padding(horizontal = 28.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontSize = 16.7.sp,
+            color = PhaseHeaderTextColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -1916,6 +2555,7 @@ private fun CardsSidebar(
 private fun PlayerSidebar(
     players: List<GamePlayerUi>,
     activePlayerId: PlayerId?,
+    round: Int,
     modifier: Modifier = Modifier,
 ) {
     val playerListScrollState = rememberScrollState()
@@ -1931,35 +2571,43 @@ private fun PlayerSidebar(
         }
     }
 
-    Surface(
+    Box(
         modifier =
             modifier
-                .testTag("game_player_panel"),
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+                .testTag("game_player_panel")
+                .paint(
+                    painter = painterResource(Res.drawable.hud_player_list_background),
+                    contentScale = ContentScale.Crop,
+                ),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(playerListScrollState)
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(
+            Text(
+                text = stringResource(Res.string.game_round_value, round),
                 modifier =
                     Modifier
-                        .fillMaxSize()
-                        .verticalScroll(playerListScrollState)
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                players.forEach { player ->
-                    PlayerSidebarRow(
-                        player = player,
-                        isActive = player.playerId == activePlayerId,
-                        disableBringIntoView =
-                            activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
-                    )
-                }
+                        .align(Alignment.CenterHorizontally)
+                        .testTag("game_round_value")
+                        .padding(bottom = 2.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = HudAccentColor,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
+
+            players.forEach { player ->
+                PlayerSidebarRow(
+                    player = player,
+                    isActive = player.playerId == activePlayerId,
+                    disableBringIntoView =
+                        activePlayerIndex == 0 || activePlayerIndex == players.lastIndex,
+                )
             }
         }
     }
@@ -1980,50 +2628,58 @@ private fun PlayerSidebarRow(
         }
     }
 
-    Column {
-        Row(
-            modifier =
-                Modifier
-                    .bringIntoViewRequester(bringIntoViewRequester)
-                    .fillMaxWidth()
-                    .background(
-                        if (isActive) HudSurfaceMutedColor else Color.Transparent,
-                        RoundedCornerShape(14.dp),
-                    )
-                    .wrapContentHeight()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+    Row(
+        modifier =
+            Modifier
+                .bringIntoViewRequester(bringIntoViewRequester)
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start,
+    ) {
+        Box(
+            modifier = Modifier.size(width = 26.dp, height = 20.dp),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            ActiveTurnIndicator(isVisible = isActive)
-            PlayerAvatar(player = player, size = 28.dp)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ConnectionStatusIndicator(
-                        status = player.connectionStatus,
-                        modifier =
-                            Modifier.testTag(
-                                "player_connection_status_${player.playerId.value}",
-                            ),
-                    )
-                    Text(
-                        text = player.name,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = HudContentColor,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    )
-                }
-                if (player.isHost) {
-                    HostIndicator()
-                }
+            if (isActive) {
+                Image(
+                    painter = painterResource(Res.drawable.hud_active_player_marker),
+                    contentDescription = null,
+                    modifier = Modifier.size(width = 18.dp, height = 20.dp),
+                )
             }
         }
+        PlayerAvatar(player = player, size = 36.dp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f, fill = true)
+                    .padding(end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = player.name,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isActive) HudAccentColor else HudContentColor,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (player.isHost) {
+                HostIndicator()
+            }
+        }
+        ConnectionStatusIndicator(
+            status = player.connectionStatus,
+            modifier =
+                Modifier.testTag(
+                    "player_connection_status_${player.playerId.value}",
+                ),
+        )
     }
 }
 
@@ -2061,47 +2717,11 @@ internal fun connectionStatusIndicatorColor(status: ConnectionStatus): Color =
 
 @Composable
 private fun HostIndicator() {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = HudContentColor,
-        contentColor = HudInverseColor,
-    ) {
-        Text(
-            text = stringResource(Res.string.game_host_indicator),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = HudInverseColor,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
-private fun ActiveTurnIndicator(isVisible: Boolean) {
-    if (!isVisible) {
-        Spacer(modifier = Modifier.width(8.dp))
-        return
-    }
-
-    Canvas(
-        modifier =
-            Modifier
-                .size(width = 8.dp, height = 14.dp)
-                .testTag("active_player_marker"),
-    ) {
-        val trianglePath =
-            Path().apply {
-                moveTo(size.width, size.height / 2f)
-                lineTo(0f, 0f)
-                lineTo(0f, size.height)
-                close()
-            }
-
-        drawPath(
-            path = trianglePath,
-            color = HudBorderColor,
-        )
-    }
+    Image(
+        painter = painterResource(Res.drawable.hud_host_marker),
+        contentDescription = stringResource(Res.string.game_host_indicator),
+        modifier = Modifier.size(width = 44.dp, height = 18.dp),
+    )
 }
 
 @Composable
@@ -2266,18 +2886,29 @@ private fun HandCardRow(
                     item.cardId?.let(onSelected)
                 },
         shape = RoundedCornerShape(6.dp),
-        color = if (item.isSelected) Color(0xFFD7EEE9) else HudSurfaceMutedColor,
+        color = Color.Transparent,
         contentColor = HudContentColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
-        Text(
-            text = item.label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = HudContentColor,
-        )
+        Box(contentAlignment = Alignment.CenterStart) {
+            Image(
+                painter = painterResource(Res.drawable.ui_button_wood),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+            if (item.isSelected) {
+                Box(modifier = Modifier.matchParentSize().background(HudSelectedCardColor))
+            }
+            Text(
+                text = item.label,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = HudContentColor,
+            )
+        }
     }
 }
 
@@ -2389,7 +3020,7 @@ private fun ReinforcementPanel(
                 text =
                     stringResource(
                         Res.string.game_reinforcements_target,
-                        state.selectedRegionId,
+                        regionDisplayName(state.selectedRegionId),
                     ),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -2455,8 +3086,8 @@ private fun AttackPanel(
                     text =
                         stringResource(
                             Res.string.game_attack_route,
-                            state.fromRegionId,
-                            state.toRegionId,
+                            regionDisplayName(state.fromRegionId),
+                            regionDisplayName(state.toRegionId),
                         ),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -2467,7 +3098,7 @@ private fun AttackPanel(
                     label = "X",
                     onClick = actions.onDismiss,
                     selected = false,
-                    enabled = true,
+                    enabled = state.canDismiss,
                     modifier =
                         Modifier
                             .size(34.dp)
@@ -2493,6 +3124,11 @@ private fun AttackPanel(
                 onAdjust = actions.onAdjustMoveAfterCapture,
                 tagPrefix = "attack_move",
             )
+            AutoAttackControl(
+                checked = state.attackState.autoAttack.isEnabled,
+                enabled = state.canToggleAutoAttack,
+                onCheckedChange = actions.onSetAutoAttackEnabled,
+            )
             BlockActionButton(
                 label = stringResource(Res.string.game_attack_submit),
                 onClick = actions.onAttack,
@@ -2501,6 +3137,52 @@ private fun AttackPanel(
                 modifier = Modifier.fillMaxWidth().testTag("attack_submit_button"),
             )
         }
+    }
+}
+
+@Composable
+private fun AutoAttackControl(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 36.dp)
+                .testTag("attack_auto_toggle_row"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "AUTO ATTACK",
+                style = MaterialTheme.typography.labelLarge,
+                color = HudContentColor,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "wiederholt den Angriff bis Eroberung oder Abbruch",
+                style = MaterialTheme.typography.bodySmall,
+                color = HudContentColor.copy(alpha = 0.78f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = PulverfassColors.GoldBright,
+                    checkedTrackColor = PulverfassColors.GoldDark,
+                    uncheckedThumbColor = PulverfassColors.TextMuted,
+                    uncheckedTrackColor = PulverfassColors.SurfaceDark,
+                ),
+            modifier = Modifier.testTag("attack_auto_toggle"),
+        )
     }
 }
 
@@ -2540,8 +3222,8 @@ private fun FortifyPanel(
                     text =
                         stringResource(
                             Res.string.game_fortify_route,
-                            state.fromRegionId,
-                            state.toRegionId,
+                            regionDisplayName(state.fromRegionId),
+                            regionDisplayName(state.toRegionId),
                         ),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -2640,6 +3322,22 @@ private fun TroopAmountSliderRow(
     }
 }
 
+private fun AttackResultUiState.toAttackVfxRequest(): AttackVfxRequest? {
+    val fromRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(fromTerritoryId) ?: return null
+    val toRegionId =
+        GameMapTerritoryMapper.toAndroidRegionId(toTerritoryId) ?: return null
+    return AttackVfxRequest(
+        attackId = attackId,
+        fromRegionId = fromRegionId,
+        toRegionId = toRegionId,
+        attackerLosses = attackerLosses,
+        defenderLosses = defenderLosses,
+        sourceTroopsBefore = sourceTroopsBefore,
+        targetTroopsBefore = targetTroopsBefore,
+    )
+}
+
 /** Zeigt das letzte vom Server aufgelöste Kampfergebnis ohne lokale Berechnung. */
 @Composable
 private fun AttackResultPanel(
@@ -2670,8 +3368,8 @@ private fun AttackResultPanel(
                 text =
                     stringResource(
                         Res.string.game_attack_result_title,
-                        fromRegionId,
-                        toRegionId,
+                        regionDisplayName(fromRegionId),
+                        regionDisplayName(toRegionId),
                     ),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
@@ -2722,7 +3420,6 @@ private fun AttackResultPanel(
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
-    val canUseLocalInput: Boolean,
     val canEndPhase: Boolean,
     val cardsVisible: Boolean,
 )
@@ -2735,93 +3432,105 @@ private fun BottomActionClusters(
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(0.dp),
-        color = HudSurfaceColor,
-        contentColor = HudContentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+    Box(
+        modifier =
+            modifier
+                .height(BottomBarHeight)
+                .padding(horizontal = 20.dp, vertical = 6.dp),
     ) {
-        Row(
+        val sideButtonWidth = 132.dp
+
+        GameActionButton(
+            label =
+                if (state.cardsVisible) {
+                    stringResource(Res.string.game_cards_hide)
+                } else {
+                    stringResource(Res.string.game_cards_button)
+                },
+            style =
+                GameActionButtonStyle(
+                    backgroundActive = Res.drawable.hud_action_cards,
+                    backgroundInactive = Res.drawable.hud_action_cards,
+                    fontSize = 11.sp,
+                ),
+            onClick = {
+                musicManager?.playSfx(SfxSound.UI_CLICK)
+                onToggleCards()
+            },
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .height(BottomBarHeight)
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                    .align(Alignment.CenterStart)
+                    .width(sideButtonWidth)
+                    .fillMaxHeight(),
+        )
+
+        Row(
+            modifier = Modifier.align(Alignment.Center).fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            BlockActionButton(
-                label =
-                    if (state.cardsVisible) {
-                        stringResource(Res.string.game_cards_hide)
-                    } else {
-                        stringResource(Res.string.game_cards_button)
-                    },
-                onClick = onToggleCards,
-                selected = false,
-                enabled = state.canUseLocalInput,
-                modifier = Modifier.width(CardsSidebarWidth - 20.dp),
-                musicManager = musicManager,
+            GameActionButton(
+                label = stringResource(Res.string.game_action_reinforce),
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = Res.drawable.hud_action_reinforce_active,
+                        backgroundInactive = Res.drawable.hud_action_reinforce_inactive,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                    ),
+                active = state.currentPhase == TurnPhase.REINFORCEMENTS,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
             )
-
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PhaseButton(
-                    label = stringResource(Res.string.game_action_reinforce),
-                    selected = state.currentPhase == TurnPhase.REINFORCEMENTS,
-                    enabled = false,
-                    modifier = Modifier.weight(1f),
-                )
-                PhaseButton(
-                    label = stringResource(Res.string.game_action_attack),
-                    selected = state.currentPhase == TurnPhase.ATTACK,
-                    enabled = false,
-                    modifier = Modifier.weight(1f),
-                )
-                PhaseButton(
-                    label = stringResource(Res.string.game_action_move),
-                    selected = state.currentPhase == TurnPhase.FORTIFY,
-                    enabled = false,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            Row(
-                modifier = Modifier.width(172.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BlockActionButton(
-                    label = stringResource(Res.string.game_end_round_button),
-                    onClick = onEndPhase,
-                    selected = true,
-                    enabled = state.canEndPhase,
-                    modifier = Modifier.fillMaxWidth().testTag("end_round_button"),
-                    musicManager = musicManager,
-                    sfxResId = SfxSound.ATTACK_CONFIRM,
-                )
-            }
+            GameActionButton(
+                label = stringResource(Res.string.game_action_attack),
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = Res.drawable.hud_action_attack_active,
+                        backgroundInactive = Res.drawable.hud_action_attack_inactive,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                    ),
+                active = state.currentPhase == TurnPhase.ATTACK,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
+            )
+            GameActionButton(
+                label = stringResource(Res.string.game_action_move),
+                style =
+                    GameActionButtonStyle(
+                        backgroundActive = Res.drawable.hud_action_fortify_active,
+                        backgroundInactive = Res.drawable.hud_action_fortify_inactive,
+                        backgroundScale = ContentScale.Crop,
+                        textStartFraction = 0.27f,
+                        fontSize = 10.sp,
+                    ),
+                active = state.currentPhase == TurnPhase.FORTIFY,
+                modifier = Modifier.width(PhaseButtonWidth).fillMaxHeight(),
+            )
         }
-    }
-}
 
-@Composable
-private fun PhaseButton(
-    label: String,
-    selected: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    BlockActionButton(
-        label = label,
-        onClick = {},
-        selected = selected,
-        enabled = enabled,
-        modifier = modifier,
-    )
+        GameActionButton(
+            label = stringResource(Res.string.game_end_round_button),
+            style =
+                GameActionButtonStyle(
+                    backgroundActive = Res.drawable.hud_action_end_phase,
+                    backgroundInactive = Res.drawable.hud_action_end_phase,
+                    backgroundScale = ContentScale.Crop,
+                    textStartFraction = 0.22f,
+                    fontSize = 9.sp,
+                ),
+            enabled = state.canEndPhase,
+            onClick = {
+                musicManager?.playSfx(SfxSound.ATTACK_CONFIRM)
+                onEndPhase()
+            },
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(sideButtonWidth)
+                    .fillMaxHeight()
+                    .testTag("end_round_button"),
+        )
+    }
 }
 
 @Composable
@@ -2854,7 +3563,7 @@ private fun BlockActionButton(
             contentPadding = contentPadding,
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = HudContentColor,
+                    containerColor = HudAccentColor,
                     contentColor = HudInverseColor,
                 ),
         ) {

@@ -1,14 +1,13 @@
 package at.aau.pulverfass.client.ui.screens
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
 @Composable
 actual fun LightSensorCheatTrigger(
     enabled: Boolean,
     onTriggered: () -> Unit,
+    modifier: Modifier,
 ) {
-    /*
-     * Kein öffentlicher Lichtsensor-Zugriff auf iOS — der Cheat bleibt
-     * deaktiviert, wie auf Android-Geräten ohne Lichtsensor.
-     */
+    // iOS bietet keinen öffentlichen Zugriff auf den Umgebungslichtsensor.
 }

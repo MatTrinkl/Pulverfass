@@ -3,6 +3,7 @@ package at.aau.pulverfass.client.ui.map
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -71,11 +74,12 @@ import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.imageResource
 import kotlin.math.roundToInt
 
-private const val MAP_IMAGE_WIDTH_PX = 2540
-private const val MAP_IMAGE_HEIGHT_PX = 1346
+private const val MAP_IMAGE_WIDTH_PX = 3840
+private const val MAP_IMAGE_HEIGHT_PX = 2160
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 private const val TERRITORY_OVERLAY_ALPHA = 0.78f
+private const val HIT_TEST_SEARCH_RADIUS_PX = 6
 private val MapOverlaySurfaceColor = Color.White
 private val MapOverlayBorderColor = Color.Black
 private val MapOverlayContentColor = Color.Black
@@ -349,6 +353,7 @@ object PulverfassMapDefaults {
  * @param modifier Compose-Modifier der Kartenfläche
  * @param regionStates serverbasierter Zustand pro Region-ID
  * @param options Render- und Hitmap-Konfiguration
+ * @param attackVfx zuletzt aufgelöstes Kampfergebnis für die Clash-Animation
  */
 @Composable
 fun InteractiveGameMap(
@@ -358,9 +363,11 @@ fun InteractiveGameMap(
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
     options: InteractiveGameMapOptions = InteractiveGameMapOptions(),
+    attackVfx: AttackVfxRequest? = null,
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    val currentOnRegionSelected = rememberUpdatedState(onRegionSelected)
 
     /*
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
@@ -401,6 +408,9 @@ fun InteractiveGameMap(
         remember(viewportSize, options.aspectRatio) {
             createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = options.aspectRatio)
         }
+    val attackVfxController = rememberAttackVfxController(attackVfx)
+    val activeAttackVfx = attackVfxController.activeRequest
+    val regionsById = remember(regions) { regions.associateBy(GameMapRegion::id) }
 
     Box(
         modifier =
@@ -431,7 +441,7 @@ fun InteractiveGameMap(
                                 )
 
                             if (tappedRegion != null) {
-                                onRegionSelected(tappedRegion)
+                                currentOnRegionSelected.value(tappedRegion)
                             }
                         }
                     }
@@ -492,22 +502,91 @@ fun InteractiveGameMap(
                      * Test-Tags für UI-Tests stabil bleiben.
                      */
                     RegionTroopCounter(
-                        state = regionStates[region.id],
+                        state =
+                            visibleRegionState(
+                                baseState = regionStates[region.id],
+                                regionId = region.id,
+                                activeAttackVfx = activeAttackVfx,
+                            ),
                         isSelected = region.id == selectedRegionId,
+                        onClick = { currentOnRegionSelected.value(region) },
                         modifier =
                             Modifier
                                 .align(Alignment.TopStart)
                                 .offset {
                                     IntOffset(
-                                        x = (labelPosition.x - 18.dp.toPx()).roundToInt(),
-                                        y = (labelPosition.y - 18.dp.toPx()).roundToInt(),
+                                        x = (labelPosition.x - 22.dp.toPx()).roundToInt(),
+                                        y = (labelPosition.y - 22.dp.toPx()).roundToInt(),
                                     )
                                 }
                                 .testTag("region_button_${region.id}"),
                     )
                 }
             }
+
+            if (activeAttackVfx != null) {
+                ActiveAttackVfx(
+                    request = activeAttackVfx,
+                    controller = attackVfxController,
+                    anchors = anchors,
+                    regionsById = regionsById,
+                    regionStates = regionStates,
+                    layoutMetrics = layoutMetrics,
+                    viewportState = viewportState,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun ActiveAttackVfx(
+    request: AttackVfxRequest,
+    controller: AttackVfxController,
+    anchors: Map<String, MapPoint>,
+    regionsById: Map<String, GameMapRegion>,
+    regionStates: Map<String, GameMapRegionState>,
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+) {
+    val fromAnchor =
+        anchors[request.fromRegionId]
+            ?: regionsById[request.fromRegionId]?.fallbackAnchor
+            ?: return
+    val toAnchor =
+        anchors[request.toRegionId]
+            ?: regionsById[request.toRegionId]?.fallbackAnchor
+            ?: return
+    AttackVfxOverlay(
+        controller = controller,
+        fromAnchor = fromAnchor,
+        toAnchor = toAnchor,
+        colors =
+            ClashColors(
+                attacker = regionStates[request.fromRegionId]?.accentColor ?: NeutralRegionColor,
+                defender = regionStates[request.toRegionId]?.accentColor ?: NeutralRegionColor,
+            ),
+        layoutMetrics = layoutMetrics,
+        viewportState = viewportState,
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+private fun visibleRegionState(
+    baseState: GameMapRegionState?,
+    regionId: String,
+    activeAttackVfx: AttackVfxRequest?,
+): GameMapRegionState? {
+    if (baseState == null || activeAttackVfx == null) {
+        return baseState
+    }
+
+    return when (regionId) {
+        activeAttackVfx.fromRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.sourceTroopsBefore)
+        activeAttackVfx.toRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.targetTroopsBefore)
+        else -> baseState
     }
 }
 
@@ -632,7 +711,14 @@ internal fun findRegionAtScreenPoint(
         ) ?: return null
 
     val pixelRgb = regionIdPixelMap.argbAt(imagePixel.x, imagePixel.y) and RGB_MASK
-    return findRegionByIdColor(regions = regions, pixelRgb = pixelRgb)
+    findRegionByIdColor(regions = regions, pixelRgb = pixelRgb)?.let { return it }
+
+    return findNearestRegionByIdColor(
+        regions = regions,
+        origin = imagePixel,
+        regionIdPixelMap = regionIdPixelMap,
+        searchRadius = HIT_TEST_SEARCH_RADIUS_PX,
+    )
 }
 
 /**
@@ -715,6 +801,31 @@ internal fun findRegionByIdColor(
     regions.firstOrNull { region ->
         region.idMapColorRgb == (pixelRgb and RGB_MASK)
     }
+
+private fun findNearestRegionByIdColor(
+    regions: List<GameMapRegion>,
+    origin: IntOffset,
+    regionIdPixelMap: PixelMap,
+    searchRadius: Int,
+): GameMapRegion? {
+    for (radius in 1..searchRadius) {
+        for (dy in -radius..radius) {
+            for (dx in -radius..radius) {
+                if (kotlin.math.abs(dx) != radius && kotlin.math.abs(dy) != radius) {
+                    continue
+                }
+                val x = origin.x + dx
+                val y = origin.y + dy
+                if (x !in 0 until regionIdPixelMap.width || y !in 0 until regionIdPixelMap.height) {
+                    continue
+                }
+                val pixelRgb = regionIdPixelMap.argbAt(x, y) and RGB_MASK
+                findRegionByIdColor(regions = regions, pixelRgb = pixelRgb)?.let { return it }
+            }
+        }
+    }
+    return null
+}
 
 /**
  * Transformiert einen normalisierten Kartenpunkt in Bildschirmkoordinaten.
@@ -860,6 +971,7 @@ private fun calculateAxisOffsetBounds(
 private fun RegionTroopCounter(
     state: GameMapRegionState?,
     isSelected: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val containerColor = if (isSelected) MapOverlayContentColor else MapOverlaySurfaceColor
@@ -868,7 +980,11 @@ private fun RegionTroopCounter(
     Surface(
         modifier =
             modifier
-                .size(36.dp),
+                .size(44.dp)
+                .clickable(
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
         shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,

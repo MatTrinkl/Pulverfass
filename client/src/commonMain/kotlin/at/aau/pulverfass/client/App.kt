@@ -2,8 +2,6 @@ package at.aau.pulverfass.client
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -107,99 +105,97 @@ fun App(musicManager: BackgroundMusicManager) {
             lobbyState = lobbyState,
         )
 
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
-                /*
-                 * Definiert alle aktuell verfügbaren Routen und Ziele.
-                 */
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.StudioIntro.route,
-                ) {
-                    composable(Screen.StudioIntro.route) {
-                        StudioIntroScreen(
-                            navController = navController,
-                            musicManager = musicManager,
-                        )
-                    }
-                    composable(Screen.Load.route) {
-                        LoadScreen(navController)
-                    }
-                    composable(Screen.MainMenu.route) {
-                        MainMenuScreen(
-                            onStartClick = {
-                                navController.navigate(Screen.Lobby.route)
+        Box(modifier = Modifier.fillMaxSize()) {
+            /*
+             * Definiert alle aktuell verfügbaren Routen und Ziele.
+             */
+            NavHost(
+                navController = navController,
+                startDestination = Screen.StudioIntro.route,
+            ) {
+                composable(Screen.StudioIntro.route) {
+                    StudioIntroScreen(
+                        navController = navController,
+                        musicManager = musicManager,
+                    )
+                }
+                composable(Screen.Load.route) {
+                    LoadScreen(navController)
+                }
+                composable(Screen.MainMenu.route) {
+                    MainMenuScreen(
+                        onStartClick = {
+                            navController.navigate(Screen.Lobby.route)
+                        },
+                        onOptionsClick = {
+                            navController.navigate(Screen.Options.route)
+                        },
+                        onExitClick =
+                            if (isExitSupported) {
+                                { exitApplication() }
+                            } else {
+                                null
                             },
-                            onOptionsClick = {
-                                navController.navigate(Screen.Options.route)
-                            },
-                            onExitClick =
-                                if (isExitSupported) {
-                                    { exitApplication() }
-                                } else {
-                                    null
-                                },
-                        )
-                    }
-                    composable(Screen.Lobby.route) {
-                        LobbyScreen(
-                            navController = navController,
-                            controller = lobbyController,
-                        )
-                    }
+                    )
+                }
+                composable(Screen.Lobby.route) {
+                    LobbyScreen(
+                        navController = navController,
+                        controller = lobbyController,
+                    )
+                }
 
-                    composable(Screen.LoadGame.route) {
-                        LoadGameScreen(navController = navController)
-                    }
-                    /*
-                     * Warteraum mit Parametern aus der Navigation.
-                     * Der Controller ist trotzdem die Quelle der Wahrheit;
-                     * die Argumente sind nur ein Fallback für direkte
-                     * Navigation und UI-Rekonstruktion.
-                     */
-                    composable(
-                        route =
-                            Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
-                        arguments =
-                            listOf(
-                                navArgument("lobbyCode") { type = NavType.StringType },
-                                navArgument("isHost") { type = NavType.BoolType },
-                                navArgument("playerName") { type = NavType.StringType },
-                            ),
-                    ) { backStackEntry ->
-                        val args = backStackEntry.arguments
-                        val lobbyCode = args?.read { getStringOrNull("lobbyCode") } ?: ""
-                        val isHost = args?.read { getBooleanOrNull("isHost") } ?: false
-                        val playerName =
-                            (args?.read { getStringOrNull("playerName") } ?: "").decodeURLPart()
-                        WaitingRoomScreen(
-                            navController = navController,
-                            controller = lobbyController,
-                            lobbyCode = lobbyCode,
-                            isHost = isHost,
-                            playerName = playerName,
-                        )
-                    }
-                    composable(Screen.Game.route) {
-                        GameScreen(
-                            controller = lobbyController,
-                            musicManager = musicManager,
-                            onNavigateToMain = {
-                                navController.navigate(Screen.MainMenu.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            },
-                        )
-                    }
-                    composable(Screen.Options.route) {
-                        val optionsState by lobbyController.state.collectAsState()
-                        OptionsScreen(
-                            navController = navController,
-                            playerName = optionsState.playerName,
-                            onPlayerNameChange = lobbyController::updatePlayerName,
-                            musicManager = musicManager,
-                        )
-                    }
+                composable(Screen.LoadGame.route) {
+                    LoadGameScreen(navController = navController)
+                }
+                /*
+                 * Warteraum mit Parametern aus der Navigation.
+                 * Der Controller ist trotzdem die Quelle der Wahrheit;
+                 * die Argumente sind nur ein Fallback für direkte
+                 * Navigation und UI-Rekonstruktion.
+                 */
+                composable(
+                    route =
+                        Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
+                    arguments =
+                        listOf(
+                            navArgument("lobbyCode") { type = NavType.StringType },
+                            navArgument("isHost") { type = NavType.BoolType },
+                            navArgument("playerName") { type = NavType.StringType },
+                        ),
+                ) { backStackEntry ->
+                    val args = backStackEntry.arguments
+                    val lobbyCode = args?.read { getStringOrNull("lobbyCode") } ?: ""
+                    val isHost = args?.read { getBooleanOrNull("isHost") } ?: false
+                    val playerName =
+                        (args?.read { getStringOrNull("playerName") } ?: "").decodeURLPart()
+                    WaitingRoomScreen(
+                        navController = navController,
+                        controller = lobbyController,
+                        lobbyCode = lobbyCode,
+                        isHost = isHost,
+                        playerName = playerName,
+                    )
+                }
+                composable(Screen.Game.route) {
+                    GameScreen(
+                        controller = lobbyController,
+                        musicManager = musicManager,
+                        onNavigateToMain = {
+                            navController.navigate(Screen.MainMenu.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable(Screen.Options.route) {
+                    val optionsState by lobbyController.state.collectAsState()
+                    OptionsScreen(
+                        navController = navController,
+                        playerName = optionsState.playerName,
+                        onPlayerNameChange = lobbyController::updatePlayerName,
+                        musicManager = musicManager,
+                    )
                 }
             }
         }

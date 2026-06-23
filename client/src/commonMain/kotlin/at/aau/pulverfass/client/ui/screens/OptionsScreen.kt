@@ -34,6 +34,7 @@ import at.aau.pulverfass.client.ui.components.VideoAsset
 import at.aau.pulverfass.client.ui.components.VideoPlayer
 import at.aau.pulverfass.client.ui.theme.PulverfassColors
 import at.aau.pulverfass.client.ui.theme.cinzelDecorative
+import at.aau.pulverfass.shared.lobby.MAX_PLAYER_DISPLAY_NAME_LENGTH
 
 /**
  * Globaler Options-Screen für Anzeigename und Audio.
@@ -101,7 +102,13 @@ fun OptionsScreen(
 
             MainInputField(
                 value = playerName,
-                onValueChange = { if (it.length <= 20) onPlayerNameChange(it) },
+                onValueChange = {
+                    if (it.length <= MAX_PLAYER_DISPLAY_NAME_LENGTH) {
+                        onPlayerNameChange(
+                            it,
+                        )
+                    }
+                },
                 placeholder = "SPIELERNAME",
                 modifier = Modifier.fillMaxWidth(0.5f),
             )

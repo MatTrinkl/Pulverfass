@@ -136,6 +136,15 @@ enum class MessageType(val id: Int) {
     /** Broadcast des aktuellen Verbindungsstatus eines Lobby-Spielers. */
     LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST(88),
 
+    /** Anfrage eines Spielers, einen vermuteten Cheat eines anderen zu melden. */
+    LOBBY_REPORT_CHEAT_REQUEST(89),
+
+    /** Erfolgsantwort auf eine Cheat-Meldung. */
+    LOBBY_REPORT_CHEAT_RESPONSE(90),
+
+    /** Fehlantwort auf eine Cheat-Meldung. */
+    LOBBY_REPORT_CHEAT_ERROR_RESPONSE(91),
+
     /** Logout-Anfrage eines Clients. */
     LOGOUT_REQUEST(3),
 

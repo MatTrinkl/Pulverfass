@@ -40,10 +40,20 @@ class SharedPreferencesPlayerNameStore(
             .apply()
     }
 
+    override fun readAutoAttackEnabled(): Boolean =
+        preferences.getBoolean(KEY_AUTO_ATTACK_ENABLED, false)
+
+    override fun saveAutoAttackEnabled(enabled: Boolean) {
+        preferences.edit()
+            .putBoolean(KEY_AUTO_ATTACK_ENABLED, enabled)
+            .apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "pulverfass_player_settings"
         const val KEY_PLAYER_NAME = "player_name"
         const val KEY_CHARACTER_ID = "character_id"
+        const val KEY_AUTO_ATTACK_ENABLED = "auto_attack_enabled"
     }
 }
 

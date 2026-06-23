@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LocalTextStyle
@@ -36,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -44,6 +48,8 @@ import at.aau.pulverfass.client.ui.components.LobbyVideoBackground
 import at.aau.pulverfass.client.ui.components.MainButton
 import at.aau.pulverfass.client.ui.components.MainInputField
 import at.aau.pulverfass.client.ui.navigation.Screen
+import at.aau.pulverfass.client.ui.screenHeightDp
+import at.aau.pulverfass.client.ui.screenWidthDp
 import at.aau.pulverfass.client.ui.theme.PulverfassColors
 import at.aau.pulverfass.client.ui.theme.cinzelDecorative
 import io.ktor.http.encodeURLParameter
@@ -66,13 +72,16 @@ fun LobbyScreen(
 ) {
     val state by controller.state.collectAsState()
     val uiScope = rememberCoroutineScope()
+    val screenWidth = screenWidthDp()
+    val screenHeight = screenHeightDp()
     var showDevPanel by remember { mutableStateOf(false) }
+    val compactHeight = screenHeight < 430.dp
+    val showDebugPanels = !compactHeight && screenWidth >= 980.dp
 
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .systemBarsPadding()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
         LobbyVideoBackground()
@@ -90,55 +99,69 @@ fun LobbyScreen(
             OnlinePlayersPill(count = state.globalPlayerCount)
         }
 
-        // Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht und Map-Test.
-        DevInfoPanel(
-            serverUrl = state.serverUrl,
-            lastMessageType = state.lastMessageType,
-            onMapTestClick = { navController.navigate(Screen.LoadGame.route) },
-            modifier =
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = 24.dp, top = 16.dp),
-        )
+        if (showDebugPanels) {
+            // Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht und Map-Test.
+            DevInfoPanel(
+                serverUrl = state.serverUrl,
+                lastMessageType = state.lastMessageType,
+                onMapTestClick = { navController.navigate(Screen.LoadGame.route) },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 24.dp, top = 16.dp),
+            )
+        }
 
-        // Unten rechts: einblendbare Dev-Verbindungssteuerung.
-        DevControlsPanel(
-            controlsState =
-                DevControlsState(
-                    isConnected = state.isConnected,
-                    isConnecting = state.isConnecting,
-                    serverUrl = state.serverUrl,
-                ),
-            showDevPanel = showDevPanel,
-            onToggleDevMod = { showDevPanel = !showDevPanel },
-            onConnectClick = controller::connect,
-            onDisconnectClick = controller::disconnect,
-            onUpdateServerUrl = controller::updateServerUrl,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 24.dp, bottom = 24.dp),
-        )
-
-        // Unten links: zurück zum Hauptmenü.
-        MainButton(
-            text = "ZURÜCK",
-            onClick = { navController.popBackStack() },
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 24.dp, bottom = 24.dp),
-        )
+        if (showDebugPanels) {
+            // Unten rechts: einblendbare Dev-Verbindungssteuerung.
+            DevControlsPanel(
+                controlsState =
+                    DevControlsState(
+                        isConnected = state.isConnected,
+                        isConnecting = state.isConnecting,
+                        serverUrl = state.serverUrl,
+                    ),
+                showDevPanel = showDevPanel,
+                onToggleDevMod = { showDevPanel = !showDevPanel },
+                onConnectClick = controller::connect,
+                onDisconnectClick = controller::disconnect,
+                onUpdateServerUrl = controller::updateServerUrl,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 24.dp, bottom = 24.dp),
+            )
+        }
 
         // Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
-        Box(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 48.dp),
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = 24.dp,
+                        end = 24.dp,
+                        top = if (compactHeight) 72.dp else 64.dp,
+                        bottom = 48.dp,
+                    ),
             contentAlignment = Alignment.Center,
         ) {
+            val formWidth =
+                when {
+                    maxWidth < 520.dp -> maxWidth
+                    maxWidth < 760.dp -> minOf(maxWidth * 0.82f, 520.dp)
+                    else -> 500.dp
+                }
+            val formModifier =
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = formWidth)
+                    .verticalScroll(rememberScrollState())
             if (!state.isJoining) {
                 CreateOrJoinForm(
                     playerName = state.playerName,
                     errorText = state.errorText,
+                    modifier = formModifier,
                     onPlayerNameChange = controller::updatePlayerName,
                     onCreateClick = {
                         controller.createLobby { generatedCode ->
@@ -151,12 +174,14 @@ fun LobbyScreen(
                         }
                     },
                     onJoinToggle = { controller.setJoining(true) },
+                    onBackClick = { navController.popBackStack() },
                 )
             } else {
                 JoinLobbyForm(
                     lobbyCode = state.lobbyCode,
                     playerName = state.playerName,
                     errorText = state.errorText,
+                    modifier = formModifier,
                     onLobbyCodeChange = controller::updateLobbyCode,
                     onPlayerNameChange = controller::updatePlayerName,
                     onJoinClick = {
@@ -183,42 +208,52 @@ fun LobbyScreen(
 private fun CreateOrJoinForm(
     playerName: String,
     errorText: String?,
+    modifier: Modifier = Modifier,
     onPlayerNameChange: (String) -> Unit,
     onCreateClick: () -> Unit,
     onJoinToggle: () -> Unit,
+    onBackClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth(0.7f),
+        modifier = modifier,
     ) {
         LobbyTitle("SPIEL-LOBBY")
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(28.dp))
         MainInputField(
             value = playerName,
             onValueChange = onPlayerNameChange,
             placeholder = "SPIELERNAME",
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions =
                 KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
                 ),
         )
-        Spacer(modifier = Modifier.height(32.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(0.8f),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        Spacer(modifier = Modifier.height(24.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             MainButton(
                 text = "LOBBY ERSTELLEN",
                 onClick = onCreateClick,
                 enabled = playerName.isNotBlank(),
-                modifier = Modifier.weight(1f),
+                fontSize = 15,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
             )
             MainButton(
                 text = "LOBBY BEITRETEN",
                 onClick = onJoinToggle,
                 enabled = playerName.isNotBlank(),
-                modifier = Modifier.weight(1f),
+                fontSize = 15,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
+            )
+            MainButton(
+                text = "ZURÜCK",
+                onClick = onBackClick,
+                fontSize = 15,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
             )
         }
         ErrorTextSlot(errorText)
@@ -230,6 +265,7 @@ private fun JoinLobbyForm(
     lobbyCode: String,
     playerName: String,
     errorText: String?,
+    modifier: Modifier = Modifier,
     onLobbyCodeChange: (String) -> Unit,
     onPlayerNameChange: (String) -> Unit,
     onJoinClick: () -> Unit,
@@ -237,10 +273,10 @@ private fun JoinLobbyForm(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth(0.7f),
+        modifier = modifier,
     ) {
         LobbyTitle("JOIN-LOBBY")
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         MainInputField(
             value = lobbyCode,
             onValueChange = { input ->
@@ -250,7 +286,7 @@ private fun JoinLobbyForm(
                 }
             },
             placeholder = "4-STELLIGER LOBBY-CODE",
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -258,27 +294,29 @@ private fun JoinLobbyForm(
             value = playerName,
             onValueChange = onPlayerNameChange,
             placeholder = "SPIELERNAME",
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions =
                 KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
                 ),
         )
-        Spacer(modifier = Modifier.height(32.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(0.8f),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        Spacer(modifier = Modifier.height(22.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             MainButton(
-                text = "JOIN LOBBY",
+                text = "LOBBY BEITRETEN",
                 onClick = onJoinClick,
                 enabled = playerName.isNotBlank() && lobbyCode.length == 4,
-                modifier = Modifier.weight(1f),
+                fontSize = 15,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
             )
             MainButton(
                 text = "ZURÜCK",
                 onClick = onBackClick,
-                modifier = Modifier.weight(1f),
+                fontSize = 15,
+                modifier = Modifier.fillMaxWidth().height(88.dp),
             )
         }
         ErrorTextSlot(errorText)
@@ -287,13 +325,16 @@ private fun JoinLobbyForm(
 
 @Composable
 private fun LobbyTitle(text: String) {
+    val screenWidth = screenWidthDp()
+    val compactWidth = screenWidth < 760.dp
     Text(
         text = text,
         color = PulverfassColors.GoldBright,
         fontFamily = cinzelDecorative(),
-        fontSize = 56.sp,
+        fontSize = if (compactWidth) 38.sp else 56.sp,
         fontWeight = FontWeight.Black,
-        letterSpacing = 4.sp,
+        letterSpacing = if (compactWidth) 2.sp else 4.sp,
+        textAlign = TextAlign.Center,
     )
 }
 

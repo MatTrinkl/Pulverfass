@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -45,7 +46,7 @@ private const val DEFAULT_LOADING_TEXT_INTERVAL_MS = 2200L
 internal val LoadingTexts =
     listOf(
         "Hisse die Segel...",
-        "Schartnerbomb wird gebaut...",
+        "Schartnerbombe laden...",
         "Pulver ins Fass laden...",
         "Karten entrollen...",
         "Würfel polieren...",
@@ -213,7 +214,7 @@ fun LoadScreen(
                     if (loadError != null) {
                         PulverfassColors.DangerBright
                     } else {
-                        PulverfassColors.TextPrimary
+                        Color.White
                     },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,

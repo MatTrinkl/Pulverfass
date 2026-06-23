@@ -75,6 +75,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -95,6 +96,7 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
@@ -124,6 +126,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
@@ -180,7 +184,29 @@ class MainServerLobbyRoutingService(
         const val RECONNECT_SNAPSHOT_SKIPPED_WITH_LOBBY_PREFIX =
             "Reconnect snapshot skipped connectionId={} lobbyCode={} "
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
+        const val CHEAT_REPORT_WINDOW_MILLIS = 20_000L
+        const val CHEAT_REPORT_REWARD = 3
+        const val CHEAT_REPORT_PENALTY = -3
     }
+
+    private data class CheatReportWindow(
+        val expiresAtMillis: Long,
+    )
+
+    private data class CheatReportKey(
+        val reporterPlayerId: PlayerId,
+        val accusedPlayerId: PlayerId,
+    )
+
+    private data class CheatReportResult(
+        val correct: Boolean,
+        val modifierDelta: Int,
+    )
+
+    private data class CheatReinforcementAdjustment(
+        val modifier: Int,
+        val zeroReinforcements: Boolean,
+    )
 
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
@@ -197,6 +223,15 @@ class MainServerLobbyRoutingService(
     private val publicGameStateBuilder = PublicGameStateBuilder()
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
     private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
+    private val cheatReportLock = Any()
+    private val pendingVisibleCheatByLobby = mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
+    private val cheatReportWindowsByLobby =
+        mutableMapOf<LobbyCode, MutableMap<PlayerId, CheatReportWindow>>()
+    private val cheatReportsByLobby = mutableMapOf<LobbyCode, MutableSet<CheatReportKey>>()
+    private val nextReinforcementModifierByLobby =
+        mutableMapOf<LobbyCode, MutableMap<PlayerId, Int>>()
+    private val nextZeroReinforcementPenaltyByLobby =
+        mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
     init {
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
@@ -245,6 +280,7 @@ class MainServerLobbyRoutingService(
             is GameStatePrivateGetRequest -> routeGameStatePrivateGetRequest(request)
             is FortifyMoveRequest -> routeFortifyMoveRequest(request)
             is PlaceReinforcementsRequest -> routePlaceReinforcementsRequest(request)
+            is ReportCheatRequest -> routeReportCheatRequest(request)
             is StartPlayerSetRequest -> routeStartPlayerSetRequest(request)
             is TradeInCardsRequest -> routeTradeInCardsRequest(request)
             is TurnStateGetRequest -> routeTurnStateGetRequest(request)
@@ -700,6 +736,7 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildClaimCheatReinforcementBonusEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
+            markCheatReportWindowPending(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
                 ClaimCheatReinforcementBonusResponse(payload.lobbyCode),
@@ -707,6 +744,64 @@ class MainServerLobbyRoutingService(
             hooks.onRouted(request.connectionId)
         }.onFailure { cause ->
             val error = claimCheatReinforcementBonusErrorResponse(request, payload, cause)
+            network.send(request.connectionId, error)
+            hooks.onRoutingError(
+                request.connectionId,
+                LobbyRoutingError.InvalidRoutingData(
+                    reason = error.reason,
+                    context =
+                        LobbyRoutingContext(
+                            connectionId = request.connectionId,
+                            messageType = request.receivedPacket.header.type,
+                            lobbyCode = payload.lobbyCode,
+                        ),
+                    cause = cause,
+                ),
+            )
+        }
+    }
+
+    private suspend fun routeReportCheatRequest(request: DecodedNetworkRequest) {
+        val payload = request.payload as ReportCheatRequest
+
+        runCatching {
+            val lobby =
+                lobbyManager.getLobby(payload.lobbyCode)
+                    ?: throw IllegalStateException("GAME_NOT_FOUND")
+            val state = lobby.currentState()
+            val contextPlayerId = request.context.playerId
+
+            require(!(contextPlayerId == null || contextPlayerId != payload.reporterPlayerId)) {
+                "REQUESTER_MISMATCH"
+            }
+            require(state.gameStarted) { "GAME_NOT_RUNNING" }
+            require(
+                payload.reporterPlayerId in state.players &&
+                    payload.accusedPlayerId in state.players,
+            ) {
+                "UNKNOWN_PLAYER"
+            }
+            require(payload.reporterPlayerId != payload.accusedPlayerId) { "SELF_REPORT" }
+
+            val result =
+                resolveCheatReport(
+                    lobbyCode = payload.lobbyCode,
+                    reporterPlayerId = payload.reporterPlayerId,
+                    accusedPlayerId = payload.accusedPlayerId,
+                )
+
+            network.send(
+                request.connectionId,
+                ReportCheatResponse(
+                    lobbyCode = payload.lobbyCode,
+                    accusedPlayerId = payload.accusedPlayerId,
+                    correct = result.correct,
+                    modifierDelta = result.modifierDelta,
+                ),
+            )
+            hooks.onRouted(request.connectionId)
+        }.onFailure { cause ->
+            val error = reportCheatErrorResponse(request, payload, cause)
             network.send(request.connectionId, error)
             hooks.onRoutingError(
                 request.connectionId,
@@ -764,6 +859,7 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildPlaceReinforcementsEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
+            openPendingCheatReportWindowAfterPlacement(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
                 PlaceReinforcementsResponse(lobbyCode = payload.lobbyCode),
@@ -919,6 +1015,53 @@ class MainServerLobbyRoutingService(
             ),
             context,
         )
+
+        val adjustment =
+            synchronized(cheatReportLock) {
+                val activePlayerId = currentTurnState.activePlayerId
+                val modifiers = nextReinforcementModifierByLobby[lobbyCode]
+                val modifier = modifiers?.remove(activePlayerId) ?: 0
+                if (modifiers?.isEmpty() == true) {
+                    nextReinforcementModifierByLobby.remove(lobbyCode)
+                }
+
+                val penalizedPlayers = nextZeroReinforcementPenaltyByLobby[lobbyCode]
+                val zeroReinforcements = penalizedPlayers?.remove(activePlayerId) == true
+                if (penalizedPlayers?.isEmpty() == true) {
+                    nextZeroReinforcementPenaltyByLobby.remove(lobbyCode)
+                }
+
+                CheatReinforcementAdjustment(
+                    modifier = modifier,
+                    zeroReinforcements = zeroReinforcements,
+                )
+            }
+
+        if (adjustment.zeroReinforcements) {
+            if (breakdown.total > 0) {
+                lobbyManager.submit(
+                    PendingReinforcementsChangedEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = currentTurnState.activePlayerId,
+                        delta = -breakdown.total,
+                    ),
+                    context,
+                )
+            }
+            return
+        }
+
+        val appliedModifier = adjustment.modifier.coerceAtLeast(-breakdown.total)
+        if (appliedModifier != 0) {
+            lobbyManager.submit(
+                PendingReinforcementsChangedEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = currentTurnState.activePlayerId,
+                    delta = appliedModifier,
+                ),
+                context,
+            )
+        }
     }
 
     private suspend fun routeStartPlayerSetRequest(request: DecodedNetworkRequest) {
@@ -1198,9 +1341,12 @@ class MainServerLobbyRoutingService(
         request: DecodedNetworkRequest,
         payload: JoinLobbyRequest,
     ) {
-        network.send(request.connectionId, JoinLobbyResponse(payload.lobbyCode))
+        val playerId = request.context.playerId
+        network.send(request.connectionId, JoinLobbyResponse(payload.lobbyCode, playerId))
 
-        val playerId = request.context.playerId ?: return
+        if (playerId == null) {
+            return
+        }
         val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
         val members = lobbyState.players
         resolveSessionToken(request.connectionId)?.let { sessionToken ->
@@ -1836,6 +1982,96 @@ class MainServerLobbyRoutingService(
         )
     }
 
+    private fun markCheatReportWindowPending(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ) {
+        synchronized(cheatReportLock) {
+            pendingVisibleCheatByLobby
+                .getOrPut(lobbyCode) { mutableSetOf() }
+                .add(accusedPlayerId)
+        }
+    }
+
+    private fun openPendingCheatReportWindowAfterPlacement(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ) {
+        synchronized(cheatReportLock) {
+            val pendingPlayers = pendingVisibleCheatByLobby[lobbyCode]
+            if (pendingPlayers?.remove(accusedPlayerId) != true) {
+                return@synchronized
+            }
+            if (pendingPlayers.isEmpty()) {
+                pendingVisibleCheatByLobby.remove(lobbyCode)
+            }
+            if (cheatReportWindowsByLobby[lobbyCode]?.containsKey(accusedPlayerId) != true) {
+                openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
+            }
+        }
+    }
+
+    private fun openCheatReportWindowLocked(
+        lobbyCode: LobbyCode,
+        accusedPlayerId: PlayerId,
+    ): CheatReportWindow {
+        val window =
+            CheatReportWindow(
+                expiresAtMillis = nowEpochMillis() + CHEAT_REPORT_WINDOW_MILLIS,
+            )
+        cheatReportWindowsByLobby
+            .getOrPut(lobbyCode) { mutableMapOf() }[accusedPlayerId] = window
+        return window
+    }
+
+    private fun resolveCheatReport(
+        lobbyCode: LobbyCode,
+        reporterPlayerId: PlayerId,
+        accusedPlayerId: PlayerId,
+    ): CheatReportResult =
+        synchronized(cheatReportLock) {
+            val window = cheatReportWindowsByLobby[lobbyCode]?.get(accusedPlayerId)
+            val now = nowEpochMillis()
+            val pendingCheat =
+                pendingVisibleCheatByLobby[lobbyCode]?.contains(accusedPlayerId) == true
+            val activeWindow = window?.takeIf { now <= it.expiresAtMillis }
+            val correct = activeWindow != null || pendingCheat
+
+            if (window != null && !correct) {
+                cheatReportWindowsByLobby[lobbyCode]?.remove(accusedPlayerId)
+            }
+
+            if (correct) {
+                val key =
+                    CheatReportKey(
+                        reporterPlayerId = reporterPlayerId,
+                        accusedPlayerId = accusedPlayerId,
+                    )
+                require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
+                    "ALREADY_REPORTED"
+                }
+            }
+
+            val modifierDelta =
+                if (correct) {
+                    CHEAT_REPORT_REWARD
+                } else {
+                    CHEAT_REPORT_PENALTY
+                }
+            val modifiers = nextReinforcementModifierByLobby.getOrPut(lobbyCode) { mutableMapOf() }
+            modifiers[reporterPlayerId] = (modifiers[reporterPlayerId] ?: 0) + modifierDelta
+            if (correct) {
+                nextZeroReinforcementPenaltyByLobby
+                    .getOrPut(lobbyCode) { mutableSetOf() }
+                    .add(accusedPlayerId)
+            }
+
+            CheatReportResult(
+                correct = correct,
+                modifierDelta = modifierDelta,
+            )
+        }
+
     private fun buildAttackEvents(
         request: DecodedNetworkRequest,
         payload: AttackRequest,
@@ -2187,6 +2423,10 @@ class MainServerLobbyRoutingService(
                 TurnAdvanceErrorCode.GAME_PAUSED ->
                     "Lobby '${payload.lobbyCode.value}' ist pausiert; " +
                         "Turn-Wechsel ist aktuell nicht erlaubt."
+                TurnAdvanceErrorCode.GAME_FINISHED ->
+                    "Lobby '${payload.lobbyCode.value}' ist bereits beendet."
+                TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED ->
+                    "Der aktive Spieler muss zuerst Karten eintauschen."
                 TurnAdvanceErrorCode.PHASE_MISMATCH -> {
                     val expectedPhase = payload.expectedPhase
                     val currentPhase =
@@ -2359,6 +2599,49 @@ class MainServerLobbyRoutingService(
             }
 
         return ClaimCheatReinforcementBonusErrorResponse(code = code, reason = reason)
+    }
+
+    private fun reportCheatErrorResponse(
+        request: DecodedNetworkRequest,
+        payload: ReportCheatRequest,
+        cause: Throwable,
+    ): ReportCheatErrorResponse {
+        val code =
+            when (cause.message) {
+                "GAME_NOT_FOUND" -> ReportCheatErrorCode.GAME_NOT_FOUND
+                "REQUESTER_MISMATCH" -> ReportCheatErrorCode.REQUESTER_MISMATCH
+                "GAME_NOT_RUNNING" -> ReportCheatErrorCode.GAME_NOT_RUNNING
+                "SELF_REPORT" -> ReportCheatErrorCode.SELF_REPORT
+                "ALREADY_REPORTED" -> ReportCheatErrorCode.ALREADY_REPORTED
+                else -> ReportCheatErrorCode.UNKNOWN_PLAYER
+            }
+
+        val reason =
+            when (code) {
+                ReportCheatErrorCode.GAME_NOT_FOUND ->
+                    "Lobby '${payload.lobbyCode.value}' wurde nicht gefunden."
+                ReportCheatErrorCode.REQUESTER_MISMATCH -> {
+                    val contextPlayerId = request.context.playerId
+                    if (contextPlayerId == null) {
+                        connectionNotAssignedToLobby(payload.lobbyCode)
+                    } else {
+                        "Reporter '${payload.reporterPlayerId.value}' passt nicht zur " +
+                            "aktuellen Connection '${contextPlayerId.value}'."
+                    }
+                }
+                ReportCheatErrorCode.GAME_NOT_RUNNING ->
+                    "Cheat-Meldungen sind erst in einem laufenden Spiel moeglich."
+                ReportCheatErrorCode.UNKNOWN_PLAYER ->
+                    "Reporter '${payload.reporterPlayerId.value}' oder beschuldigter Spieler " +
+                        "'${payload.accusedPlayerId.value}' ist nicht Teil der Lobby."
+                ReportCheatErrorCode.SELF_REPORT ->
+                    "Spieler koennen sich nicht selbst als Cheater melden."
+                ReportCheatErrorCode.ALREADY_REPORTED ->
+                    "Dieser Cheat wurde von Spieler '${payload.reporterPlayerId.value}' " +
+                        "bereits gemeldet."
+            }
+
+        return ReportCheatErrorResponse(code = code, reason = reason)
     }
 
     private fun attackErrorResponse(
@@ -2799,13 +3082,25 @@ class MainServerLobbyRoutingService(
     private fun lobbyCodeOf(payload: NetworkMessagePayload): LobbyCode? =
         when (payload) {
             is AttackRequest -> payload.lobbyCode
+            is CharacterSelectRequest -> payload.lobbyCode
+            is ClaimCheatReinforcementBonusRequest -> payload.lobbyCode
+            is ConfirmAttackDoneRequest -> payload.lobbyCode
+            is ConfirmReinforcementsDoneRequest -> payload.lobbyCode
             is FortifyMoveRequest -> payload.lobbyCode
+            is GameStateCatchUpRequest -> payload.lobbyCode
+            is GameStatePrivateGetRequest -> payload.lobbyCode
             is JoinLobbyRequest -> payload.lobbyCode
             is LeaveLobbyRequest -> payload.lobbyCode
+            is LobbyPlayerCountRequest -> payload.lobbyCode
             is KickPlayerRequest -> payload.lobbyCode
+            is PlaceReinforcementsRequest -> payload.lobbyCode
+            is ReportCheatRequest -> payload.lobbyCode
             is StartGameRequest -> payload.lobbyCode
+            is StartPlayerSetRequest -> payload.lobbyCode
+            is TradeInCardsRequest -> payload.lobbyCode
             is MapGetRequest -> payload.lobbyCode
             is TurnAdvanceRequest -> payload.lobbyCode
+            is TurnStateGetRequest -> payload.lobbyCode
             else -> null
         }
 

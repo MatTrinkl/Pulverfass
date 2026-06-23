@@ -6,6 +6,8 @@ struct iOSApp: App {
     var body: some Scene {
         WindowGroup {
             ComposeView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
                 .ignoresSafeArea(.all)
         }
     }

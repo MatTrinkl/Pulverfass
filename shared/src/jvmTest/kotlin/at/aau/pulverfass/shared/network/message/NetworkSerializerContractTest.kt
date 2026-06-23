@@ -93,7 +93,7 @@ class NetworkSerializerContractTest {
             }
 
         // Test 1: Missing lobbyCode in JoinLobbyRequest
-        val missingLobbyCode = "{\"playerDisplayName\":\"TestPlayer\"}"
+        val missingLobbyCode = "{\"playerDisplayName\":\"TEST\"}"
         val exception1 =
             assertThrows(MissingFieldException::class.java) {
                 json.decodeFromString(JoinLobbyRequestSerializer, missingLobbyCode)
@@ -179,11 +179,11 @@ class NetworkSerializerContractTest {
             listOf(
                 JoinLobbyRequest(
                     lobbyCode = LobbyCode("CD34"),
-                    playerDisplayName = "TestPlayer",
+                    playerDisplayName = "TEST",
                 ),
                 JoinLobbyRequest(
                     lobbyCode = LobbyCode("EF56"),
-                    playerDisplayName = "Player with spaces",
+                    playerDisplayName = "ALICE",
                 ),
             )
 

@@ -8,11 +8,13 @@ import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
@@ -85,6 +87,9 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
 
@@ -111,8 +116,30 @@ object ClientGameStateReducer {
             turnState = response.turnState,
             definition = response.definition,
             territoryStates = response.territoryStates,
+            gameStatus = response.gameStatus,
+            matchEndReason = response.matchEndReason,
+            winnerPlayerId = response.winnerPlayerId,
             players = players,
         )
+
+    /**
+     * Wendet ein direkt gesendetes Match-Ende auf den lokalen State an.
+     *
+     * Der reguläre Pfad läuft über [GameStateDeltaEvent]. Diese Methode hält den
+     * Controller zusätzlich robust, falls ein Server das Ende als einzelnes
+     * Broadcast-Payload sendet.
+     */
+    fun applyMatchEndedBroadcast(
+        current: GameUiState,
+        event: MatchEndedBroadcastEvent,
+    ): GameUiState {
+        val eventVersion = event.stateVersion ?: current.stateVersion
+        if (eventVersion < current.stateVersion) {
+            return current
+        }
+
+        return current.applyMatchEnded(event)
+    }
 
     /**
      * Wendet ein öffentliches Delta auf den lokalen State an.
@@ -132,6 +159,9 @@ object ClientGameStateReducer {
         delta: GameStateDeltaEvent,
         players: List<LobbyPlayerUi>,
     ): DeltaApplyResult {
+        if (current.isCatchingUp) {
+            return DeltaApplyResult(state = current, needsCatchUp = false)
+        }
         if (delta.toVersion <= current.stateVersion) {
             return DeltaApplyResult(state = current, needsCatchUp = false)
         }
@@ -208,7 +238,7 @@ object ClientGameStateReducer {
                 ) {
                     current.attackState
                 } else {
-                    AttackUiState()
+                    current.attackState.resetForInactiveAttackPhase()
                 },
             fortifyState = FortifyUiState(),
             selectedTradeInCardIds =
@@ -266,9 +296,9 @@ object ClientGameStateReducer {
 
     private fun GameUiState.attackStateFor(turnPhase: TurnPhase): AttackUiState =
         if (turnPhase == TurnPhase.ATTACK) {
-            attackState
+            attackState.afterFullSnapshot(turnPhase)
         } else {
-            AttackUiState()
+            attackState.resetForInactiveAttackPhase()
         }
 
     private fun GameUiState.fortifyStateFor(response: TurnStateGetResponse): FortifyUiState =
@@ -632,6 +662,9 @@ object ClientGameStateReducer {
         turnState: PublicTurnStateSnapshot,
         definition: MapDefinitionSnapshot,
         territoryStates: List<MapTerritoryStateSnapshot>,
+        gameStatus: GameStatus,
+        matchEndReason: String?,
+        winnerPlayerId: PlayerId?,
         players: List<LobbyPlayerUi>,
     ): GameUiState {
         if (stateVersion < current.stateVersion) {
@@ -642,6 +675,9 @@ object ClientGameStateReducer {
             current =
                 current.copy(
                     isStarted = true,
+                    gameStatus = gameStatus,
+                    matchEndReason = matchEndReason,
+                    winnerPlayerId = winnerPlayerId,
                     activePlayerId = turnState.activePlayerId,
                     turnPhase = turnState.turnPhase,
                     turnCount = turnState.turnCount,
@@ -659,7 +695,7 @@ object ClientGameStateReducer {
                             ReinforcementUiState()
                         },
                     reinforcementPlacementAmount = 1,
-                    attackState = AttackUiState(),
+                    attackState = current.attackState.afterFullSnapshot(turnState.turnPhase),
                     fortifyState =
                         if (turnState.turnPhase == TurnPhase.FORTIFY) {
                             FortifyUiState(hasMoved = turnState.fortifyUsedThisTurn)
@@ -718,7 +754,14 @@ object ClientGameStateReducer {
     ): GameUiState =
         when (event) {
             is GameStartedEvent ->
-                current.copy(isStarted = true, isCatchingUp = true, lastSyncError = null)
+                current.copy(
+                    isStarted = true,
+                    gameStatus = GameStatus.RUNNING,
+                    matchEndReason = null,
+                    winnerPlayerId = null,
+                    isCatchingUp = true,
+                    lastSyncError = null,
+                )
             is TurnStateUpdatedEvent ->
                 current.copy(
                     activePlayerId = event.activePlayerId,
@@ -769,31 +812,199 @@ object ClientGameStateReducer {
                 current.updateTerritory(players = players, event = event)
             is TerritoryTroopsChangedEvent ->
                 current.updateTerritory(players = players, event = event)
-            is AttackResolvedBroadcastEvent ->
-                current.copy(
-                    selectedRegionId = null,
-                    selectionFromRegionId = null,
-                    selectionToRegionId = null,
-                    selectionMessage = null,
-                    attackState =
-                        AttackUiState(
-                            latestResult =
-                                AttackResultUiState(
-                                    fromTerritoryId = event.fromTerritoryId,
-                                    toTerritoryId = event.toTerritoryId,
-                                    attackerRolls = event.attackerRolls,
-                                    defenderRolls = event.defenderRolls,
-                                    attackerLosses = event.attackerLosses,
-                                    defenderLosses = event.defenderLosses,
-                                    attackerRemaining = event.attackerRemaining,
-                                    defenderRemaining = event.defenderRemaining,
-                                    occupyingTroopCount = event.occupyingTroopCount,
-                                ),
-                        ),
-                )
+            is AttackResolvedBroadcastEvent -> current.applyAttackResolved(event)
             is ReinforcementsGrantedEvent -> current.applyReinforcementsGranted(event)
             is PendingReinforcementsChangedEvent -> current.applyPendingReinforcementsChanged(event)
+            is MatchEndedBroadcastEvent -> current.applyMatchEnded(event)
             else -> current
+        }
+
+    private fun GameUiState.applyMatchEnded(event: MatchEndedBroadcastEvent): GameUiState =
+        copy(
+            stateVersion = maxOf(stateVersion, event.stateVersion ?: stateVersion),
+            gameStatus = GameStatus.FINISHED,
+            matchEndReason = event.reason.name,
+            winnerPlayerId = event.winnerPlayerId,
+            selectedRegionId = null,
+            selectionFromRegionId = null,
+            selectionToRegionId = null,
+            selectionMessage = null,
+            reinforcementState = ReinforcementUiState(),
+            reinforcementPlacementAmount = 1,
+            attackState = AttackUiState(),
+            fortifyState = FortifyUiState(),
+            isPaused = false,
+            pauseReason = null,
+            pausedPlayerId = null,
+            isCatchingUp = false,
+            isDesynced = false,
+            lastSyncError = null,
+        )
+
+    private fun GameUiState.applyAttackResolved(event: AttackResolvedBroadcastEvent): GameUiState {
+        val latestResult =
+            AttackResultUiState(
+                fromTerritoryId = event.fromTerritoryId,
+                toTerritoryId = event.toTerritoryId,
+                attackerRolls = event.attackerRolls,
+                defenderRolls = event.defenderRolls,
+                attackerLosses = event.attackerLosses,
+                defenderLosses = event.defenderLosses,
+                attackerRemaining = event.attackerRemaining,
+                defenderRemaining = event.defenderRemaining,
+                occupyingTroopCount = event.occupyingTroopCount,
+                attackId =
+                    event.stateVersion
+                        ?: ((attackState.latestResult?.attackId ?: 0L) + 1L),
+                sourceTroopsBefore = event.sourceTroopsBefore,
+                targetTroopsBefore = event.targetTroopsBefore,
+            )
+        val updatedAutoAttack = attackState.autoAttack.afterAttackResolved(event)
+        val shouldStopAutoAttackAfterLoss =
+            updatedAutoAttack.isEnabled &&
+                updatedAutoAttack.intent?.matches(event) == true &&
+                event.attackerLosses > 0
+        val nextAutoAttack =
+            if (shouldStopAutoAttackAfterLoss) {
+                updatedAutoAttack.afterAttackerLoss()
+            } else {
+                updatedAutoAttack
+            }
+        val maximumFollowUpAttackTroops = event.attackerRemaining - 1
+        val canKeepSelection =
+            nextAutoAttack.isEnabled &&
+                (
+                    nextAutoAttack.intent?.matches(event) == true ||
+                        shouldStopAutoAttackAfterLoss
+                ) &&
+                !latestResult.captured &&
+                maximumFollowUpAttackTroops >= MIN_ATTACK_TROOPS
+        val canContinueAutoAttack =
+            canKeepSelection &&
+                !shouldStopAutoAttackAfterLoss &&
+                nextAutoAttack.intent != null
+        val updatedAttackState =
+            when {
+                canContinueAutoAttack ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = true,
+                        )
+                canKeepSelection ->
+                    attackState
+                        .copy(
+                            latestResult = latestResult,
+                            autoAttack = nextAutoAttack,
+                        ).withClampedFollowUpAttack(
+                            maximumAttackTroops = maximumFollowUpAttackTroops,
+                            keepAutoIntent = false,
+                        )
+                else ->
+                    AttackUiState(
+                        latestResult = latestResult,
+                        autoAttack = nextAutoAttack,
+                    )
+            }
+
+        return copy(
+            selectedRegionId = if (canKeepSelection) selectionToRegionId else null,
+            selectionFromRegionId = if (canKeepSelection) selectionFromRegionId else null,
+            selectionToRegionId = if (canKeepSelection) selectionToRegionId else null,
+            selectionMessage = null,
+            attackState = updatedAttackState,
+        )
+    }
+
+    private fun AttackUiState.withClampedFollowUpAttack(
+        maximumAttackTroops: Int,
+        keepAutoIntent: Boolean,
+    ): AttackUiState {
+        val clampedAttackTroops =
+            attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+        val clampedMoveAfterCapture =
+            moveAfterCapture.coerceIn(
+                minimumOccupyingTroopsForAttack(clampedAttackTroops),
+                clampedAttackTroops,
+            )
+        val nextAutoAttack =
+            if (keepAutoIntent) {
+                val clampedIntent =
+                    autoAttack.intent?.let { intent ->
+                        val intentAttackTroops =
+                            intent.attackTroops.coerceIn(MIN_ATTACK_TROOPS, maximumAttackTroops)
+                        intent.copy(
+                            attackTroops = intentAttackTroops,
+                            moveAfterCapture =
+                                intent.moveAfterCapture.coerceIn(
+                                    minimumOccupyingTroopsForAttack(intentAttackTroops),
+                                    intentAttackTroops,
+                                ),
+                        )
+                    }
+                autoAttack.copy(intent = clampedIntent)
+            } else {
+                autoAttack.afterAttackerLoss()
+            }
+
+        return copy(
+            attackTroops = clampedAttackTroops,
+            moveAfterCapture = clampedMoveAfterCapture,
+            autoAttack = nextAutoAttack,
+        )
+    }
+
+    private fun AutoAttackUiState.afterAttackResolved(
+        event: AttackResolvedBroadcastEvent,
+    ): AutoAttackUiState =
+        if (isEnabled && intent?.matches(event) == true) {
+            copy(
+                isAwaitingResult = false,
+                pendingRequestId = null,
+                statusText = "Auto-Angriff prüft den nächsten Schritt.",
+                errorText = null,
+            )
+        } else {
+            this
+        }
+
+    private fun AutoAttackUiState.afterAttackerLoss(): AutoAttackUiState =
+        copy(
+            intent = null,
+            isAwaitingResult = false,
+            pendingRequestId = null,
+            statusText = null,
+            errorText = null,
+        )
+
+    private fun AttackUiState.afterFullSnapshot(turnPhase: TurnPhase): AttackUiState =
+        if (turnPhase == TurnPhase.ATTACK) {
+            copy(autoAttack = autoAttack.afterAuthoritativeAttackSnapshot())
+        } else {
+            resetForInactiveAttackPhase()
+        }
+
+    private fun AttackUiState.resetForInactiveAttackPhase(): AttackUiState =
+        AttackUiState(autoAttack = autoAttack.resetForInactiveAttackPhase())
+
+    private fun AutoAttackUiState.afterAuthoritativeAttackSnapshot(): AutoAttackUiState =
+        if (isEnabled) {
+            copy(
+                isAwaitingResult = false,
+                pendingRequestId = null,
+                statusText =
+                    if (intent != null) {
+                        "Auto-Angriff prüft den nächsten Schritt."
+                    } else {
+                        statusText
+                    },
+                errorText = null,
+            )
+        } else {
+            AutoAttackUiState()
         }
 
     private fun selectFortifyRegion(
@@ -946,18 +1157,24 @@ object ClientGameStateReducer {
         }
     }
 
-    private fun GameUiState.withAttackSource(regionId: String): GameUiState =
-        copy(
+    private fun GameUiState.withAttackSource(regionId: String): GameUiState {
+        val sourceTerritoryId = GameMapTerritoryMapper.toTerritoryId(regionId)
+        val maxAttackTroops =
+            (territoryStates[sourceTerritoryId]?.troopCount?.minus(1) ?: MIN_ATTACK_TROOPS)
+                .coerceAtLeast(MIN_ATTACK_TROOPS)
+        return copy(
             selectedRegionId = regionId,
             selectionFromRegionId = regionId,
             selectionToRegionId = null,
             selectionMessage = null,
             attackState =
                 attackState.copy(
-                    attackTroops = MIN_ATTACK_TROOPS,
-                    moveAfterCapture = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
+                    attackTroops = maxAttackTroops,
+                    moveAfterCapture = maxAttackTroops,
+                    autoAttack = attackState.autoAttack.resetForNewAttackSelection(),
                 ),
         )
+    }
 
     private fun GameUiState.clearAttackSelection(): GameUiState =
         copy(
@@ -969,8 +1186,23 @@ object ClientGameStateReducer {
                 attackState.copy(
                     attackTroops = MIN_ATTACK_TROOPS,
                     moveAfterCapture = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
+                    autoAttack = attackState.autoAttack.resetForNewAttackSelection(),
                 ),
         )
+
+    private fun AutoAttackUiState.resetForNewAttackSelection(): AutoAttackUiState =
+        if (isEnabled) {
+            AutoAttackUiState(isEnabled = true)
+        } else {
+            AutoAttackUiState()
+        }
+
+    private fun AutoAttackUiState.resetForInactiveAttackPhase(): AutoAttackUiState =
+        if (isEnabled) {
+            AutoAttackUiState(isEnabled = true)
+        } else {
+            AutoAttackUiState()
+        }
 
     private fun GameUiState.maximumAttackTroops(): Int? {
         val sourceRegionId = selectionFromRegionId ?: return null

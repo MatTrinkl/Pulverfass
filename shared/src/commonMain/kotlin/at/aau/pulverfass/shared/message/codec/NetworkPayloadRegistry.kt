@@ -15,6 +15,7 @@ import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
@@ -39,6 +40,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
@@ -59,6 +61,7 @@ import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.LobbyPlayerCountResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
@@ -78,6 +81,7 @@ import at.aau.pulverfass.shared.message.lobby.response.error.KickPlayerErrorResp
 import at.aau.pulverfass.shared.message.lobby.response.error.LobbyPlayerCountErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartGameErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
@@ -88,7 +92,6 @@ import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadClassException
 import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeException
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.Json
 import kotlin.reflect.KClass
 
 /**
@@ -149,6 +152,9 @@ internal object NetworkPayloadRegistry {
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_RESPONSE,
             ClaimCheatReinforcementBonusErrorResponse::class to
                 MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE,
+            ReportCheatRequest::class to MessageType.LOBBY_REPORT_CHEAT_REQUEST,
+            ReportCheatResponse::class to MessageType.LOBBY_REPORT_CHEAT_RESPONSE,
+            ReportCheatErrorResponse::class to MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE,
             PendingReinforcementsChangedEvent::class to
                 MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
             ReinforcementsGrantedEvent::class to
@@ -164,6 +170,7 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class to MessageType.LOBBY_START_RESPONSE,
             StartGameErrorResponse::class to MessageType.LOBBY_START_ERROR_RESPONSE,
             GameStartedEvent::class to MessageType.LOBBY_GAME_STARTED_BROADCAST,
+            MatchEndedBroadcastEvent::class to MessageType.LOBBY_ENDED_BROADCAST,
             PlayerHandUpdatedEvent::class to MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT,
             GameStateDeltaEvent::class to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
             PhaseBoundaryEvent::class to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
@@ -277,6 +284,10 @@ internal object NetworkPayloadRegistry {
                 encodeWith(ClaimCheatReinforcementBonusResponse.serializer()),
             ClaimCheatReinforcementBonusErrorResponse::class to
                 encodeWith(ClaimCheatReinforcementBonusErrorResponse.serializer()),
+            ReportCheatRequest::class to encodeWith(ReportCheatRequest.serializer()),
+            ReportCheatResponse::class to encodeWith(ReportCheatResponse.serializer()),
+            ReportCheatErrorResponse::class to
+                encodeWith(ReportCheatErrorResponse.serializer()),
             PendingReinforcementsChangedEvent::class to
                 encodeWith(PendingReinforcementsChangedEvent.serializer()),
             ReinforcementsGrantedEvent::class to
@@ -293,6 +304,8 @@ internal object NetworkPayloadRegistry {
             StartGameResponse::class to encodeWith(StartGameResponse.serializer()),
             StartGameErrorResponse::class to encodeWith(StartGameErrorResponse.serializer()),
             GameStartedEvent::class to encodeWith(GameStartedEvent.serializer()),
+            MatchEndedBroadcastEvent::class to
+                encodeWith(MatchEndedBroadcastEvent.serializer()),
             PlayerHandUpdatedEvent::class to encodeWith(PlayerHandUpdatedEvent.serializer()),
             GameStateDeltaEvent::class to encodeWith(GameStateDeltaEvent.serializer()),
             PhaseBoundaryEvent::class to encodeWith(PhaseBoundaryEvent.serializer()),
@@ -412,6 +425,12 @@ internal object NetworkPayloadRegistry {
                 decodeWith(ClaimCheatReinforcementBonusResponse.serializer()),
             MessageType.LOBBY_CHEAT_REINFORCEMENT_BONUS_ERROR_RESPONSE to
                 decodeWith(ClaimCheatReinforcementBonusErrorResponse.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_REQUEST to
+                decodeWith(ReportCheatRequest.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_RESPONSE to
+                decodeWith(ReportCheatResponse.serializer()),
+            MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE to
+                decodeWith(ReportCheatErrorResponse.serializer()),
             MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST to
                 decodeWith(PendingReinforcementsChangedEvent.serializer()),
             MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST to
@@ -431,6 +450,8 @@ internal object NetworkPayloadRegistry {
             MessageType.LOBBY_START_ERROR_RESPONSE to
                 decodeWith(StartGameErrorResponse.serializer()),
             MessageType.LOBBY_GAME_STARTED_BROADCAST to decodeWith(GameStartedEvent.serializer()),
+            MessageType.LOBBY_ENDED_BROADCAST to
+                decodeWith(MatchEndedBroadcastEvent.serializer()),
             MessageType.LOBBY_PLAYER_HAND_UPDATED_EVENT to
                 decodeWith(PlayerHandUpdatedEvent.serializer()),
             MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST to
@@ -498,7 +519,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (NetworkMessagePayload) -> String {
         return { payload ->
-            Json.encodeToString(serializer, payload as T)
+            NetworkJson.encodeToString(serializer, payload as T)
         }
     }
 
@@ -506,7 +527,7 @@ internal object NetworkPayloadRegistry {
         serializer: KSerializer<T>,
     ): (String) -> NetworkMessagePayload {
         return { json ->
-            Json.decodeFromString(serializer, json)
+            NetworkJson.decodeFromString(serializer, json)
         }
     }
 

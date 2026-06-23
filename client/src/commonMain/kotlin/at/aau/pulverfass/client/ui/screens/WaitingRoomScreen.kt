@@ -420,7 +420,7 @@ private fun BoxScope.WaitingRoomCharacterEntry(
         modifier =
             Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 36.dp),
+                .padding(end = 72.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -441,7 +441,10 @@ private fun BoxScope.WaitingRoomCharacterEntry(
         MainButton(
             text = "CHARAKTER\nWÄHLEN",
             onClick = onOpenPicker,
-            modifier = Modifier.testTag("character_picker_button"),
+            modifier =
+                Modifier
+                    .width(260.dp)
+                    .testTag("character_picker_button"),
         )
     }
 }
@@ -458,7 +461,7 @@ private fun BoxScope.WaitingRoomActions(
             Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 32.dp, bottom = 32.dp)
-                .width(220.dp),
+                .width(260.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (isHost) {
@@ -965,7 +968,7 @@ private fun CharacterPickerOverlay(
         val hPadding = (contentWidth - itemSize) / 2
 
         val lazyRowHeight = minOf(349.dp, screenHeight * 0.50f)
-        val buttonRowHeight = 56.dp
+        val buttonRowHeight = 84.dp
         val bottomSafeOffset = screenHeight * 0.05f
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Column(
@@ -1060,11 +1063,16 @@ private fun CharacterPickerOverlay(
                         .offset(y = -bottomSafeOffset),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                MainButton(text = "ABBRECHEN", onClick = onDismiss)
+                MainButton(
+                    text = "ABBRECHEN",
+                    onClick = onDismiss,
+                    modifier = Modifier.width(260.dp),
+                )
                 MainButton(
                     text = "SPEICHERN",
                     onClick = { onSave(selectedCharacterId) },
                     enabled = !selectedCharacterTaken,
+                    modifier = Modifier.width(260.dp),
                 )
             }
         }

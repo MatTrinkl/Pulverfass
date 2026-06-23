@@ -27,9 +27,16 @@ internal class UserDefaultsPlayerNameStore(
         defaults.setObject(characterId, forKey = KEY_CHARACTER_ID)
     }
 
+    override fun readAutoAttackEnabled(): Boolean = defaults.boolForKey(KEY_AUTO_ATTACK_ENABLED)
+
+    override fun saveAutoAttackEnabled(enabled: Boolean) {
+        defaults.setBool(enabled, forKey = KEY_AUTO_ATTACK_ENABLED)
+    }
+
     private companion object {
         const val KEY_PLAYER_NAME = "player_name"
         const val KEY_CHARACTER_ID = "character_id"
+        const val KEY_AUTO_ATTACK_ENABLED = "auto_attack_enabled"
     }
 }
 

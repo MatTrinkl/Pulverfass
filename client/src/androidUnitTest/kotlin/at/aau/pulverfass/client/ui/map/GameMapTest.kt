@@ -24,9 +24,9 @@ class GameMapTest {
         val metrics =
             createMapLayoutMetrics(viewportSize = IntSize(1000, 600), aspectRatio = mapAspectRatio)
 
-        assertFloatEquals(1132.244f, metrics.mapSize.width)
+        assertFloatEquals(1066.6666f, metrics.mapSize.width)
         assertFloatEquals(600f, metrics.mapSize.height)
-        assertFloatEquals(-66.122f, metrics.mapOrigin.x)
+        assertFloatEquals(-33.3333f, metrics.mapOrigin.x)
         assertFloatEquals(0f, metrics.mapOrigin.y)
     }
 
