@@ -3025,6 +3025,12 @@ class LobbyControllerTest {
 
                 controller.leaveLobby()
 
+                waitUntil {
+                    store.readSessionToken() == null &&
+                        controller.state.value.sessionToken == null &&
+                        controller.state.value.activeLobbyCode == null
+                }
+
                 assertNull(store.readSessionToken())
                 assertNull(controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
