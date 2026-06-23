@@ -33,11 +33,13 @@ import at.aau.pulverfass.shared.message.connection.response.ReconnectResponse
 import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerKickedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerLeftLobbyEvent
+import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.KickPlayerRequest
@@ -275,6 +277,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     val createResponse = assertIs<CreateLobbyResponse>(receivePayload(session))
+                    assertTrue(createResponse.lobbyCode.value.all(Char::isDigit))
 
                     session.send(
                         Frame.Binary(
@@ -287,11 +290,12 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
 
                     assertJoinLobbyResponse(createResponse.lobbyCode, receivePayload(session))
+
                     assertEquals(
                         PlayerJoinedLobbyEvent(
                             lobbyCode = createResponse.lobbyCode,
                             playerId = PlayerId(1),
-                            playerDisplayName = "Alice",
+                            playerDisplayName = "ALICE",
                             isHost = true,
                         ),
                         receivePayload(session),
@@ -1134,8 +1138,9 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertJoinLobbyResponse(lobbyA, receivePayload(sessionA1AndConnection.first))
+
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(sessionA1AndConnection.first),
                     )
                     assertEquals(
@@ -1156,8 +1161,9 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertJoinLobbyResponse(lobbyB, receivePayload(sessionB1AndConnection.first))
+
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "CAROL", isHost = true),
                         receivePayload(sessionB1AndConnection.first),
                     )
                     assertEquals(
@@ -1186,16 +1192,17 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     assertIs<JoinLobbyResponse>(joinerResponse)
                     assertJoinLobbyResponse(lobbyA, joinerResponse)
+
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                         joinerExistingMemberEvent,
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "BOB"),
                         joinerBroadcast,
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                        PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "BOB"),
                         memberBroadcast,
                     )
                     assertNull(otherLobbyPayload)
@@ -1353,6 +1360,134 @@ class MainServerLobbyRoutingIntegrationTest {
                     sessionA1AndConnection.first.close()
                     sessionA2AndConnection.first.close()
                     sessionB1AndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `active leave in running game grants reinforcements to next player`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("LF12")
+            val leavingPlayer = PlayerId(1)
+            val nextPlayer = PlayerId(2)
+            val thirdPlayer = PlayerId(3)
+            val players = listOf(leavingPlayer, nextPlayer, thirdPlayer)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = players,
+                        activePlayerId = leavingPlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val leavingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = leavingPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val nextSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = nextPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val thirdSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = thirdPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    leavingSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+
+                    assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
+                        receivePayload(leavingSessionAndConnection.first),
+                    )
+                    val grantedReinforcements =
+                        receiveReinforcementsGrantedEvent(nextSessionAndConnection.first)
+                    val turnUpdate =
+                        receivePayloadOfType<TurnStateUpdatedEvent>(
+                            session = nextSessionAndConnection.first,
+                            maxMessages = 10,
+                        )
+                    val membershipSnapshot =
+                        receivePayloadOfType<GameStateSnapshotBroadcast>(
+                            session = nextSessionAndConnection.first,
+                            maxMessages = 10,
+                        )
+
+                    assertEquals(nextPlayer, grantedReinforcements.playerId)
+                    assertTrue(grantedReinforcements.amount >= 3)
+                    assertEquals(nextPlayer, turnUpdate.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, turnUpdate.turnPhase)
+                    assertEquals(nextPlayer, membershipSnapshot.turnState.activePlayerId)
+                    assertEquals(TurnPhase.REINFORCEMENTS, membershipSnapshot.turnState.turnPhase)
+
+                    waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 2)
+                    val updatedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("Expected lobby state after leave.")
+                    assertEquals(nextPlayer, updatedState.activePlayer)
+                    assertEquals(
+                        grantedReinforcements.amount,
+                        updatedState.pendingReinforcementsFor(nextPlayer),
+                    )
+                    assertEquals(GameStatus.RUNNING, updatedState.status)
+
+                    leavingSessionAndConnection.first.close()
+                    nextSessionAndConnection.first.close()
+                    thirdSessionAndConnection.first.close()
                 }
             } finally {
                 routingService.stop()
@@ -1539,15 +1674,15 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "HOST", isHost = true),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JOINERA"),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JOINERA"),
                         receivePayload(hostSessionAndConnection.first),
                     )
 
@@ -1562,23 +1697,23 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "HOST", isHost = true),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JOINERA"),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "LEAVER"),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "LEAVER"),
                         receivePayload(hostSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "LEAVER"),
                         receivePayload(joinerASessionAndConnection.first),
                     )
 
@@ -1593,31 +1728,31 @@ class MainServerLobbyRoutingIntegrationTest {
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "Host", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyCode, hostId, "HOST", isHost = true),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JoinerA"),
+                        PlayerJoinedLobbyEvent(lobbyCode, joinerAId, "JOINERA"),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "Leaver"),
+                        PlayerJoinedLobbyEvent(lobbyCode, leavePlayerId, "LEAVER"),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KICKME"),
                         receivePayload(kickedPlayerSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KICKME"),
                         receivePayload(hostSessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KICKME"),
                         receivePayload(joinerASessionAndConnection.first),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KickMe"),
+                        PlayerJoinedLobbyEvent(lobbyCode, kickedPlayerId, "KICKME"),
                         receivePayload(leavePlayerSessionAndConnection.first),
                     )
 
@@ -1812,8 +1947,13 @@ class MainServerLobbyRoutingIntegrationTest {
                         ),
                     )
                     assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
+
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                        receivePayload(aliceSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(aliceSession),
                     )
 
@@ -1840,13 +1980,13 @@ class MainServerLobbyRoutingIntegrationTest {
                             success = true,
                             playerId = PlayerId(1),
                             lobbyCode = lobbyCode,
-                            playerDisplayName = "Alice",
+                            playerDisplayName = "ALICE",
                         ),
                         reconnectResponse,
                     )
                     assertTrue(aliceConnectionId != reboundConnectionId)
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(reconnectingSession),
                     )
                     assertEquals(
@@ -1869,16 +2009,21 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
 
                     assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
+
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                        JoinLobbyResponse(lobbyCode, PlayerId(2)),
                         receivePayload(bobSession),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                         receivePayload(bobSession),
                     )
                     assertEquals(
-                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
+                        receivePayload(bobSession),
+                    )
+                    assertEquals(
+                        PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
                         receivePayload(reconnectingSession),
                     )
 
@@ -1926,8 +2071,9 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyA, receivePayload(aliceSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
 
@@ -1940,16 +2086,17 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyA, receivePayload(bobSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
 
@@ -1972,8 +2119,9 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyB, receivePayload(carolSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "Carol", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyB, PlayerId(3), "CAROL", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
                 )
                 receivePayloadOfType<TurnStateUpdatedEvent>(carolSession)
@@ -2007,16 +2155,17 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyA, receivePayload(daveSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "Alice", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(daveSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(2), "BOB"),
                     receivePayload(daveSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(4), "Dave"),
+                    PlayerJoinedLobbyEvent(lobbyA, PlayerId(4), "DAVE"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(daveSession),
                 )
                 assertEquals(
@@ -2068,8 +2217,13 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                    receivePayload(aliceSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
                 receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession)
@@ -2083,16 +2237,17 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
 
@@ -2105,24 +2260,29 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(carolSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    JoinLobbyResponse(lobbyCode, PlayerId(3)),
                     receivePayload(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
                 )
 
@@ -2180,7 +2340,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         success = true,
                         playerId = PlayerId(1),
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receivePayload(reconnectingSession),
                 )
@@ -2418,8 +2578,13 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(aliceSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                    receivePayload(aliceSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
                 receivePayloadOfType<TurnStateUpdatedEvent>(aliceSession)
@@ -2433,16 +2598,17 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(bobSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
 
@@ -2455,24 +2621,29 @@ class MainServerLobbyRoutingIntegrationTest {
                     ),
                 )
                 assertJoinLobbyResponse(lobbyCode, receivePayload(carolSession))
+
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "Alice", isHost = true),
+                    JoinLobbyResponse(lobbyCode, PlayerId(3)),
                     receivePayload(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "Bob"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(1), "ALICE", isHost = true),
                     receivePayload(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(2), "BOB"),
+                    receivePayload(carolSession),
+                )
+                assertEquals(
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(carolSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(aliceSession),
                 )
                 assertEquals(
-                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "Carol"),
+                    PlayerJoinedLobbyEvent(lobbyCode, PlayerId(3), "CAROL"),
                     receivePayloadOfType<PlayerJoinedLobbyEvent>(bobSession),
                 )
 
@@ -2558,7 +2729,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         success = true,
                         playerId = PlayerId(1),
                         lobbyCode = lobbyCode,
-                        playerDisplayName = "Alice",
+                        playerDisplayName = "ALICE",
                     ),
                     receivePayload(reconnectingSession),
                 )
@@ -2752,6 +2923,36 @@ class MainServerLobbyRoutingIntegrationTest {
         session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
     ): NetworkMessagePayload = receiveRelevantTestPayload(session)
 
+    /**
+     * Liest den Verstärkungsgrant aus den Game-State-Deltas einer Testverbindung.
+     *
+     * Leave- und Kick-Routen liefern die eigentliche Verstärkungsinformation nicht
+     * als direkte Antwort, sondern als synchronisiertes Delta an die betroffenen
+     * Spieler. Dieser Helper hält den Test dadurch an der echten Serverkommunikation.
+     *
+     * @param session WebSocket-Verbindung des Spielers, der die Verstärkungen erhalten soll.
+     * @param maxMessages Maximale Anzahl eingehender Nachrichten, die nach dem Delta durchsucht wird.
+     * @return Gefundenes Verstärkungsereignis für den neuen aktiven Spieler.
+     */
+    private suspend fun receiveReinforcementsGrantedEvent(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession,
+        maxMessages: Int = 10,
+    ): ReinforcementsGrantedEvent {
+        repeat(maxMessages) {
+            val payload = receiveAnyPayload(session)
+            if (payload is GameStateDeltaEvent) {
+                val grant =
+                    payload.events
+                        .filterIsInstance<ReinforcementsGrantedEvent>()
+                        .singleOrNull()
+                if (grant != null) {
+                    return grant
+                }
+            }
+        }
+        throw AssertionError("Expected ReinforcementsGrantedEvent within $maxMessages messages.")
+    }
+
     private suspend fun waitUntilProcessed(
         manager: LobbyManager,
         lobbyCode: LobbyCode,
@@ -2844,6 +3045,46 @@ class MainServerLobbyRoutingIntegrationTest {
                 turnOrder = players,
                 status = GameStatus.WAITING_FOR_PLAYERS,
             )
+
+    /**
+     * Erstellt einen laufenden Spielzustand für Routing-Tests ohne vollständigen Lobby-Flow.
+     *
+     * Der Zustand enthält eine Karte, feste Zugreihenfolge und verteilte Gebiete,
+     * damit ein Leave während eines echten Spielzugs denselben Phasenwechsel auslöst
+     * wie in einer produktiven Partie.
+     *
+     * @param lobbyCode Code der Testlobby, die den Zustand erhält.
+     * @param players Spieler in der gewünschten Zugreihenfolge.
+     * @param activePlayerId Spieler, der beim Startzustand am Zug ist.
+     * @param turnPhase Phase, in der der aktive Spieler den Test beginnt.
+     * @return Laufender Spielzustand mit Karte und angreifbaren Gebieten.
+     */
+    private fun createRunningGameState(
+        lobbyCode: LobbyCode,
+        players: List<PlayerId>,
+        activePlayerId: PlayerId,
+        turnPhase: TurnPhase,
+    ): GameState =
+        GameState
+            .initial(
+                lobbyCode = lobbyCode,
+                mapDefinition = defaultMapDefinition(),
+                players = players,
+                playerDisplayNames = players.associateWith { "Player ${it.value}" },
+            ).copy(
+                lobbyOwner = players.firstOrNull(),
+                activePlayer = activePlayerId,
+                turnOrder = players,
+                turnNumber = 1,
+                turnState =
+                    TurnState(
+                        activePlayerId = activePlayerId,
+                        turnPhase = turnPhase,
+                        turnCount = 1,
+                        startPlayerId = players.first(),
+                    ),
+                status = GameStatus.RUNNING,
+            ).withAttackableTerritories(players)
 
     private fun createMappedGameState(
         lobbyCode: LobbyCode,

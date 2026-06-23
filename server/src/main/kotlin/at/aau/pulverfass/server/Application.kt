@@ -22,6 +22,7 @@ import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.network.Network
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -94,6 +95,7 @@ internal fun prepareServerEngine(
         LobbyPersistenceCallbacks,
     ) -> ApplicationEngine = ::createServerWithLobbyRuntime,
 ): ApplicationEngine? {
+    logDeploymentInfo(runtimeConfig)
     migrationRunner(runtimeConfig.database)
     if (serverMode == SERVER_MODE_MIGRATE) {
         runtimeLogger.info(
@@ -105,6 +107,7 @@ internal fun prepareServerEngine(
     val persistenceCallbacks = persistenceCallbacksFactory(runtimeConfig.database)
     val databaseReadinessProbe =
         databaseReadinessProbeFactory(runtimeConfig.database, persistenceCallbacks)
+    logDatabaseReadiness(databaseReadinessProbe.readiness())
     runtimeLogger.info(
         "Starting websocket server on {}:{} (version: {}, database env configured: {})",
         runtimeConfig.host,
@@ -200,6 +203,8 @@ fun Application.module(
     runtimeConfig: ServerRuntimeConfig = ServerRuntimeConfig.fromEnvironment(),
     databaseReadinessProbe: DatabaseReadinessProbe = DatabaseReadinessProbe.disabled(),
 ) {
+    val moduleStartedAtEpochMillis = System.currentTimeMillis()
+
     install(WebSockets) {
         pingPeriodMillis = WebSocketPolicy.PING_PERIOD_MILLIS
         timeoutMillis = WebSocketPolicy.TIMEOUT_MILLIS
@@ -225,6 +230,24 @@ fun Application.module(
             call.respondText(
                 formatReadinessResponse(runtimeConfig.appVersion, readiness),
                 status = status,
+            )
+        }
+        get("/metrics") {
+            val remoteHost = call.request.local.remoteHost
+            if (!isInternalMetricsRequest(remoteHost)) {
+                call.respondText("Forbidden", status = HttpStatusCode.Forbidden)
+                return@get
+            }
+
+            call.respondText(
+                formatMetricsResponse(
+                    runtimeConfig = runtimeConfig,
+                    readiness = databaseReadinessProbe.readiness(),
+                    startedAtEpochMillis = moduleStartedAtEpochMillis,
+                    nowEpochMillis = System.currentTimeMillis(),
+                ),
+                contentType = ContentType.Text.Plain,
+                status = HttpStatusCode.OK,
             )
         }
         webSocket("/ws") {
@@ -312,11 +335,92 @@ internal fun formatReadinessResponse(
     }
 }
 
-private fun GameState.isRecoverableOnStartup(): Boolean =
-    status == GameStatus.WAITING_FOR_PLAYERS || status == GameStatus.RUNNING
+internal fun formatMetricsResponse(
+    runtimeConfig: ServerRuntimeConfig,
+    readiness: DatabaseReadiness,
+    startedAtEpochMillis: Long,
+    nowEpochMillis: Long,
+): String {
+    val uptimeSeconds = ((nowEpochMillis - startedAtEpochMillis).coerceAtLeast(0L)) / 1_000L
+    val databaseConfigured = runtimeConfig.database.isConfigured
+    val databaseReady = if (readiness.isReady) 1 else 0
 
-private fun GameState.isTerminal(): Boolean =
-    status == GameStatus.CLOSED || status == GameStatus.FINISHED
+    return buildString {
+        appendLine("# HELP pulverfass_server_info Build and deployment information.")
+        appendLine("# TYPE pulverfass_server_info gauge")
+        append("pulverfass_server_info{version=\"")
+        append(metricLabel(runtimeConfig.appVersion))
+        append("\",commit=\"")
+        append(metricLabel(runtimeConfig.commitSha ?: "unknown"))
+        append("\",database_configured=\"")
+        append(databaseConfigured)
+        appendLine("\"} 1")
+        appendLine("# HELP pulverfass_database_readiness Database readiness state.")
+        appendLine("# TYPE pulverfass_database_readiness gauge")
+        append("pulverfass_database_readiness{state=\"")
+        append(readiness.state.name.lowercase())
+        append("\"} ")
+        appendLine(databaseReady)
+        appendLine("# HELP pulverfass_server_uptime_seconds Server uptime in seconds.")
+        appendLine("# TYPE pulverfass_server_uptime_seconds gauge")
+        append("pulverfass_server_uptime_seconds ")
+        appendLine(uptimeSeconds)
+    }
+}
+
+internal fun isInternalMetricsRequest(remoteHost: String): Boolean {
+    val host = remoteHost.trim().removeSurrounding("[", "]").lowercase()
+    if (
+        host == "localhost" ||
+        host == "127.0.0.1" ||
+        host == "::1" ||
+        host == "0:0:0:0:0:0:0:1"
+    ) {
+        return true
+    }
+
+    if (host.startsWith("10.") || host.startsWith("192.168.")) {
+        return true
+    }
+
+    val private172SecondOctet =
+        host
+            .takeIf { it.startsWith("172.") }
+            ?.split(".")
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+    return private172SecondOctet != null && private172SecondOctet in 16..31
+}
+
+private fun metricLabel(value: String): String =
+    value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace(Regex("\\s+"), " ")
+
+private fun logDeploymentInfo(runtimeConfig: ServerRuntimeConfig) {
+    runtimeLogger.info(
+        "Deployment info version={} commit={} databaseConfigured={}",
+        runtimeConfig.appVersion,
+        runtimeConfig.commitSha ?: "unknown",
+        runtimeConfig.database.isConfigured,
+    )
+}
+
+private fun logDatabaseReadiness(readiness: DatabaseReadiness) {
+    runtimeLogger.info(
+        "Database readiness state={} detail={}",
+        readiness.state.name,
+        readiness.detail,
+    )
+}
+
+private fun GameState.isRecoverableOnStartup(): Boolean =
+    status == GameStatus.WAITING_FOR_PLAYERS ||
+        status == GameStatus.RUNNING ||
+        status == GameStatus.FINISHED
+
+private fun GameState.requiresTerminalCleanup(): Boolean = status == GameStatus.CLOSED
 
 private fun List<GameState>.maxPlayerId(): Long =
     asSequence()
@@ -324,6 +428,33 @@ private fun List<GameState>.maxPlayerId(): Long =
         .map(PlayerId::value)
         .maxOrNull()
         ?: 0L
+
+private fun logRecoverySummary(
+    recoveryEnabled: Boolean,
+    restoredStates: List<GameState>,
+    recoverableStates: List<GameState>,
+    discardedStates: List<GameState>,
+) {
+    runtimeLogger.info(
+        "Lobby recovery completed enabled={} restoredLobbies={} recoverableLobbies={} " +
+            "discardedLobbies={}",
+        recoveryEnabled,
+        restoredStates.size,
+        recoverableStates.size,
+        discardedStates.size,
+    )
+    restoredStates.forEach { state ->
+        runtimeLogger.info(
+            "Lobby restored lobbyId={} stateVersion={} processedEventCount={} " +
+                "status={} playerCount={}",
+            state.lobbyCode.value,
+            state.stateVersion,
+            state.processedEventCount,
+            state.status.name,
+            state.players.size,
+        )
+    }
+}
 
 internal fun persistReconnectSessionIfPossible(
     network: ServerNetwork,
@@ -386,6 +517,12 @@ private fun Application.installLobbyRuntime(
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val mapDefinitionRepository = ClasspathMapDefinitionRepository.loadDefault()
     val defaultMapDefinition = mapDefinitionRepository.defaultMapDefinition()
+    runtimeLogger.info(
+        "Runtime assets loaded mapSchemaVersion={} mapHash={} rulesVersion={}",
+        defaultMapDefinition.schemaVersion,
+        defaultMapDefinition.mapHash,
+        null,
+    )
     val recoveryDataSource =
         runtimeConfig.database.takeIf(DatabaseRuntimeConfig::isConfigured)?.let { config ->
             createPostgresDataSource(
@@ -428,6 +565,12 @@ private fun Application.installLobbyRuntime(
     val restoredStates = recoveryLoader?.restoreAll().orEmpty()
     val recoverableStates = restoredStates.filter(GameState::isRecoverableOnStartup)
     val discardedStates = restoredStates.filterNot(GameState::isRecoverableOnStartup)
+    logRecoverySummary(
+        recoveryEnabled = recoveryLoader != null,
+        restoredStates = restoredStates,
+        recoverableStates = recoverableStates,
+        discardedStates = discardedStates,
+    )
     val lobbyManager =
         LobbyManager(
             scope = serverScope,
@@ -549,7 +692,7 @@ private fun Application.installLobbyRuntime(
             privateStatePayloadMaxBytes = runtimeConfig.webSocketMaxFrameSizeBytes.toInt(),
         )
     lobbyManager.registerAcceptedEventListener { lobbyCode, _, _, currentState ->
-        if (!currentState.isTerminal()) {
+        if (!currentState.requiresTerminalCleanup()) {
             return@registerAcceptedEventListener
         }
         cleanupTerminalLobbyState(

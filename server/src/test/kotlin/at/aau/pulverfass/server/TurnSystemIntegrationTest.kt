@@ -468,19 +468,6 @@ class TurnSystemIntegrationTest {
                         request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.FORTIFY),
                         expectedUpdate =
                             TurnStateUpdatedEvent(
-                                lobbyCode,
-                                hostId,
-                                TurnPhase.DRAW_CARD,
-                                1,
-                                hostId,
-                            ),
-                    )
-                    advanceAndAssertBroadcast(
-                        actor = hostSession.first,
-                        watchers = listOf(connectedWatcherSession),
-                        request = TurnAdvanceRequest(lobbyCode, hostId, TurnPhase.DRAW_CARD),
-                        expectedUpdate =
-                            TurnStateUpdatedEvent(
                                 lobbyCode = lobbyCode,
                                 activePlayerId = disconnectedNextPlayer,
                                 turnPhase = TurnPhase.REINFORCEMENTS,
@@ -658,19 +645,6 @@ class TurnSystemIntegrationTest {
             actor = actor,
             watchers = watchers,
             request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.FORTIFY),
-            expectedUpdate =
-                TurnStateUpdatedEvent(
-                    lobbyCode,
-                    activePlayer,
-                    TurnPhase.DRAW_CARD,
-                    currentTurnCount,
-                    startPlayer,
-                ),
-        )
-        advanceAndAssertBroadcast(
-            actor = actor,
-            watchers = watchers,
-            request = TurnAdvanceRequest(lobbyCode, activePlayer, TurnPhase.DRAW_CARD),
             expectedUpdate =
                 TurnStateUpdatedEvent(
                     lobbyCode,

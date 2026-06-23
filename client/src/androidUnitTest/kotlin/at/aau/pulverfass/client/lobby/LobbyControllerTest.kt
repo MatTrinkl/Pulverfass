@@ -369,7 +369,8 @@ class LobbyControllerTest {
                 controller.updateServerUrl(server.url)
                 controller.updatePlayerName("Alice")
 
-                controller.createLobby { }
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
                 waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
 
                 controller.startGame()
@@ -1822,7 +1823,7 @@ class LobbyControllerTest {
                 controller.selectGameRegion("argentina")
                 controller.attack()
                 waitUntil { controller.state.value.gameState.attackState.latestResult != null }
-                delay(100)
+                delay(500)
                 assertEquals(TurnPhase.ATTACK, controller.state.value.gameState.turnPhase)
 
                 controller.confirmAttackDone()

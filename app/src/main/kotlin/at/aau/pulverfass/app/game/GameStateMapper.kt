@@ -1,15 +1,22 @@
 package at.aau.pulverfass.app.game
 
 import androidx.compose.ui.graphics.Color
+import at.aau.pulverfass.app.lobby.Characters
 import at.aau.pulverfass.app.lobby.LobbyPlayerUi
 import at.aau.pulverfass.app.ui.map.GameMapRegionState
-import at.aau.pulverfass.app.ui.theme.PulverfassColors
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
-private val NeutralTerritoryColor = Color(0xFF8F8F8F)
-private val DepartedTerritoryColor = Color(0xFF5E6268)
+private val NeutralTerritoryColor = Color(0xFFC2C2C2)
+
+/*
+ * Übergangsfarbe für das kurze Fenster zwischen Lobby-Join und Charakter-
+ * Synchronisierung, in dem ein Spieler noch keine Charakter-ID hat. Im Normalfall
+ * trägt jeder Spieler die Akzentfarbe seines Charakters.
+ */
+private val UnassignedPlayerColor = Color(0xFF9E9E9E)
 
 /**
  * Abbildung zwischen Backend-Territories und vorhandenen Android-Kartenmasken.
@@ -77,19 +84,33 @@ fun lobbyPlayersToGamePlayers(
     ownPlayerId: PlayerId? = null,
     ownCharacterId: String? = null,
 ): List<GamePlayerUi> =
-    players.stablePlayerColors().let { colorsByPlayerId ->
-        players.map { player ->
-            GamePlayerUi(
-                playerId = player.playerId,
-                name = player.displayName,
-                avatarText = player.displayName.toAvatarText(),
-                characterId = player.gameCharacterId(ownPlayerId, ownCharacterId),
-                color = colorsByPlayerId.getValue(player.playerId),
-                isHost = player.isHost,
-                connectionStatus = player.connectionStatus,
-            )
-        }
+    players.map { player ->
+        val characterId = player.gameCharacterId(ownPlayerId, ownCharacterId)
+        val displayName = normalizePlayerDisplayName(player.displayName).ifBlank { "?" }
+        GamePlayerUi(
+            playerId = player.playerId,
+            name = displayName,
+            avatarText = displayName.toAvatarText(),
+            characterId = characterId,
+            color = playerColorFor(characterId),
+            isHost = player.isHost,
+            connectionStatus = player.connectionStatus,
+        )
     }
+
+/**
+ * Spielerfarbe = Akzentfarbe des gewählten Charakters.
+ *
+ * Da jeder Spieler beim Beitritt zwingend einen freien Charakter zugewiesen
+ * bekommt und Doppelbelegungen ausgeschlossen sind, ist die Farbe automatisch
+ * eindeutig. [UnassignedPlayerColor] greift nur im kurzen Fenster vor der
+ * Charakter-Synchronisierung, wenn noch keine ID vorliegt.
+ *
+ * @param characterId aktuell gewählter Charakter oder `null`
+ * @return Kartenfarbe des Spielers
+ */
+fun playerColorFor(characterId: String?): Color =
+    characterId?.let { Characters.byId(it)?.color } ?: UnassignedPlayerColor
 
 fun territorySnapshotsToUiStates(
     territoryStates: List<MapTerritoryStateSnapshot>,
@@ -118,7 +139,6 @@ fun buildRegionStates(
             GameMapTerritoryMapper.toAndroidRegionId(territory.territoryId)
                 ?: return@mapNotNull null
         val owner = territory.ownerId?.let(playersById::get)
-        val isDepartedOwner = territory.ownerId != null && owner == null
         regionId to
             GameMapRegionState(
                 ownerPlayerId = territory.ownerId?.value?.toString() ?: NEUTRAL_OWNER_ID,
@@ -127,12 +147,12 @@ fun buildRegionStates(
                         ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
                         ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                accentColor =
-                    when {
-                        owner != null -> owner.color
-                        isDepartedOwner -> DepartedTerritoryColor
-                        else -> NeutralTerritoryColor
-                    },
+                /*
+                 * Unbeanspruchte und von verlassenen Spielern zurückgelassene
+                 * Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
+                 * bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
+                 */
+                accentColor = owner?.color ?: NeutralTerritoryColor,
             )
     }.toMap()
 }
@@ -154,14 +174,6 @@ private fun LobbyPlayerUi.gameCharacterId(
     } else {
         characterId
     }
-
-private fun fallbackPlayerColor(index: Int): Color =
-    PulverfassColors.playerColors[index % PulverfassColors.playerColors.size]
-
-private fun List<LobbyPlayerUi>.stablePlayerColors(): Map<PlayerId, Color> =
-    sortedBy { it.playerId.value }
-        .mapIndexed { index, player -> player.playerId to fallbackPlayerColor(index) }
-        .toMap()
 
 private const val DEPARTED_OWNER_NAME = "Verlassener Spieler"
 private const val NEUTRAL_OWNER_ID = "neutral"

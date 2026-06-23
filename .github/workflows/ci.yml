@@ -113,6 +113,7 @@ jobs:
           ./gradlew
           :shared:assemble
           :server:assemble
+          :server:installDist
           :e2e:assemble
           :shared:test
           :server:test
@@ -127,6 +128,13 @@ jobs:
             **/build/reports/tests/**
             **/build/test-results/**
           if-no-files-found: ignore
+
+      - name: Upload server distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server/**
+          if-no-files-found: error
 
       - name: Cleanup test PostgreSQL
         if: always()
@@ -169,6 +177,12 @@ jobs:
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
+
+      - name: Set up Temurin JDK 17 (Android/AGP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Run app unit tests
         run: >
@@ -292,14 +306,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Derive image and version metadata
         id: metadata
@@ -329,12 +337,30 @@ jobs:
             echo "local_tag=${local_tag}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-install
+          path: server/build/install/server
+
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
+
       - name: Build server image
-        run: >
-          docker build
-          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
-          --tag ${{ steps.metadata.outputs.local_tag }}
-          .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: ${{ steps.metadata.outputs.local_tag }}
+          build-args: |
+            APP_VERSION=${{ steps.metadata.outputs.app_version }}
+            COMMIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
+
+      - name: Verify server image
+        run: docker image inspect "${{ steps.metadata.outputs.local_tag }}" >/dev/null
 
       - name: Smoke test container
         run: |
@@ -363,7 +389,7 @@ jobs:
       - name: Show container logs on failure
         if: failure()
         run: |
-          docker logs se2risiko-server-smoke
+          docker logs se2risiko-server-smoke || true
 
       - name: Cleanup smoke test container
         if: always()
@@ -374,9 +400,6 @@ jobs:
     runs-on: self-hosted
     if: github.event_name == 'pull_request'
     needs: dokka-build
-    env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
     permissions:
       contents: read
 
@@ -384,38 +407,30 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download Dokka site artifact
+        uses: actions/download-artifact@v4
         with:
-          distribution: temurin
-          java-version: '25'
+          name: dokka-site
+          path: build/documentation/html
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/android-sdk
-          key: ${{ runner.os }}-android-sdk-35
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build Dokka site
-        run: ./gradlew dokkaGenerate --stacktrace
+      - name: Verify Dokka artifact
+        run: test -f build/documentation/html/index.html
 
       - name: Build Dokka image
-        run: docker build -f Dockerfile.dokka --tag se2risiko-dokka-pr .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dokka
+          load: true
+          tags: se2risiko-dokka-pr
+          cache-from: type=gha,scope=dokka
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
+
+      - name: Verify Dokka image
+        run: docker image inspect se2risiko-dokka-pr >/dev/null
 
       - name: Smoke test Dokka container
         run: |
@@ -445,8 +460,6 @@ jobs:
       contents: read
       packages: write
     env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
 
@@ -456,14 +469,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Derive image and version metadata
         id: metadata
@@ -497,44 +504,62 @@ jobs:
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
         with:
-          path: ${{ github.workspace }}/android-sdk
-          key: ${{ runner.os }}-android-sdk-35
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
+          name: server-install
+          path: server/build/install/server
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
 
       - name: Build server image
-        run: >
-          docker build
-          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
-          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
-          --label org.opencontainers.image.revision=${{ github.sha }}
-          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
-          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          --tag ${{ steps.metadata.outputs.server_local_tag }}
-          .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: ${{ steps.metadata.outputs.server_local_tag }}
+          build-args: |
+            APP_VERSION=${{ steps.metadata.outputs.app_version }}
+            COMMIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
+
+      - name: Verify server image
+        run: docker image inspect "${{ steps.metadata.outputs.server_local_tag }}" >/dev/null
+
+      - name: Download Dokka site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dokka-site
+          path: build/documentation/html
+
+      - name: Verify Dokka artifact
+        run: test -f build/documentation/html/index.html
 
       - name: Build Dokka image
-        run: |
-          chmod +x ./gradlew
-          ./gradlew dokkaGenerate --stacktrace
-          docker build \
-            -f Dockerfile.dokka \
-            --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }} \
-            --label org.opencontainers.image.revision=${{ github.sha }} \
-            --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }} \
-            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
-            --tag ${{ steps.metadata.outputs.dokka_local_tag }} \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dokka
+          load: true
+          tags: ${{ steps.metadata.outputs.dokka_local_tag }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=dokka
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
+
+      - name: Verify Dokka image
+        run: docker image inspect "${{ steps.metadata.outputs.dokka_local_tag }}" >/dev/null
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -569,8 +594,6 @@ jobs:
       contents: read
       packages: write
     env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || secrets.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
     outputs:
@@ -586,14 +609,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Derive image and version metadata
         id: metadata
@@ -632,44 +649,62 @@ jobs:
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
+      - name: Download server distribution artifact
+        uses: actions/download-artifact@v4
         with:
-          path: ${{ github.workspace }}/android-sdk
-          key: ${{ runner.os }}-android-sdk-35
-          restore-keys: |
-            ${{ runner.os }}-android-sdk-
+          name: server-install
+          path: server/build/install/server
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
+      - name: Verify server distribution artifact
+        run: test -f server/build/install/server/bin/server
 
       - name: Build server image
-        run: >
-          docker build
-          --build-arg APP_VERSION=${{ steps.metadata.outputs.app_version }}
-          --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
-          --label org.opencontainers.image.revision=${{ github.sha }}
-          --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
-          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          --tag ${{ steps.metadata.outputs.server_local_tag }}
-          .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: ${{ steps.metadata.outputs.server_local_tag }}
+          build-args: |
+            APP_VERSION=${{ steps.metadata.outputs.app_version }}
+            COMMIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=min,scope=server,ignore-error=true
+
+      - name: Verify server image
+        run: docker image inspect "${{ steps.metadata.outputs.server_local_tag }}" >/dev/null
+
+      - name: Download Dokka site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dokka-site
+          path: build/documentation/html
+
+      - name: Verify Dokka artifact
+        run: test -f build/documentation/html/index.html
 
       - name: Build Dokka image
-        run: |
-          chmod +x ./gradlew
-          ./gradlew dokkaGenerate --stacktrace
-          docker build \
-            -f Dockerfile.dokka \
-            --label org.opencontainers.image.created=${{ steps.metadata.outputs.created }} \
-            --label org.opencontainers.image.revision=${{ github.sha }} \
-            --label org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }} \
-            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
-            --tag ${{ steps.metadata.outputs.dokka_local_tag }} \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dokka
+          load: true
+          tags: ${{ steps.metadata.outputs.dokka_local_tag }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.metadata.outputs.app_version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=dokka
+          cache-to: type=gha,mode=min,scope=dokka,ignore-error=true
+
+      - name: Verify Dokka image
+        run: docker image inspect "${{ steps.metadata.outputs.dokka_local_tag }}" >/dev/null
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

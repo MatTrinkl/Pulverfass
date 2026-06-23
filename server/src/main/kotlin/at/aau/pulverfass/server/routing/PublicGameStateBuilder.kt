@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyUsedSetEvent
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
@@ -19,6 +20,7 @@ import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStartedEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PublicGameEvent
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
 import at.aau.pulverfass.shared.message.lobby.event.VisibleGameStatePayload
@@ -66,6 +68,9 @@ class PublicGameStateBuilder {
                 ),
             definition = mapProjection.definition,
             territoryStates = mapProjection.territoryStates,
+            gameStatus = gameState.status,
+            matchEndReason = gameState.closedReason,
+            winnerPlayerId = gameState.winnerPlayerId,
         )
     }
 
@@ -215,6 +220,15 @@ class PublicGameStateBuilder {
             -> listOf(versionedTerritoryEvent(event, currentState.stateVersion))
             is FortifyMoveAppliedEvent -> buildFortifyMovePayloads(currentState, event)
             is FortifyUsedSetEvent -> emptyList()
+            is MatchEndedEvent ->
+                listOf(
+                    MatchEndedBroadcastEvent(
+                        lobbyCode = lobbyCode,
+                        reason = event.reason,
+                        winnerPlayerId = event.winnerPlayerId,
+                        stateVersion = currentState.stateVersion,
+                    ),
+                )
             is TurnStateUpdatedEvent -> listOf(event)
             else -> null
         }

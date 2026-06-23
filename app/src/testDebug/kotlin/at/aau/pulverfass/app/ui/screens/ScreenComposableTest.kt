@@ -2,6 +2,10 @@ package at.aau.pulverfass.app.ui.screens
 
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.semantics.SemanticsActions
@@ -25,6 +29,8 @@ import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import at.aau.pulverfass.app.game.AttackResultUiState
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.AutoAttackIntent
+import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.FortifyUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameTerritoryUiState
@@ -45,6 +51,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -353,6 +360,122 @@ class ScreenComposableTest {
     }
 
     @Test
+    fun game_screen_shows_cheat_report_notice_for_four_seconds() {
+        /*
+         * Das Overlay soll nicht sofort verschwinden: Die Meldung erklärt eine
+         * spätere Konsequenz im Spiel. Mit deaktivierter Auto-Advance-Clock kann
+         * der Test exakt prüfen, dass es nach ca. vier Sekunden geschlossen wird.
+         */
+        composeTestRule.mainClock.autoAdvance = false
+        var dismissed = false
+        val noticeText =
+            "Deine Meldung war korrekt. Du erhältst in deiner nächsten " +
+                "Verstärkungsphase +3 Truppen."
+
+        try {
+            composeTestRule.setContent {
+                AndroidAppTheme {
+                    GameScreenContent(
+                        contentState =
+                            GameScreenContentState(
+                                players = emptyList(),
+                                localPlayerId = PlayerId(1),
+                                uiState = GameUiState(),
+                                isConnected = true,
+                                pendingCommandKeys = emptySet(),
+                                mapPainter = ColorPainter(Color.White),
+                                cheatReportNoticeText = noticeText,
+                            ),
+                        actions =
+                            GameScreenActions(
+                                onRegionSelected = {},
+                                onToggleCards = {},
+                                onAdvanceTurn = {},
+                                onRefreshGameState = {},
+                                onClearCheatReportNotice = { dismissed = true },
+                            ),
+                        countdownState = false to 0,
+                    )
+                }
+            }
+
+            composeTestRule.onNodeWithTag("cheat_report_notice_popup").assertIsDisplayed()
+            composeTestRule.onNodeWithText("CHEAT-MELDUNG").assertIsDisplayed()
+            composeTestRule.onNodeWithText(noticeText).assertIsDisplayed()
+            composeTestRule.mainClock.advanceTimeBy(3_100)
+            composeTestRule.waitForIdle()
+            assertTrue(!dismissed)
+
+            composeTestRule.mainClock.advanceTimeBy(1_000)
+            composeTestRule.waitForIdle()
+
+            assertTrue(dismissed)
+        } finally {
+            composeTestRule.mainClock.autoAdvance = true
+        }
+    }
+
+    @Test
+    fun game_screen_options_reports_selected_cheat_player() {
+        /*
+         * Dieser UI-Test prüft nicht die Serverlogik, sondern nur die Bedienung:
+         * Optionsmenü öffnen, "CHEAT MELDEN" anklicken, Gegner auswählen und
+         * sicherstellen, dass dessen PlayerId an den Callback geht.
+         */
+        val localPlayerId = PlayerId(1)
+        val accusedPlayerId = PlayerId(2)
+        var reportedPlayerId: PlayerId? = null
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = localPlayerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                    GamePlayerUi(
+                                        playerId = accusedPlayerId,
+                                        name = "Bob",
+                                        avatarText = "B",
+                                        color = Color(0xFFA6342B),
+                                    ),
+                                ),
+                            localPlayerId = localPlayerId,
+                            uiState = GameUiState(),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onReportCheat = { reportedPlayerId = it },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("game_options_button").performClick()
+        composeTestRule.onNodeWithText("CHEAT MELDEN").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("SPIELER AUSWÄHLEN").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("cheat_report_player_${accusedPlayerId.value}")
+            .performClick()
+
+        assertEquals(accusedPlayerId, reportedPlayerId)
+        composeTestRule.onAllNodesWithText("SPIELER AUSWÄHLEN").assertCountEquals(0)
+    }
+
+    @Test
     fun private_hand_panel_shows_own_cards_with_duplicate_labels() {
         composeTestRule.setContent {
             AndroidAppTheme {
@@ -457,12 +580,10 @@ class ScreenComposableTest {
     }
 
     @Test
-    fun reinforcement_panel_places_troops_and_typed_hand_submits_trade_in() {
+    fun reinforcement_panel_places_troops() {
         val playerId = PlayerId(1)
-        val cardIds = listOf(CardId("a"), CardId("b"), CardId("c"))
         var placementDelta = 0
         var placed = false
-        var traded = false
         var closedRegion: String? = null
 
         composeTestRule.setContent {
@@ -485,7 +606,6 @@ class ScreenComposableTest {
                                     activePlayerId = playerId,
                                     turnPhase = TurnPhase.REINFORCEMENTS,
                                     selectedRegionId = "brazil",
-                                    cardsVisible = true,
                                     reinforcementState =
                                         ReinforcementUiState(
                                             playerId = playerId,
@@ -493,13 +613,6 @@ class ScreenComposableTest {
                                             territoryBonus = 2,
                                             isBonusBreakdownKnown = true,
                                         ),
-                                    privateHandCards =
-                                        listOf(
-                                            PrivateHandCardUi(cardIds[0], CardType.A),
-                                            PrivateHandCardUi(cardIds[1], CardType.B),
-                                            PrivateHandCardUi(cardIds[2], CardType.C),
-                                        ),
-                                    selectedTradeInCardIds = cardIds.toSet(),
                                 ),
                             isConnected = true,
                             pendingCommandKeys = emptySet(),
@@ -512,7 +625,6 @@ class ScreenComposableTest {
                             onAdvanceTurn = {},
                             onAdjustReinforcementPlacementAmount = { placementDelta = it },
                             onPlaceReinforcements = { placed = true },
-                            onTradeInCards = { traded = true },
                             onRefreshGameState = {},
                         ),
                     countdownState = false to 0,
@@ -532,15 +644,189 @@ class ScreenComposableTest {
             .onNodeWithTag("place_reinforcements_button")
             .assertIsEnabled()
             .performClick()
-        composeTestRule.onNodeWithText("Infanterie").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
-            .performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithTag("close_reinforcement_panel").performClick()
 
         assertEquals(1, placementDelta)
         assertTrue(placed)
-        assertTrue(traded)
         assertEquals("brazil", closedRegion)
+    }
+
+    @Test
+    fun card_hand_overlay_shows_typed_cards_and_submits_trade_in() {
+        val playerId = PlayerId(1)
+        val cardIds =
+            listOf(
+                CardId("territory:sahara:a"),
+                CardId("territory:brasilien:b"),
+                CardId("territory:japan:c"),
+            )
+        var selectedCardId: CardId? = null
+        var traded = false
+        var closed = false
+
+        composeTestRule.setContent {
+            var selectedTradeInCardIds by remember {
+                mutableStateOf(setOf(cardIds[1], cardIds[2]))
+            }
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.REINFORCEMENTS,
+                                    cardsVisible = true,
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(cardIds[0], CardType.A),
+                                            PrivateHandCardUi(cardIds[1], CardType.B),
+                                            PrivateHandCardUi(cardIds[2], CardType.C),
+                                            PrivateHandCardUi(CardId("joker:1"), CardType.JOKER),
+                                        ),
+                                    selectedTradeInCardIds = selectedTradeInCardIds,
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = { closed = true },
+                            onAdvanceTurn = {},
+                            onToggleTradeInCard = { cardId ->
+                                selectedCardId = cardId
+                                selectedTradeInCardIds =
+                                    if (cardId in selectedTradeInCardIds) {
+                                        selectedTradeInCardIds - cardId
+                                    } else {
+                                        selectedTradeInCardIds + cardId
+                                    }
+                            },
+                            onTradeInCards = { traded = true },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("card_hand_overlay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Galeone Sahara").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kanone Brasilien").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pirat Japan").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a").performClick()
+        composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.onNodeWithTag("close_cards_button").performClick()
+
+        assertEquals(cardIds[0], selectedCardId)
+        assertTrue(traded)
+        assertTrue(closed)
+    }
+
+    @Test
+    fun cards_screen_names_joker_cards_as_kaiser() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.DRAW_CARD,
+                                    cardsVisible = true,
+                                    privateHandCards =
+                                        listOf(
+                                            PrivateHandCardUi(CardId("joker:1"), CardType.JOKER),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Kaiser").assertIsDisplayed()
+    }
+
+    @Test
+    fun draw_card_phase_does_not_offer_manual_phase_end() {
+        val playerId = PlayerId(1)
+        var advanced = false
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players =
+                                listOf(
+                                    GamePlayerUi(
+                                        playerId = playerId,
+                                        name = "Alice",
+                                        avatarText = "A",
+                                        color = Color(0xFF6FD4C5),
+                                    ),
+                                ),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.DRAW_CARD,
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = { advanced = true },
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("end_round_button").assertIsNotEnabled()
+        assertFalse(advanced)
     }
 
     @Test
@@ -700,7 +986,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("attack_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Angriff: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Angriff: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag("attack_troops_slider").performSemanticsAction(
             SemanticsActions.SetProgress,
         ) { setProgress ->
@@ -718,6 +1004,62 @@ class ScreenComposableTest {
         assertEquals(1, moveAdjustment)
         assertTrue(attacked)
         assertTrue(finished)
+    }
+
+    @Test
+    fun auto_attack_hides_manual_attack_panel() {
+        val playerId = PlayerId(1)
+
+        composeTestRule.setContent {
+            AndroidAppTheme {
+                GameScreenContent(
+                    contentState =
+                        GameScreenContentState(
+                            players = emptyList(),
+                            localPlayerId = playerId,
+                            uiState =
+                                GameUiState(
+                                    activePlayerId = playerId,
+                                    turnPhase = TurnPhase.ATTACK,
+                                    selectionFromRegionId = "brazil",
+                                    selectionToRegionId = "argentina",
+                                    attackState =
+                                        AttackUiState(
+                                            attackTroops = 3,
+                                            moveAfterCapture = 3,
+                                            autoAttack =
+                                                AutoAttackUiState(
+                                                    intent =
+                                                        AutoAttackIntent(
+                                                            fromTerritoryId =
+                                                                TerritoryId("brasilien"),
+                                                            toTerritoryId =
+                                                                TerritoryId("argentinien"),
+                                                            attackTroops = 3,
+                                                            moveAfterCapture = 3,
+                                                        ),
+                                                    isEnabled = true,
+                                                    isAwaitingResult = true,
+                                                ),
+                                        ),
+                                ),
+                            isConnected = true,
+                            pendingCommandKeys = emptySet(),
+                            mapPainter = ColorPainter(Color.White),
+                        ),
+                    actions =
+                        GameScreenActions(
+                            onRegionSelected = {},
+                            onToggleCards = {},
+                            onAdvanceTurn = {},
+                            onRefreshGameState = {},
+                        ),
+                    countdownState = false to 0,
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("attack_panel").assertCountEquals(0)
     }
 
     @Test
@@ -784,7 +1126,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("fortify_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Verschieben: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verschieben: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag("fortify_troops_slider").performSemanticsAction(
             SemanticsActions.SetProgress,
         ) { setProgress ->
@@ -845,7 +1187,7 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("attack_result_panel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kampfergebnis: brazil → argentina").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Kampfergebnis: Brasilien → Argentinien").assertIsDisplayed()
         composeTestRule.onNodeWithTag(
             "attack_result_outcome",
         ).assertTextEquals("Erobert · Besetzung: 2")

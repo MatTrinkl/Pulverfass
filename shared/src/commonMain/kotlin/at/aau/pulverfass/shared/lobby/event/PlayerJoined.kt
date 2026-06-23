@@ -9,7 +9,8 @@ import at.aau.pulverfass.shared.lobby.requireValidPlayerDisplayName
  *
  * @property lobbyCode betroffene Lobby
  * @property playerId beigetretener Spieler
- * @property playerDisplayName Anzeigename des Players für die Lobby-UI
+ * @property playerDisplayName Anzeigename des Players für die Lobby-UI;
+ * maximal 8 ASCII-Buchstaben vor der Normalisierung.
  */
 data class PlayerJoined(
     override val lobbyCode: LobbyCode,

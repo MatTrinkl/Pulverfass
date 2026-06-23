@@ -4,8 +4,11 @@ import at.aau.pulverfass.app.ui.map.GameMapRegionState
 import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.state.CardSetValidator
 import at.aau.pulverfass.shared.lobby.state.CardType
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TurnPhase
+import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 
 /**
  * Android-Projektion des serverautoritativen öffentlichen GameStates.
@@ -15,6 +18,9 @@ import at.aau.pulverfass.shared.lobby.state.TurnPhase
  */
 data class GameUiState(
     val isStarted: Boolean = false,
+    val gameStatus: GameStatus = GameStatus.RUNNING,
+    val matchEndReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val isCatchingUp: Boolean = false,
     val isDesynced: Boolean = false,
     val stateVersion: Long = 0,
@@ -47,6 +53,12 @@ data class GameUiState(
     val lastSyncError: String? = null,
 ) {
     /**
+     * Signalisiert ein fachlich beendetes Match.
+     */
+    val isFinished: Boolean
+        get() = gameStatus == GameStatus.FINISHED
+
+    /**
      * Prüft, ob lokale Spielaktionen aktuell sinnvoll angeboten werden dürfen.
      *
      * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
@@ -58,6 +70,7 @@ data class GameUiState(
         isConnected: Boolean = true,
     ): Boolean =
         localPlayerId != null &&
+            gameStatus == GameStatus.RUNNING &&
             activePlayerId == localPlayerId &&
             isConnected &&
             !isPaused &&
@@ -78,7 +91,8 @@ data class GameUiState(
         canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
             turnPhase != null &&
             turnPhase != TurnPhase.REINFORCEMENTS &&
-            turnPhase != TurnPhase.ATTACK
+            turnPhase != TurnPhase.ATTACK &&
+            turnPhase != TurnPhase.DRAW_CARD
 
     /**
      * Prüft, ob die aktuelle Verstärkungsphase lokal bedient werden kann.
@@ -130,19 +144,33 @@ data class GameUiState(
             reinforcementState.pendingAmount == 0
 
     /**
-     * Prüft, ob drei private Karten zum Eintausch ausgewählt wurden.
+     * Prüft, ob drei eigene private Karten ein gültiges Eintausch-Set bilden.
      *
-     * Ob die konkrete Kombination gültig oder ein erzwungener Trade nötig ist,
-     * entscheidet weiterhin der Server. Die UI beschränkt lediglich die
-     * Auswahlmenge, damit kein offensichtlich ungültiger Request entsteht.
+     * Die Serverprüfung bleibt autoritativ. Die UI sperrt den Button aber
+     * bereits bei ungültigen lokalen Kombinationen, damit kein sicher
+     * abgelehnter Request entsteht.
+     *
+     * @param localPlayerId eigener Spieler aus dem Lobby-Kontext
+     * @param isConnected aktueller WebSocket-Zustand
+     * @return `true`, wenn der aktive Spieler ein gültiges Dreier-Set ausgewählt hat
      */
     fun canTradeInCards(
         localPlayerId: PlayerId?,
         isConnected: Boolean = true,
-    ): Boolean =
-        canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) &&
-            turnPhase == TurnPhase.REINFORCEMENTS &&
-            selectedTradeInCardIds.size == 3
+    ): Boolean {
+        if (
+            !canUseGameActions(localPlayerId = localPlayerId, isConnected = isConnected) ||
+            turnPhase != TurnPhase.REINFORCEMENTS ||
+            selectedTradeInCardIds.size != 3
+        ) {
+            return false
+        }
+
+        val selectedCards =
+            privateHandCards.filter { card -> card.cardId in selectedTradeInCardIds }
+        return selectedCards.size == 3 &&
+            CardSetValidator.isValidSet(selectedCards.map { card -> card.type })
+    }
 
     /**
      * Prüft, ob ein Angriff in der aktuellen Phase vorbereitet werden kann.
@@ -170,6 +198,21 @@ data class GameUiState(
             attackState.attackTroops >= MIN_ATTACK_TROOPS &&
             attackState.moveAfterCapture in
             minimumOccupyingTroopsForAttack(attackState.attackTroops)..attackState.attackTroops
+
+    /**
+     * Prüft, ob für die aktuelle Auswahl ein Auto-Angriff vorgemerkt oder
+     * gestartet werden darf.
+     *
+     * Ein bereits laufender Auto-Angriff darf nicht noch einmal gestartet werden;
+     * die einzelne Sequenz wird danach vom Controller serverautoritativ
+     * fortgesetzt.
+     */
+    fun canStartAutoAttack(
+        localPlayerId: PlayerId?,
+        isConnected: Boolean = true,
+    ): Boolean =
+        canSubmitAttack(localPlayerId, isConnected) &&
+            !attackState.autoAttack.isRunning
 
     /**
      * Die Angriffsphase darf ohne Angriff oder nach beliebig vielen Kämpfen enden.
@@ -421,7 +464,44 @@ data class AttackUiState(
     val attackTroops: Int = MIN_ATTACK_TROOPS,
     val moveAfterCapture: Int = minimumOccupyingTroopsForAttack(MIN_ATTACK_TROOPS),
     val latestResult: AttackResultUiState? = null,
+    val autoAttack: AutoAttackUiState = AutoAttackUiState(),
 )
+
+/**
+ * Sichtbarer Zustand einer laufenden Auto-Attack-Sequenz.
+ *
+ * Der Zustand ist rein clientseitig. Der Server sieht weiterhin nur normale,
+ * einzelne [at.aau.pulverfass.shared.message.lobby.request.AttackRequest]s.
+ */
+data class AutoAttackUiState(
+    val intent: AutoAttackIntent? = null,
+    val isEnabled: Boolean = false,
+    val isAwaitingResult: Boolean = false,
+    val pendingRequestId: String? = null,
+    val statusText: String? = null,
+    val errorText: String? = null,
+) {
+    val isRunning: Boolean
+        get() = intent != null || isAwaitingResult
+}
+
+/**
+ * Eingefrorene Angriffsabsicht, die Auto-Attack gegen dasselbe Ziel wiederholt.
+ *
+ * `attackTroops` und `moveAfterCapture` sind die vom Nutzer gewählten Werte.
+ * Wenn das Ausgangsgebiet nach serverseitigen Verlusten diese Angriffsstärke
+ * nicht mehr tragen kann, beendet der Controller nur die laufende Sequenz.
+ */
+data class AutoAttackIntent(
+    val fromTerritoryId: TerritoryId,
+    val toTerritoryId: TerritoryId,
+    val attackTroops: Int,
+    val moveAfterCapture: Int,
+) {
+    fun matches(event: AttackResolvedBroadcastEvent): Boolean =
+        fromTerritoryId == event.fromTerritoryId &&
+            toTerritoryId == event.toTerritoryId
+}
 
 /**
  * Lokale Eingabe der einmaligen Truppenverschiebung in der Fortify-Phase.
@@ -441,6 +521,12 @@ data class FortifyUiState(
 
 /**
  * Präsentationsmodell eines einzelnen serverseitig ausgewürfelten Kampfes.
+ *
+ * [attackId] identifiziert den Kampf eindeutig, damit die Clash-Animation pro
+ * Ergebnis genau einmal abgespielt wird. [sourceTroopsBefore] und
+ * [targetTroopsBefore] erlauben der Karte, die Truppen-Chips während der
+ * Animation noch kurz auf dem Vorkampfstand anzuzeigen, ohne den
+ * autoritativen Spielzustand zu verzögern.
  */
 data class AttackResultUiState(
     val fromTerritoryId: TerritoryId,
@@ -452,6 +538,9 @@ data class AttackResultUiState(
     val attackerRemaining: Int,
     val defenderRemaining: Int,
     val occupyingTroopCount: Int?,
+    val attackId: Long = 0L,
+    val sourceTroopsBefore: Int = 0,
+    val targetTroopsBefore: Int = 0,
 ) {
     val captured: Boolean
         get() = defenderRemaining == 0

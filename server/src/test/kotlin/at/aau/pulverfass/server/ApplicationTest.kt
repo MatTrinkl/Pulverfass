@@ -1,5 +1,6 @@
 package at.aau.pulverfass.server
 
+import at.aau.pulverfass.server.logging.ServerLoggerNames
 import at.aau.pulverfass.server.persistence.DatabaseBackedLobbyPersistenceGateway
 import at.aau.pulverfass.server.persistence.FakeConnectionScript
 import at.aau.pulverfass.server.persistence.FakeJdbcDataSource
@@ -22,10 +23,17 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerCountUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerJoinedLobbyEvent
 import at.aau.pulverfass.shared.message.lobby.request.CreateLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.response.CreateLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -39,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -49,6 +58,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 
 class ApplicationTest {
     private val mapDefinition =
@@ -402,7 +412,7 @@ class ApplicationTest {
         assertTrue(connection.committed)
         assertEquals(21L, delete.lastParameters[1])
         assertEquals("AB12", insert.lastParameters[3])
-        assertEquals("Alice", insert.lastParameters[4])
+        assertEquals("ALICE", insert.lastParameters[4])
     }
 
     @Test
@@ -432,6 +442,67 @@ class ApplicationTest {
             assertEquals(HttpStatusCode.OK, response.status)
             assertEquals("v1.2.3", response.bodyAsText())
         }
+
+    @Test
+    fun `module exposes internal metrics endpoint`() =
+        testApplication {
+            application {
+                module(
+                    runtimeConfig =
+                        ServerRuntimeConfig(
+                            appVersion = "v1.2.3",
+                            commitSha = "abcdef1234567890",
+                        ),
+                    databaseReadinessProbe = ReadyDatabaseProbe,
+                )
+            }
+
+            val response = client.get("/metrics")
+            val body = response.bodyAsText()
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(body.contains("pulverfass_server_info"))
+            assertTrue(body.contains("version=\"v1.2.3\""))
+            assertTrue(body.contains("commit=\"abcdef1234567890\""))
+            assertTrue(body.contains("database_configured=\"false\""))
+            assertTrue(body.contains("pulverfass_database_readiness{state=\"up\"} 1"))
+            assertTrue(body.contains("pulverfass_server_uptime_seconds"))
+        }
+
+    @Test
+    fun `formatMetricsResponse escapes labels and clamps uptime`() {
+        val response =
+            formatMetricsResponse(
+                runtimeConfig =
+                    ServerRuntimeConfig(
+                        appVersion = "v1.2.3 local",
+                        commitSha = "abc\"def",
+                    ),
+                readiness = DatabaseReadiness(DatabaseReadinessState.DOWN),
+                startedAtEpochMillis = 5_000,
+                nowEpochMillis = 3_000,
+            )
+
+        assertTrue(response.contains("version=\"v1.2.3 local\""))
+        assertTrue(response.contains("commit=\"abc\\\"def\""))
+        assertTrue(response.contains("pulverfass_database_readiness{state=\"down\"} 0"))
+        assertTrue(response.contains("pulverfass_server_uptime_seconds 0"))
+    }
+
+    @Test
+    fun `metrics endpoint internal host filter allows local and private addresses`() {
+        assertTrue(isInternalMetricsRequest("localhost"))
+        assertTrue(isInternalMetricsRequest("127.0.0.1"))
+        assertTrue(isInternalMetricsRequest("[::1]"))
+        assertTrue(isInternalMetricsRequest("10.1.2.3"))
+        assertTrue(isInternalMetricsRequest("172.16.0.1"))
+        assertTrue(isInternalMetricsRequest("172.31.255.255"))
+        assertTrue(isInternalMetricsRequest("192.168.1.10"))
+
+        assertFalse(isInternalMetricsRequest("8.8.8.8"))
+        assertFalse(isInternalMetricsRequest("172.15.0.1"))
+        assertFalse(isInternalMetricsRequest("172.32.0.1"))
+    }
 
     @Test
     fun `transport only module still exposes standard http endpoints`() =
@@ -543,7 +614,7 @@ class ApplicationTest {
     }
 
     @Test
-    fun `startup helper functions classify recoverable and terminal states`() {
+    fun `startup helper functions classify recoverable states and cleanup candidates`() {
         val waiting =
             GameState
                 .initial(
@@ -577,12 +648,12 @@ class ApplicationTest {
 
         assertTrue(invokeBooleanHelper("isRecoverableOnStartup", waiting))
         assertTrue(invokeBooleanHelper("isRecoverableOnStartup", running))
-        assertFalse(invokeBooleanHelper("isRecoverableOnStartup", finished))
+        assertTrue(invokeBooleanHelper("isRecoverableOnStartup", finished))
         assertFalse(invokeBooleanHelper("isRecoverableOnStartup", closed))
-        assertTrue(invokeBooleanHelper("isTerminal", finished))
-        assertTrue(invokeBooleanHelper("isTerminal", closed))
-        assertFalse(invokeBooleanHelper("isTerminal", waiting))
-        assertFalse(invokeBooleanHelper("isTerminal", running))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", finished))
+        assertTrue(invokeBooleanHelper("requiresTerminalCleanup", closed))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", waiting))
+        assertFalse(invokeBooleanHelper("requiresTerminalCleanup", running))
         assertEquals(
             7L,
             invokeMaxPlayerId(listOf(waiting, running)),
@@ -620,11 +691,12 @@ class ApplicationTest {
             )
 
             assertJoinLobbyResponse(lobbyCode, receivePayload(hostSession))
+
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(1),
-                    playerDisplayName = "Alice",
+                    playerDisplayName = "ALICE",
                     isHost = true,
                 ),
                 receivePayload(hostSession),
@@ -641,11 +713,12 @@ class ApplicationTest {
             )
 
             assertJoinLobbyResponse(lobbyCode, receivePayload(guestSession))
+
             assertEquals(
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(1),
-                    playerDisplayName = "Alice",
+                    playerDisplayName = "ALICE",
                     isHost = true,
                 ),
                 receivePayload(guestSession),
@@ -654,7 +727,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(2),
-                    playerDisplayName = "Bob",
+                    playerDisplayName = "BOB",
                     isHost = false,
                 ),
                 receivePayload(guestSession),
@@ -663,7 +736,7 @@ class ApplicationTest {
                 PlayerJoinedLobbyEvent(
                     lobbyCode = lobbyCode,
                     playerId = PlayerId(2),
-                    playerDisplayName = "Bob",
+                    playerDisplayName = "BOB",
                     isHost = false,
                 ),
                 receivePayload(hostSession),
@@ -671,6 +744,118 @@ class ApplicationTest {
 
             hostSession.close()
             guestSession.close()
+        }
+
+    @Test
+    fun `moduleWithLobbyRuntime logs correlated create join snapshot and leave flows`() =
+        testApplication {
+            val context = LoggerFactory.getILoggerFactory() as LoggerContext
+            val routingLogger =
+                context.getLogger("${ServerLoggerNames.TECHNICAL}.MainServerLobbyRoutingService")
+            val appender =
+                ListAppender<ILoggingEvent>().apply {
+                    this.context = context
+                    start()
+                }
+            routingLogger.addAppender(appender)
+
+            try {
+                application {
+                    moduleWithLobbyRuntime()
+                }
+
+                val client =
+                    createClient {
+                        install(WebSockets)
+                    }
+                val session = client.webSocketSession("/ws")
+                discardConnectionHandshake(session)
+
+                session.send(
+                    Frame.Binary(fin = true, data = MessageCodec.encode(CreateLobbyRequest)),
+                )
+                val createLobbyResponse = assertIs<CreateLobbyResponse>(receivePayload(session))
+                val lobbyCode = createLobbyResponse.lobbyCode
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                    ),
+                )
+                assertEquals(JoinLobbyResponse(lobbyCode, PlayerId(1)), receivePayload(session))
+                assertIs<PlayerJoinedLobbyEvent>(receivePayload(session))
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(MapGetRequest(lobbyCode)),
+                    ),
+                )
+                assertIs<MapGetResponse>(receivePayload(session))
+
+                session.send(
+                    Frame.Binary(
+                        fin = true,
+                        data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                    ),
+                )
+                assertEquals(LeaveLobbyResponse(lobbyCode), receivePayload(session))
+                session.close()
+
+                /*
+                 * Auf den letzten (Leave-)Completion-Log warten; die früheren Logs
+                 * entstehen davor auf derselben Verbindungs-Coroutine und sind dann
+                 * ebenfalls vorhanden.
+                 */
+                val messages =
+                    awaitLoggedMessages(appender) { logged ->
+                        logged.any {
+                            it.contains("Request completed") &&
+                                it.contains("messageType=LOBBY_LEAVE_REQUEST") &&
+                                it.contains("responseType=LeaveLobbyResponse")
+                        }
+                    }
+                assertTrue(
+                    messages.any {
+                        it.contains("Request received") &&
+                            it.contains("messageType=LOBBY_CREATE_REQUEST") &&
+                            it.contains("requestId=srv-")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("responseType=CreateLobbyResponse") &&
+                            it.contains("lobbyId=${lobbyCode.value}")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_JOIN_REQUEST") &&
+                            it.contains("responseType=JoinLobbyResponse") &&
+                            it.contains("playerId=1")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_MAP_GET_REQUEST") &&
+                            it.contains("responseType=MapGetResponse") &&
+                            it.contains("mapHash=")
+                    },
+                )
+                assertTrue(
+                    messages.any {
+                        it.contains("Request completed") &&
+                            it.contains("messageType=LOBBY_LEAVE_REQUEST") &&
+                            it.contains("responseType=LeaveLobbyResponse")
+                    },
+                )
+            } finally {
+                routingLogger.detachAppender(appender)
+            }
         }
 
     private suspend fun discardConnectionHandshake(session: DefaultClientWebSocketSession) {
@@ -695,6 +880,32 @@ class ApplicationTest {
             }
         }
         throw AssertionError("Expected lobby payload within 20 messages.")
+    }
+
+    /**
+     * Wartet, bis das [predicate] auf den gesammelten Log-Nachrichten erfüllt ist,
+     * und gibt anschließend die zuletzt gelesenen Nachrichten zurück.
+     *
+     * Die Completion-Logs werden auf der Server-Coroutine erst nach dem Versand der
+     * Antwort geschrieben, weshalb der Appender asynchron befüllt wird. Ohne dieses
+     * Warten könnte die Prüfung unter Last fehlschlagen, weil der erwartete Eintrag
+     * noch nicht angehängt wurde. Nach Ablauf von [timeoutMillis] werden die bis
+     * dahin vorhandenen Nachrichten zurückgegeben, damit die folgenden Assertions
+     * weiterhin eine aussagekräftige Fehlermeldung liefern.
+     */
+    private suspend fun awaitLoggedMessages(
+        appender: ListAppender<ILoggingEvent>,
+        timeoutMillis: Long = 5_000,
+        predicate: (List<String>) -> Boolean,
+    ): List<String> {
+        val deadlineNanos = System.nanoTime() + timeoutMillis * 1_000_000
+        while (true) {
+            val messages = appender.list.map(ILoggingEvent::getFormattedMessage)
+            if (predicate(messages) || System.nanoTime() >= deadlineNanos) {
+                return messages
+            }
+            delay(25)
+        }
     }
 
     private inline fun <reified T> assertIs(value: Any?): T {

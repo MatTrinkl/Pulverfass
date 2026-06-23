@@ -73,6 +73,16 @@ class PlayerJoinedLobbyEventTest {
     }
 
     @Test
+    fun `should reject player display name with invalid characters`() {
+        val exception =
+            assertThrows(IllegalArgumentException::class.java) {
+                PlayerJoinedLobbyEvent(LobbyCode("AB12"), PlayerId(7), "ALICE1")
+            }
+
+        assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
+    }
+
+    @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
             json.decodeFromString<PlayerJoinedLobbyEvent>("""{"lobbyCode":"AB12"}""")

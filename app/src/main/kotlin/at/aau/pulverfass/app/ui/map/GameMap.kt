@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -47,12 +49,27 @@ import androidx.compose.ui.unit.dp
 import at.aau.pulverfass.app.R
 import kotlin.math.roundToInt
 
-private const val MAP_IMAGE_WIDTH_PX = 2540
-private const val MAP_IMAGE_HEIGHT_PX = 1346
+private const val MAP_IMAGE_WIDTH_PX = 3840
+private const val MAP_IMAGE_HEIGHT_PX = 2160
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
-private const val TERRITORY_OVERLAY_ALPHA = 0.78f
-private val MapOverlaySurfaceColor = Color.White
+
+/*
+ * Statt jedes Territory ganzflächig einzufärben, zeichnen wir nur einen Rand in
+ * Besitzerfarbe. So bleibt die Kartenkunst im Inneren sichtbar, während Besitz
+ * über Outline und Truppen-Chip eindeutig lesbar bleibt. Die Randform steckt
+ * fertig in den Masken (`territory_*.png` sind reine Rand-Ringe); hier wird nur
+ * die Deckkraft je nach Besitz skaliert.
+ */
+private const val OWNED_BORDER_ALPHA = 0xFF
+private const val NEUTRAL_BORDER_ALPHA = 0x70
+
+/*
+ * Durchmesser des Truppen-Chips. Bewusst kompakt, damit kleine Gebiete beim
+ * Herauszoomen nicht vom Chip verdeckt werden.
+ */
+private val RegionCounterSize = 26.dp
+private val NeutralRegionColor = Color(0xFFC2C2C2)
 private val MapOverlayBorderColor = Color.Black
 private val MapOverlayContentColor = Color.Black
 private val MapOverlayInverseColor = Color.White
@@ -74,9 +91,10 @@ data class MapPoint(
 /**
  * Beschreibt eine Territory-Region der Spielkarte.
  *
- * [maskResId] verweist auf die transparente Territory-Maske. [idMapColorRgb]
- * ist die exakte RGB-Farbe aus `map_region_id.png`, die für Hitdetection
- * verwendet wird. Andere Farben werden bewusst ignoriert.
+ * [maskResId] verweist auf die transparente Rand-Maske des Gebiets (ein reiner
+ * Outline-Ring). [idMapColorRgb] ist die exakte RGB-Farbe aus
+ * `map_region_id.png`, die für Hitdetection verwendet wird. Andere Farben werden
+ * bewusst ignoriert.
  *
  * @param id Android-interne Region-ID der Bitmap-Assets
  * @param name lesbarer Gebietsname für UI und Debugging
@@ -150,15 +168,28 @@ data class InteractiveGameMapOptions(
 )
 
 /**
- * Vorberechnete Bitmap-Daten für eine Compose-Renderphase.
+ * Einmalig dekodierte, farbunabhängige Randpixel einer Region.
  *
- * [overlay] enthält alle Territory-Masken bereits eingefärbt und zusammengelegt.
- * [anchors] sind automatisch berechnete Schwerpunkte der Masken und dienen als
- * Position für Truppenzähler. Das verhindert, dass Labels von Hand gepflegt
- * werden müssen, solange die Masken sauber sind.
+ * [pixelIndices] sind die flachen Bildindizes (`y * width + x`) der sichtbaren
+ * Maskenpixel, [alphas] das zugehörige Alpha. So muss beim Einfärben nur über die
+ * wenigen Randpixel iteriert werden statt über das gesamte Bild.
  */
-private data class TerritoryRenderAssets(
-    val overlay: ImageBitmap,
+private class RegionMaskPixels(
+    val pixelIndices: IntArray,
+    val alphas: IntArray,
+)
+
+/**
+ * Dekodierte Rand-Masken aller Regionen. Hängt nur an der Maskenform und wird
+ * daher genau einmal pro Kartenladung berechnet.
+ *
+ * [pixelsByRegion] hält die sichtbaren Randpixel je Region, [anchors] die
+ * automatisch berechneten Schwerpunkte als Position für die Truppenzähler.
+ */
+private data class TerritoryMaskData(
+    val width: Int,
+    val height: Int,
+    val pixelsByRegion: Map<String, RegionMaskPixels>,
     val anchors: Map<String, MapPoint>,
 )
 
@@ -179,145 +210,145 @@ object PulverfassMapDefaults {
                 "america",
                 "Amerika",
                 R.drawable.territory_america,
-                rgbKey(0xE6, 0x19, 0x4B),
+                rgbKey(0xD3, 0x3C, 0x51),
             ),
             GameMapRegion(
                 "canada",
                 "Kanada",
                 R.drawable.territory_canada,
-                rgbKey(0x3C, 0xB4, 0x4B),
+                rgbKey(0x66, 0xAD, 0x56),
             ),
             GameMapRegion(
                 "mexico",
                 "Mexiko",
                 R.drawable.territory_mexico,
-                rgbKey(0xFF, 0xE1, 0x19),
+                rgbKey(0xF8, 0xE2, 0x58),
             ),
             GameMapRegion(
                 "greenland",
                 "Grönland",
                 R.drawable.territory_greenland,
-                rgbKey(0x43, 0x63, 0xD8),
+                rgbKey(0x4E, 0x64, 0xA5),
             ),
             GameMapRegion(
                 "british_islands",
                 "Britische Inseln",
                 R.drawable.territory_british_islands,
-                rgbKey(0xF5, 0x82, 0x31),
+                rgbKey(0xE0, 0x8D, 0x4C),
             ),
             GameMapRegion(
                 "scandinavia",
                 "Skandinavien",
                 R.drawable.territory_scandinavia,
-                rgbKey(0x91, 0x1E, 0xB4),
+                rgbKey(0x78, 0x3D, 0x87),
             ),
             GameMapRegion(
                 "west_europe",
                 "Westeuropa",
                 R.drawable.territory_west_europe,
-                rgbKey(0x46, 0xF0, 0xF0),
+                rgbKey(0xA6, 0xCF, 0xD4),
             ),
             GameMapRegion(
                 "central_europe",
                 "Mitteleuropa",
                 R.drawable.territory_central_europe,
-                rgbKey(0xF0, 0x32, 0xE6),
+                rgbKey(0xA5, 0x61, 0x9A),
             ),
             GameMapRegion(
                 "russia",
                 "Russland",
                 R.drawable.territory_russia,
-                rgbKey(0xBC, 0xF6, 0x0C),
+                rgbKey(0xAC, 0xC5, 0x49),
             ),
             GameMapRegion(
                 "siberia",
                 "Sibirien",
                 R.drawable.territory_siberia,
-                rgbKey(0xFA, 0xBE, 0xBE),
+                rgbKey(0xEB, 0xC3, 0xC2),
             ),
             GameMapRegion(
                 "east_siberia",
                 "Ostsibirien",
                 R.drawable.territory_east_siberia,
-                rgbKey(0x00, 0x80, 0x80),
+                rgbKey(0x35, 0x7E, 0x84),
             ),
             GameMapRegion(
                 "china",
                 "China",
                 R.drawable.territory_china,
-                rgbKey(0xE6, 0xBE, 0xFF),
+                rgbKey(0xD1, 0xC1, 0xD8),
             ),
             GameMapRegion(
                 "japan",
                 "Japan",
                 R.drawable.territory_japan,
-                rgbKey(0x9A, 0x63, 0x24),
+                rgbKey(0x8A, 0x5F, 0x33),
             ),
             GameMapRegion(
                 "orient",
                 "Orient",
                 R.drawable.territory_orient,
-                rgbKey(0xFF, 0xFA, 0xC8),
+                rgbKey(0xFA, 0xF4, 0xD6),
             ),
             GameMapRegion(
                 "middle_east",
                 "Mittlerer Osten",
                 R.drawable.territory_middle_east,
-                rgbKey(0x80, 0x00, 0x00),
+                rgbKey(0x76, 0x29, 0x20),
             ),
             GameMapRegion(
                 "egypt",
                 "Ägypten",
                 R.drawable.territory_egypt,
-                rgbKey(0xAA, 0xFF, 0xC3),
+                rgbKey(0xCD, 0xE0, 0xCC),
             ),
             GameMapRegion(
                 "west_africa",
                 "Westafrika",
                 R.drawable.territory_west_africa,
-                rgbKey(0x80, 0x80, 0x00),
+                rgbKey(0x82, 0x82, 0x3C),
             ),
             GameMapRegion(
                 "central_africa",
                 "Zentralafrika",
                 R.drawable.territory_central_africa,
-                rgbKey(0xFF, 0xD8, 0xB1),
+                rgbKey(0xF3, 0xD8, 0xBC),
             ),
             GameMapRegion(
                 "south_africa",
                 "Südafrika",
                 R.drawable.territory_south_africa,
-                rgbKey(0x00, 0x00, 0x75),
+                rgbKey(0x19, 0x1D, 0x4F),
             ),
             GameMapRegion(
                 "brazil",
                 "Brasilien",
                 R.drawable.territory_brazil,
-                rgbKey(0xA9, 0xA9, 0xA9),
+                rgbKey(0xAB, 0xAB, 0xAB),
             ),
             GameMapRegion(
                 "andean_community",
                 "Andengemeinschaft",
                 R.drawable.territory_andean_community,
-                rgbKey(0xFF, 0x8C, 0x00),
+                rgbKey(0xE1, 0x8E, 0x37),
             ),
             GameMapRegion(
                 "argentina",
                 "Argentinien",
                 R.drawable.territory_argentina,
-                rgbKey(0x8B, 0x00, 0x8B),
+                rgbKey(0x75, 0x33, 0x7D),
             ),
             GameMapRegion(
                 "australia",
                 "Australien",
                 R.drawable.territory_australia,
-                rgbKey(0x00, 0xCE, 0xD1),
+                rgbKey(0x71, 0xB8, 0xC1),
             ),
             GameMapRegion(
                 "oceania",
                 "Ozeanien",
                 R.drawable.territory_oceania,
-                rgbKey(0xDC, 0x14, 0x3C),
+                rgbKey(0xCC, 0x39, 0x41),
             ),
         )
 }
@@ -332,6 +363,7 @@ object PulverfassMapDefaults {
  * @param modifier Compose-Modifier der Kartenfläche
  * @param regionStates serverbasierter Zustand pro Android-Region-ID
  * @param options Render- und Hitmap-Konfiguration
+ * @param attackVfx zuletzt aufgelöstes Kampfergebnis für die Clash-Animation
  */
 @Composable
 fun InteractiveGameMap(
@@ -341,11 +373,22 @@ fun InteractiveGameMap(
     modifier: Modifier = Modifier,
     regionStates: Map<String, GameMapRegionState> = emptyMap(),
     options: InteractiveGameMapOptions = InteractiveGameMapOptions(),
+    attackVfx: AttackVfxRequest? = null,
 ) {
     var viewportState by remember { mutableStateOf(MapViewportState()) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     val context = LocalContext.current
     val resources = context.resources
+
+    /*
+     * Der Tap-Callback wird über rememberUpdatedState immer aktuell gehalten. Sonst
+     * würde der pointerInput-Block die zum Startzeitpunkt gefangene Lambda behalten:
+     * Wird der Spieler nach dem Zug eines anderen wieder aktiv, ändert sich der
+     * Callback (jetzt darf ausgewählt werden), aber der Block startet ohne Key-
+     * Änderung nicht neu. Taps gingen dann ins Leere, bis eine Geste den Block neu
+     * startet.
+     */
+    val currentOnRegionSelected = rememberUpdatedState(onRegionSelected)
 
     /*
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
@@ -362,26 +405,37 @@ fun InteractiveGameMap(
      */
     val regionTintColors =
         regions.associate { region ->
-            region.id to (regionStates[region.id]?.accentColor ?: Color(0xFF8F8F8F))
+            region.id to (regionStates[region.id]?.accentColor ?: NeutralRegionColor)
         }
 
     /*
-     * Masken werden nur neu zusammengesetzt, wenn sich Regionliste oder Farben
-     * ändern. Zoom/Pan löst dadurch kein teures Bitmap-Rebuild aus.
+     * Die Rand-Masken werden genau einmal pro Kartenladung dekodiert. Das ist der
+     * teure Schritt (24 große PNGs) und hängt nur an der Maskenform, nicht an den
+     * Besitzerfarben.
      */
-    val territoryRenderAssets =
-        remember(resources, regions, regionTintColors) {
-            buildTerritoryRenderAssets(
-                resources = resources,
-                regions = regions,
-                regionTintColors = regionTintColors,
-            )
+    val territoryMaskData =
+        remember(resources, regions) {
+            decodeTerritoryMasks(resources = resources, regions = regions)
+        }
+
+    /*
+     * Nur das Einfärben des Overlays hängt an den Besitzerfarben. Da hier lediglich
+     * die wenigen Randpixel gesetzt werden, ist ein Besitzwechsel günstig und löst
+     * kein erneutes Dekodieren aus.
+     */
+    val territoryOverlay =
+        remember(territoryMaskData, regionTintColors) {
+            paintTerritoryOverlay(maskData = territoryMaskData, regionTintColors = regionTintColors)
         }
 
     val layoutMetrics =
         remember(viewportSize, options.aspectRatio) {
             createMapLayoutMetrics(viewportSize = viewportSize, aspectRatio = options.aspectRatio)
         }
+
+    val attackVfxController = rememberAttackVfxController(attackVfx)
+    val activeAttackVfx = attackVfxController.activeRequest
+    val regionsById = remember(regions) { regions.associateBy(GameMapRegion::id) }
 
     Box(
         modifier =
@@ -412,7 +466,7 @@ fun InteractiveGameMap(
                                 )
 
                             if (tappedRegion != null) {
-                                onRegionSelected(tappedRegion)
+                                currentOnRegionSelected.value(tappedRegion)
                             }
                         }
                     }
@@ -446,7 +500,7 @@ fun InteractiveGameMap(
                         .testTag("game_map_canvas"),
             ) {
                 drawGameMap(
-                    territoryOverlay = territoryRenderAssets.overlay,
+                    territoryOverlay = territoryOverlay,
                     layoutMetrics = layoutMetrics,
                     viewportState = viewportState,
                     backgroundPainter = options.backgroundPainter,
@@ -454,7 +508,7 @@ fun InteractiveGameMap(
             }
 
             regions.forEach { region ->
-                val anchor = territoryRenderAssets.anchors[region.id] ?: region.fallbackAnchor
+                val anchor = territoryMaskData.anchors[region.id] ?: region.fallbackAnchor
                 val labelPosition =
                     mapPointToScreenOffset(
                         point = anchor,
@@ -472,22 +526,108 @@ fun InteractiveGameMap(
                      * Test-Tags für UI-Tests stabil bleiben.
                      */
                     RegionTroopCounter(
-                        state = regionStates[region.id],
+                        state =
+                            visibleRegionState(
+                                baseState = regionStates[region.id],
+                                regionId = region.id,
+                                activeAttackVfx = activeAttackVfx,
+                            ),
                         isSelected = region.id == selectedRegionId,
                         modifier =
                             Modifier
                                 .align(Alignment.TopStart)
                                 .offset {
+                                    val half = RegionCounterSize.toPx() / 2f
                                     IntOffset(
-                                        x = (labelPosition.x - 18.dp.toPx()).roundToInt(),
-                                        y = (labelPosition.y - 18.dp.toPx()).roundToInt(),
+                                        x = (labelPosition.x - half).roundToInt(),
+                                        y = (labelPosition.y - half).roundToInt(),
                                     )
                                 }
                                 .testTag("region_button_${region.id}"),
                     )
                 }
             }
+
+            if (activeAttackVfx != null) {
+                ActiveAttackVfx(
+                    request = activeAttackVfx,
+                    controller = attackVfxController,
+                    anchors = territoryMaskData.anchors,
+                    regionsById = regionsById,
+                    regionStates = regionStates,
+                    layoutMetrics = layoutMetrics,
+                    viewportState = viewportState,
+                )
+            }
         }
+    }
+}
+
+/**
+ * Rendert die Clash-Animation für den aktuell aktiven [request].
+ *
+ * Wie bei den Truppen-Bubbles fällt der Anker auf
+ * [GameMapRegion.fallbackAnchor] zurück, falls eine Maske nicht dekodiert werden
+ * konnte. Fehlt auch dieser, entfällt die Animation, ohne den restlichen
+ * Kartenzustand zu beeinflussen.
+ */
+@Composable
+private fun ActiveAttackVfx(
+    request: AttackVfxRequest,
+    controller: AttackVfxController,
+    anchors: Map<String, MapPoint>,
+    regionsById: Map<String, GameMapRegion>,
+    regionStates: Map<String, GameMapRegionState>,
+    layoutMetrics: MapLayoutMetrics,
+    viewportState: MapViewportState,
+) {
+    val fromAnchor =
+        anchors[request.fromRegionId]
+            ?: regionsById[request.fromRegionId]?.fallbackAnchor
+            ?: return
+    val toAnchor =
+        anchors[request.toRegionId]
+            ?: regionsById[request.toRegionId]?.fallbackAnchor
+            ?: return
+    AttackVfxOverlay(
+        controller = controller,
+        fromAnchor = fromAnchor,
+        toAnchor = toAnchor,
+        colors =
+            ClashColors(
+                attacker = regionStates[request.fromRegionId]?.accentColor ?: NeutralRegionColor,
+                defender = regionStates[request.toRegionId]?.accentColor ?: NeutralRegionColor,
+            ),
+        layoutMetrics = layoutMetrics,
+        viewportState = viewportState,
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/**
+ * Hält die Truppen-Chips der beiden Kampfparteien während der Clash-Animation
+ * auf dem Vorkampfstand.
+ *
+ * Nur die Anzeige wird überbrückt; [regionStates][GameMapRegionState] selbst
+ * bleibt der unveränderte, autoritative Stand. Nach Ende der Animation liefert
+ * [AttackVfxController.activeRequest] wieder `null` und die Chips springen
+ * automatisch auf den echten Wert.
+ */
+private fun visibleRegionState(
+    baseState: GameMapRegionState?,
+    regionId: String,
+    activeAttackVfx: AttackVfxRequest?,
+): GameMapRegionState? {
+    if (baseState == null || activeAttackVfx == null) {
+        return baseState
+    }
+
+    return when (regionId) {
+        activeAttackVfx.fromRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.sourceTroopsBefore)
+        activeAttackVfx.toRegionId ->
+            baseState.copy(troopCount = activeAttackVfx.targetTroopsBefore)
+        else -> baseState
     }
 }
 
@@ -842,23 +982,30 @@ private fun RegionTroopCounter(
     isSelected: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = if (isSelected) MapOverlayContentColor else MapOverlaySurfaceColor
-    val contentColor = if (isSelected) MapOverlayInverseColor else MapOverlayContentColor
+    /*
+     * Der Chip trägt die Besitzerfarbe. So bleibt der Besitz auch bei sehr
+     * kleinen Gebieten eindeutig, in denen der Rand allein schwer zu treffen ist.
+     * Die ausgewählte Region behält den kräftigen Kontrast-Look.
+     */
+    val ownerColor = state?.accentColor ?: NeutralRegionColor
+    val containerColor = if (isSelected) MapOverlayContentColor else ownerColor
+    val contentColor =
+        if (isSelected) MapOverlayInverseColor else readableContentColor(ownerColor)
 
     Surface(
         modifier =
             modifier
-                .size(36.dp),
+                .size(RegionCounterSize),
         shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,
-        border = BorderStroke(1.5.dp, MapOverlayBorderColor),
+        border = BorderStroke(1.dp, MapOverlayBorderColor),
         shadowElevation = 0.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = state?.troopCount?.toString() ?: "0",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }
@@ -930,20 +1077,20 @@ private fun DrawScope.withMapTransform(
     }
 }
 
-private fun buildTerritoryRenderAssets(
+private fun decodeTerritoryMasks(
     resources: Resources,
     regions: List<GameMapRegion>,
-    regionTintColors: Map<String, Color>,
-): TerritoryRenderAssets {
+): TerritoryMaskData {
     var targetWidth = MAP_IMAGE_WIDTH_PX
     var targetHeight = MAP_IMAGE_HEIGHT_PX
-    var overlayPixels = IntArray(targetWidth * targetHeight)
+    val pixelsByRegion = mutableMapOf<String, RegionMaskPixels>()
     val anchors = mutableMapOf<String, MapPoint>()
 
     /*
-     * Jede Territory-Maske ist ein transparentes Bild, dessen sichtbare Pixel
-     * genau das Gebiet beschreiben. Beim Rebuild färben wir diese Pixel mit der
-     * aktuellen Owner-Farbe ein und schreiben sie in ein gemeinsames Overlay.
+     * Jede Territory-Maske ist ein vorgebackener Rand-Ring: Ihre sichtbaren Pixel
+     * beschreiben nur die Außenlinie des Gebiets. Dieses Dekodieren ist der teure
+     * Teil und hängt nicht an den Besitzerfarben, läuft daher nur einmal. Wir
+     * merken uns je Region die sichtbaren Pixel und schmeißen die Bitmap weg.
      */
     regions.forEach { region ->
         val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
@@ -956,38 +1103,34 @@ private fun buildTerritoryRenderAssets(
                  */
                 targetWidth = bitmap.width
                 targetHeight = bitmap.height
-                overlayPixels = IntArray(targetWidth * targetHeight)
             }
 
             val maskPixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(maskPixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-            val tintColor = regionTintColors[region.id] ?: Color(0xFF8F8F8F)
-            val tintRgb = tintColor.toArgb() and RGB_MASK
+            val pixelIndices = ArrayList<Int>()
+            val alphas = ArrayList<Int>()
             var visibleCount = 0L
             var sumX = 0.0
             var sumY = 0.0
             var index = 0
 
-            /*
-             * Alpha kommt aus der Maske, RGB aus dem GameState. So bleiben
-             * Küsten/Antialiasing der Maske erhalten, während Besitzwechsel nur
-             * die Farbe austauschen.
-             */
             for (y in 0 until bitmap.height) {
                 for (x in 0 until bitmap.width) {
                     val alpha = (maskPixels[index] ushr 24) and 0xFF
                     if (alpha > 1) {
+                        pixelIndices.add(index)
+                        alphas.add(alpha)
                         visibleCount++
                         sumX += x.toDouble()
                         sumY += y.toDouble()
-                        overlayPixels[index] =
-                            ((alpha * TERRITORY_OVERLAY_ALPHA).roundToInt() shl 24) or tintRgb
                     }
                     index++
                 }
             }
 
+            pixelsByRegion[region.id] =
+                RegionMaskPixels(pixelIndices.toIntArray(), alphas.toIntArray())
             anchors[region.id] =
                 if (visibleCount > 0L) {
                     MapPoint(
@@ -1002,13 +1145,61 @@ private fun buildTerritoryRenderAssets(
         }
     }
 
-    val overlayBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-    overlayBitmap.setPixels(overlayPixels, 0, targetWidth, 0, 0, targetWidth, targetHeight)
-    return TerritoryRenderAssets(
-        overlay = overlayBitmap.asImageBitmap(),
+    return TerritoryMaskData(
+        width = targetWidth,
+        height = targetHeight,
+        pixelsByRegion = pixelsByRegion,
         anchors = anchors,
     )
 }
+
+/**
+ * Färbt die zwischengespeicherten Randpixel mit den aktuellen Besitzerfarben ein.
+ *
+ * Neutrale Gebiete nehmen sich mit einem gedämpften Rand zurück, besessene Gebiete
+ * bekommen einen kräftigen Rand. Es werden nur die wenigen Randpixel gesetzt, daher
+ * ist ein Besitzwechsel günstig und dekodiert nichts neu.
+ *
+ * @param maskData einmalig dekodierte Randpixel je Region
+ * @param regionTintColors aktuelle Besitzerfarbe je Region
+ * @return fertig eingefärbtes Overlay in Kartengröße
+ */
+private fun paintTerritoryOverlay(
+    maskData: TerritoryMaskData,
+    regionTintColors: Map<String, Color>,
+): ImageBitmap {
+    val overlayPixels = IntArray(maskData.width * maskData.height)
+
+    maskData.pixelsByRegion.forEach { (regionId, mask) ->
+        val tintColor = regionTintColors[regionId] ?: NeutralRegionColor
+        val tintRgb = tintColor.toArgb() and RGB_MASK
+        val alphaScale =
+            if (tintColor == NeutralRegionColor) {
+                NEUTRAL_BORDER_ALPHA / 255f
+            } else {
+                OWNED_BORDER_ALPHA / 255f
+            }
+
+        val indices = mask.pixelIndices
+        val alphas = mask.alphas
+        for (k in indices.indices) {
+            overlayPixels[indices[k]] =
+                ((alphas[k] * alphaScale).roundToInt() shl 24) or tintRgb
+        }
+    }
+
+    val overlayBitmap =
+        Bitmap.createBitmap(maskData.width, maskData.height, Bitmap.Config.ARGB_8888)
+    overlayBitmap.setPixels(overlayPixels, 0, maskData.width, 0, 0, maskData.width, maskData.height)
+    return overlayBitmap.asImageBitmap()
+}
+
+/**
+ * Wählt für einen Truppen-Chip eine gut lesbare Textfarbe je nach Helligkeit der
+ * Besitzerfarbe.
+ */
+private fun readableContentColor(background: Color): Color =
+    if (background.luminance() > 0.5f) MapOverlayContentColor else MapOverlayInverseColor
 
 private fun Offset.isFinite(): Boolean = x.isFinite() && y.isFinite()
 

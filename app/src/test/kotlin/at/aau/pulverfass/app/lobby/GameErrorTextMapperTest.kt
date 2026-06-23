@@ -153,6 +153,12 @@ class GameErrorTextMapperTest {
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_PAUSED, "raw"),
             ),
         )
+        assertEquals(
+            "Das Spiel ist bereits beendet.",
+            GameErrorTextMapper.map(
+                TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_FINISHED, "raw"),
+            ),
+        )
         assertTrue(
             GameErrorTextMapper.map(
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.PHASE_MISMATCH, "raw"),
@@ -163,6 +169,11 @@ class GameErrorTextMapperTest {
             GameErrorTextMapper.map(
                 TurnAdvanceErrorResponse(TurnAdvanceErrorCode.GAME_NOT_FOUND, "raw"),
             ),
+        )
+        assertTrue(
+            GameErrorTextMapper.map(
+                TurnAdvanceErrorResponse(TurnAdvanceErrorCode.FORCED_TRADE_REQUIRED, "raw"),
+            ).contains("Kartenset"),
         )
     }
 
@@ -370,6 +381,11 @@ class GameErrorTextMapperTest {
 
     @Test
     fun `cheat reinforcement bonus errors are translated for UI`() {
+        /*
+         * Der Server liefert technische Fehlercodes. Dieser Test stellt sicher,
+         * dass jeder Cheatbonus-Fehler einen verständlichen UI-Text bekommt und
+         * nicht als roher Servertext beim Spieler landet.
+         */
         val messages =
             ClaimCheatReinforcementBonusErrorCode.entries.associateWith { code ->
                 GameErrorTextMapper.map(ClaimCheatReinforcementBonusErrorResponse(code, "raw"))

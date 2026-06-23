@@ -8,6 +8,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -17,6 +18,8 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerCardsRemovedEvent
@@ -31,6 +34,7 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.DeckState
@@ -219,6 +223,7 @@ class LobbyRecoveryLoader(
  * @property gameStarted Kennzeichen, ob die Partie gestartet wurde
  * @property status serialisierter [GameStatus]-Name
  * @property closedReason optionaler Schließgrund einer beendeten Lobby
+ * @property winnerPlayerId Gewinner eines beendeten Matches, falls eindeutig bestimmbar
  * @property lastInvalidActionReason letzte fachliche Fehlermeldung
  * @property fortifyUsedThisTurn Marker für bereits verbrauchte Fortify-Aktion
  * @property determinism determinismusrelevante Metadaten der Karte
@@ -249,8 +254,10 @@ data class PersistedLobbyRecoverySnapshot(
     val gameStarted: Boolean,
     val status: String,
     val closedReason: String? = null,
+    val winnerPlayerId: PlayerId? = null,
     val lastInvalidActionReason: String? = null,
     val fortifyUsedThisTurn: Boolean = false,
+    val territoryCapturedThisTurn: Boolean = false,
     val determinism: PublicDeterminismMetadataSnapshot,
     val definition: MapDefinitionSnapshot,
     val territoryStates: List<MapTerritoryStateSnapshot>,
@@ -278,7 +285,10 @@ data class PersistedLobbyRecoverySnapshot(
                 players = gameState.players,
                 playerDisplayNames =
                     gameState.playerDisplayNames.entries.map { (playerId, displayName) ->
-                        PersistedPlayerDisplayName(playerId = playerId, displayName = displayName)
+                        PersistedPlayerDisplayName(
+                            playerId = playerId,
+                            displayName = normalizePlayerDisplayNameOrFallback(displayName),
+                        )
                     },
                 activePlayer = gameState.activePlayer,
                 configuredStartPlayerId = gameState.configuredStartPlayerId,
@@ -288,8 +298,10 @@ data class PersistedLobbyRecoverySnapshot(
                 gameStarted = gameState.gameStarted,
                 status = gameState.status.name,
                 closedReason = gameState.closedReason,
+                winnerPlayerId = gameState.winnerPlayerId,
                 lastInvalidActionReason = gameState.lastInvalidActionReason,
                 fortifyUsedThisTurn = gameState.fortifyUsedThisTurn,
+                territoryCapturedThisTurn = gameState.territoryCapturedThisTurn,
                 determinism =
                     PublicDeterminismMetadataSnapshot.from(
                         gameState.mapDefinition
@@ -341,7 +353,10 @@ data class PersistedLobbyRecoverySnapshot(
             lobbyCode = lobbyCode,
             lobbyOwner = lobbyOwner,
             players = players,
-            playerDisplayNames = playerDisplayNames.associate { it.playerId to it.displayName },
+            playerDisplayNames =
+                playerDisplayNames.associate {
+                    it.playerId to normalizePlayerDisplayNameOrFallback(it.displayName)
+                },
             activePlayer = activePlayer,
             configuredStartPlayerId = configuredStartPlayerId,
             turnOrder = turnOrder,
@@ -355,8 +370,10 @@ data class PersistedLobbyRecoverySnapshot(
             gameRandomState = gameRandomState ?: gameRandomSeed ?: determinism.seed,
             lastEventContext = null,
             closedReason = closedReason,
+            winnerPlayerId = winnerPlayerId,
             lastInvalidActionReason = lastInvalidActionReason,
             fortifyUsedThisTurn = fortifyUsedThisTurn,
+            territoryCapturedThisTurn = territoryCapturedThisTurn,
             mapDefinition = restoredDefinition,
             territoryStates =
                 territoryStates.associate { snapshot ->
@@ -527,6 +544,12 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 value = jsonObject.int("value"),
                 tradeIndex = jsonObject.int("tradeIndex"),
             )
+        "card_drawn" ->
+            CardDrawnEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(jsonObject.long("playerId")),
+                cardId = CardId(jsonObject.string("cardId")),
+            )
         "pending_reinforcements_set" ->
             PendingReinforcementsSetEvent(
                 lobbyCode = lobbyCode,
@@ -539,6 +562,11 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 playerId = PlayerId(jsonObject.long("playerId")),
                 delta = jsonObject.int("delta"),
             )
+        /*
+         * Beim Wiederherstellen der Lobby wird aus dem persistierten Typ wieder
+         * dasselbe Domain-Event gebaut. Der Reducer setzt daraus erneut
+         * usedCheatReinforcementBonusByPlayer im GameState.
+         */
         "cheat_reinforcement_bonus_used" ->
             CheatReinforcementBonusUsedEvent(
                 lobbyCode = lobbyCode,
@@ -551,11 +579,20 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 cardIds = jsonObject.stringList("cardIds").map(::CardId),
             )
         "lobby_closed" -> LobbyClosed(lobbyCode, reason = jsonObject.nullableString("reason"))
+        "match_ended" ->
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.valueOf(jsonObject.string("reason")),
+                winnerPlayerId = jsonObject.nullableLong("winnerPlayerId")?.let(::PlayerId),
+            )
         "player_joined" ->
             PlayerJoined(
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(jsonObject.long("playerId")),
-                playerDisplayName = jsonObject.string("playerDisplayName"),
+                playerDisplayName =
+                    normalizePlayerDisplayNameOrFallback(
+                        jsonObject.string("playerDisplayName"),
+                    ),
             )
         "player_left" ->
             PlayerLeft(

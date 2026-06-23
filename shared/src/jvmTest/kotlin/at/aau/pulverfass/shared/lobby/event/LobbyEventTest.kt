@@ -10,6 +10,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
+/**
+ * Smoke-Test für die wichtigsten LobbyEvent-Datenklassen.
+ *
+ * Der Test prüft keine Spiellogik, sondern stellt sicher, dass die Events mit
+ * realistischen Beispielwerten gebaut werden können. Das ist besonders für neue
+ * Events wie CheatReinforcementBonusUsedEvent nützlich, weil sie später im
+ * Reducer und in der Persistenz wiederverwendet werden.
+ */
 class LobbyEventTest {
     @Test
     fun `should instantiate sample lobby events consistently`() {
@@ -32,12 +40,18 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode, "finished"),
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
                 CardSetTradedInEvent(
                     lobbyCode = lobbyCode,
                     playerId = playerId,
                     cardIds = listOf(CardId("card-1"), CardId("card-2"), CardId("card-3")),
                     value = 2,
                     tradeIndex = 1,
+                ),
+                CardDrawnEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardId = CardId("drawn-card"),
                 ),
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerId),
                 AttackResolvedEvent(
@@ -95,7 +109,8 @@ class LobbyEventTest {
                 InvalidActionDetected(lobbyCode, playerId, "move rejected"),
             )
 
-        assertEquals(22, events.size)
+        assertEquals(24, events.size)
+
         assertEquals(lobbyCode, events.first().lobbyCode)
         assertEquals("finished", (events[7] as LobbyClosed).reason)
     }
@@ -133,6 +148,7 @@ class LobbyEventTest {
         val internalResult =
             when (val event: InternalLobbyEvent = LobbyClosed(lobbyCode, "done")) {
                 is AttackResolvedEvent -> event.rngTrace.size.toString()
+                is CardDrawnEvent -> event.cardId.value
                 is CardSetTradedInEvent -> event.value.toString()
                 is CheatReinforcementBonusUsedEvent -> event.playerId.value.toString()
                 is FortifyUsedSetEvent -> event.used.toString()
@@ -177,12 +193,18 @@ class LobbyEventTest {
                 TurnEnded(lobbyCode, playerId),
                 LobbyCreated(lobbyCode),
                 LobbyClosed(lobbyCode),
+                MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
                 CardSetTradedInEvent(
                     lobbyCode = lobbyCode,
                     playerId = playerId,
                     cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
                     value = 2,
                     tradeIndex = 1,
+                ),
+                CardDrawnEvent(
+                    lobbyCode = lobbyCode,
+                    playerId = playerId,
+                    cardId = CardId("drawn-card"),
                 ),
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerId),
                 AttackResolvedEvent(

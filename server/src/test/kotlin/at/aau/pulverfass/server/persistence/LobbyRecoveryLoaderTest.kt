@@ -6,6 +6,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -14,6 +15,8 @@ import at.aau.pulverfass.shared.lobby.event.GameStarted
 import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
+import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.PlayerKicked
@@ -55,7 +58,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(hostId, guestId),
-                playerDisplayNames = mapOf(hostId to "Alice", guestId to "Bob"),
+                playerDisplayNames = mapOf(hostId to "ALICE", guestId to "BOB"),
             ).copy(
                 lobbyOwner = hostId,
                 status = GameStatus.RUNNING,
@@ -63,6 +66,7 @@ class LobbyRecoveryLoaderTest {
                 gameRandomSeed = 99L,
                 gameRandomState = 1234L,
                 fortifyUsedThisTurn = true,
+                territoryCapturedThisTurn = true,
                 stateVersion = 7,
                 processedEventCount = 7,
                 tradedInSetCount = 2,
@@ -140,7 +144,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(PlayerId(1)),
-                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+                playerDisplayNames = mapOf(PlayerId(1) to "ALICE"),
             ).copy(
                 status = GameStatus.RUNNING,
                 gameStarted = true,
@@ -167,7 +171,7 @@ class LobbyRecoveryLoaderTest {
                 lobbyCode = lobbyCode,
                 mapDefinition = mapDefinition,
                 players = listOf(PlayerId(1)),
-                playerDisplayNames = mapOf(PlayerId(1) to "Alice"),
+                playerDisplayNames = mapOf(PlayerId(1) to "ALICE"),
             ).copy(
                 status = GameStatus.RUNNING,
                 gameStarted = true,
@@ -301,6 +305,18 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
+            CardDrawnEvent(
+                lobbyCode = lobbyCode,
+                playerId = PlayerId(5),
+                cardId = CardId("drawn-card"),
+            ),
+            record(
+                "card_drawn",
+                """{"lobbyCode":"LR11","playerId":5,"cardId":"drawn-card"}""",
+                createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
             LobbyCreated(lobbyCode),
             record(
                 eventType = "lobby_created",
@@ -317,7 +333,28 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
-            PlayerJoined(lobbyCode, PlayerId(1), "Alice"),
+            MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
+            record(
+                eventType = "match_ended",
+                eventJson = """{"lobbyCode":"LR11","reason":"DECK_EMPTY"}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            MatchEndedEvent(
+                lobbyCode = lobbyCode,
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = PlayerId(1),
+            ),
+            record(
+                eventType = "match_ended",
+                eventJson =
+                    """{"lobbyCode":"LR11","reason":"TERRITORY_DOMINATION","winnerPlayerId":1}""",
+                createdAt = createdAt,
+            ).toLobbyEvent(),
+        )
+        assertEquals(
+            PlayerJoined(lobbyCode, PlayerId(1), "ALICE"),
             record(
                 "player_joined",
                 """{"lobbyCode":"LR11","playerId":1,"playerDisplayName":"Alice"}""",
@@ -465,6 +502,11 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
+            /*
+             * Recovery muss aus dem Persistenztyp wieder das Domain-Event bauen.
+             * Erst danach kann der Reducer den Spieler wieder als "Bonus bereits
+             * verwendet" markieren.
+             */
             CheatReinforcementBonusUsedEvent(
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(5),

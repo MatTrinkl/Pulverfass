@@ -124,7 +124,12 @@ enum class MessageType(val id: Int) {
     /** Broadcast, dass ein Spieler einen Charakter gewählt hat. */
     LOBBY_CHARACTER_SELECTED_BROADCAST(84),
 
-    /** Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
+    /**
+     * Anfrage zum Beanspruchen des einmaligen Schummel-Verstärkungsbonus.
+     *
+     * Diese IDs müssen stabil bleiben, weil sie im Paket-Header über das
+     * Netzwerk gehen. App und Server müssen also dieselbe Zahl gleich deuten.
+     */
     LOBBY_CHEAT_REINFORCEMENT_BONUS_REQUEST(85),
 
     /** Erfolgsantwort auf das Beanspruchen des einmaligen Schummel-Verstärkungsbonus. */
@@ -136,7 +141,14 @@ enum class MessageType(val id: Int) {
     /** Broadcast des aktuellen Verbindungsstatus eines Lobby-Spielers. */
     LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST(88),
 
-    /** Anfrage eines Spielers, einen vermuteten Cheat eines anderen zu melden. */
+    /**
+     * Anfrage, einen mutmaßlichen Cheat eines anderen Spielers zu melden.
+     *
+     * Der Report ist ein eigener Nachrichtentyp und nicht Teil des
+     * Cheatbonus-Requests, weil er von einem anderen Spieler und zu einem
+     * späteren Zeitpunkt abgeschickt wird.
+     */
+
     LOBBY_REPORT_CHEAT_REQUEST(89),
 
     /** Erfolgsantwort auf eine Cheat-Meldung. */

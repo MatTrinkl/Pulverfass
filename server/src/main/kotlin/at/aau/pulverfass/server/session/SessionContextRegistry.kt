@@ -3,6 +3,7 @@ package at.aau.pulverfass.server.session
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -57,7 +58,7 @@ class SessionContextRegistry(
             val updated =
                 current.copy(
                     lobbyCode = lobbyCode,
-                    playerDisplayName = playerDisplayName,
+                    playerDisplayName = normalizePlayerDisplayNameOrFallback(playerDisplayName),
                 )
             contextsBySession[sessionToken] = updated
             if (updated.playerId != null) {
@@ -136,13 +137,16 @@ class SessionContextRegistry(
     private fun currentOrLoaded(sessionToken: SessionToken): SessionReconnectContext? {
         contextsBySession[sessionToken]?.let { return it }
 
-        val loaded = persistenceHooks.loadContext(sessionToken) ?: return null
+        val loaded = persistenceHooks.loadContext(sessionToken)?.normalized() ?: return null
         val existing = contextsBySession.putIfAbsent(sessionToken, loaded) ?: loaded
         existing.playerId?.let { playerId ->
             sessionsByPlayer[playerId] = sessionToken
         }
         return existing
     }
+
+    private fun SessionReconnectContext.normalized(): SessionReconnectContext =
+        copy(playerDisplayName = playerDisplayName?.let(::normalizePlayerDisplayNameOrFallback))
 }
 
 data class SessionContextPersistenceHooks(

@@ -3,6 +3,7 @@ package at.aau.pulverfass.shared.lobby.reducer
 import at.aau.pulverfass.shared.event.EventContext
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -12,6 +13,7 @@ import at.aau.pulverfass.shared.lobby.event.InvalidActionDetected
 import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.MatchEndedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsSetEvent
@@ -27,13 +29,17 @@ import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnEnded
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
+import at.aau.pulverfass.shared.lobby.state.CardDeckFactory
 import at.aau.pulverfass.shared.lobby.state.CardSetValidator
+import at.aau.pulverfass.shared.lobby.state.DiscardPileState
 import at.aau.pulverfass.shared.lobby.state.GameStartPreparation
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
 import at.aau.pulverfass.shared.lobby.state.TradeInProgression
 import at.aau.pulverfass.shared.lobby.state.TurnOrderPolicy
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
+import at.aau.pulverfass.shared.lobby.state.TurnPhase
 import at.aau.pulverfass.shared.lobby.state.TurnState
 import at.aau.pulverfass.shared.lobby.state.TurnStateMachine
 
@@ -77,10 +83,12 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                     state.copy(
                         status = GameStatus.WAITING_FOR_PLAYERS,
                         closedReason = null,
+                        winnerPlayerId = null,
                         pendingReinforcements = null,
                     )
 
                 is AttackResolvedEvent -> onAttackResolved(state, event)
+                is CardDrawnEvent -> onCardDrawn(state, event)
                 is CardSetTradedInEvent -> onCardSetTradedIn(state, event)
                 is MatchEndedEvent -> onMatchEnded(state, event)
                 is CheatReinforcementBonusUsedEvent -> onCheatReinforcementBonusUsed(state, event)
@@ -134,10 +142,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val updatedStatus = preserveLobbyStatus(state, updatedPlayers)
         val updatedTurnState =
             synchronizedTurnStateForLobbySetup(state, updatedTurnOrder, state.turnOrder)
+        val normalizedPlayerDisplayName =
+            normalizePlayerDisplayNameOrFallback(playerDisplayName)
         val baseUpdatedState =
             state.copy(
                 players = updatedPlayers,
-                playerDisplayNames = state.playerDisplayNames + (playerId to playerDisplayName),
+                playerDisplayNames =
+                    state.playerDisplayNames + (playerId to normalizedPlayerDisplayName),
                 lobbyOwner = updatedLobbyOwner,
                 pendingReinforcements = state.pendingReinforcements,
                 setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer + (playerId to 0),
@@ -310,25 +321,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         )
     }
 
-    private fun onMatchEnded(
-        state: GameState,
-        event: MatchEndedEvent,
-    ): GameState {
-        if (state.status != GameStatus.RUNNING) {
-            throw InvalidLobbyEventException(
-                "MatchEndedEvent kann nur im Status RUNNING verarbeitet werden, " +
-                    "war aber '${state.status}'.",
-            )
-        }
-
-        return state.copy(
-            status = GameStatus.FINISHED,
-            activePlayer = null,
-            pendingReinforcements = null,
-            turnState = null,
-        )
-    }
-
     private fun onTerritoryOwnerChanged(
         state: GameState,
         event: TerritoryOwnerChangedEvent,
@@ -349,8 +341,13 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 ownerId = event.ownerId,
             )
 
-        return if (hasWinningPlayer(updatedState)) {
-            updatedState.copy(status = GameStatus.FINISHED)
+        val winnerPlayerId = updatedState.territoryDominationWinner()
+        return if (winnerPlayerId != null) {
+            finishMatch(
+                state = updatedState,
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = winnerPlayerId,
+            )
         } else {
             updatedState
         }
@@ -459,11 +456,24 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         val runningState =
             state.copy(
                 configuredStartPlayerId = initializedTurnState?.startPlayerId,
+                deckState =
+                    CardDeckFactory.createShuffledDeck(
+                        mapDefinition =
+                            state.mapDefinition
+                                ?: throw InvalidLobbyEventException(
+                                    "Spielstart benötigt eine MapDefinition.",
+                                ),
+                        randomSeed = event.randomSeed,
+                    ),
+                discardPileState = DiscardPileState(),
                 gameStarted = true,
                 gameRandomSeed = event.randomSeed,
                 gameRandomState = event.randomSeed,
                 pendingReinforcements = null,
                 status = GameStatus.RUNNING,
+                closedReason = null,
+                winnerPlayerId = null,
+                territoryCapturedThisTurn = false,
                 turnOrder = preparedStart.randomizedTurnOrder,
                 territoryStates = preparedStart.preparedTerritoryStates,
                 setupTroopsToPlaceByPlayer = preparedStart.setupTroopsToPlaceByPlayer,
@@ -489,16 +499,45 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         requireKnownTerritory(state, event.fromTerritoryId)
         requireKnownTerritory(state, event.toTerritoryId)
 
-        val currentRngSeed =
-            state.gameRandomSeed
-                ?: throw InvalidLobbyEventException(
-                    "AttackResolvedEvent benötigt initialisierten gameRandomSeed.",
-                )
-        val currentRngState =
-            state.gameRandomState
-                ?: throw InvalidLobbyEventException(
-                    "AttackResolvedEvent benötigt initialisierten gameRandomState.",
-                )
+        val currentRngSeed = requireAttackRandomSeed(state)
+        val currentRngState = requireAttackRandomState(state)
+        validateAttackResolvedPreconditions(state, event, currentRngState)
+
+        val stateAfterLosses =
+            state
+                .withTerritoryTroops(event.fromTerritoryId, event.attackerRemaining)
+                .withTerritoryTroops(event.toTerritoryId, event.defenderRemaining)
+
+        val updatedState = applyAttackOccupationIfNeeded(stateAfterLosses, event)
+
+        check(currentRngSeed == state.gameRandomSeed)
+        val stateWithCaptureFlag =
+            if (event.capture) {
+                updatedState.withTerritoryCapturedThisTurn(true)
+            } else {
+                updatedState
+            }
+
+        return stateWithCaptureFlag.withGameRandomState(event.rngStateAfter)
+    }
+
+    private fun requireAttackRandomSeed(state: GameState): Long =
+        state.gameRandomSeed
+            ?: throw InvalidLobbyEventException(
+                "AttackResolvedEvent benötigt initialisierten gameRandomSeed.",
+            )
+
+    private fun requireAttackRandomState(state: GameState): Long =
+        state.gameRandomState
+            ?: throw InvalidLobbyEventException(
+                "AttackResolvedEvent benötigt initialisierten gameRandomState.",
+            )
+
+    private fun validateAttackResolvedPreconditions(
+        state: GameState,
+        event: AttackResolvedEvent,
+        currentRngState: Long,
+    ) {
         if (currentRngState != event.rngStateBefore) {
             throw InvalidLobbyEventException(
                 "AttackResolvedEvent.rngStateBefore passt nicht zum aktuellen GameState: " +
@@ -527,62 +566,88 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "AttackResolvedEvent.targetTroopsBefore passt nicht zum aktuellen GameState.",
             )
         }
+    }
 
-        val stateAfterLosses =
-            state
-                .withTerritoryTroops(event.fromTerritoryId, event.attackerRemaining)
-                .withTerritoryTroops(event.toTerritoryId, event.defenderRemaining)
+    private fun applyAttackOccupationIfNeeded(
+        stateAfterLosses: GameState,
+        event: AttackResolvedEvent,
+    ): GameState =
+        if (event.capture) {
+            applyCapturedAttackOccupation(stateAfterLosses, event)
+        } else {
+            validateNonCaptureHasNoOccupationData(event)
+            stateAfterLosses
+        }
 
-        val updatedState =
-            if (event.capture) {
-                val occupyingTroopCount =
-                    event.occupyingTroopCount
-                        ?: throw InvalidLobbyEventException(
-                            "Capture-AttackResolvedEvent benötigt occupyingTroopCount.",
-                        )
-                val minOccupyingTroops =
-                    event.minOccupyingTroops
-                        ?: throw InvalidLobbyEventException(
-                            "Capture-AttackResolvedEvent benötigt minOccupyingTroops.",
-                        )
-                if (occupyingTroopCount < minOccupyingTroops) {
-                    throw InvalidLobbyEventException(
-                        "AttackResolvedEvent.occupyingTroopCount unterschreitet " +
-                            "minOccupyingTroops: minimum=$minOccupyingTroops, " +
-                            "war=$occupyingTroopCount.",
-                    )
-                }
-                if (occupyingTroopCount >= event.attackerRemaining) {
-                    throw InvalidLobbyEventException(
-                        "AttackResolvedEvent muss mindestens eine Truppe im " +
-                            "Ursprungsterritorium lassen.",
-                    )
-                }
+    private fun applyCapturedAttackOccupation(
+        stateAfterLosses: GameState,
+        event: AttackResolvedEvent,
+    ): GameState {
+        val occupyingTroopCount = requireOccupyingTroopCount(event)
+        val minOccupyingTroops = requireMinOccupyingTroops(event)
+        validateCapturedOccupation(event, occupyingTroopCount, minOccupyingTroops)
 
-                stateAfterLosses
-                    .withTerritoryTroops(
-                        event.fromTerritoryId,
-                        event.attackerRemaining - occupyingTroopCount,
-                    )
-                    .withTerritoryOwner(event.toTerritoryId, event.attackerPlayerId)
-                    .withTerritoryTroops(event.toTerritoryId, occupyingTroopCount)
-            } else {
-                if (event.occupyingTroopCount != null || event.minOccupyingTroops != null) {
-                    throw InvalidLobbyEventException(
-                        "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
-                    )
-                }
-                stateAfterLosses
-            }
+        return stateAfterLosses
+            .withTerritoryTroops(
+                event.fromTerritoryId,
+                event.attackerRemaining - occupyingTroopCount,
+            )
+            .withTerritoryOwner(event.toTerritoryId, event.attackerPlayerId)
+            .withTerritoryTroops(event.toTerritoryId, occupyingTroopCount)
+    }
 
-        check(currentRngSeed == state.gameRandomSeed)
-        return updatedState.withGameRandomState(event.rngStateAfter)
+    private fun requireOccupyingTroopCount(event: AttackResolvedEvent): Int =
+        event.occupyingTroopCount
+            ?: throw InvalidLobbyEventException(
+                "Capture-AttackResolvedEvent benötigt occupyingTroopCount.",
+            )
+
+    private fun requireMinOccupyingTroops(event: AttackResolvedEvent): Int =
+        event.minOccupyingTroops
+            ?: throw InvalidLobbyEventException(
+                "Capture-AttackResolvedEvent benötigt minOccupyingTroops.",
+            )
+
+    private fun validateCapturedOccupation(
+        event: AttackResolvedEvent,
+        occupyingTroopCount: Int,
+        minOccupyingTroops: Int,
+    ) {
+        if (occupyingTroopCount < minOccupyingTroops) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent.occupyingTroopCount unterschreitet " +
+                    "minOccupyingTroops: minimum=$minOccupyingTroops, " +
+                    "war=$occupyingTroopCount.",
+            )
+        }
+        if (occupyingTroopCount >= event.attackerRemaining) {
+            throw InvalidLobbyEventException(
+                "AttackResolvedEvent muss mindestens eine Truppe im " +
+                    "Ursprungsterritorium lassen.",
+            )
+        }
+    }
+
+    private fun validateNonCaptureHasNoOccupationData(event: AttackResolvedEvent) {
+        if (event.occupyingTroopCount != null || event.minOccupyingTroops != null) {
+            throw InvalidLobbyEventException(
+                "Nicht-eroberter Angriff darf keine Occupation-Daten enthalten.",
+            )
+        }
     }
 
     private fun onCheatReinforcementBonusUsed(
         state: GameState,
         event: CheatReinforcementBonusUsedEvent,
     ): GameState {
+        /*
+         * Der Reducer speichert nur, dass der Bonus verbraucht wurde.
+         * Die fachliche Prüfung, ob der Spieler gerade aktiv ist, in der
+         * Reinforcements-Phase steht und keinen Pflicht-Kartentausch offen hat,
+         * passiert vorher im Server-Routing. Diese Trennung ist wichtig:
+         * - Routing entscheidet, ob ein Request erlaubt ist.
+         * - Reducer macht aus einem gültigen Event deterministisch neuen State.
+         */
         requireKnownPlayer(state, event.playerId)
         if (event.playerId in state.usedCheatReinforcementBonusByPlayer) {
             throw InvalidLobbyEventException(
@@ -592,6 +657,11 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
 
         return state.copy(
+            /*
+             * Set statt Boolean pro Spieler: So bleibt die Information klein und
+             * lässt sich beim Entfernen eines Spielers einfach wieder aus dem
+             * State herausnehmen.
+             */
             usedCheatReinforcementBonusByPlayer =
                 state.usedCheatReinforcementBonusByPlayer + event.playerId,
         )
@@ -726,15 +796,83 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             .withTradeRequiredOnNextReinforcementPhase(event.playerId, false)
     }
 
+    private fun onCardDrawn(
+        state: GameState,
+        event: CardDrawnEvent,
+    ): GameState {
+        requireKnownPlayer(state, event.playerId)
+
+        val currentTurnState =
+            state.resolvedTurnState
+                ?: throw InvalidLobbyEventException(
+                    "CardDrawnEvent benötigt einen initialisierten TurnState.",
+                )
+        if (currentTurnState.activePlayerId != event.playerId) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent.playerId '${event.playerId.value}' ist nicht aktiver Spieler.",
+            )
+        }
+        if (currentTurnState.turnPhase != TurnPhase.DRAW_CARD) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent ist nur in Phase DRAW_CARD erlaubt.",
+            )
+        }
+        if (!state.territoryCapturedThisTurn) {
+            throw InvalidLobbyEventException(
+                "CardDrawnEvent benötigt mindestens eine Eroberung im aktuellen Zug.",
+            )
+        }
+
+        return state
+            .withCardDrawnFromDeck(event.playerId, event.cardId)
+            .withTerritoryCapturedThisTurn(false)
+    }
+
+    private fun onMatchEnded(
+        state: GameState,
+        event: MatchEndedEvent,
+    ): GameState {
+        val mayEnrichFinishedState =
+            state.status == GameStatus.FINISHED &&
+                state.closedReason == null &&
+                state.winnerPlayerId == null
+        if (state.status != GameStatus.RUNNING && !mayEnrichFinishedState) {
+            throw InvalidLobbyEventException(
+                "MatchEndedEvent kann nur im Status RUNNING verarbeitet werden, " +
+                    "war aber '${state.status}'.",
+            )
+        }
+        if (event.winnerPlayerId != null) {
+            requireKnownPlayer(state, event.winnerPlayerId)
+        }
+
+        return finishMatch(
+            state = state,
+            reason = event.reason,
+            winnerPlayerId = event.winnerPlayerId,
+        )
+    }
+
+    private fun finishMatch(
+        state: GameState,
+        reason: MatchEndReason,
+        winnerPlayerId: PlayerId?,
+    ): GameState =
+        state.copy(
+            status = GameStatus.FINISHED,
+            closedReason = reason.name,
+            winnerPlayerId = winnerPlayerId,
+            pendingReinforcements = null,
+            territoryCapturedThisTurn = false,
+        )
+
     private fun onPlayerCardsRemoved(
         state: GameState,
         event: PlayerCardsRemovedEvent,
     ): GameState {
         requireKnownPlayer(state, event.playerId)
 
-        return event.cardIds.fold(state) { currentState, cardId ->
-            currentState.withoutCardFromHand(event.playerId, cardId)
-        }
+        return state.withCardsMovedFromHandToDiscard(event.playerId, event.cardIds)
     }
 
     private fun onFortifyMoveApplied(
@@ -841,7 +979,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 pauseReason = event.pauseReason,
                 pausedPlayerId = event.pausedPlayerId,
             )
-        val shouldResetFortifyUsed =
+        val shouldResetTurnScopedFlags =
             state.activePlayer != updatedTurnState.activePlayerId ||
                 state.turnNumber != updatedTurnState.turnCount
 
@@ -850,7 +988,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             configuredStartPlayerId = updatedTurnState.startPlayerId,
             turnNumber = updatedTurnState.turnCount,
             turnState = updatedTurnState,
-            fortifyUsedThisTurn = state.fortifyUsedThisTurn && !shouldResetFortifyUsed,
+            fortifyUsedThisTurn = state.fortifyUsedThisTurn && !shouldResetTurnScopedFlags,
+            territoryCapturedThisTurn =
+                state.territoryCapturedThisTurn && !shouldResetTurnScopedFlags,
         )
     }
 
@@ -908,18 +1048,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
 
     private fun hasStartedGame(state: GameState): Boolean =
         state.gameStarted || state.status == GameStatus.RUNNING
-
-    private fun hasWinningPlayer(state: GameState): Boolean {
-        if (!hasStartedGame(state) || !state.hasMap()) {
-            return false
-        }
-
-        val territoryStates = state.allTerritoryStates()
-        val owners = territoryStates.mapNotNull { territoryState -> territoryState.ownerId }.toSet()
-        return territoryStates.isNotEmpty() &&
-            owners.size == 1 &&
-            territoryStates.all { territoryState -> territoryState.ownerId != null }
-    }
 
     private fun requireMapLoaded(state: GameState) {
         if (!state.hasMap()) {

@@ -2,9 +2,11 @@ package at.aau.pulverfass.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
 import at.aau.pulverfass.app.game.AttackUiState
+import at.aau.pulverfass.app.game.AutoAttackUiState
 import at.aau.pulverfass.app.game.GamePlayerUi
 import at.aau.pulverfass.app.game.GameUiState
 import at.aau.pulverfass.shared.ids.PlayerId
+import at.aau.pulverfass.shared.lobby.state.GameStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -46,6 +48,31 @@ class GameScreenStateTest {
     }
 
     @Test
+    fun `createAttackResolutionOverlayState returns null during running auto attack`() {
+        val result =
+            createAttackResolutionOverlayState(
+                selection = "siberia" to "japan",
+                uiState =
+                    pendingAttackUiState().copy(
+                        attackState =
+                            AttackUiState(
+                                attackTroops = 3,
+                                autoAttack =
+                                    AutoAttackUiState(
+                                        isEnabled = true,
+                                        isAwaitingResult = true,
+                                    ),
+                            ),
+                    ),
+                players = listOf(gamePlayer()),
+                fallbackPlayerName = "Fallback",
+                isAttackRequestPending = true,
+            )
+
+        assertNull(result)
+    }
+
+    @Test
     fun `createAttackResolutionOverlayState builds pending attack announcement state`() {
         val result =
             createAttackResolutionOverlayState(
@@ -62,6 +89,42 @@ class GameScreenStateTest {
                 fromRegionId = "siberia",
                 toRegionId = "japan",
                 troopCount = 3,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `createWinningOverlayState returns null for running match`() {
+        val result =
+            createWinningOverlayState(
+                uiState = GameUiState(gameStatus = GameStatus.RUNNING),
+                players = listOf(gamePlayer()),
+                localPlayerId = PlayerId(1),
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `createWinningOverlayState resolves local winner`() {
+        val player = gamePlayer()
+        val result =
+            createWinningOverlayState(
+                uiState =
+                    GameUiState(
+                        gameStatus = GameStatus.FINISHED,
+                        winnerPlayerId = player.playerId,
+                    ),
+                players = listOf(player),
+                localPlayerId = player.playerId,
+            )
+
+        assertEquals(
+            WinningOverlayState(
+                winnerPlayer = player,
+                winnerName = "Alice",
+                isLocalWinner = true,
             ),
             result,
         )

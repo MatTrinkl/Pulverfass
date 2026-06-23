@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.PlayerJoined
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
+import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
 import at.aau.pulverfass.shared.lobby.reducer.DefaultLobbyEventReducer
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
@@ -277,7 +278,13 @@ class LobbyRecoveryLoaderIntegrationTest {
     }
 
     private fun normalizeRecoveredState(state: GameState): GameState =
-        state.copy(lastEventContext = null)
+        state.copy(
+            lastEventContext = null,
+            playerDisplayNames =
+                state.playerDisplayNames.mapValues { (_, playerDisplayName) ->
+                    normalizePlayerDisplayNameOrFallback(playerDisplayName)
+                },
+        )
 
     private fun createRecoveryLoader() =
         LobbyRecoveryLoader(

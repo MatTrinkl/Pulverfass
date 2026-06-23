@@ -12,7 +12,10 @@ Das Modul `:server` stellt den Ktor-WebSocket-Server, die Lobby-Runtime und die 
 
 Default-Port im Container: `8080`
 
+Aus dem Repo-Root:
+
 ```bash
+./gradlew :server:installDist
 docker build -t se2risiko-server .
 docker run --rm -p 8080:8080 se2risiko-server
 ```
@@ -106,6 +109,7 @@ Für einen lokalen Build ohne GHCR-Pull gibt es zusätzlich `compose.local.yaml`
 ```bash
 export POSTGRES_PASSWORD='<SET_LOCALLY>'
 export DB_PASSWORD='<SET_LOCALLY>'
+./gradlew :server:installDist dokkaGenerate
 docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 

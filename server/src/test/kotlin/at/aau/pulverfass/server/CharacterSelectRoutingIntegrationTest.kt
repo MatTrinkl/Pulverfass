@@ -195,6 +195,7 @@ class CharacterSelectRoutingIntegrationTest {
                     val joinedPlayer = receiveRelevantTestPayload(sessionTwo, skipGameSync = true)
 
                     assertJoinLobbyResponse(lobbyCode, joinResponse)
+
                     assertTrue(existingPlayer is PlayerJoinedLobbyEvent)
                     assertEquals(playerOne, (existingPlayer as PlayerJoinedLobbyEvent).playerId)
                     assertTrue(characterReplay is CharacterSelectedBroadcast)

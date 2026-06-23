@@ -7,6 +7,7 @@ import at.aau.pulverfass.shared.ids.CardId
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
 import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
+import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
 import at.aau.pulverfass.shared.lobby.event.FortifyMoveAppliedEvent
@@ -322,6 +323,13 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                         )
                     },
             )
+        is CardDrawnEvent ->
+            persistedPayload(
+                type = "card_drawn",
+                "lobbyCode" to lobbyCode.value,
+                "playerId" to playerId.value,
+                "cardId" to cardId.value,
+            )
         is PendingReinforcementsSetEvent ->
             persistedPayload(
                 type = "pending_reinforcements_set",
@@ -336,6 +344,11 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 "playerId" to playerId.value,
                 "delta" to delta,
             )
+        /*
+         * Der verbrauchte Cheatbonus muss im Eventlog landen. Sonst könnte ein
+         * Spieler nach einem Server-Neustart denselben einmaligen Bonus erneut
+         * benutzen, obwohl der GameState ihn vor dem Neustart schon verbraucht hatte.
+         */
         is CheatReinforcementBonusUsedEvent ->
             persistedPayload(
                 type = "cheat_reinforcement_bonus_used",
@@ -363,6 +376,13 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 type = "lobby_closed",
                 "lobbyCode" to lobbyCode.value,
                 "reason" to reason,
+            )
+        is MatchEndedEvent ->
+            persistedPayload(
+                type = "match_ended",
+                "lobbyCode" to lobbyCode.value,
+                "reason" to reason.name,
+                "winnerPlayerId" to winnerPlayerId?.value,
             )
         is PlayerJoined ->
             persistedPayload(

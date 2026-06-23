@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,12 +71,13 @@ fun LobbyScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .systemBarsPadding()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
         LobbyVideoBackground()
 
-        // Oben links: Verbindungsstatus und globale Online-Zahl.
+        /*
+         * Oben links: Verbindungsstatus und globale Online-Zahl.
+         */
         Row(
             modifier =
                 Modifier
@@ -90,7 +90,10 @@ fun LobbyScreen(
             OnlinePlayersPill(count = state.globalPlayerCount)
         }
 
-        // Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht und Map-Test.
+        /*
+         * Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht
+         * und Map-Test.
+         */
         DevInfoPanel(
             serverUrl = state.serverUrl,
             lastMessageType = state.lastMessageType,
@@ -101,7 +104,9 @@ fun LobbyScreen(
                     .padding(end = 24.dp, top = 16.dp),
         )
 
-        // Unten rechts: einblendbare Dev-Verbindungssteuerung.
+        /*
+         * Unten rechts: einblendbare Dev-Verbindungssteuerung.
+         */
         DevControlsPanel(
             controlsState =
                 DevControlsState(
@@ -120,7 +125,9 @@ fun LobbyScreen(
                     .padding(end = 24.dp, bottom = 24.dp),
         )
 
-        // Unten links: zurück zum Hauptmenü.
+        /*
+         * Unten links: zurück zum Hauptmenü.
+         */
         MainButton(
             text = "ZURÜCK",
             onClick = { navController.popBackStack() },
@@ -130,7 +137,9 @@ fun LobbyScreen(
                     .padding(start = 24.dp, bottom = 24.dp),
         )
 
-        // Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
+        /*
+         * Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
+         */
         Box(
             modifier = Modifier.fillMaxSize().padding(horizontal = 48.dp),
             contentAlignment = Alignment.Center,
@@ -200,7 +209,8 @@ private fun CreateOrJoinForm(
             modifier = Modifier.fillMaxWidth(0.8f),
             keyboardOptions =
                 KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
+                    capitalization = KeyboardCapitalization.Characters,
+                    keyboardType = KeyboardType.Ascii,
                 ),
         )
         Spacer(modifier = Modifier.height(32.dp))
@@ -244,14 +254,13 @@ private fun JoinLobbyForm(
         MainInputField(
             value = lobbyCode,
             onValueChange = { input ->
-                val uppercase = input.uppercase()
-                if (uppercase.length <= 4 && uppercase.all { it.isLetterOrDigit() }) {
-                    onLobbyCodeChange(uppercase)
+                if (input.length <= 4 && input.all { it.isDigit() }) {
+                    onLobbyCodeChange(input)
                 }
             },
             placeholder = "4-STELLIGER LOBBY-CODE",
             modifier = Modifier.fillMaxWidth(0.8f),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainInputField(
@@ -261,7 +270,8 @@ private fun JoinLobbyForm(
             modifier = Modifier.fillMaxWidth(0.8f),
             keyboardOptions =
                 KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
+                    capitalization = KeyboardCapitalization.Characters,
+                    keyboardType = KeyboardType.Ascii,
                 ),
         )
         Spacer(modifier = Modifier.height(32.dp))

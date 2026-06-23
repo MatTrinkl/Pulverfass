@@ -10,6 +10,7 @@ import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
@@ -28,6 +29,7 @@ import at.aau.pulverfass.shared.map.config.TerritoryDefinition
 import at.aau.pulverfass.shared.map.config.TerritoryEdgeDefinition
 import at.aau.pulverfass.shared.message.lobby.event.AttackResolvedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
@@ -605,6 +607,102 @@ class AttackIntegrationTest {
 
                     attackerSession.first.close()
                     defenderSession.first.close()
+                }
+            } finally {
+                fixture.stop()
+            }
+        }
+
+    @Test
+    fun `capture that completes territory domination broadcasts match ended`() =
+        testApplication {
+            val lobbyCode = LobbyCode("ATKW")
+            val attacker = PlayerId(1)
+            val defender = PlayerId(2)
+            val map = defaultMapDefinition()
+            val fromTerritoryId = map.territories.first().territoryId
+            val toTerritoryId = map.territories.first().edges.first().targetId
+            val allOwners =
+                map.territories.associate { territory -> territory.territoryId to attacker } +
+                    (toTerritoryId to defender)
+            val allTroopCounts =
+                map.territories.associate { territory -> territory.territoryId to 1 } +
+                    (fromTerritoryId to 5) +
+                    (toTerritoryId to 2)
+
+            val initialState =
+                attackGame(
+                    lobbyCode = lobbyCode,
+                    players = listOf(attacker, defender),
+                    activePlayerId = attacker,
+                    turnPhase = TurnPhase.ATTACK,
+                    rngSeed = 1L,
+                    rngState = 2L,
+                    owners = allOwners,
+                    troopCounts = allTroopCounts,
+                )
+
+            val fixture = createFixture(lobbyCode, initialState, this)
+
+            try {
+                coroutineScope {
+                    val attackerSession = fixture.connectPlayer(fixture.client, attacker)
+
+                    attackerSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data =
+                                MessageCodec.encode(
+                                    AttackRequest(
+                                        lobbyCode = lobbyCode,
+                                        playerId = attacker,
+                                        fromTerritoryId = fromTerritoryId,
+                                        toTerritoryId = toTerritoryId,
+                                        attackTroops = 3,
+                                        moveAfterCapture = 3,
+                                        requestId = "req-win",
+                                    ),
+                                ),
+                        ),
+                    )
+
+                    val attackDelta =
+                        receiveRelevantTestPayload(attackerSession.first) as GameStateDeltaEvent
+                    val resolvedAttack =
+                        attackDelta.events.filterIsInstance<AttackResolvedBroadcastEvent>().single()
+                    assertEquals(true, resolvedAttack.capture)
+
+                    val eliminationDelta =
+                        receiveRelevantTestPayload(attackerSession.first) as GameStateDeltaEvent
+                    val eliminated =
+                        eliminationDelta.events.filterIsInstance<PlayerEliminatedEvent>().single()
+                    assertEquals(defender, eliminated.playerId)
+                    assertEquals(attacker, eliminated.eliminatedByPlayerId)
+
+                    val matchEndedDelta =
+                        receiveRelevantTestPayload(attackerSession.first) as GameStateDeltaEvent
+                    val matchEnded =
+                        matchEndedDelta.events.filterIsInstance<MatchEndedBroadcastEvent>().single()
+                    assertEquals(MatchEndReason.TERRITORY_DOMINATION, matchEnded.reason)
+                    assertEquals(attacker, matchEnded.winnerPlayerId)
+
+                    assertEquals(
+                        AttackResponse(lobbyCode = lobbyCode, requestId = "req-win"),
+                        receiveRelevantTestPayload(attackerSession.first),
+                    )
+
+                    val updatedState =
+                        fixture.lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("state missing")
+                    assertEquals(GameStatus.FINISHED, updatedState.status)
+                    assertEquals(
+                        MatchEndReason.TERRITORY_DOMINATION.name,
+                        updatedState.closedReason,
+                    )
+                    assertEquals(attacker, updatedState.winnerPlayerId)
+                    assertNull(receiveRelevantTestPayloadOrNull(attackerSession.first))
+
+                    attackerSession.first.close()
                 }
             } finally {
                 fixture.stop()

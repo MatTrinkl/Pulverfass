@@ -18,6 +18,7 @@ data class ServerRuntimeConfig(
     val database: DatabaseRuntimeConfig = DatabaseRuntimeConfig(),
     val webSocketMaxFrameSizeBytes: Long = WebSocketPolicy.MAX_FRAME_SIZE_BYTES,
     val appVersion: String = BuildVersion.DEFAULT_VALUE,
+    val commitSha: String? = null,
 ) {
     companion object {
         /**
@@ -83,6 +84,7 @@ data class ServerRuntimeConfig(
                         environment.optionalValue("APP_VERSION"),
                         manifestVersionProvider,
                     ).value,
+                commitSha = resolveCommitSha(environment),
             )
 
         private fun parsePort(
@@ -157,6 +159,10 @@ data class ServerRuntimeConfig(
                     ?.takeIf(String::isNotEmpty)
                     ?.let(BuildVersion::fromManifestVersion)
                 ?: BuildVersion.default()
+
+        private fun resolveCommitSha(environment: Map<String, String>): String? =
+            listOf("GITHUB_SHA", "COMMIT_SHA", "GIT_COMMIT")
+                .firstNotNullOfOrNull { key -> environment.optionalValue(key) }
 
         private fun readManifestVersion(): String? =
             ServerRuntimeConfig::class.java.`package`?.implementationVersion

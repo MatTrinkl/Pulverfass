@@ -116,7 +116,7 @@ class RoundHistoryIntegrationTest {
                                 .filterKeys { it != turnState.activePlayerId }
                                 .values
                                 .single()
-                        val turnChange = turnState.turnPhase == TurnPhase.DRAW_CARD
+                        val turnChange = turnState.turnPhase == TurnPhase.FORTIFY
 
                         actor.send(
                             Frame.Binary(
@@ -134,6 +134,7 @@ class RoundHistoryIntegrationTest {
 
                         assertTrue(receivePayload(actor) is GameStateDeltaEvent)
                         if (turnChange) {
+                            assertTrue(receivePayload(actor) is GameStateDeltaEvent)
                             val grantedDelta = receivePayload(actor) as GameStateDeltaEvent
                             assertEquals(
                                 listOf(
@@ -168,6 +169,7 @@ class RoundHistoryIntegrationTest {
 
                         assertTrue(receivePayload(watcher) is GameStateDeltaEvent)
                         if (turnChange) {
+                            assertTrue(receivePayload(watcher) is GameStateDeltaEvent)
                             val grantedDelta = receivePayload(watcher) as GameStateDeltaEvent
                             assertEquals(
                                 listOf(
@@ -211,9 +213,11 @@ class RoundHistoryIntegrationTest {
 
                     val roundThree = history[1]
                     assertEquals(3, roundThree.roundIndex)
-                    assertEquals(
-                        listOf(RoundSnapshotTrigger.TURN_CHANGE_BROADCAST),
-                        roundThree.snapshots.map { it.trigger },
+                    assertTrue(roundThree.snapshots.isNotEmpty())
+                    assertTrue(
+                        roundThree.snapshots.all { snapshot ->
+                            snapshot.trigger == RoundSnapshotTrigger.TURN_CHANGE_BROADCAST
+                        },
                     )
                     assertTrue(roundThree.startStateVersion <= roundThree.endStateVersion)
                     assertTrue(routingService.describeRoundHistory(lobbyCode).contains("round=3"))

@@ -4,6 +4,7 @@ import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.ids.SessionToken
 import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.lobby.event.MatchEndReason
 import at.aau.pulverfass.shared.lobby.event.PendingReinforcementsChangedEvent
 import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
@@ -21,6 +22,7 @@ import at.aau.pulverfass.shared.message.lobby.event.CharacterSelectedBroadcast
 import at.aau.pulverfass.shared.message.lobby.event.ConnectionStatusUpdateEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateDeltaEvent
 import at.aau.pulverfass.shared.message.lobby.event.GameStateSnapshotBroadcast
+import at.aau.pulverfass.shared.message.lobby.event.MatchEndedBroadcastEvent
 import at.aau.pulverfass.shared.message.lobby.event.PhaseBoundaryEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostEvent
 import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
@@ -38,6 +40,7 @@ import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.LobbyPlayerCountRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartPlayerSetRequest
 import at.aau.pulverfass.shared.message.lobby.request.TerritoryPlacement
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -59,6 +62,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartPlayerSetResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnStateGetResponse
@@ -79,6 +83,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.MapGetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.StartPlayerSetErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
@@ -648,6 +654,50 @@ class NetworkPayloadRegistryTest {
     }
 
     @Test
+    fun `should resolve message type and serialization for report cheat messages`() {
+        val request =
+            ReportCheatRequest(
+                lobbyCode = LobbyCode("RC12"),
+                reporterPlayerId = PlayerId(2),
+                accusedPlayerId = PlayerId(1),
+            )
+        val response =
+            ReportCheatResponse(
+                lobbyCode = LobbyCode("RC12"),
+                accusedPlayerId = PlayerId(1),
+                correct = true,
+                modifierDelta = 3,
+            )
+        val error =
+            ReportCheatErrorResponse(
+                code = ReportCheatErrorCode.ALREADY_REPORTED,
+                reason = "Dieser Cheat wurde bereits gemeldet.",
+            )
+
+        val requestType = NetworkPayloadRegistry.messageTypeFor(request)
+        val requestSerialized = NetworkPayloadRegistry.serializePayload(request)
+        val requestDeserialized =
+            NetworkPayloadRegistry.deserializePayload(requestType, requestSerialized)
+
+        val responseType = NetworkPayloadRegistry.messageTypeFor(response)
+        val responseSerialized = NetworkPayloadRegistry.serializePayload(response)
+        val responseDeserialized =
+            NetworkPayloadRegistry.deserializePayload(responseType, responseSerialized)
+
+        val errorType = NetworkPayloadRegistry.messageTypeFor(error)
+        val errorSerialized = NetworkPayloadRegistry.serializePayload(error)
+        val errorDeserialized =
+            NetworkPayloadRegistry.deserializePayload(errorType, errorSerialized)
+
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_REQUEST, requestType)
+        assertEquals(request, requestDeserialized)
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_RESPONSE, responseType)
+        assertEquals(response, responseDeserialized)
+        assertEquals(MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE, errorType)
+        assertEquals(error, errorDeserialized)
+    }
+
+    @Test
     fun `should resolve message type and serialization for leave lobby request`() {
         val payload = LeaveLobbyRequest(LobbyCode("GH78"))
 
@@ -912,6 +962,26 @@ class NetworkPayloadRegistryTest {
         assertEquals(payload, deserialized)
         assertTrue(serialized.contains("fromVersion"))
         assertTrue(serialized.contains("messageType"))
+    }
+
+    @Test
+    fun `should resolve message type and serialization for match ended broadcast`() {
+        val payload =
+            MatchEndedBroadcastEvent(
+                lobbyCode = LobbyCode("ME12"),
+                reason = MatchEndReason.TERRITORY_DOMINATION,
+                winnerPlayerId = PlayerId(1),
+                stateVersion = 12L,
+            )
+
+        val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
+        val serialized = NetworkPayloadRegistry.serializePayload(payload)
+        val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
+
+        assertEquals(MessageType.LOBBY_ENDED_BROADCAST, messageType)
+        assertEquals(payload, deserialized)
+        assertTrue(serialized.contains("TERRITORY_DOMINATION"))
+        assertTrue(serialized.contains("winnerPlayerId"))
     }
 
     @Test

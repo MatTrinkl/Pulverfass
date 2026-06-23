@@ -42,8 +42,10 @@ import at.aau.pulverfass.shared.message.lobby.request.FortifyMoveRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStateCatchUpRequest
 import at.aau.pulverfass.shared.message.lobby.request.GameStatePrivateGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.JoinLobbyRequest
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.MapGetRequest
 import at.aau.pulverfass.shared.message.lobby.request.PlaceReinforcementsRequest
+import at.aau.pulverfass.shared.message.lobby.request.ReportCheatRequest
 import at.aau.pulverfass.shared.message.lobby.request.StartGameRequest
 import at.aau.pulverfass.shared.message.lobby.request.TradeInCardsRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
@@ -58,13 +60,16 @@ import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PlaceReinforcementsResponse
 import at.aau.pulverfass.shared.message.lobby.response.PublicDeterminismMetadataSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.PublicTurnStateSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.ReportCheatResponse
 import at.aau.pulverfass.shared.message.lobby.response.StartGameResponse
 import at.aau.pulverfass.shared.message.lobby.response.TradeInCardsResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
@@ -75,8 +80,8 @@ import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorCod
 import at.aau.pulverfass.shared.message.lobby.response.error.FortifyMoveErrorResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.PlaceReinforcementsErrorResponse
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorCode
-import at.aau.pulverfass.shared.message.lobby.response.error.TradeInCardsErrorResponse
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorCode
+import at.aau.pulverfass.shared.message.lobby.response.error.ReportCheatErrorResponse
 import at.aau.pulverfass.shared.message.protocol.NetworkMessagePayload
 import at.aau.pulverfass.shared.network.codec.MessageCodec
 import io.ktor.server.application.install
@@ -91,6 +96,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -155,12 +161,53 @@ class LobbyControllerTest {
         val playerNameStore = InMemoryPlayerNameStore("Anne Bonny")
         val controller = createController(playerNameStore = playerNameStore)
         try {
-            assertEquals("Anne Bonny", controller.state.value.playerName)
+            assertEquals("ANNEBONN", controller.state.value.playerName)
 
             controller.updatePlayerName("Mary Read")
 
-            assertEquals("Mary Read", controller.state.value.playerName)
-            assertEquals("Mary Read", playerNameStore.readPlayerName())
+            assertEquals("MARYREAD", controller.state.value.playerName)
+            assertEquals("MARYREAD", playerNameStore.readPlayerName())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `updatePlayerName filters to eight uppercase ascii letters`() {
+        val playerNameStore = InMemoryPlayerNameStore()
+        val controller = createController(playerNameStore = playerNameStore)
+        try {
+            controller.updatePlayerName("a1 b_😊cdefghiä")
+
+            assertEquals("ABCDEFGH", controller.state.value.playerName)
+            assertEquals("ABCDEFGH", playerNameStore.readPlayerName())
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
+    fun `controller should restore and persist auto attack preference`() {
+        val playerNameStore = InMemoryPlayerNameStore(autoAttackEnabled = true)
+        val controller = createController(playerNameStore = playerNameStore)
+        try {
+            assertTrue(controller.state.value.autoAttackEnabled)
+            assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+
+            controller.setAutoAttackEnabled(false)
+
+            assertFalse(controller.state.value.autoAttackEnabled)
+            assertFalse(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertNull(controller.state.value.gameState.attackState.autoAttack.statusText)
+            assertFalse(playerNameStore.readAutoAttackEnabled())
+
+            controller.setAutoAttackEnabled(true)
+
+            assertTrue(controller.state.value.autoAttackEnabled)
+            assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+            assertNull(controller.state.value.gameState.attackState.autoAttack.statusText)
+            assertTrue(playerNameStore.readAutoAttackEnabled())
+            assertNull(controller.state.value.errorText)
         } finally {
             controller.close()
         }
@@ -239,12 +286,12 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174200"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Alice") }
+                waitUntil { controller.state.value.playerNames.contains("ALICE") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
                 assertTrue(state.isHost)
-                assertEquals(listOf("Alice"), state.playerNames)
+                assertEquals(listOf("ALICE"), state.playerNames)
             } finally {
                 controller.close()
                 server.close()
@@ -299,7 +346,7 @@ class LobbyControllerTest {
                         "123e4567-e89b-12d3-a456-426614174201"
                 }
                 waitUntil { readyLobbyCode == lobbyCode.value }
-                waitUntil { controller.state.value.playerNames.contains("Bob") }
+                waitUntil { controller.state.value.playerNames.contains("BOB") }
 
                 val state = controller.state.value
                 assertEquals(lobbyCode.value, state.activeLobbyCode)
@@ -458,7 +505,7 @@ class LobbyControllerTest {
 
                 val disconnectedPlayer =
                     controller.state.value.players.first { it.playerId == PlayerId(2) }
-                assertEquals("Bob", disconnectedPlayer.displayName)
+                assertEquals("BOB", disconnectedPlayer.displayName)
                 assertTrue(disconnectedPlayer.isDisconnected)
             } finally {
                 controller.close()
@@ -601,8 +648,122 @@ class LobbyControllerTest {
 
                 val state = controller.state.value
                 assertTrue(state.isHost)
-                assertEquals(listOf("Bob"), state.playerNames)
+                assertEquals(listOf("BOB"), state.playerNames)
                 assertTrue(state.players.none { it.playerId == PlayerId(1) })
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `player left event should remove player and render their territories neutral`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("LT42")
+            val departedPlayerId = PlayerId(1)
+            val ownPlayerId = PlayerId(2)
+            val neutralColor = Color(0xFFC2C2C2)
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174243"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(
+                            JoinLobbyResponse(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                playerDisplayName = "Alice",
+                                isHost = true,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            CharacterSelectedBroadcast(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                characterId = "character_04",
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            MapGetResponse(
+                                lobbyCode = payload.lobbyCode,
+                                schemaVersion = 1,
+                                mapHash = "leave-test-map",
+                                stateVersion = 1L,
+                                definition =
+                                    MapDefinitionSnapshot(
+                                        territories =
+                                            listOf(
+                                                MapTerritoryDefinitionSnapshot(
+                                                    territoryId = TerritoryId("brasilien"),
+                                                    edges = emptyList(),
+                                                ),
+                                            ),
+                                        continents = emptyList(),
+                                    ),
+                                territoryStates =
+                                    listOf(
+                                        MapTerritoryStateSnapshot(
+                                            territoryId = TerritoryId("brasilien"),
+                                            ownerId = departedPlayerId,
+                                            troopCount = 3,
+                                        ),
+                                    ),
+                            ),
+                        )
+                    }
+                }
+            val controller = createController(playerNameStore = InMemoryPlayerNameStore("Bob"))
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+                waitUntil {
+                    controller.state.value.gameState.regionStates["brazil"]?.ownerName == "ALICE"
+                }
+
+                val occupiedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertTrue(occupiedTerritory.accentColor != neutralColor)
+                assertTrue(controller.state.value.players.any { it.playerId == departedPlayerId })
+
+                server.broadcast(
+                    PlayerLeftLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = departedPlayerId,
+                        newHost = ownPlayerId,
+                    ),
+                )
+
+                waitUntil {
+                    controller.state.value.players.none { it.playerId == departedPlayerId } &&
+                        controller.state.value.gameState
+                            .regionStates["brazil"]
+                            ?.ownerName == "Verlassener Spieler"
+                }
+
+                val departedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertEquals(departedPlayerId.value.toString(), departedTerritory.ownerPlayerId)
+                assertEquals("Verlassener Spieler", departedTerritory.ownerName)
+                assertEquals(neutralColor, departedTerritory.accentColor)
             } finally {
                 controller.close()
                 server.close()
@@ -678,7 +839,6 @@ class LobbyControllerTest {
             val config = LobbyControllerConfig()
             val seenPayloads = CopyOnWriteArrayList<Any>()
             var placeAttempts = 0
-            var tradeInAttempts = 0
             val server =
                 startProtocolServer { payload, outgoing ->
                     seenPayloads += payload
@@ -869,40 +1029,25 @@ class LobbyControllerTest {
                             }
                         }
                         is TradeInCardsRequest -> {
-                            tradeInAttempts += 1
-                            if (tradeInAttempts == 1) {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            TradeInCardsErrorResponse(
-                                                TradeInCardsErrorCode.INVALID_SET,
-                                                "invalid set",
-                                            ),
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
+                                ),
+                            )
+                            outgoing.send(
+                                Frame.Binary(
+                                    true,
+                                    MessageCodec.encode(
+                                        PlayerHandUpdatedEvent(
+                                            lobbyCode = lobbyCode,
+                                            recipientPlayerId = playerId,
+                                            stateVersion = 3,
+                                            handCards = emptyList(),
                                         ),
                                     ),
-                                )
-                            } else {
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(TradeInCardsResponse(lobbyCode)),
-                                    ),
-                                )
-                                outgoing.send(
-                                    Frame.Binary(
-                                        true,
-                                        MessageCodec.encode(
-                                            PlayerHandUpdatedEvent(
-                                                lobbyCode = lobbyCode,
-                                                recipientPlayerId = playerId,
-                                                stateVersion = 3,
-                                                handCards = emptyList(),
-                                            ),
-                                        ),
-                                    ),
-                                )
-                            }
+                                ),
+                            )
                         }
                         is ConfirmReinforcementsDoneRequest -> {
                             outgoing.sendPayload(ConfirmReinforcementsDoneResponse(lobbyCode))
@@ -979,12 +1124,7 @@ class LobbyControllerTest {
 
                 cardIds.forEach(controller::toggleTradeInCard)
                 controller.tradeInCards()
-                waitUntil {
-                    controller.state.value.errorText ==
-                        "Die gewählten Karten bilden kein gültiges Set."
-                }
-                controller.tradeInCards()
-                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 2 }
+                waitUntil { seenPayloads.filterIsInstance<TradeInCardsRequest>().size == 1 }
                 assertEquals(
                     cardIds.toSet(),
                     seenPayloads.filterIsInstance<TradeInCardsRequest>().last().cardIds.toSet(),
@@ -1009,6 +1149,11 @@ class LobbyControllerTest {
 
     @Test
     fun `reinforcement actions require a local player context`() {
+        /*
+         * Ohne ownPlayerId kann der Controller keine spielbezogenen Requests
+         * sinnvoll adressieren. Der Test stellt sicher, dass diese Fehler lokal
+         * abgefangen werden, statt kaputte Payloads an den Server zu schicken.
+         */
         val config = LobbyControllerConfig()
         val controller = createController(config = config)
         try {
@@ -1032,8 +1177,133 @@ class LobbyControllerTest {
 
             controller.fortifyMove()
             assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
+
+            controller.reportCheat(PlayerId(2))
+            assertEquals(config.errorPlayerIdMissing, controller.state.value.errorText)
         } finally {
             controller.close()
+        }
+    }
+
+    @Test
+    fun `report cheat response should show result notice`() {
+        runBlocking {
+            /*
+             * Dieser Test deckt die App-Seite der Cheat-Meldung ab:
+             * - Selbstmeldung wird lokal blockiert.
+             * - Korrekte Serverantwort erzeugt einen positiven Hinweis.
+             * - Falsche Serverantwort erzeugt einen Malus-Hinweis.
+             * - Formale Serverfehler landen als errorText.
+             */
+            val lobbyCode = LobbyCode("RC42")
+            val playerId = PlayerId(1)
+            val accusedPlayerId = PlayerId(2)
+            var nextReportIsCorrect = true
+            var nextReportErrorReason: String? = null
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174250"),
+                        ),
+                ) { payload, outgoing ->
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                    isHost = true,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = accusedPlayerId,
+                                    playerDisplayName = "Bob",
+                                ),
+                            )
+                        }
+                        is ReportCheatRequest -> {
+                            val errorReason = nextReportErrorReason
+                            if (errorReason != null) {
+                                outgoing.sendPayload(
+                                    ReportCheatErrorResponse(
+                                        code = ReportCheatErrorCode.SELF_REPORT,
+                                        reason = errorReason,
+                                    ),
+                                )
+                            } else {
+                                outgoing.sendPayload(
+                                    ReportCheatResponse(
+                                        lobbyCode = payload.lobbyCode,
+                                        accusedPlayerId = payload.accusedPlayerId,
+                                        correct = nextReportIsCorrect,
+                                        modifierDelta = if (nextReportIsCorrect) 3 else -3,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    controller.state.value.ownPlayerId == playerId &&
+                        controller.state.value.players.any {
+                            it.playerId == accusedPlayerId
+                        }
+                }
+
+                controller.reportCheat(playerId)
+                assertEquals(
+                    "Du kannst dich nicht selbst melden.",
+                    controller.state.value.errorText,
+                )
+
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.cheatReportNoticeText
+                        ?.contains("Meldung war korrekt") == true
+                }
+                assertNull(controller.state.value.errorText)
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+
+                controller.clearCheatReportNotice()
+                assertNull(controller.state.value.cheatReportNoticeText)
+
+                nextReportIsCorrect = false
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.cheatReportNoticeText
+                        ?.contains("falsch verdächtigt") == true
+                }
+                assertNull(controller.state.value.errorText)
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+
+                nextReportErrorReason = "Meldung nicht erlaubt."
+                controller.reportCheat(accusedPlayerId)
+                waitUntil {
+                    controller.state.value.errorText == "Meldung nicht erlaubt."
+                }
+                assertTrue(
+                    LobbyCommandKey.REPORT_CHEAT !in controller.state.value.pendingCommandKeys,
+                )
+            } finally {
+                controller.close()
+                server.close()
+            }
         }
     }
 
@@ -1267,7 +1537,7 @@ class LobbyControllerTest {
                 val request = seenPayloads.filterIsInstance<AttackRequest>().last()
                 assertEquals(TerritoryId("brasilien"), request.fromTerritoryId)
                 assertEquals(TerritoryId("argentinien"), request.toTerritoryId)
-                assertEquals(3, request.attackTroops)
+                assertEquals(4, request.attackTroops)
                 assertEquals(3, request.moveAfterCapture)
                 assertTrue(
                     controller.state.value.gameState.attackState.latestResult?.captured == true,
@@ -1282,6 +1552,379 @@ class LobbyControllerTest {
                 assertTrue(seenPayloads.filterIsInstance<ConfirmAttackDoneRequest>().isEmpty())
                 controller.clearAutoPhaseNotice()
                 assertNull(controller.state.value.autoPhaseNoticeText)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `auto attack toggle arms and stops after attacker loses first battle`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AA12")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val sourceId = TerritoryId("brasilien")
+            val targetId = TerritoryId("argentinien")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val firstAttackReceived = CompletableDeferred<Unit>()
+            val releaseFirstDelta = CompletableDeferred<Unit>()
+            var attackCount = 0
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.ATTACK,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories =
+                                                listOf(
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = sourceId,
+                                                        edges =
+                                                            listOf(
+                                                                MapTerritoryEdgeSnapshot(
+                                                                    targetId,
+                                                                ),
+                                                            ),
+                                                    ),
+                                                    MapTerritoryDefinitionSnapshot(
+                                                        territoryId = targetId,
+                                                        edges = emptyList(),
+                                                    ),
+                                                ),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates =
+                                        listOf(
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = sourceId,
+                                                ownerId = playerId,
+                                                troopCount = 5,
+                                            ),
+                                            MapTerritoryStateSnapshot(
+                                                territoryId = targetId,
+                                                ownerId = opponentId,
+                                                troopCount = 2,
+                                            ),
+                                        ),
+                                ),
+                            )
+                        }
+                        is AttackRequest -> {
+                            attackCount += 1
+                            if (attackCount == 1) {
+                                firstAttackReceived.complete(Unit)
+                                releaseFirstDelta.await()
+                                outgoing.sendPayload(
+                                    GameStateDeltaEvent(
+                                        lobbyCode = lobbyCode,
+                                        fromVersion = 1,
+                                        toVersion = 2,
+                                        events =
+                                            listOf(
+                                                AttackResolvedBroadcastEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    attackerPlayerId = playerId,
+                                                    defenderPlayerId = opponentId,
+                                                    fromTerritoryId = sourceId,
+                                                    toTerritoryId = targetId,
+                                                    attackTroops = 3,
+                                                    sourceTroopsBefore = 5,
+                                                    targetTroopsBefore = 2,
+                                                    requestedAttackDice = 3,
+                                                    attackDice = 3,
+                                                    defendDice = 2,
+                                                    attackerRolls = listOf(3, 2, 1),
+                                                    defenderRolls = listOf(6, 5),
+                                                    attackerLosses = 2,
+                                                    defenderLosses = 0,
+                                                    attackerRemaining = 3,
+                                                    defenderRemaining = 2,
+                                                ),
+                                                TerritoryTroopsChangedEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    territoryId = sourceId,
+                                                    troopCount = 3,
+                                                    stateVersion = 2,
+                                                ),
+                                                TerritoryTroopsChangedEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    territoryId = targetId,
+                                                    troopCount = 2,
+                                                    stateVersion = 2,
+                                                ),
+                                            ),
+                                    ),
+                                )
+                                delay(100)
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                            } else {
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                                outgoing.sendPayload(
+                                    GameStateDeltaEvent(
+                                        lobbyCode = lobbyCode,
+                                        fromVersion = 2,
+                                        toVersion = 3,
+                                        events =
+                                            listOf(
+                                                AttackResolvedBroadcastEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    attackerPlayerId = playerId,
+                                                    defenderPlayerId = opponentId,
+                                                    fromTerritoryId = sourceId,
+                                                    toTerritoryId = targetId,
+                                                    attackTroops = 2,
+                                                    sourceTroopsBefore = 3,
+                                                    targetTroopsBefore = 2,
+                                                    requestedAttackDice = 2,
+                                                    attackDice = 2,
+                                                    defendDice = 2,
+                                                    attackerRolls = listOf(6, 5),
+                                                    defenderRolls = listOf(2, 1),
+                                                    attackerLosses = 0,
+                                                    defenderLosses = 2,
+                                                    attackerRemaining = 3,
+                                                    defenderRemaining = 0,
+                                                    occupyingTroopCount = 2,
+                                                ),
+                                                TerritoryTroopsChangedEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    territoryId = sourceId,
+                                                    troopCount = 1,
+                                                    stateVersion = 3,
+                                                ),
+                                                TerritoryOwnerChangedEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    territoryId = targetId,
+                                                    ownerId = playerId,
+                                                    stateVersion = 3,
+                                                ),
+                                                TerritoryTroopsChangedEvent(
+                                                    lobbyCode = lobbyCode,
+                                                    territoryId = targetId,
+                                                    troopCount = 2,
+                                                    stateVersion = 3,
+                                                ),
+                                            ),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                /*
+                 * Slider startet auf Maximum (Quelle 5 -> 4); auf die im Test
+                 * gescriptete Kampfstärke von 3 herunterregeln.
+                 */
+                controller.adjustAttackTroops(-1)
+                controller.adjustMoveAfterCapture(1)
+                controller.setAutoAttackEnabled(true)
+
+                delay(100)
+                assertEquals(0, seenPayloads.filterIsInstance<AttackRequest>().size)
+                assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+                assertFalse(controller.state.value.gameState.attackState.autoAttack.isRunning)
+
+                controller.attack()
+                firstAttackReceived.await()
+                delay(100)
+                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+                assertTrue(controller.state.value.gameState.attackState.autoAttack.isAwaitingResult)
+                assertTrue(LobbyCommandKey.ATTACK !in controller.state.value.pendingCommandKeys)
+                releaseFirstDelta.complete(Unit)
+                waitUntil {
+                    controller.state.value.gameState.attackState.latestResult != null
+                }
+                delay(700)
+
+                val requests = seenPayloads.filterIsInstance<AttackRequest>()
+                assertEquals(1, requests.size)
+                assertTrue(requests.single().requestId?.startsWith("auto-attack-") == true)
+                assertEquals(3, requests.single().attackTroops)
+                assertEquals(3, requests.single().moveAfterCapture)
+                assertTrue(controller.state.value.gameState.attackState.autoAttack.isEnabled)
+                assertFalse(controller.state.value.gameState.attackState.autoAttack.isRunning)
+                assertNull(controller.state.value.gameState.attackState.autoAttack.intent)
+                assertEquals("brazil", controller.state.value.gameState.selectionFromRegionId)
+                assertEquals("argentina", controller.state.value.gameState.selectionToRegionId)
+                assertEquals(2, controller.state.value.gameState.attackState.attackTroops)
+                assertEquals(2, controller.state.value.gameState.attackState.moveAfterCapture)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `auto attack waits after catch up resolves pending battle`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("AC12")
+            val playerId = PlayerId(1)
+            val opponentId = PlayerId(2)
+            val sourceId = TerritoryId("brasilien")
+            val targetId = TerritoryId("argentinien")
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val firstAttackReceived = CompletableDeferred<Unit>()
+            val releaseFirstResponse = CompletableDeferred<Unit>()
+            var attackCount = 0
+
+            fun publicSnapshot(
+                stateVersion: Long,
+                sourceTroops: Int,
+                targetTroops: Int,
+            ) = GameStateCatchUpResponse(
+                lobbyCode = lobbyCode,
+                stateVersion = stateVersion,
+                determinism =
+                    PublicDeterminismMetadataSnapshot(
+                        mapHash = "hash",
+                        schemaVersion = 1,
+                    ),
+                turnState =
+                    PublicTurnStateSnapshot(
+                        activePlayerId = playerId,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 1,
+                        startPlayerId = playerId,
+                    ),
+                definition =
+                    MapDefinitionSnapshot(
+                        territories =
+                            listOf(
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = sourceId,
+                                    edges = listOf(MapTerritoryEdgeSnapshot(targetId)),
+                                ),
+                                MapTerritoryDefinitionSnapshot(
+                                    territoryId = targetId,
+                                    edges = emptyList(),
+                                ),
+                            ),
+                        continents = emptyList(),
+                    ),
+                territoryStates =
+                    listOf(
+                        MapTerritoryStateSnapshot(sourceId, playerId, sourceTroops),
+                        MapTerritoryStateSnapshot(targetId, opponentId, targetTroops),
+                    ),
+            )
+
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(publicSnapshot(1, 6, 2))
+                        }
+                        is GameStatePrivateGetRequest ->
+                            outgoing.sendPayload(
+                                GameStatePrivateGetResponse(
+                                    lobbyCode = lobbyCode,
+                                    recipientPlayerId = playerId,
+                                    stateVersion = 1,
+                                    privateHandCards = emptyList(),
+                                ),
+                            )
+                        is AttackRequest -> {
+                            attackCount += 1
+                            if (attackCount == 1) {
+                                firstAttackReceived.complete(Unit)
+                                releaseFirstResponse.await()
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                            } else {
+                                outgoing.sendPayload(
+                                    AttackResponse(lobbyCode, requestId = payload.requestId),
+                                )
+                            }
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
+                controller.selectGameRegion("brazil")
+                controller.selectGameRegion("argentina")
+                // Slider startet auf Maximum (Quelle 6 -> 5); auf 3 herunterregeln,
+                // damit der Auto-Angriff auch nach dem Verlust auf 4 Truppen weiterläuft.
+                controller.adjustAttackTroops(-2)
+                controller.adjustMoveAfterCapture(1)
+                controller.setAutoAttackEnabled(true)
+
+                controller.attack()
+                firstAttackReceived.await()
+                assertEquals(1, seenPayloads.filterIsInstance<AttackRequest>().size)
+
+                server.broadcast(publicSnapshot(2, 4, 2))
+                delay(100)
+                releaseFirstResponse.complete(Unit)
+                /*
+                 * Der Catch-up löst den noch offenen Kampf auf. Der Startzeitpunkt des
+                 * Fortsetzungs-Timers ist in diesem Pfad nicht deterministisch, daher
+                 * wird die 500-ms-Verzögerung hier nicht über die Wanduhr geprüft (das
+                 * flackerte unter Last). Geprüft wird stattdessen das deterministische
+                 * Verhalten: Der Auto-Angriff setzt mit einem zweiten Auto-Request fort.
+                 * Die Verzögerung selbst deckt der Delta-Test robust ab.
+                 */
+                waitUntil { seenPayloads.filterIsInstance<AttackRequest>().size == 2 }
+                val requests = seenPayloads.filterIsInstance<AttackRequest>()
+                assertEquals(2, requests.size)
+                assertTrue(requests.last().requestId?.startsWith("auto-attack-") == true)
             } finally {
                 controller.close()
                 server.close()
@@ -2636,6 +3279,92 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `draw card phase advances automatically through auto phase system`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("DC01")
+            val playerId = PlayerId(1)
+            val nextPlayerId = PlayerId(2)
+            val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
+            val server =
+                startProtocolServer { payload, outgoing ->
+                    seenPayloads += payload
+                    when (payload) {
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = lobbyCode,
+                                    playerId = playerId,
+                                    playerDisplayName = payload.playerDisplayName,
+                                ),
+                            )
+                            outgoing.sendPayload(
+                                GameStateCatchUpResponse(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 1,
+                                    determinism =
+                                        PublicDeterminismMetadataSnapshot(
+                                            mapHash = "hash",
+                                            schemaVersion = 1,
+                                        ),
+                                    turnState =
+                                        PublicTurnStateSnapshot(
+                                            activePlayerId = playerId,
+                                            turnPhase = TurnPhase.DRAW_CARD,
+                                            turnCount = 1,
+                                            startPlayerId = playerId,
+                                        ),
+                                    definition =
+                                        MapDefinitionSnapshot(
+                                            territories = emptyList(),
+                                            continents = emptyList(),
+                                        ),
+                                    territoryStates = emptyList(),
+                                ),
+                            )
+                        }
+                        is TurnAdvanceRequest -> {
+                            outgoing.sendPayload(TurnAdvanceResponse(lobbyCode))
+                            outgoing.sendPayload(
+                                PhaseBoundaryEvent(
+                                    lobbyCode = lobbyCode,
+                                    stateVersion = 2,
+                                    previousPhase = TurnPhase.DRAW_CARD,
+                                    nextPhase = TurnPhase.REINFORCEMENTS,
+                                    activePlayerId = nextPlayerId,
+                                    turnCount = 2,
+                                ),
+                            )
+                        }
+                    }
+                }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+
+                waitUntil {
+                    seenPayloads.filterIsInstance<TurnAdvanceRequest>().isNotEmpty()
+                }
+                val request = seenPayloads.filterIsInstance<TurnAdvanceRequest>().single()
+                assertEquals(TurnPhase.DRAW_CARD, request.expectedPhase)
+                assertEquals(
+                    "Karte wurde gezogen. Die Kartenphase wird automatisch beendet.",
+                    controller.state.value.autoPhaseNoticeText,
+                )
+                waitUntil {
+                    controller.state.value.gameState.turnPhase == TurnPhase.REINFORCEMENTS
+                }
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `reconnect should reuse old session token and request catch up`() {
         runBlocking {
             val lobbyCode = LobbyCode("RC01")
@@ -2861,6 +3590,116 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `game reconnect button should reuse active session without normal lobby flow`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("GR01")
+            val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174232")
+            val payloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(originalToken),
+                ) { payload, outgoing ->
+                    payloads += payload
+                    when (payload) {
+                        CreateLobbyRequest ->
+                            outgoing.sendPayload(CreateLobbyResponse(lobbyCode))
+                        is JoinLobbyRequest -> {
+                            outgoing.sendPayload(JoinLobbyResponse(payload.lobbyCode))
+                            outgoing.sendPayload(
+                                PlayerJoinedLobbyEvent(
+                                    lobbyCode = payload.lobbyCode,
+                                    playerId = PlayerId(1),
+                                    playerDisplayName = payload.playerDisplayName,
+                                    isHost = true,
+                                ),
+                            )
+                        }
+                        is StartGameRequest -> {
+                            outgoing.sendPayload(StartGameResponse())
+                            outgoing.sendPayload(GameStartedEvent(payload.lobbyCode))
+                        }
+                        is ReconnectRequest ->
+                            outgoing.sendPayload(
+                                ReconnectResponse(
+                                    success = true,
+                                    playerId = PlayerId(1),
+                                    lobbyCode = lobbyCode,
+                                    playerDisplayName = "Alice",
+                                ),
+                            )
+                    }
+                }
+            val controller =
+                createController(
+                    config =
+                        LobbyControllerConfig(
+                            reconnectMaxAttempts = 10,
+                            reconnectRetryDelayMillis = 100L,
+                        ),
+                )
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alice")
+                controller.createLobby { }
+                waitUntil { controller.state.value.ownPlayerId == PlayerId(1) }
+
+                controller.startGame()
+                waitUntil { controller.state.value.gameStarted }
+                waitUntil { payloads.any { it is GameStateCatchUpRequest } }
+
+                controller.disconnect()
+                waitUntil { !controller.state.value.isConnected }
+                payloads.clear()
+
+                controller.retryReconnect()
+
+                waitUntil {
+                    payloads.any {
+                        it is ReconnectRequest && it.sessionToken == originalToken
+                    }
+                }
+                waitUntil {
+                    controller.state.value.isConnected &&
+                        !controller.state.value.isReconnecting
+                }
+
+                assertFalse(payloads.any { it is CreateLobbyRequest })
+                assertFalse(payloads.any { it is JoinLobbyRequest })
+                assertFalse(payloads.any { it is StartGameRequest })
+                assertEquals(originalToken.value, controller.state.value.sessionToken)
+                assertEquals(lobbyCode.value, controller.state.value.activeLobbyCode)
+                assertEquals(PlayerId(1), controller.state.value.ownPlayerId)
+                assertTrue(controller.state.value.gameStarted)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `game reconnect button without session should not start normal connect`() {
+        runBlocking {
+            val config = LobbyControllerConfig()
+            val controller = createController(config = config)
+            try {
+                controller.updatePlayerName("Alice")
+
+                controller.retryReconnect()
+
+                val state = controller.state.value
+                assertFalse(state.isConnected)
+                assertFalse(state.isConnecting)
+                assertFalse(state.isReconnecting)
+                assertEquals(config.statusReconnectFailed, state.statusText)
+                assertEquals(config.errorReconnectTokenMissing, state.errorText)
+            } finally {
+                controller.close()
+            }
+        }
+    }
+
+    @Test
     fun `startup reconnect should reuse persisted token`() {
         runBlocking {
             val lobbyCode = LobbyCode("PR35")
@@ -2930,6 +3769,44 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `normal connect should replace stale persisted session token`() {
+        runBlocking {
+            val firstToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
+            val freshToken = SessionToken("123e4567-e89b-12d3-a456-426614174213")
+            val store = InMemoryReconnectSessionStore()
+            val firstServer =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(firstToken),
+                ) { _, _ -> }
+            val secondServer =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(freshToken),
+                ) { _, _ -> }
+            val controller = createController(sessionStore = store)
+
+            try {
+                controller.updatePlayerName("Alice")
+                controller.updateServerUrl(firstServer.url)
+                controller.connect()
+                waitUntil { controller.state.value.sessionToken == firstToken.value }
+
+                controller.disconnect()
+                waitUntil { !controller.state.value.isConnected }
+
+                controller.updateServerUrl(secondServer.url)
+                controller.connect()
+
+                waitUntil { controller.state.value.sessionToken == freshToken.value }
+                assertEquals(freshToken.value, store.readSessionToken())
+            } finally {
+                controller.close()
+                firstServer.close()
+                secondServer.close()
+            }
+        }
+    }
+
+    @Test
     fun `failed startup reconnect should clear persisted session token`() {
         runBlocking {
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174220")
@@ -2986,15 +3863,17 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `leave lobby should clear persisted session token`() {
+    fun `leave lobby should clear persisted session token but keep live session token`() {
         runBlocking {
             val lobbyCode = LobbyCode("LV42")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
             val store = InMemoryReconnectSessionStore()
+            val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
                     onOpenPayload = ConnectionResponse(originalToken),
                 ) { payload, outgoing ->
+                    seenPayloads += payload
                     when (payload) {
                         CreateLobbyRequest ->
                             outgoing.send(
@@ -3010,6 +3889,8 @@ class LobbyControllerTest {
                                     MessageCodec.encode(JoinLobbyResponse(payload.lobbyCode)),
                                 ),
                             )
+                        is LeaveLobbyRequest ->
+                            outgoing.sendPayload(LeaveLobbyResponse(payload.lobbyCode))
                     }
                 }
 
@@ -3021,12 +3902,21 @@ class LobbyControllerTest {
 
                 waitUntil { controller.state.value.sessionToken == originalToken.value }
                 waitUntil { controller.state.value.activeLobbyCode == lobbyCode.value }
+                waitUntil { server.activeSessionCount() == 1 }
 
                 controller.leaveLobby()
+                waitUntil { seenPayloads.any { it is LeaveLobbyRequest } }
+                delay(100)
 
                 assertNull(store.readSessionToken())
-                assertNull(controller.state.value.sessionToken)
+                assertEquals(originalToken.value, controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
+                assertTrue(controller.state.value.isConnected)
+                assertEquals(1, server.activeSessionCount())
+                assertEquals(
+                    lobbyCode,
+                    seenPayloads.filterIsInstance<LeaveLobbyRequest>().single().lobbyCode,
+                )
             } finally {
                 controller.close()
                 server.close()
@@ -3438,6 +4328,71 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `saved character auto selection uses join response player id when names are duplicated`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("CC47")
+            val ownPlayerId = PlayerId(22)
+            val seenPayloads = CopyOnWriteArrayList<Any>()
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174227"),
+                        ),
+                ) { payload, outgoing ->
+                    seenPayloads += payload
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(
+                            JoinLobbyResponse(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = PlayerId(21),
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                    }
+                }
+            val playerNameStore =
+                InMemoryPlayerNameStore()
+                    .also { it.saveCharacterId("character_04") }
+            val controller = createController(playerNameStore = playerNameStore)
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updatePlayerName("Alex")
+                controller.updateLobbyCode(lobbyCode.value)
+                controller.joinLobby { }
+                waitUntil {
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .any { it.characterId == "character_04" }
+                }
+
+                val request =
+                    seenPayloads
+                        .filterIsInstance<CharacterSelectRequest>()
+                        .single()
+                assertEquals(ownPlayerId, request.playerId)
+                assertEquals(lobbyCode, request.lobbyCode)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `saved character auto selection falls back when preferred character is taken`() {
         runBlocking {
             val lobbyCode = LobbyCode("CC46")
@@ -3707,6 +4662,8 @@ class LobbyControllerTest {
         val url: String,
         private val activeSessions: CopyOnWriteArrayList<DefaultWebSocketServerSession>,
     ) {
+        fun activeSessionCount(): Int = activeSessions.size
+
         fun broadcast(payload: NetworkMessagePayload) {
             runBlocking {
                 activeSessions.forEach { session ->
@@ -3781,6 +4738,7 @@ class LobbyControllerTest {
      */
     private class InMemoryPlayerNameStore(
         private var playerName: String? = null,
+        private var autoAttackEnabled: Boolean = false,
     ) : PlayerNameStore {
         private var characterId: String? = null
 
@@ -3794,6 +4752,12 @@ class LobbyControllerTest {
 
         override fun saveCharacterId(characterId: String) {
             this.characterId = characterId
+        }
+
+        override fun readAutoAttackEnabled(): Boolean = autoAttackEnabled
+
+        override fun saveAutoAttackEnabled(enabled: Boolean) {
+            autoAttackEnabled = enabled
         }
     }
 }

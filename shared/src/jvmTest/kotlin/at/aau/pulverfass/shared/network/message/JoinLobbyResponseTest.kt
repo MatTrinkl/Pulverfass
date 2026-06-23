@@ -10,6 +10,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.lang.reflect.InvocationTargetException
@@ -22,6 +23,7 @@ class JoinLobbyResponseTest {
         val response = JoinLobbyResponse(LobbyCode("AB12"))
 
         assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertNull(response.playerId)
     }
 
     @Test
@@ -40,6 +42,17 @@ class JoinLobbyResponseTest {
         val deserialized = json.decodeFromString<JoinLobbyResponse>(serialized)
 
         assertEquals("""{"lobbyCode":"EF56"}""", serialized)
+        assertEquals(response, deserialized)
+    }
+
+    @Test
+    fun `should serialize and deserialize join lobby response with player id`() {
+        val response = JoinLobbyResponse(LobbyCode("IJ90"), PlayerId(4))
+
+        val serialized = json.encodeToString(JoinLobbyResponse.serializer(), response)
+        val deserialized = json.decodeFromString<JoinLobbyResponse>(serialized)
+
+        assertEquals("""{"lobbyCode":"IJ90","playerId":4}""", serialized)
         assertEquals(response, deserialized)
     }
 

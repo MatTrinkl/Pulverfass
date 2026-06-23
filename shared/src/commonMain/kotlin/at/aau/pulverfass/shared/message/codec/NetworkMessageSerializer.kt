@@ -9,7 +9,6 @@ import at.aau.pulverfass.shared.network.exception.UnsupportedPayloadTypeExceptio
 import at.aau.pulverfass.shared.text.decodeUtf8Strict
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
 
 /**
  * Interner Serializer für Header und Payloads des Netzwerkprotokolls.
@@ -18,7 +17,7 @@ import kotlinx.serialization.json.Json
  * Wire-Bytes erfolgt separat über den Packet-Codec.
  */
 internal object NetworkMessageSerializer {
-    private val json = Json
+    private val json = NetworkJson
     private const val HEADER_DESERIALIZATION_FAILURE_MESSAGE =
         "Failed to deserialize message header"
 

@@ -156,6 +156,7 @@ internal object NetworkPayloadRegistry {
             ReportCheatResponse::class to MessageType.LOBBY_REPORT_CHEAT_RESPONSE,
             ReportCheatErrorResponse::class to MessageType.LOBBY_REPORT_CHEAT_ERROR_RESPONSE,
             PendingReinforcementsChangedEvent::class to
+
                 MessageType.LOBBY_PENDING_REINFORCEMENTS_CHANGED_BROADCAST,
             ReinforcementsGrantedEvent::class to
                 MessageType.LOBBY_REINFORCEMENTS_GRANTED_BROADCAST,
@@ -175,6 +176,7 @@ internal object NetworkPayloadRegistry {
             GameStateDeltaEvent::class to MessageType.LOBBY_GAME_STATE_DELTA_BROADCAST,
             PhaseBoundaryEvent::class to MessageType.LOBBY_PHASE_BOUNDARY_BROADCAST,
             GameStateSnapshotBroadcast::class to
+
                 MessageType.LOBBY_GAME_STATE_SNAPSHOT_BROADCAST,
             GameStateCatchUpRequest::class to
                 MessageType.LOBBY_GAME_STATE_CATCH_UP_REQUEST,
@@ -289,6 +291,7 @@ internal object NetworkPayloadRegistry {
             ReportCheatErrorResponse::class to
                 encodeWith(ReportCheatErrorResponse.serializer()),
             PendingReinforcementsChangedEvent::class to
+
                 encodeWith(PendingReinforcementsChangedEvent.serializer()),
             ReinforcementsGrantedEvent::class to
                 encodeWith(ReinforcementsGrantedEvent.serializer()),
@@ -310,6 +313,7 @@ internal object NetworkPayloadRegistry {
             GameStateDeltaEvent::class to encodeWith(GameStateDeltaEvent.serializer()),
             PhaseBoundaryEvent::class to encodeWith(PhaseBoundaryEvent.serializer()),
             GameStateSnapshotBroadcast::class to
+
                 encodeWith(GameStateSnapshotBroadcast.serializer()),
             GameStateCatchUpRequest::class to encodeWith(GameStateCatchUpRequest.serializer()),
             GameStateCatchUpResponse::class to
