@@ -475,13 +475,6 @@ private fun LobbyEvent.toPersistedPayload(): PersistedEventPayload =
                 "lobbyCode" to lobbyCode.value,
                 "playerId" to playerId.value,
             )
-        is MatchEndedEvent ->
-            persistedPayload(
-                type = "match_ended",
-                "lobbyCode" to lobbyCode.value,
-                "reason" to reason.name,
-                "winnerPlayerId" to winnerPlayerId?.value,
-            )
         is TurnStateUpdatedEvent ->
             persistedPayload(
                 type = "turn_state_updated",
