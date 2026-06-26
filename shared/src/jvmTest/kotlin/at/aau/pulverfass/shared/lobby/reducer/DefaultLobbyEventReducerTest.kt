@@ -275,6 +275,15 @@ class DefaultLobbyEventReducerTest {
         assertEquals(playerOne, runningState.activePlayer)
         assertEquals(TurnPhase.REINFORCEMENTS, runningState.turnState?.turnPhase)
 
+        val startedState =
+            duplicateState.copy(
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+            )
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(startedState, PlayerJoined(lobbyCode, playerTwo, "BOB"))
+        }
+
         val closedState = duplicateState.copy(status = GameStatus.CLOSED)
         val finishedState = duplicateState.copy(status = GameStatus.FINISHED)
 
@@ -1828,7 +1837,7 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
-        /*
+        /**
          * Der Reducer trägt den Spieler in das Set der bereits verwendeten
          * Cheatboni ein. Genau dieses Set verhindert später eine zweite Nutzung.
          */
@@ -1855,7 +1864,7 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
-        /*
+        /**
          * Auch wenn die Hauptprüfung im Server-Routing sitzt, schützt der Reducer
          * den State zusätzlich davor, dass dasselbe Event fachlich zweimal
          * angewendet wird.

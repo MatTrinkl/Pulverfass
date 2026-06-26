@@ -58,6 +58,7 @@ import at.aau.pulverfass.shared.message.lobby.response.FortifyMoveResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
@@ -604,6 +605,120 @@ class LobbyControllerTest {
                 assertTrue(state.isHost)
                 assertEquals(listOf("BOB"), state.playerNames)
                 assertTrue(state.players.none { it.playerId == PlayerId(1) })
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
+    fun `player left event should remove player and render their territories neutral`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("LT42")
+            val departedPlayerId = PlayerId(1)
+            val ownPlayerId = PlayerId(2)
+            val neutralColor = Color(0xFFC2C2C2)
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174243"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(
+                            JoinLobbyResponse(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                playerDisplayName = "Alice",
+                                isHost = true,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            CharacterSelectedBroadcast(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                characterId = "character_04",
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            MapGetResponse(
+                                lobbyCode = payload.lobbyCode,
+                                schemaVersion = 1,
+                                mapHash = "leave-test-map",
+                                stateVersion = 1L,
+                                definition =
+                                    MapDefinitionSnapshot(
+                                        territories =
+                                            listOf(
+                                                MapTerritoryDefinitionSnapshot(
+                                                    territoryId = TerritoryId("brasilien"),
+                                                    edges = emptyList(),
+                                                ),
+                                            ),
+                                        continents = emptyList(),
+                                    ),
+                                territoryStates =
+                                    listOf(
+                                        MapTerritoryStateSnapshot(
+                                            territoryId = TerritoryId("brasilien"),
+                                            ownerId = departedPlayerId,
+                                            troopCount = 3,
+                                        ),
+                                    ),
+                            ),
+                        )
+                    }
+                }
+            val controller = createController(playerNameStore = InMemoryPlayerNameStore("Bob"))
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+                waitUntil {
+                    controller.state.value.gameState.regionStates["brazil"]?.ownerName == "ALICE"
+                }
+
+                val occupiedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertTrue(occupiedTerritory.accentColor != neutralColor)
+                assertTrue(controller.state.value.players.any { it.playerId == departedPlayerId })
+
+                server.broadcast(
+                    PlayerLeftLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = departedPlayerId,
+                        newHost = ownPlayerId,
+                    ),
+                )
+
+                waitUntil {
+                    controller.state.value.players.none { it.playerId == departedPlayerId } &&
+                        controller.state.value.gameState
+                            .regionStates["brazil"]
+                            ?.ownerName == "Verlassener Spieler"
+                }
+
+                val departedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertEquals(departedPlayerId.value.toString(), departedTerritory.ownerPlayerId)
+                assertEquals("Verlassener Spieler", departedTerritory.ownerName)
+                assertEquals(neutralColor, departedTerritory.accentColor)
             } finally {
                 controller.close()
                 server.close()

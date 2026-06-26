@@ -135,6 +135,11 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "Player '$playerId' ist bereits Teil der Lobby '${state.lobbyCode}'.",
             )
         }
+        if (hasStartedGame(state)) {
+            throw InvalidLobbyEventException(
+                "Player '$playerId' kann Lobby '${state.lobbyCode}' nach Spielstart nicht beitreten.",
+            )
+        }
 
         val updatedPlayers = state.players + playerId
         val updatedTurnOrder = TurnOrderPolicy.normalize(state.turnOrder + playerId)
@@ -640,7 +645,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         state: GameState,
         event: CheatReinforcementBonusUsedEvent,
     ): GameState {
-        /*
+        /**
          * Der Reducer speichert nur, dass der Bonus verbraucht wurde.
          * Die fachliche Prüfung, ob der Spieler gerade aktiv ist, in der
          * Reinforcements-Phase steht und keinen Pflicht-Kartentausch offen hat,
@@ -657,7 +662,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
 
         return state.copy(
-            /*
+            /**
              * Set statt Boolean pro Spieler: So bleibt die Information klein und
              * lässt sich beim Entfernen eines Spielers einfach wieder aus dem
              * State herausnehmen.
