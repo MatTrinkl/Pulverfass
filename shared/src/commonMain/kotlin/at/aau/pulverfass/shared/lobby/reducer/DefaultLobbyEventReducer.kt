@@ -137,7 +137,8 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
         if (hasStartedGame(state)) {
             throw InvalidLobbyEventException(
-                "Player '$playerId' kann Lobby '${state.lobbyCode}' nach Spielstart nicht beitreten.",
+                "Player '$playerId' kann Lobby '${state.lobbyCode}' " +
+                    "nach Spielstart nicht beitreten.",
             )
         }
 
@@ -662,11 +663,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
 
         return state.copy(
-            /**
-             * Set statt Boolean pro Spieler: So bleibt die Information klein und
-             * lässt sich beim Entfernen eines Spielers einfach wieder aus dem
-             * State herausnehmen.
-             */
+            // Set statt Boolean pro Spieler: So bleibt die Information klein und
+            // lässt sich beim Entfernen eines Spielers einfach wieder aus dem
+            // State herausnehmen.
             usedCheatReinforcementBonusByPlayer =
                 state.usedCheatReinforcementBonusByPlayer + event.playerId,
         )

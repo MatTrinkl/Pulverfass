@@ -18,14 +18,14 @@ class CreateLobbyResponseTest {
 
     @Test
     fun `should create create lobby response correctly`() {
-        val response = CreateLobbyResponse(lobbyCode = LobbyCode("AB12"))
+        val response = CreateLobbyResponse(lobbyCode = LobbyCode("1003"))
 
-        assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertEquals(LobbyCode("1003"), response.lobbyCode)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val response = CreateLobbyResponse(lobbyCode = LobbyCode("CD34"))
+        val response = CreateLobbyResponse(lobbyCode = LobbyCode("1071"))
         val payload: NetworkMessagePayload = response
 
         assertEquals(response, payload)
@@ -33,12 +33,12 @@ class CreateLobbyResponseTest {
 
     @Test
     fun `should serialize and deserialize create lobby response`() {
-        val response = CreateLobbyResponse(lobbyCode = LobbyCode("EF56"))
+        val response = CreateLobbyResponse(lobbyCode = LobbyCode("1132"))
 
         val serialized = json.encodeToString(CreateLobbyResponse.serializer(), response)
         val deserialized = json.decodeFromString<CreateLobbyResponse>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56"}""", serialized)
+        assertEquals("""{"lobbyCode":"1132"}""", serialized)
         assertEquals(response, deserialized)
     }
 
@@ -54,9 +54,9 @@ class CreateLobbyResponseTest {
                 )
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", null) as CreateLobbyResponse
+        val valid = constructor.newInstance("1178", null) as CreateLobbyResponse
 
-        assertEquals(LobbyCode("GH78"), valid.lobbyCode)
+        assertEquals(LobbyCode("1178"), valid.lobbyCode)
 
         assertThrows(InvocationTargetException::class.java) {
             constructor.newInstance(null, null)
@@ -92,10 +92,10 @@ class CreateLobbyResponseTest {
             CreateLobbyResponseSerializer.deserialize(
                 SerializerTestDecoder(
                     indices = intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "ZX90",
+                    scalarString = "1440",
                 ),
             )
 
-        assertEquals(LobbyCode("ZX90"), decoded.lobbyCode)
+        assertEquals(LobbyCode("1440"), decoded.lobbyCode)
     }
 }

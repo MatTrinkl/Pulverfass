@@ -22,7 +22,7 @@ class LobbyEventLoopTest {
     fun `event loop validates lifecycle and processes events`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
             val loop = LobbyEventLoop(lobbyCode = lobbyCode, scope = scope)
 
             try {
@@ -41,7 +41,7 @@ class LobbyEventLoopTest {
                 assertEquals(1, loop.currentState().processedEventCount)
 
                 assertThrowsSuspend(IllegalArgumentException::class.java) {
-                    loop.submit(SystemTick(LobbyCode("CD34"), 1))
+                    loop.submit(SystemTick(LobbyCode("1071"), 1))
                 }
 
                 loop.shutdown()
@@ -56,7 +56,7 @@ class LobbyEventLoopTest {
     fun `event loop propagates reducer failures to caller`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("EF56")
+            val lobbyCode = LobbyCode("1132")
             val loop = LobbyEventLoop(lobbyCode = lobbyCode, scope = scope)
 
             try {
@@ -78,8 +78,8 @@ class LobbyEventLoopTest {
         try {
             assertThrows(IllegalArgumentException::class.java) {
                 LobbyEventLoop(
-                    lobbyCode = LobbyCode("GH78"),
-                    initialState = GameState.initial(LobbyCode("JK90")),
+                    lobbyCode = LobbyCode("1178"),
+                    initialState = GameState.initial(LobbyCode("1201")),
                     scope = scope,
                 )
             }
@@ -92,7 +92,7 @@ class LobbyEventLoopTest {
     fun `event loop detects cancelled scope as not running`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("LM12")
+            val lobbyCode = LobbyCode("1217")
             val loop = LobbyEventLoop(lobbyCode = lobbyCode, scope = scope)
 
             try {

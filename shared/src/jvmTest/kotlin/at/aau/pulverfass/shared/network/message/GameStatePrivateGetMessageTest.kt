@@ -24,7 +24,7 @@ class GameStatePrivateGetMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             GameStatePrivateGetRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(3),
             )
 
@@ -35,7 +35,7 @@ class GameStatePrivateGetMessageTest {
                 serialized,
             )
 
-        assertEquals("""{"lobbyCode":"AB12","playerId":3}""", serialized)
+        assertEquals("""{"lobbyCode":"1003","playerId":3}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -43,7 +43,7 @@ class GameStatePrivateGetMessageTest {
     fun `serializer roundtrip response`() {
         val response =
             GameStatePrivateGetResponse(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 recipientPlayerId = PlayerId(2),
                 stateVersion = 9,
                 handCards = listOf("infantry", "cavalry"),
@@ -73,7 +73,7 @@ class GameStatePrivateGetMessageTest {
         val response =
             GameStatePrivateGetErrorResponse(
                 code = GameStatePrivateGetErrorCode.PAYLOAD_TOO_LARGE,
-                reason = "Privater Snapshot fuer Lobby 'AB12' ist groesser als 128 Bytes.",
+                reason = "Privater Snapshot fuer Lobby '1003' ist groesser als 128 Bytes.",
             )
 
         val serialized =
@@ -96,7 +96,7 @@ class GameStatePrivateGetMessageTest {
         val card = CardState(CardId("card-private"), CardType.JOKER)
         val gameState =
             GameState(
-                lobbyCode = LobbyCode("GH56"),
+                lobbyCode = LobbyCode("1177"),
                 players = listOf(recipient),
                 turnOrder = listOf(recipient),
                 stateVersion = 11,

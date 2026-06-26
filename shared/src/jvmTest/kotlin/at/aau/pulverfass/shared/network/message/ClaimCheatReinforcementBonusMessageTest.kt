@@ -25,7 +25,7 @@ class ClaimCheatReinforcementBonusMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             ClaimCheatReinforcementBonusRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
             )
 
@@ -40,7 +40,7 @@ class ClaimCheatReinforcementBonusMessageTest {
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("CD34"))
+        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("1071"))
 
         val serialized =
             json.encodeToString(ClaimCheatReinforcementBonusResponse.serializer(), response)

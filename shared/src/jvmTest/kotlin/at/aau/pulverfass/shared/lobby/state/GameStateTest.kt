@@ -32,9 +32,9 @@ import org.junit.jupiter.api.Test
 class GameStateTest {
     @Test
     fun `should expose consistent initial state`() {
-        val state = GameState.initial(LobbyCode("AB12"))
+        val state = GameState.initial(LobbyCode("1003"))
 
-        assertEquals(LobbyCode("AB12"), state.lobbyCode)
+        assertEquals(LobbyCode("1003"), state.lobbyCode)
         assertTrue(state.players.isEmpty())
         assertTrue(state.turnOrder.isEmpty())
         assertNull(state.activePlayer)
@@ -56,7 +56,7 @@ class GameStateTest {
         val context = EventContext(occurredAtEpochMillis = 1234)
         val state =
             GameState(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 players = listOf(playerOne, playerTwo),
                 activePlayer = playerOne,
                 turnOrder = listOf(playerOne, playerTwo),
@@ -97,13 +97,13 @@ class GameStateTest {
 
         val firstState =
             GameState(
-                lobbyCode = LobbyCode("GH78"),
+                lobbyCode = LobbyCode("1178"),
                 players = listOf(firstPlayer),
                 turnOrder = listOf(firstPlayer),
             )
         val secondState =
             GameState(
-                lobbyCode = LobbyCode("JK90"),
+                lobbyCode = LobbyCode("1201"),
                 players = listOf(secondPlayer),
                 turnOrder = listOf(secondPlayer),
             )
@@ -116,7 +116,7 @@ class GameStateTest {
 
     @Test
     fun `should report no map when map definition is missing`() {
-        val state = GameState.initial(LobbyCode("NM12"))
+        val state = GameState.initial(LobbyCode("1258"))
 
         // Prüft, dass ein GameState ohne MapDefinition auch keine Spielkarte meldet.
         assertFalse(state.hasMap())
@@ -127,7 +127,7 @@ class GameStateTest {
         val firstPlayer = PlayerId(1)
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("MP12"),
+                lobbyCode = LobbyCode("1248"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(firstPlayer, PlayerId(2)),
             )
@@ -149,7 +149,7 @@ class GameStateTest {
     fun `should expose adjacency from readonly map definition`() {
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("MQ34"),
+                lobbyCode = LobbyCode("1250"),
                 mapDefinition = sampleMapDefinition(),
             )
 
@@ -164,7 +164,7 @@ class GameStateTest {
     fun `should expose gameplay adjacency queries`() {
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("QA12"),
+                lobbyCode = LobbyCode("1310"),
                 mapDefinition = sampleMapDefinition(),
             )
 
@@ -188,13 +188,13 @@ class GameStateTest {
             reducer.apply(
                 reducer.apply(
                     GameState.initial(
-                        lobbyCode = LobbyCode("MR56"),
+                        lobbyCode = LobbyCode("1252"),
                         mapDefinition = sampleMapDefinition(),
                         players = listOf(playerOne),
                     ),
-                    TerritoryOwnerChangedEvent(LobbyCode("MR56"), TerritoryId("alpha"), playerOne),
+                    TerritoryOwnerChangedEvent(LobbyCode("1252"), TerritoryId("alpha"), playerOne),
                 ),
-                TerritoryTroopsChangedEvent(LobbyCode("MR56"), TerritoryId("alpha"), 5),
+                TerritoryTroopsChangedEvent(LobbyCode("1252"), TerritoryId("alpha"), 5),
             )
 
         assertEquals(playerOne, state.territoryOwnerOf(TerritoryId("alpha")))
@@ -214,7 +214,7 @@ class GameStateTest {
         val playerOne = PlayerId(11)
         val playerTwo = PlayerId(12)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("MS78")
+        val lobbyCode = LobbyCode("1254")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -247,7 +247,7 @@ class GameStateTest {
         val playerOne = PlayerId(31)
         val playerTwo = PlayerId(32)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("ATQ1")
+        val lobbyCode = LobbyCode("1044")
         val baseState =
             GameState.initial(
                 lobbyCode = lobbyCode,
@@ -292,7 +292,7 @@ class GameStateTest {
         val playerOne = PlayerId(41)
         val playerTwo = PlayerId(42)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("ATQ2")
+        val lobbyCode = LobbyCode("1045")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -322,7 +322,7 @@ class GameStateTest {
         val playerOne = PlayerId(43)
         val playerTwo = PlayerId(44)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("ATQ2")
+        val lobbyCode = LobbyCode("1045")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -356,7 +356,7 @@ class GameStateTest {
         val playerTwo = PlayerId(52)
         val playerThree = PlayerId(53)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("ATQ3")
+        val lobbyCode = LobbyCode("1046")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -397,7 +397,7 @@ class GameStateTest {
         val playerOne = PlayerId(54)
         val playerTwo = PlayerId(55)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("ATQ4")
+        val lobbyCode = LobbyCode("1047")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -426,7 +426,7 @@ class GameStateTest {
         val attacker = PlayerId(61)
         val defender = PlayerId(62)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("SEA1")
+        val lobbyCode = LobbyCode("1335")
         val state =
             reducer.apply(
                 reducer.apply(
@@ -459,7 +459,7 @@ class GameStateTest {
         val playerOne = PlayerId(21)
         val playerTwo = PlayerId(22)
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("QB34")
+        val lobbyCode = LobbyCode("1311")
         val baseState =
             GameState.initial(
                 lobbyCode = lobbyCode,
@@ -554,7 +554,7 @@ class GameStateTest {
     fun `should expose optional metadata fields`() {
         val state =
             GameState(
-                lobbyCode = LobbyCode("LM12"),
+                lobbyCode = LobbyCode("1217"),
                 closedReason = "timeout",
                 lastInvalidActionReason = "invalid move",
             )
@@ -570,7 +570,7 @@ class GameStateTest {
         val jokerCard = CardState(cardId = CardId("card-joker"), type = CardType.JOKER)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("HC12"),
+                lobbyCode = LobbyCode("1190"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne),
             )
@@ -595,7 +595,7 @@ class GameStateTest {
         val secondCard = CardState(cardId = CardId("deck-second"), type = CardType.B)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("DC12"),
+                lobbyCode = LobbyCode("1114"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne, playerTwo),
             ).copy(
@@ -630,7 +630,7 @@ class GameStateTest {
         val secondCard = CardState(cardId = CardId("hand-second"), type = CardType.B)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("DC13"),
+                lobbyCode = LobbyCode("1115"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne, playerTwo),
             )
@@ -661,7 +661,7 @@ class GameStateTest {
         val playerTwo = PlayerId(2)
         val state =
             GameState(
-                lobbyCode = LobbyCode("LG12"),
+                lobbyCode = LobbyCode("1215"),
                 players = listOf(playerOne, playerTwo),
                 activePlayer = playerTwo,
                 turnOrder = listOf(playerOne, playerTwo),
@@ -681,7 +681,7 @@ class GameStateTest {
         // Prüft, dass der Lobby-Owner Teil der Spielerliste ist.
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 lobbyOwner = playerTwo,
@@ -697,7 +697,7 @@ class GameStateTest {
         // Prüft, dass für jeden Spieler genau ein Anzeigename im GameState vorhanden sein muss.
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("PD12"),
+                lobbyCode = LobbyCode("1276"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 playerDisplayNames =
@@ -715,7 +715,7 @@ class GameStateTest {
         // Prüft, dass jeder Spieler in players einen Anzeigenamen im GameState haben muss.
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("PD34"),
+                lobbyCode = LobbyCode("1277"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 playerDisplayNames = emptyMap(),
@@ -729,7 +729,7 @@ class GameStateTest {
         val playerTwo = PlayerId(2)
         val state =
             GameState(
-                lobbyCode = LobbyCode("DN12"),
+                lobbyCode = LobbyCode("1129"),
                 players = listOf(playerOne, playerTwo),
                 turnOrder = listOf(playerOne, playerTwo),
                 playerDisplayNames =
@@ -750,7 +750,7 @@ class GameStateTest {
         val unknownPlayer = PlayerId(2)
         val state =
             GameState(
-                lobbyCode = LobbyCode("DP34"),
+                lobbyCode = LobbyCode("1130"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 playerDisplayNames =
@@ -768,7 +768,7 @@ class GameStateTest {
         val playerOne = PlayerId(1)
         val state =
             GameState(
-                lobbyCode = LobbyCode("HP34"),
+                lobbyCode = LobbyCode("1195"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
             )
@@ -783,7 +783,7 @@ class GameStateTest {
         val unknownPlayer = PlayerId(2)
         val state =
             GameState(
-                lobbyCode = LobbyCode("HP12"),
+                lobbyCode = LobbyCode("1194"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
             )
@@ -798,41 +798,41 @@ class GameStateTest {
         val playerTwo = PlayerId(2)
 
         assertThrows(IllegalArgumentException::class.java) {
-            GameState(lobbyCode = LobbyCode("NO34"), turnNumber = -1)
+            GameState(lobbyCode = LobbyCode("1259"), turnNumber = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            GameState(lobbyCode = LobbyCode("OP12"), stateVersion = -1)
+            GameState(lobbyCode = LobbyCode("1261"), stateVersion = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            GameState(lobbyCode = LobbyCode("PQ56"), processedEventCount = -1)
+            GameState(lobbyCode = LobbyCode("1296"), processedEventCount = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            GameState(lobbyCode = LobbyCode("PQ57"), tradedInSetCount = -1)
+            GameState(lobbyCode = LobbyCode("1297"), tradedInSetCount = -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("RS78"),
+                lobbyCode = LobbyCode("1332"),
                 players = listOf(playerOne, playerOne),
                 turnOrder = listOf(playerOne),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("TU90"),
+                lobbyCode = LobbyCode("1419"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne, playerOne),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("VW12"),
+                lobbyCode = LobbyCode("1425"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerTwo),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XY34"),
+                lobbyCode = LobbyCode("1428"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 activePlayer = playerTwo,
@@ -840,7 +840,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XY56"),
+                lobbyCode = LobbyCode("1429"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 setupTroopsToPlaceByPlayer = emptyMap(),
@@ -848,7 +848,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XY78"),
+                lobbyCode = LobbyCode("1430"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 setupTroopsToPlaceByPlayer = mapOf(playerOne to -1),
@@ -856,7 +856,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XZ12"),
+                lobbyCode = LobbyCode("1431"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 pendingReinforcements = PendingReinforcements(playerOne, -1),
@@ -864,13 +864,13 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XZ56"),
+                lobbyCode = LobbyCode("1432"),
                 mapDefinition = sampleMapDefinition(),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("XZ78"),
+                lobbyCode = LobbyCode("1433"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 handState =
@@ -890,7 +890,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("YZ12"),
+                lobbyCode = LobbyCode("1435"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 handState =
@@ -920,7 +920,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("QB78"),
+                lobbyCode = LobbyCode("1312"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 activePlayer = playerOne,
@@ -934,7 +934,7 @@ class GameStateTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("YA78"),
+                lobbyCode = LobbyCode("1434"),
                 mapDefinition = sampleMapDefinition(),
                 territoryStates =
                     mapOf(
@@ -949,7 +949,7 @@ class GameStateTest {
     @Test
     fun `should increment state version monotonically for each applied event`() {
         val reducer = DefaultLobbyEventReducer()
-        val lobbyCode = LobbyCode("SV12")
+        val lobbyCode = LobbyCode("1359")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
 
@@ -984,7 +984,7 @@ class GameStateTest {
         val defender = PlayerId(2)
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("SP90"),
+                lobbyCode = LobbyCode("1349"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(attacker, defender),
             ).copy(
@@ -1019,13 +1019,13 @@ class GameStateTest {
 
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("TG11"),
+                lobbyCode = LobbyCode("1383"),
                 gameRandomState = 5L,
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             GameState(
-                lobbyCode = LobbyCode("TG12"),
+                lobbyCode = LobbyCode("1384"),
                 players = listOf(playerOne),
                 turnOrder = listOf(playerOne),
                 tradeRequiredOnNextReinforcementPhaseByPlayer = emptyMap(),
@@ -1034,7 +1034,7 @@ class GameStateTest {
 
         val helperState =
             GameState(
-                lobbyCode = LobbyCode("TG13"),
+                lobbyCode = LobbyCode("1385"),
                 players = listOf(playerOne, playerTwo),
                 playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
                 activePlayer = playerOne,
@@ -1050,7 +1050,7 @@ class GameStateTest {
 
         val transferred =
             GameState.initial(
-                lobbyCode = LobbyCode("TG14"),
+                lobbyCode = LobbyCode("1386"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne, playerTwo),
             )
@@ -1081,7 +1081,7 @@ class GameStateTest {
         val unknownTerritory = TerritoryId("missing")
         val stateWithoutMap =
             GameState(
-                lobbyCode = LobbyCode("TG21"),
+                lobbyCode = LobbyCode("1387"),
                 players = listOf(playerOne, playerTwo),
                 playerDisplayNames = mapOf(playerOne to "One", playerTwo to "Two"),
                 turnOrder = listOf(playerOne, playerTwo),
@@ -1109,7 +1109,7 @@ class GameStateTest {
 
         val mappedState =
             GameState.initial(
-                lobbyCode = LobbyCode("TG22"),
+                lobbyCode = LobbyCode("1388"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne, playerTwo),
             )

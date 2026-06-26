@@ -19,7 +19,7 @@ class NetworkTest {
 
     @Test
     fun `should expose message received event data`() {
-        val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
+        val payload = JoinLobbyRequest(LobbyCode("1003"), "alice")
         val event = Network.Event.MessageReceived(ConnectionId(2), payload)
 
         assertEquals(ConnectionId(2), event.connectionId)

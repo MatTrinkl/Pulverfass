@@ -28,7 +28,7 @@ class AttackMessageTest {
     fun `serializer roundtrip attack request`() {
         val request =
             AttackRequest(
-                lobbyCode = LobbyCode("AT12"),
+                lobbyCode = LobbyCode("1020"),
                 playerId = PlayerId(7),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -51,7 +51,7 @@ class AttackMessageTest {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
                 AttackRequest(
-                    lobbyCode = LobbyCode("AT12"),
+                    lobbyCode = LobbyCode("1020"),
                     playerId = PlayerId(7),
                     fromTerritoryId = TerritoryId("alpha"),
                     toTerritoryId = TerritoryId("beta"),
@@ -69,7 +69,7 @@ class AttackMessageTest {
 
     @Test
     fun `serializer roundtrip attack response`() {
-        val response = AttackResponse(lobbyCode = LobbyCode("AT34"), requestId = "req-2")
+        val response = AttackResponse(lobbyCode = LobbyCode("1025"), requestId = "req-2")
 
         val serialized = json.encodeToString(AttackResponse.serializer(), response)
         val deserialized = json.decodeFromString(AttackResponse.serializer(), serialized)
@@ -97,7 +97,7 @@ class AttackMessageTest {
     fun `serializer roundtrip confirm attack done request`() {
         val request =
             ConfirmAttackDoneRequest(
-                lobbyCode = LobbyCode("AT90"),
+                lobbyCode = LobbyCode("1031"),
                 playerId = PlayerId(7),
             )
 
@@ -115,14 +115,14 @@ class AttackMessageTest {
         assertThrows(kotlinx.serialization.MissingFieldException::class.java) {
             json.decodeFromString(
                 ConfirmAttackDoneRequest.serializer(),
-                """{"lobbyCode":"AT90"}""",
+                """{"lobbyCode":"1031"}""",
             )
         }
     }
 
     @Test
     fun `serializer roundtrip confirm attack done response`() {
-        val response = ConfirmAttackDoneResponse(lobbyCode = LobbyCode("AT91"))
+        val response = ConfirmAttackDoneResponse(lobbyCode = LobbyCode("1032"))
 
         val serialized = json.encodeToString(ConfirmAttackDoneResponse.serializer(), response)
         val deserialized =
@@ -173,7 +173,7 @@ class AttackMessageTest {
     fun `serializer roundtrip attack resolved event`() {
         val event =
             AttackResolvedEvent(
-                lobbyCode = LobbyCode("AT56"),
+                lobbyCode = LobbyCode("1026"),
                 attackerPlayerId = PlayerId(7),
                 defenderPlayerId = PlayerId(8),
                 fromTerritoryId = TerritoryId("alpha"),
@@ -211,7 +211,7 @@ class AttackMessageTest {
     fun `attack resolved broadcast strips rng data and marks capture`() {
         val internalEvent =
             AttackResolvedEvent(
-                lobbyCode = LobbyCode("AT58"),
+                lobbyCode = LobbyCode("1028"),
                 attackerPlayerId = PlayerId(7),
                 defenderPlayerId = PlayerId(8),
                 fromTerritoryId = TerritoryId("alpha"),
@@ -251,7 +251,7 @@ class AttackMessageTest {
     fun `attack resolved event enforces capture occupation invariants`() {
         assertThrows(IllegalArgumentException::class.java) {
             AttackResolvedEvent(
-                lobbyCode = LobbyCode("AT59"),
+                lobbyCode = LobbyCode("1029"),
                 attackerPlayerId = PlayerId(7),
                 defenderPlayerId = PlayerId(8),
                 fromTerritoryId = TerritoryId("alpha"),
@@ -278,7 +278,7 @@ class AttackMessageTest {
 
         assertThrows(IllegalArgumentException::class.java) {
             AttackResolvedEvent(
-                lobbyCode = LobbyCode("AT60"),
+                lobbyCode = LobbyCode("1030"),
                 attackerPlayerId = PlayerId(7),
                 defenderPlayerId = PlayerId(8),
                 fromTerritoryId = TerritoryId("alpha"),
@@ -308,7 +308,7 @@ class AttackMessageTest {
     fun `serializer roundtrip player eliminated event`() {
         val event =
             PlayerEliminatedEvent(
-                lobbyCode = LobbyCode("AT57"),
+                lobbyCode = LobbyCode("1027"),
                 playerId = PlayerId(8),
                 eliminatedByPlayerId = PlayerId(7),
                 stateVersion = 12L,

@@ -45,7 +45,7 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 class LobbyRecoveryLoaderTest {
-    private val lobbyCode = LobbyCode("LR11")
+    private val lobbyCode = LobbyCode("1228")
     private val mapDefinition =
         ClasspathMapDefinitionRepository.loadDefault().defaultMapDefinition()
 
@@ -264,7 +264,7 @@ class LobbyRecoveryLoaderTest {
             record(
                 "attack_resolved",
                 """
-                {"lobbyCode":"LR11","attackerPlayerId":1,"defenderPlayerId":2,
+                {"lobbyCode":"1228","attackerPlayerId":1,"defenderPlayerId":2,
                 "fromTerritoryId":"alpha","toTerritoryId":"beta","attackTroops":3,"sourceTroopsBefore":5,
                 "targetTroopsBefore":2,"requestedAttackDice":3,"attackDice":3,"defendDice":2,
                 "attackerRolls":[5,4,3],"defenderRolls":[2,1],"rngTrace":[5,3,4,1,2],
@@ -284,7 +284,7 @@ class LobbyRecoveryLoaderTest {
             ),
             record(
                 "player_eliminated",
-                """{"lobbyCode":"LR11","playerId":2,"eliminatedByPlayerId":1,"stateVersion":2}""",
+                """{"lobbyCode":"1228","playerId":2,"eliminatedByPlayerId":1,"stateVersion":2}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -299,7 +299,7 @@ class LobbyRecoveryLoaderTest {
             record(
                 "card_set_traded_in",
                 """
-                {"lobbyCode":"LR11","playerId":5,"cardIds":["card-a","card-b","card-c"],"value":6,"tradeIndex":3}
+                {"lobbyCode":"1228","playerId":5,"cardIds":["card-a","card-b","card-c"],"value":6,"tradeIndex":3}
                 """.trimIndent(),
                 createdAt,
             ).toLobbyEvent(),
@@ -312,7 +312,7 @@ class LobbyRecoveryLoaderTest {
             ),
             record(
                 "card_drawn",
-                """{"lobbyCode":"LR11","playerId":5,"cardId":"drawn-card"}""",
+                """{"lobbyCode":"1228","playerId":5,"cardId":"drawn-card"}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -320,7 +320,7 @@ class LobbyRecoveryLoaderTest {
             LobbyCreated(lobbyCode),
             record(
                 eventType = "lobby_created",
-                eventJson = """{"lobbyCode":"LR11"}""",
+                eventJson = """{"lobbyCode":"1228"}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -328,7 +328,7 @@ class LobbyRecoveryLoaderTest {
             LobbyClosed(lobbyCode, "done"),
             record(
                 eventType = "lobby_closed",
-                eventJson = """{"lobbyCode":"LR11","reason":"done"}""",
+                eventJson = """{"lobbyCode":"1228","reason":"done"}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -336,7 +336,7 @@ class LobbyRecoveryLoaderTest {
             MatchEndedEvent(lobbyCode, MatchEndReason.DECK_EMPTY),
             record(
                 eventType = "match_ended",
-                eventJson = """{"lobbyCode":"LR11","reason":"DECK_EMPTY"}""",
+                eventJson = """{"lobbyCode":"1228","reason":"DECK_EMPTY"}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -349,7 +349,7 @@ class LobbyRecoveryLoaderTest {
             record(
                 eventType = "match_ended",
                 eventJson =
-                    """{"lobbyCode":"LR11","reason":"TERRITORY_DOMINATION","winnerPlayerId":1}""",
+                    """{"lobbyCode":"1228","reason":"TERRITORY_DOMINATION","winnerPlayerId":1}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -357,7 +357,7 @@ class LobbyRecoveryLoaderTest {
             PlayerJoined(lobbyCode, PlayerId(1), "ALICE"),
             record(
                 "player_joined",
-                """{"lobbyCode":"LR11","playerId":1,"playerDisplayName":"Alice"}""",
+                """{"lobbyCode":"1228","playerId":1,"playerDisplayName":"Alice"}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -365,7 +365,7 @@ class LobbyRecoveryLoaderTest {
             PlayerLeft(lobbyCode, PlayerId(2), "quit"),
             record(
                 "player_left",
-                """{"lobbyCode":"LR11","playerId":2,"reason":"quit"}""",
+                """{"lobbyCode":"1228","playerId":2,"reason":"quit"}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -373,7 +373,7 @@ class LobbyRecoveryLoaderTest {
             PlayerKicked(lobbyCode, PlayerId(2), PlayerId(1)),
             record(
                 "player_kicked",
-                """{"lobbyCode":"LR11","targetPlayerId":2,"requesterPlayerId":1}""",
+                """{"lobbyCode":"1228","targetPlayerId":2,"requesterPlayerId":1}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -381,7 +381,7 @@ class LobbyRecoveryLoaderTest {
             StartPlayerConfigured(lobbyCode, PlayerId(2), PlayerId(1)),
             record(
                 "start_player_configured",
-                """{"lobbyCode":"LR11","startPlayerId":2,"requesterPlayerId":1}""",
+                """{"lobbyCode":"1228","startPlayerId":2,"requesterPlayerId":1}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -389,7 +389,7 @@ class LobbyRecoveryLoaderTest {
             GameStarted(lobbyCode, 123L),
             record(
                 eventType = "game_started",
-                eventJson = """{"lobbyCode":"LR11","randomSeed":123}""",
+                eventJson = """{"lobbyCode":"1228","randomSeed":123}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -397,7 +397,7 @@ class LobbyRecoveryLoaderTest {
             InvalidActionDetected(lobbyCode, PlayerId(3), "invalid"),
             record(
                 "invalid_action_detected",
-                """{"lobbyCode":"LR11","playerId":3,"reason":"invalid"}""",
+                """{"lobbyCode":"1228","playerId":3,"reason":"invalid"}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -405,7 +405,7 @@ class LobbyRecoveryLoaderTest {
             SystemTick(lobbyCode, 77L),
             record(
                 eventType = "system_tick",
-                eventJson = """{"lobbyCode":"LR11","tick":77}""",
+                eventJson = """{"lobbyCode":"1228","tick":77}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -418,7 +418,7 @@ class LobbyRecoveryLoaderTest {
             ),
             record(
                 "territory_owner_changed",
-                """{"lobbyCode":"LR11","territoryId":"territory-1","ownerId":4,"stateVersion":5}""",
+                """{"lobbyCode":"1228","territoryId":"territory-1","ownerId":4,"stateVersion":5}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -432,7 +432,7 @@ class LobbyRecoveryLoaderTest {
             record(
                 "territory_troops_changed",
                 """
-                {"lobbyCode":"LR11","territoryId":"territory-2","troopCount":9,"stateVersion":6}
+                {"lobbyCode":"1228","territoryId":"territory-2","troopCount":9,"stateVersion":6}
                 """.trimIndent(),
                 createdAt,
             ).toLobbyEvent(),
@@ -448,7 +448,7 @@ class LobbyRecoveryLoaderTest {
             record(
                 "fortify_move_applied",
                 """
-                {"lobbyCode":"LR11","playerId":7,"fromTerritoryId":"territory-3",
+                {"lobbyCode":"1228","playerId":7,"fromTerritoryId":"territory-3",
                 "toTerritoryId":"territory-4","troopCount":3}
                 """.trimIndent().replace("\n", ""),
                 createdAt,
@@ -461,7 +461,7 @@ class LobbyRecoveryLoaderTest {
             ),
             record(
                 "fortify_used_set",
-                """{"lobbyCode":"LR11","used":true}""",
+                """{"lobbyCode":"1228","used":true}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -469,7 +469,7 @@ class LobbyRecoveryLoaderTest {
             TimeoutTriggered(lobbyCode, "setup", 3000L),
             record(
                 "timeout_triggered",
-                """{"lobbyCode":"LR11","target":"setup","timeoutMillis":3000}""",
+                """{"lobbyCode":"1228","target":"setup","timeoutMillis":3000}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -477,7 +477,7 @@ class LobbyRecoveryLoaderTest {
             TurnEnded(lobbyCode, PlayerId(5)),
             record(
                 eventType = "turn_ended",
-                eventJson = """{"lobbyCode":"LR11","playerId":5}""",
+                eventJson = """{"lobbyCode":"1228","playerId":5}""",
                 createdAt = createdAt,
             ).toLobbyEvent(),
         )
@@ -495,25 +495,23 @@ class LobbyRecoveryLoaderTest {
             record(
                 "turn_state_updated",
                 """
-                {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"REINFORCEMENTS","turnCount":4,
+                {"lobbyCode":"1228","activePlayerId":6,"turnPhase":"REINFORCEMENTS","turnCount":4,
                 "startPlayerId":1,"isPaused":true,"pauseReason":"WAITING_FOR_PLAYER","pausedPlayerId":6}
                 """.trimIndent().replace("\n", ""),
                 createdAt,
             ).toLobbyEvent(),
         )
         assertEquals(
-            /**
-             * Recovery muss aus dem Persistenztyp wieder das Domain-Event bauen.
-             * Erst danach kann der Reducer den Spieler wieder als "Bonus bereits
-             * verwendet" markieren.
-             */
+            // Recovery muss aus dem Persistenztyp wieder das Domain-Event bauen.
+            // Erst danach kann der Reducer den Spieler wieder als "Bonus bereits
+            // verwendet" markieren.
             CheatReinforcementBonusUsedEvent(
                 lobbyCode = lobbyCode,
                 playerId = PlayerId(5),
             ),
             record(
                 "cheat_reinforcement_bonus_used",
-                """{"lobbyCode":"LR11","playerId":5}""",
+                """{"lobbyCode":"1228","playerId":5}""",
                 createdAt,
             ).toLobbyEvent(),
         )
@@ -522,10 +520,10 @@ class LobbyRecoveryLoaderTest {
     @Test
     fun `toLobbyEvent rejects mismatched lobby code and unknown types`() {
         assertThrows(IllegalStateException::class.java) {
-            record("lobby_created", """{"lobbyCode":"AB12"}""").toLobbyEvent()
+            record("lobby_created", """{"lobbyCode":"1003"}""").toLobbyEvent()
         }
         assertThrows(IllegalStateException::class.java) {
-            record("unknown_event", """{"lobbyCode":"LR11"}""").toLobbyEvent()
+            record("unknown_event", """{"lobbyCode":"1228"}""").toLobbyEvent()
         }
     }
 
@@ -535,21 +533,21 @@ class LobbyRecoveryLoaderTest {
             LobbyClosed(lobbyCode, null),
             record(
                 eventType = "lobby_closed",
-                eventJson = """{"lobbyCode":"LR11","reason":null}""",
+                eventJson = """{"lobbyCode":"1228","reason":null}""",
             ).toLobbyEvent(),
         )
         assertEquals(
             PlayerLeft(lobbyCode, PlayerId(2), null),
             record(
                 eventType = "player_left",
-                eventJson = """{"lobbyCode":"LR11","playerId":2,"reason":null}""",
+                eventJson = """{"lobbyCode":"1228","playerId":2,"reason":null}""",
             ).toLobbyEvent(),
         )
         assertEquals(
             InvalidActionDetected(lobbyCode, null, "invalid"),
             record(
                 eventType = "invalid_action_detected",
-                eventJson = """{"lobbyCode":"LR11","playerId":null,"reason":"invalid"}""",
+                eventJson = """{"lobbyCode":"1228","playerId":null,"reason":"invalid"}""",
             ).toLobbyEvent(),
         )
         assertEquals(
@@ -563,7 +561,7 @@ class LobbyRecoveryLoaderTest {
                 eventType = "territory_owner_changed",
                 eventJson =
                     """
-                    {"lobbyCode":"LR11","territoryId":"territory-1","ownerId":null,"stateVersion":null}
+                    {"lobbyCode":"1228","territoryId":"territory-1","ownerId":null,"stateVersion":null}
                     """.trimIndent(),
             ).toLobbyEvent(),
         )
@@ -582,7 +580,7 @@ class LobbyRecoveryLoaderTest {
                 eventType = "turn_state_updated",
                 eventJson =
                     """
-                    {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"ATTACK","turnCount":4,
+                    {"lobbyCode":"1228","activePlayerId":6,"turnPhase":"ATTACK","turnCount":4,
                     "startPlayerId":1,"isPaused":false,"pauseReason":null,"pausedPlayerId":null}
                     """.trimIndent().replace("\n", ""),
             ).toLobbyEvent(),
@@ -597,7 +595,7 @@ class LobbyRecoveryLoaderTest {
                     eventType = "attack_resolved",
                     eventJson =
                         """
-                        {"lobbyCode":"LR11","attackerPlayerId":1,"defenderPlayerId":2,
+                        {"lobbyCode":"1228","attackerPlayerId":1,"defenderPlayerId":2,
                         "fromTerritoryId":"alpha","toTerritoryId":"beta","attackTroops":"x",
                         "sourceTroopsBefore":5,"targetTroopsBefore":2,"requestedAttackDice":3,
                         "attackDice":3,"defendDice":2,"attackerRolls":[5,4,3],"defenderRolls":[2,1],
@@ -610,7 +608,7 @@ class LobbyRecoveryLoaderTest {
                     eventType = "turn_state_updated",
                     eventJson =
                         """
-                        {"lobbyCode":"LR11","activePlayerId":6,"turnPhase":"ATTACK",
+                        {"lobbyCode":"1228","activePlayerId":6,"turnPhase":"ATTACK",
                         "turnCount":4,"startPlayerId":1,"isPaused":"nope"}
                         """.trimIndent().replace("\n", ""),
                 ),
@@ -618,7 +616,7 @@ class LobbyRecoveryLoaderTest {
                     eventType = "card_set_traded_in",
                     eventJson =
                         """
-                        {"lobbyCode":"LR11","playerId":5,"cardIds":["card-a",3],"value":6,"tradeIndex":3}
+                        {"lobbyCode":"1228","playerId":5,"cardIds":["card-a",3],"value":6,"tradeIndex":3}
                         """.trimIndent(),
                 ),
             )
@@ -634,8 +632,8 @@ class LobbyRecoveryLoaderTest {
 
     @Test
     fun `restoreAll skips corrupted lobbies and keeps recoverable lobbies`() {
-        val recoverableLobbyCode = LobbyCode("RA11")
-        val corruptedLobbyCode = LobbyCode("RZ99")
+        val recoverableLobbyCode = LobbyCode("1315")
+        val corruptedLobbyCode = LobbyCode("1333")
         val hostId = PlayerId(1)
         val reader =
             FakeLobbyPersistenceReader(
@@ -648,7 +646,7 @@ class LobbyRecoveryLoaderTest {
                                     eventType = "player_joined",
                                     eventJson =
                                         """
-                                        {"lobbyCode":"RA11","playerId":1,"playerDisplayName":"Host"}
+                                        {"lobbyCode":"1315","playerId":1,"playerDisplayName":"Host"}
                                         """.trimIndent(),
                                 ),
                             ),
@@ -658,7 +656,7 @@ class LobbyRecoveryLoaderTest {
                                     lobbyCode = corruptedLobbyCode,
                                     eventType = "lobby_created",
                                     stateVersion = 2,
-                                    eventJson = """{"lobbyCode":"RZ99"}""",
+                                    eventJson = """{"lobbyCode":"1333"}""",
                                 ),
                             ),
                     ),

@@ -25,12 +25,12 @@ class SessionContextRegistryTest {
         val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174301")
         registry.assignPlayer(sessionToken, PlayerId(2))
 
-        registry.updateLobbyContext(sessionToken, LobbyCode("AB12"), "Alice")
+        registry.updateLobbyContext(sessionToken, LobbyCode("1003"), "Alice")
 
         assertEquals(
             SessionReconnectContext(
                 playerId = PlayerId(2),
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "ALICE",
             ),
             registry.contextFor(sessionToken),
@@ -42,7 +42,7 @@ class SessionContextRegistryTest {
         val registry = SessionContextRegistry()
         val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174302")
         registry.assignPlayer(sessionToken, PlayerId(3))
-        registry.updateLobbyContext(sessionToken, LobbyCode("CD34"), "Bob")
+        registry.updateLobbyContext(sessionToken, LobbyCode("1071"), "Bob")
 
         registry.clearLobbyContext(sessionToken)
 
@@ -58,7 +58,7 @@ class SessionContextRegistryTest {
         val registry = SessionContextRegistry()
         val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174303")
         registry.assignPlayer(sessionToken, PlayerId(4))
-        registry.updateLobbyContext(sessionToken, LobbyCode("EF56"), "Carol")
+        registry.updateLobbyContext(sessionToken, LobbyCode("1132"), "Carol")
 
         registry.removeSession(sessionToken)
 
@@ -73,7 +73,7 @@ class SessionContextRegistryTest {
         val previousSessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174304")
         val newSessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174305")
         registry.assignPlayer(previousSessionToken, PlayerId(5))
-        registry.updateLobbyContext(previousSessionToken, LobbyCode("GH78"), "Dora")
+        registry.updateLobbyContext(previousSessionToken, LobbyCode("1178"), "Dora")
 
         registry.assignPlayer(newSessionToken, PlayerId(5))
 
@@ -94,7 +94,7 @@ class SessionContextRegistryTest {
                             if (token == sessionToken) {
                                 SessionReconnectContext(
                                     playerId = PlayerId(6),
-                                    lobbyCode = LobbyCode("IJ90"),
+                                    lobbyCode = LobbyCode("1199"),
                                     playerDisplayName = "Eve",
                                 )
                             } else {
@@ -107,7 +107,7 @@ class SessionContextRegistryTest {
         assertEquals(
             SessionReconnectContext(
                 playerId = PlayerId(6),
-                lobbyCode = LobbyCode("IJ90"),
+                lobbyCode = LobbyCode("1199"),
                 playerDisplayName = "EVE",
             ),
             registry.contextFor(sessionToken),

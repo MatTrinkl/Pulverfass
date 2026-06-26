@@ -18,15 +18,15 @@ class PlayerLeftLobbyEventTest {
 
     @Test
     fun `should create player left lobby event correctly`() {
-        val event = PlayerLeftLobbyEvent(LobbyCode("AB12"), PlayerId(7))
+        val event = PlayerLeftLobbyEvent(LobbyCode("1003"), PlayerId(7))
 
-        assertEquals(LobbyCode("AB12"), event.lobbyCode)
+        assertEquals(LobbyCode("1003"), event.lobbyCode)
         assertEquals(PlayerId(7), event.playerId)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val event = PlayerLeftLobbyEvent(LobbyCode("CD34"), PlayerId(8))
+        val event = PlayerLeftLobbyEvent(LobbyCode("1071"), PlayerId(8))
         val payload: NetworkMessagePayload = event
 
         assertEquals(event, payload)
@@ -34,30 +34,30 @@ class PlayerLeftLobbyEventTest {
 
     @Test
     fun `should serialize and deserialize player left lobby event`() {
-        val event = PlayerLeftLobbyEvent(LobbyCode("EF56"), PlayerId(9))
+        val event = PlayerLeftLobbyEvent(LobbyCode("1132"), PlayerId(9))
 
         val serialized = json.encodeToString(PlayerLeftLobbyEvent.serializer(), event)
         val deserialized = json.decodeFromString<PlayerLeftLobbyEvent>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56","playerId":9}""", serialized)
+        assertEquals("""{"lobbyCode":"1132","playerId":9}""", serialized)
         assertEquals(event, deserialized)
     }
 
     @Test
     fun `should serialize new host only when present`() {
-        val event = PlayerLeftLobbyEvent(LobbyCode("EF56"), PlayerId(9), newHost = PlayerId(10))
+        val event = PlayerLeftLobbyEvent(LobbyCode("1132"), PlayerId(9), newHost = PlayerId(10))
 
         val serialized = json.encodeToString(PlayerLeftLobbyEvent.serializer(), event)
         val deserialized = json.decodeFromString<PlayerLeftLobbyEvent>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56","playerId":9,"newHost":10}""", serialized)
+        assertEquals("""{"lobbyCode":"1132","playerId":9,"newHost":10}""", serialized)
         assertEquals(event, deserialized)
     }
 
     @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<PlayerLeftLobbyEvent>("""{"lobbyCode":"AB12"}""")
+            json.decodeFromString<PlayerLeftLobbyEvent>("""{"lobbyCode":"1003"}""")
         }
     }
 
@@ -79,7 +79,7 @@ class PlayerLeftLobbyEventTest {
             PlayerLeftLobbyEventSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                 ),
             )
         }

@@ -31,7 +31,7 @@ class LobbyManagerTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
 
             try {
                 val created = manager.createLobby(lobbyCode)
@@ -56,7 +56,7 @@ class LobbyManagerTest {
                         GameState.initial(lobbyCode).copy(closedReason = "factory-default")
                     },
                 )
-            val lobbyCode = LobbyCode("BC23")
+            val lobbyCode = LobbyCode("1049")
 
             try {
                 val runtime = manager.createLobby(lobbyCode)
@@ -73,7 +73,7 @@ class LobbyManagerTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val lobbyCode = LobbyCode("CD34")
+            val lobbyCode = LobbyCode("1071")
 
             try {
                 manager.createLobby(lobbyCode)
@@ -83,7 +83,7 @@ class LobbyManagerTest {
                         manager.createLobby(lobbyCode)
                     }
 
-                assertEquals("Lobby 'CD34' exists already.", exception.message)
+                assertEquals("Lobby '1071' exists already.", exception.message)
             } finally {
                 manager.shutdownAll()
                 scope.cancel()
@@ -95,7 +95,7 @@ class LobbyManagerTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val lobbyCode = LobbyCode("EF56")
+            val lobbyCode = LobbyCode("1132")
 
             try {
                 manager.createLobby(lobbyCode)
@@ -117,8 +117,8 @@ class LobbyManagerTest {
     @Test
     fun `parallele nutzung mehrerer lobbys funktioniert`() =
         runBlocking {
-            val blockedLobby = LobbyCode("GH78")
-            val freeLobby = LobbyCode("JK90")
+            val blockedLobby = LobbyCode("1178")
+            val freeLobby = LobbyCode("1201")
             val enteredBlockedReducer = CountDownLatch(1)
             val releaseBlockedReducer = CountDownLatch(1)
             val reducer =
@@ -181,8 +181,8 @@ class LobbyManagerTest {
                 val exception =
                     assertThrows(IllegalArgumentException::class.java) {
                         manager.createLobby(
-                            lobbyCode = LobbyCode("LM12"),
-                            initialState = GameState.initial(LobbyCode("NO34")),
+                            lobbyCode = LobbyCode("1217"),
+                            initialState = GameState.initial(LobbyCode("1259")),
                         )
                     }
 
@@ -200,8 +200,8 @@ class LobbyManagerTest {
             val manager = LobbyManager(scope)
 
             try {
-                manager.removeLobby(LobbyCode("PQ56"))
-                assertNull(manager.getLobby(LobbyCode("PQ56")))
+                manager.removeLobby(LobbyCode("1296"))
+                assertNull(manager.getLobby(LobbyCode("1296")))
             } finally {
                 manager.shutdownAll()
                 scope.cancel()
@@ -216,7 +216,7 @@ class LobbyManagerTest {
 
             try {
                 assertThrowsSuspend(IllegalStateException::class.java) {
-                    manager.submit(SystemTick(LobbyCode("RS78"), 1))
+                    manager.submit(SystemTick(LobbyCode("1332"), 1))
                 }
             } finally {
                 manager.shutdownAll()
@@ -227,7 +227,7 @@ class LobbyManagerTest {
     @Test
     fun `manager submit deckt suspendierenden pfad isoliert ab`() =
         runBlocking {
-            val blockedLobby = LobbyCode("SU12")
+            val blockedLobby = LobbyCode("1358")
             val enteredBlockedReducer = CountDownLatch(1)
             val releaseBlockedReducer = CountDownLatch(1)
             val reducer =
@@ -269,7 +269,7 @@ class LobbyManagerTest {
     @Test
     fun `manager submit und remove lobby decken suspendierende pfade ab`() =
         runBlocking {
-            val blockedLobby = LobbyCode("ST90")
+            val blockedLobby = LobbyCode("1355")
             val enteredBlockedReducer = CountDownLatch(1)
             val releaseBlockedReducer = CountDownLatch(1)
             val reducer =

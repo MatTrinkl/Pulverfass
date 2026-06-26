@@ -125,7 +125,7 @@ class NetworkMessageSerializerTest {
     fun `should deserialize join lobby request payload for join request type`() {
         val payload =
             JoinLobbyRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
         val bytes =
@@ -159,7 +159,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered payload by runtime type`() {
         val payload =
             JoinLobbyRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
 
@@ -240,7 +240,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered join lobby response by runtime type`() {
         val payload =
             JoinLobbyResponse(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
             )
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
@@ -271,7 +271,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered create lobby response by runtime type`() {
         val payload =
             CreateLobbyResponse(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
             )
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
@@ -302,7 +302,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered player joined broadcast by runtime type`() {
         val payload =
             PlayerJoinedLobbyEvent(
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 playerId = PlayerId(7),
                 playerDisplayName = "Bob",
             )
@@ -321,7 +321,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered player connection lost broadcast by runtime type`() {
         val payload =
             PlayerConnectionLostEvent(
-                lobbyCode = LobbyCode("EF57"),
+                lobbyCode = LobbyCode("1133"),
                 playerId = PlayerId(17),
                 reason = PlayerConnectionLostReason.SOCKET_CLOSED,
             )
@@ -338,7 +338,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should deserialize lobby player count request payload for player count request type`() {
-        val payload = LobbyPlayerCountRequest(lobbyCode = LobbyCode("PC12"))
+        val payload = LobbyPlayerCountRequest(lobbyCode = LobbyCode("1273"))
         val bytes =
             NetworkMessageSerializer.serializePayload(
                 LobbyPlayerCountRequest.serializer(),
@@ -356,7 +356,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should serialize registered lobby player count response by runtime type`() {
-        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("PC34"), playerCount = 3)
+        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("1274"), playerCount = 3)
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
         val result =
@@ -372,9 +372,9 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered lobby player count error by runtime type`() {
         val payload =
             LobbyPlayerCountErrorResponse(
-                lobbyCode = LobbyCode("PC99"),
+                lobbyCode = LobbyCode("1275"),
                 code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
-                reason = "Lobby 'PC99' wurde nicht gefunden.",
+                reason = "Lobby '1275' wurde nicht gefunden.",
             )
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
@@ -389,7 +389,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should deserialize leave lobby request payload for leave request type`() {
-        val payload = LeaveLobbyRequest(lobbyCode = LobbyCode("GH78"))
+        val payload = LeaveLobbyRequest(lobbyCode = LobbyCode("1178"))
         val bytes =
             NetworkMessageSerializer.serializePayload(LeaveLobbyRequest.serializer(), payload)
 
@@ -404,7 +404,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should serialize registered leave lobby response by runtime type`() {
-        val payload = LeaveLobbyResponse(lobbyCode = LobbyCode("IJ90"))
+        val payload = LeaveLobbyResponse(lobbyCode = LobbyCode("1199"))
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
         val result =
@@ -418,7 +418,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should serialize registered player left broadcast by runtime type`() {
-        val payload = PlayerLeftLobbyEvent(lobbyCode = LobbyCode("KL12"), playerId = PlayerId(8))
+        val payload = PlayerLeftLobbyEvent(lobbyCode = LobbyCode("1205"), playerId = PlayerId(8))
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
         val result =
@@ -432,7 +432,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should deserialize map get request payload for map get request type`() {
-        val payload = MapGetRequest(lobbyCode = LobbyCode("MN34"))
+        val payload = MapGetRequest(lobbyCode = LobbyCode("1247"))
         val bytes = NetworkMessageSerializer.serializePayload(MapGetRequest.serializer(), payload)
 
         val result =
@@ -448,7 +448,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered map get response by runtime type`() {
         val payload =
             MapGetResponse(
-                lobbyCode = LobbyCode("MN34"),
+                lobbyCode = LobbyCode("1247"),
                 schemaVersion = 1,
                 mapHash = "hash",
                 stateVersion = 4,
@@ -501,7 +501,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered territory owner changed broadcast by runtime type`() {
         val payload =
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("OP56"),
+                lobbyCode = LobbyCode("1262"),
                 territoryId = TerritoryId("alpha"),
                 ownerId = PlayerId(3),
                 stateVersion = 5,
@@ -521,7 +521,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered territory troops changed broadcast by runtime type`() {
         val payload =
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("QR78"),
+                lobbyCode = LobbyCode("1313"),
                 territoryId = TerritoryId("beta"),
                 troopCount = 7,
                 stateVersion = 6,
@@ -541,7 +541,7 @@ class NetworkMessageSerializerTest {
     fun `should deserialize turn advance request payload for turn advance request type`() {
         val payload =
             TurnAdvanceRequest(
-                lobbyCode = LobbyCode("TA12"),
+                lobbyCode = LobbyCode("1374"),
                 playerId = PlayerId(5),
                 expectedPhase = TurnPhase.ATTACK,
             )
@@ -559,7 +559,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should serialize registered turn advance response by runtime type`() {
-        val payload = TurnAdvanceResponse(lobbyCode = LobbyCode("TA34"))
+        val payload = TurnAdvanceResponse(lobbyCode = LobbyCode("1378"))
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
         val result =
@@ -593,7 +593,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered turn state updated broadcast by runtime type`() {
         val payload =
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("TA56"),
+                lobbyCode = LobbyCode("1379"),
                 activePlayerId = PlayerId(1),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 2,
@@ -612,7 +612,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should deserialize turn state get request payload for turn state get request type`() {
-        val payload = TurnStateGetRequest(lobbyCode = LobbyCode("TS12"))
+        val payload = TurnStateGetRequest(lobbyCode = LobbyCode("1410"))
         val bytes =
             NetworkMessageSerializer.serializePayload(
                 TurnStateGetRequest.serializer(),
@@ -632,7 +632,7 @@ class NetworkMessageSerializerTest {
     fun `should serialize registered turn state get response by runtime type`() {
         val payload =
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("TS34"),
+                lobbyCode = LobbyCode("1411"),
                 activePlayerId = PlayerId(2),
                 turnPhase = TurnPhase.REINFORCEMENTS,
                 turnCount = 9,
@@ -673,7 +673,7 @@ class NetworkMessageSerializerTest {
     fun `should deserialize start player set request payload for start player set request type`() {
         val payload =
             StartPlayerSetRequest(
-                lobbyCode = LobbyCode("SP12"),
+                lobbyCode = LobbyCode("1345"),
                 startPlayerId = PlayerId(2),
                 requesterPlayerId = PlayerId(1),
             )
@@ -694,7 +694,7 @@ class NetworkMessageSerializerTest {
 
     @Test
     fun `should serialize registered start player set response by runtime type`() {
-        val payload = StartPlayerSetResponse(LobbyCode("SP34"), PlayerId(8))
+        val payload = StartPlayerSetResponse(LobbyCode("1348"), PlayerId(8))
 
         val bytes = NetworkMessageSerializer.serializePayload(payload)
         val result =
@@ -728,7 +728,7 @@ class NetworkMessageSerializerTest {
     fun `should throw for unsupported payload type`() {
         val payloadBytes =
             """
-            {"lobbyCode":"AB12","playerDisplayName":"Alice"}
+            {"lobbyCode":"1003","playerDisplayName":"Alice"}
             """.trimIndent().encodeToByteArray()
 
         val exception =

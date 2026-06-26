@@ -19,16 +19,16 @@ class PlayerJoinedLobbyEventTest {
 
     @Test
     fun `should create player joined lobby event correctly`() {
-        val event = PlayerJoinedLobbyEvent(LobbyCode("AB12"), PlayerId(7), "Alice")
+        val event = PlayerJoinedLobbyEvent(LobbyCode("1003"), PlayerId(7), "Alice")
 
-        assertEquals(LobbyCode("AB12"), event.lobbyCode)
+        assertEquals(LobbyCode("1003"), event.lobbyCode)
         assertEquals(PlayerId(7), event.playerId)
         assertEquals("Alice", event.playerDisplayName)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val event = PlayerJoinedLobbyEvent(LobbyCode("CD34"), PlayerId(8), "Bob")
+        val event = PlayerJoinedLobbyEvent(LobbyCode("1071"), PlayerId(8), "Bob")
         val payload: NetworkMessagePayload = event
 
         assertEquals(event, payload)
@@ -36,13 +36,13 @@ class PlayerJoinedLobbyEventTest {
 
     @Test
     fun `should serialize and deserialize player joined lobby event`() {
-        val event = PlayerJoinedLobbyEvent(LobbyCode("EF56"), PlayerId(9), "Carol")
+        val event = PlayerJoinedLobbyEvent(LobbyCode("1132"), PlayerId(9), "Carol")
 
         val serialized = json.encodeToString(PlayerJoinedLobbyEvent.serializer(), event)
         val deserialized = json.decodeFromString<PlayerJoinedLobbyEvent>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"EF56","playerId":9,"playerDisplayName":"Carol"}""",
+            """{"lobbyCode":"1132","playerId":9,"playerDisplayName":"Carol"}""",
             serialized,
         )
         assertEquals(event, deserialized)
@@ -50,13 +50,13 @@ class PlayerJoinedLobbyEventTest {
 
     @Test
     fun `should serialize isHost only when true`() {
-        val event = PlayerJoinedLobbyEvent(LobbyCode("EF56"), PlayerId(9), "Carol", isHost = true)
+        val event = PlayerJoinedLobbyEvent(LobbyCode("1132"), PlayerId(9), "Carol", isHost = true)
 
         val serialized = json.encodeToString(PlayerJoinedLobbyEvent.serializer(), event)
         val deserialized = json.decodeFromString<PlayerJoinedLobbyEvent>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"EF56","playerId":9,"playerDisplayName":"Carol","isHost":true}""",
+            """{"lobbyCode":"1132","playerId":9,"playerDisplayName":"Carol","isHost":true}""",
             serialized,
         )
         assertEquals(event, deserialized)
@@ -66,7 +66,7 @@ class PlayerJoinedLobbyEventTest {
     fun `should reject blank player display name`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                PlayerJoinedLobbyEvent(LobbyCode("AB12"), PlayerId(7), " ")
+                PlayerJoinedLobbyEvent(LobbyCode("1003"), PlayerId(7), " ")
             }
 
         assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
@@ -76,7 +76,7 @@ class PlayerJoinedLobbyEventTest {
     fun `should reject player display name with invalid characters`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                PlayerJoinedLobbyEvent(LobbyCode("AB12"), PlayerId(7), "ALICE1")
+                PlayerJoinedLobbyEvent(LobbyCode("1003"), PlayerId(7), "ALICE1")
             }
 
         assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
@@ -85,7 +85,7 @@ class PlayerJoinedLobbyEventTest {
     @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<PlayerJoinedLobbyEvent>("""{"lobbyCode":"AB12"}""")
+            json.decodeFromString<PlayerJoinedLobbyEvent>("""{"lobbyCode":"1003"}""")
         }
     }
 
@@ -107,7 +107,7 @@ class PlayerJoinedLobbyEventTest {
             PlayerJoinedLobbyEventSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                 ),
             )
         }

@@ -24,13 +24,13 @@ class ReconnectResponseTest {
             ReconnectResponse(
                 success = true,
                 playerId = PlayerId(7),
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
 
         assertEquals(true, response.success)
         assertEquals(PlayerId(7), response.playerId)
-        assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertEquals(LobbyCode("1003"), response.lobbyCode)
         assertEquals("Alice", response.playerDisplayName)
     }
 
@@ -52,7 +52,7 @@ class ReconnectResponseTest {
             ReconnectResponse(
                 success = true,
                 playerId = PlayerId(8),
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 playerDisplayName = "Bob",
             )
 
@@ -60,7 +60,7 @@ class ReconnectResponseTest {
         val deserialized = json.decodeFromString<ReconnectResponse>(serialized)
 
         assertEquals(
-            """{"success":true,"playerId":8,"lobbyCode":"CD34","playerDisplayName":"Bob"}""",
+            """{"success":true,"playerId":8,"lobbyCode":"1071","playerDisplayName":"Bob"}""",
             serialized,
         )
         assertEquals(response, deserialized)

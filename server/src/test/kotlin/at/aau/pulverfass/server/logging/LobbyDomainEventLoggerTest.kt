@@ -28,7 +28,7 @@ class LobbyDomainEventLoggerTest {
             logger.addAppender(appender)
 
             try {
-                val lobbyCode = LobbyCode("AB12")
+                val lobbyCode = LobbyCode("1003")
                 val event = PlayerJoined(lobbyCode, PlayerId(7), "Alice")
                 val beforeState = GameState.initial(lobbyCode)
                 val afterState = beforeState.copy(stateVersion = 1, processedEventCount = 1)
@@ -61,10 +61,10 @@ class LobbyDomainEventLoggerTest {
                             it.contains("id=$sessionId")
                     },
                 )
-                assertTrue(messages.any { it.contains("received | lobby=AB12") })
-                assertTrue(messages.any { it.contains("applied  | lobby=AB12") })
+                assertTrue(messages.any { it.contains("received | lobby=1003") })
+                assertTrue(messages.any { it.contains("applied  | lobby=1003") })
                 assertTrue(messages.any { it.contains("version=0->1") })
-                assertTrue(messages.any { it.contains("rejected | lobby=AB12") })
+                assertTrue(messages.any { it.contains("rejected | lobby=1003") })
                 assertTrue(messages.any { it.contains("reason=duplicate player") })
             } finally {
                 logger.detachAppender(appender)

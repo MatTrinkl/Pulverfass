@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MapCommandTest {
-    private val lobbyCode = LobbyCode("AB12")
+    private val lobbyCode = LobbyCode("1003")
     private val playerId = PlayerId(1)
     private val alpha = TerritoryId("alpha")
     private val beta = TerritoryId("beta")

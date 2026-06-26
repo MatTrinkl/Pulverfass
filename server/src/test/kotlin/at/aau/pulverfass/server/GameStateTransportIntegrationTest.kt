@@ -78,7 +78,7 @@ class GameStateTransportIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("GTI1")
+            val lobbyCode = LobbyCode("1188")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -286,7 +286,7 @@ class GameStateTransportIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("GTI2")
+            val lobbyCode = LobbyCode("1189")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(

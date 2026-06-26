@@ -152,7 +152,7 @@ class AttackResolvedEventTest {
         minOccupyingTroops: Int? = null,
         stateVersion: Long? = 7L,
     ) = AttackResolvedEvent(
-        lobbyCode = LobbyCode("AR11"),
+        lobbyCode = LobbyCode("1009"),
         attackerPlayerId = PlayerId(1),
         defenderPlayerId = PlayerId(2),
         fromTerritoryId = TerritoryId("alpha"),

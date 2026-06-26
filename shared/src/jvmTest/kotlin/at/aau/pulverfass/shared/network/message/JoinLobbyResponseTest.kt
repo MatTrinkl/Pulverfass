@@ -20,15 +20,15 @@ class JoinLobbyResponseTest {
 
     @Test
     fun `should create join lobby response correctly`() {
-        val response = JoinLobbyResponse(LobbyCode("AB12"))
+        val response = JoinLobbyResponse(LobbyCode("1003"))
 
-        assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertEquals(LobbyCode("1003"), response.lobbyCode)
         assertNull(response.playerId)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val response = JoinLobbyResponse(LobbyCode("CD34"))
+        val response = JoinLobbyResponse(LobbyCode("1071"))
         val payload: NetworkMessagePayload = response
 
         assertEquals(response, payload)
@@ -36,23 +36,23 @@ class JoinLobbyResponseTest {
 
     @Test
     fun `should serialize and deserialize join lobby response`() {
-        val response = JoinLobbyResponse(LobbyCode("EF56"))
+        val response = JoinLobbyResponse(LobbyCode("1132"))
 
         val serialized = json.encodeToString(JoinLobbyResponse.serializer(), response)
         val deserialized = json.decodeFromString<JoinLobbyResponse>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56"}""", serialized)
+        assertEquals("""{"lobbyCode":"1132"}""", serialized)
         assertEquals(response, deserialized)
     }
 
     @Test
     fun `should serialize and deserialize join lobby response with player id`() {
-        val response = JoinLobbyResponse(LobbyCode("IJ90"), PlayerId(4))
+        val response = JoinLobbyResponse(LobbyCode("1199"), PlayerId(4))
 
         val serialized = json.encodeToString(JoinLobbyResponse.serializer(), response)
         val deserialized = json.decodeFromString<JoinLobbyResponse>(serialized)
 
-        assertEquals("""{"lobbyCode":"IJ90","playerId":4}""", serialized)
+        assertEquals("""{"lobbyCode":"1199","playerId":4}""", serialized)
         assertEquals(response, deserialized)
     }
 
@@ -69,9 +69,9 @@ class JoinLobbyResponseTest {
                 )
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", PlayerId(1), null) as JoinLobbyResponse
+        val valid = constructor.newInstance("1178", PlayerId(1), null) as JoinLobbyResponse
 
-        assertEquals(LobbyCode("GH78"), valid.lobbyCode)
+        assertEquals(LobbyCode("1178"), valid.lobbyCode)
         assertEquals(PlayerId(1), valid.playerId)
 
         assertThrows(InvocationTargetException::class.java) {

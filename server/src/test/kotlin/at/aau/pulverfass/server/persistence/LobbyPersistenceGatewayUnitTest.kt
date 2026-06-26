@@ -58,7 +58,7 @@ class LobbyPersistenceGatewayUnitTest {
 
     @Test
     fun `toPersistedPayload maps supported events to stable type ids and payload fields`() {
-        val lobbyCode = LobbyCode("UT11")
+        val lobbyCode = LobbyCode("1420")
         val hostId = PlayerId(1)
         val guestId = PlayerId(2)
         val thirdPlayerId = PlayerId(3)
@@ -81,11 +81,9 @@ class LobbyPersistenceGatewayUnitTest {
                     "pending_reinforcements_set",
                 PendingReinforcementsChangedEvent(lobbyCode, hostId, delta = -2) to
                     "pending_reinforcements_changed",
-                /**
-                 * Der verbrauchte Cheatbonus muss denselben Weg gehen wie alle
-                 * anderen Domain-Events, damit Recovery später den korrekten
-                 * GameState wiederherstellen kann.
-                 */
+                // Der verbrauchte Cheatbonus muss denselben Weg gehen wie alle
+                // anderen Domain-Events, damit Recovery später den korrekten
+                // GameState wiederherstellen kann.
                 CheatReinforcementBonusUsedEvent(lobbyCode, hostId) to
                     "cheat_reinforcement_bonus_used",
                 PlayerCardsRemovedEvent(
@@ -194,7 +192,7 @@ class LobbyPersistenceGatewayUnitTest {
     @Test
     fun `gateway reports failure details when event and snapshot persistence fail`() =
         runBlocking {
-            val lobbyCode = LobbyCode("UT12")
+            val lobbyCode = LobbyCode("1421")
             val state = runningState(lobbyCode, stateVersion = 4L)
             val gateway =
                 DatabaseBackedLobbyPersistenceGateway(
@@ -226,7 +224,7 @@ class LobbyPersistenceGatewayUnitTest {
 
     @Test
     fun `gateway rejects snapshot overload without state and close delegates`() {
-        val lobbyCode = LobbyCode("UT13")
+        val lobbyCode = LobbyCode("1422")
         val state = runningState(lobbyCode, stateVersion = 1L)
         var closed = false
         val gateway =
@@ -248,7 +246,7 @@ class LobbyPersistenceGatewayUnitTest {
     @Test
     fun `disabled callbacks stay disabled and accept all invocations`() =
         runBlocking {
-            val lobbyCode = LobbyCode("UT14")
+            val lobbyCode = LobbyCode("1423")
             val state = runningState(lobbyCode, stateVersion = 1L)
             val snapshot = snapshotPayload(lobbyCode, state.stateVersion)
             val callbacks = LobbyPersistenceCallbacks.disabled()

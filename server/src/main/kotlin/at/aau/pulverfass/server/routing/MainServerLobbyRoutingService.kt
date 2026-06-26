@@ -1331,12 +1331,11 @@ class MainServerLobbyRoutingService(
         val adjustment =
             synchronized(cheatReportLock) {
                 val activePlayerId = currentTurnState.activePlayerId
-                /**
-                 * Die gespeicherten Folgen von Cheat-Meldungen werden genau beim
-                 * Start der nächsten Reinforcements-Phase verbraucht. Danach
-                 * werden sie sofort aus den Maps entfernt, damit ein Bonus oder
-                 * Malus nie versehentlich in einer späteren Runde erneut wirkt.
-                 */
+
+                // Die gespeicherten Folgen von Cheat-Meldungen werden genau beim
+                // Start der nächsten Reinforcements-Phase verbraucht. Danach
+                // werden sie sofort aus den Maps entfernt, damit ein Bonus oder
+                // Malus nie versehentlich in einer späteren Runde erneut wirkt.
 
                 val modifiers = nextReinforcementModifierByLobby[lobbyCode]
                 val modifier = modifiers?.remove(activePlayerId) ?: 0

@@ -40,7 +40,7 @@ class PhaseOneOrchestrationIntegrationTest {
     @Test
     fun `DRAW_CARD to REINFORCEMENTS advance grants reinforcements exactly once`() =
         testApplication {
-            val lobbyCode = LobbyCode("PO01")
+            val lobbyCode = LobbyCode("1293")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
 
@@ -137,7 +137,7 @@ class PhaseOneOrchestrationIntegrationTest {
     @Test
     fun `game start grants base reinforcements for first active player`() =
         testApplication {
-            val lobbyCode = LobbyCode("PO02")
+            val lobbyCode = LobbyCode("1294")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -226,7 +226,7 @@ class PhaseOneOrchestrationIntegrationTest {
     @Test
     fun `REINFORCEMENTS to ATTACK advance does not trigger a grant`() =
         testApplication {
-            val lobbyCode = LobbyCode("PO03")
+            val lobbyCode = LobbyCode("1295")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
 

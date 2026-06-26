@@ -65,7 +65,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CRI1")
+            val lobbyCode = LobbyCode("1092")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -209,7 +209,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CRI3")
+            val lobbyCode = LobbyCode("1094")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -386,7 +386,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
     @Test
     fun `confirm rejected when requester is not active player`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRNP")
+            val lobbyCode = LobbyCode("1095")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val initialState =
@@ -417,7 +417,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
     @Test
     fun `confirm rejected when phase is not REINFORCEMENTS`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRPM")
+            val lobbyCode = LobbyCode("1096")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val initialState =
@@ -449,7 +449,7 @@ class ConfirmReinforcementsDoneIntegrationTest {
     @Test
     fun `pending greater than zero fails`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRI2")
+            val lobbyCode = LobbyCode("1093")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val initialState =

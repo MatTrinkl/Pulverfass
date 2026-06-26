@@ -21,12 +21,12 @@ class PlayerConnectionLostEventTest {
     fun `should create player connection lost event correctly`() {
         val event =
             PlayerConnectionLostEvent(
-                LobbyCode("AB12"),
+                LobbyCode("1003"),
                 PlayerId(7),
                 PlayerConnectionLostReason.SOCKET_CLOSED,
             )
 
-        assertEquals(LobbyCode("AB12"), event.lobbyCode)
+        assertEquals(LobbyCode("1003"), event.lobbyCode)
         assertEquals(PlayerId(7), event.playerId)
         assertEquals(PlayerConnectionLostReason.SOCKET_CLOSED, event.reason)
     }
@@ -35,7 +35,7 @@ class PlayerConnectionLostEventTest {
     fun `should implement network message payload`() {
         val event =
             PlayerConnectionLostEvent(
-                LobbyCode("CD34"),
+                LobbyCode("1071"),
                 PlayerId(8),
                 PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
             )
@@ -48,7 +48,7 @@ class PlayerConnectionLostEventTest {
     fun `should serialize and deserialize player connection lost event`() {
         val event =
             PlayerConnectionLostEvent(
-                LobbyCode("EF56"),
+                LobbyCode("1132"),
                 PlayerId(9),
                 PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
             )
@@ -57,7 +57,7 @@ class PlayerConnectionLostEventTest {
         val deserialized = json.decodeFromString<PlayerConnectionLostEvent>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"EF56","playerId":9,"reason":"HEARTBEAT_TIMEOUT"}""",
+            """{"lobbyCode":"1132","playerId":9,"reason":"HEARTBEAT_TIMEOUT"}""",
             serialized,
         )
         assertEquals(event, deserialized)
@@ -67,7 +67,7 @@ class PlayerConnectionLostEventTest {
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
             json.decodeFromString<PlayerConnectionLostEvent>(
-                """{"lobbyCode":"AB12","playerId":9}""",
+                """{"lobbyCode":"1003","playerId":9}""",
             )
         }
     }
@@ -90,7 +90,7 @@ class PlayerConnectionLostEventTest {
             PlayerConnectionLostEventSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, 1, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                     scalarLong = 9L,
                 ),
             )

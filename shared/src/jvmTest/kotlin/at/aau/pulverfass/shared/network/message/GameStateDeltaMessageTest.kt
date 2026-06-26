@@ -20,13 +20,13 @@ class GameStateDeltaMessageTest {
     fun `serializer roundtrip game state delta with deterministic event order`() {
         val delta =
             GameStateDeltaEvent(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 fromVersion = 4,
                 toVersion = 4,
                 events =
                     listOf(
                         AttackResolvedBroadcastEvent(
-                            lobbyCode = LobbyCode("AB12"),
+                            lobbyCode = LobbyCode("1003"),
                             attackerPlayerId = PlayerId(7),
                             defenderPlayerId = PlayerId(8),
                             fromTerritoryId = TerritoryId("alpha"),
@@ -48,13 +48,13 @@ class GameStateDeltaMessageTest {
                             stateVersion = 4,
                         ),
                         TerritoryOwnerChangedEvent(
-                            lobbyCode = LobbyCode("AB12"),
+                            lobbyCode = LobbyCode("1003"),
                             territoryId = TerritoryId("alpha"),
                             ownerId = PlayerId(7),
                             stateVersion = 4,
                         ),
                         TurnStateUpdatedEvent(
-                            lobbyCode = LobbyCode("AB12"),
+                            lobbyCode = LobbyCode("1003"),
                             activePlayerId = PlayerId(8),
                             turnPhase = TurnPhase.FORTIFY,
                             turnCount = 2,

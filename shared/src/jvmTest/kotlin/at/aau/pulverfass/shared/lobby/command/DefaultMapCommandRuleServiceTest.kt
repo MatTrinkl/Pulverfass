@@ -385,7 +385,7 @@ class DefaultMapCommandRuleServiceTest {
         val departedDefender = PlayerId(99)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("CM12"),
+                lobbyCode = LobbyCode("1085"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(attacker),
             ).copy(
@@ -429,7 +429,7 @@ class DefaultMapCommandRuleServiceTest {
         val playerOne = PlayerId(1)
         val command =
             PlaceTroopsCommand(
-                lobbyCode = LobbyCode("ZZ99"),
+                lobbyCode = LobbyCode("1442"),
                 playerId = playerOne,
                 territoryId = TerritoryId("alpha"),
                 troopCount = 1,
@@ -441,17 +441,17 @@ class DefaultMapCommandRuleServiceTest {
             expectedMessagePart = "passt nicht zum aktuellen State",
         )
         assertMapCommandFailure(
-            state = GameState.initial(LobbyCode("ZZ99")),
+            state = GameState.initial(LobbyCode("1442")),
             command = command,
             expectedMessagePart = "noch nicht initialisiert",
         )
         assertMapCommandFailure(
-            state = sampleState().copy(lobbyCode = LobbyCode("ZZ99")),
+            state = sampleState().copy(lobbyCode = LobbyCode("1442")),
             command = command.copy(playerId = PlayerId(99)),
             expectedMessagePart = "ist nicht Teil der Lobby",
         )
         assertMapCommandFailure(
-            state = sampleState().copy(lobbyCode = LobbyCode("ZZ99")),
+            state = sampleState().copy(lobbyCode = LobbyCode("1442")),
             command = command.copy(territoryId = TerritoryId("missing")),
             expectedMessagePart = "ist nicht Teil der Map",
         )
@@ -672,7 +672,7 @@ class DefaultMapCommandRuleServiceTest {
         occupyingTroopCount: Int? = null,
     ): AttackCommand =
         AttackCommand(
-            lobbyCode = LobbyCode("CM12"),
+            lobbyCode = LobbyCode("1085"),
             playerId = attacker,
             fromTerritoryId = TerritoryId("alpha"),
             toTerritoryId = TerritoryId("beta"),
@@ -699,7 +699,7 @@ class DefaultMapCommandRuleServiceTest {
 
     private fun sampleState(): GameState =
         GameState.initial(
-            lobbyCode = LobbyCode("CM12"),
+            lobbyCode = LobbyCode("1085"),
             mapDefinition = sampleMapDefinition(),
             players = listOf(PlayerId(1), PlayerId(2)),
         ).copy(gameRandomSeed = 1L, gameRandomState = 1L)

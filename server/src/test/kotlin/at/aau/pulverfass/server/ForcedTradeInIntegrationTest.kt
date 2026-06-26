@@ -74,7 +74,7 @@ class ForcedTradeInIntegrationTest {
     @Test
     fun `confirm reinforcements done is blocked when 5 cards and can form set`() =
         testApplication {
-            val lobbyCode = LobbyCode("FTI1")
+            val lobbyCode = LobbyCode("1162")
             val state =
                 forcedTradeState(
                     lobbyCode = lobbyCode,
@@ -99,7 +99,7 @@ class ForcedTradeInIntegrationTest {
     @Test
     fun `place reinforcements is blocked when 5 cards and can form set`() =
         testApplication {
-            val lobbyCode = LobbyCode("FTI2")
+            val lobbyCode = LobbyCode("1163")
             val state =
                 forcedTradeState(
                     lobbyCode = lobbyCode,
@@ -126,7 +126,7 @@ class ForcedTradeInIntegrationTest {
     @Test
     fun `confirm reinforcements done is allowed when exactly 4 cards even with valid set`() =
         testApplication {
-            val lobbyCode = LobbyCode("FTI3")
+            val lobbyCode = LobbyCode("1164")
             val state =
                 forcedTradeState(
                     lobbyCode = lobbyCode,
@@ -199,7 +199,7 @@ class ForcedTradeInIntegrationTest {
     @Test
     fun `place reinforcements is allowed when exactly 4 cards even with valid set`() =
         testApplication {
-            val lobbyCode = LobbyCode("FTI4")
+            val lobbyCode = LobbyCode("1165")
             val state =
                 forcedTradeState(
                     lobbyCode = lobbyCode,
@@ -280,7 +280,7 @@ class ForcedTradeInIntegrationTest {
     @Test
     fun `confirm reinforcements done is blocked by next phase trade flag from elimination`() =
         testApplication {
-            val lobbyCode = LobbyCode("FTI5")
+            val lobbyCode = LobbyCode("1166")
             val state =
                 forcedTradeState(
                     lobbyCode = lobbyCode,

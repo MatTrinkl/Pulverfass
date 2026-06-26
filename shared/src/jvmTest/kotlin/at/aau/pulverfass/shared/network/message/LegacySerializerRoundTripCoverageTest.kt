@@ -113,7 +113,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             AttackRequestSerializer,
             AttackRequest(
-                lobbyCode = LobbyCode("LR01"),
+                lobbyCode = LobbyCode("1218"),
                 playerId = PlayerId(1),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -125,31 +125,31 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             ConfirmAttackDoneRequestSerializer,
             ConfirmAttackDoneRequest(
-                lobbyCode = LobbyCode("LR02"),
+                lobbyCode = LobbyCode("1219"),
                 playerId = PlayerId(2),
             ),
         )
         assertLegacyRoundTrip(
             ConfirmReinforcementsDoneRequestSerializer,
             ConfirmReinforcementsDoneRequest(
-                lobbyCode = LobbyCode("LR03"),
+                lobbyCode = LobbyCode("1220"),
                 playerId = PlayerId(3),
             ),
         )
         assertLegacyRoundTrip(
             GameStatePrivateGetRequestSerializer,
             GameStatePrivateGetRequest(
-                lobbyCode = LobbyCode("LR04"),
+                lobbyCode = LobbyCode("1221"),
                 playerId = PlayerId(4),
             ),
         )
         assertLegacyRoundTrip(
             LobbyPlayerCountRequestSerializer,
-            LobbyPlayerCountRequest(LobbyCode("LR05")),
+            LobbyPlayerCountRequest(LobbyCode("1222")),
         )
         assertLegacyRoundTrip(
             MapGetRequestSerializer,
-            MapGetRequest(LobbyCode("LR06")),
+            MapGetRequest(LobbyCode("1223")),
         )
         assertLegacyRoundTrip(
             TerritoryPlacementSerializer,
@@ -161,7 +161,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             PlaceReinforcementsRequestSerializer,
             PlaceReinforcementsRequest(
-                lobbyCode = LobbyCode("LR07"),
+                lobbyCode = LobbyCode("1224"),
                 playerId = PlayerId(5),
                 placements =
                     listOf(
@@ -173,7 +173,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             StartPlayerSetRequestSerializer,
             StartPlayerSetRequest(
-                lobbyCode = LobbyCode("LR08"),
+                lobbyCode = LobbyCode("1225"),
                 startPlayerId = PlayerId(6),
                 requesterPlayerId = PlayerId(7),
             ),
@@ -181,7 +181,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             TradeInCardsRequestSerializer,
             TradeInCardsRequest(
-                lobbyCode = LobbyCode("LR09"),
+                lobbyCode = LobbyCode("1226"),
                 playerId = PlayerId(8),
                 cardIds =
                     listOf(
@@ -194,14 +194,14 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             TurnAdvanceRequestSerializer,
             TurnAdvanceRequest(
-                lobbyCode = LobbyCode("LR10"),
+                lobbyCode = LobbyCode("1227"),
                 playerId = PlayerId(9),
                 expectedPhase = TurnPhase.ATTACK,
             ),
         )
         assertLegacyRoundTrip(
             TurnStateGetRequestSerializer,
-            TurnStateGetRequest(LobbyCode("LR11")),
+            TurnStateGetRequest(LobbyCode("1228")),
         )
     }
 
@@ -210,48 +210,48 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             AttackResponseSerializer,
             AttackResponse(
-                lobbyCode = LobbyCode("LS01"),
+                lobbyCode = LobbyCode("1229"),
                 requestId = "attack-ok",
             ),
         )
         assertLegacyRoundTrip(
             ConfirmAttackDoneResponseSerializer,
-            ConfirmAttackDoneResponse(LobbyCode("LS02")),
+            ConfirmAttackDoneResponse(LobbyCode("1230")),
         )
         assertLegacyRoundTrip(
             ConfirmReinforcementsDoneResponseSerializer,
-            ConfirmReinforcementsDoneResponse(LobbyCode("LS03")),
+            ConfirmReinforcementsDoneResponse(LobbyCode("1231")),
         )
         assertLegacyRoundTrip(
             LobbyPlayerCountResponseSerializer,
             LobbyPlayerCountResponse(
-                lobbyCode = LobbyCode("LS04"),
+                lobbyCode = LobbyCode("1232"),
                 playerCount = 4,
             ),
         )
         assertLegacyRoundTrip(
             PlaceReinforcementsResponseSerializer,
-            PlaceReinforcementsResponse(LobbyCode("LS05")),
+            PlaceReinforcementsResponse(LobbyCode("1233")),
         )
         assertLegacyRoundTrip(
             StartPlayerSetResponseSerializer,
             StartPlayerSetResponse(
-                lobbyCode = LobbyCode("LS06"),
+                lobbyCode = LobbyCode("1234"),
                 startPlayerId = PlayerId(10),
             ),
         )
         assertLegacyRoundTrip(
             TradeInCardsResponseSerializer,
-            TradeInCardsResponse(LobbyCode("LS07")),
+            TradeInCardsResponse(LobbyCode("1235")),
         )
         assertLegacyRoundTrip(
             TurnAdvanceResponseSerializer,
-            TurnAdvanceResponse(LobbyCode("LS08")),
+            TurnAdvanceResponse(LobbyCode("1236")),
         )
         assertLegacyRoundTrip(
             TurnStateGetResponseSerializer,
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("LS09"),
+                lobbyCode = LobbyCode("1237"),
                 activePlayerId = PlayerId(11),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 6,
@@ -286,7 +286,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             LobbyPlayerCountErrorResponseSerializer,
             LobbyPlayerCountErrorResponse(
-                lobbyCode = LobbyCode("LS10"),
+                lobbyCode = LobbyCode("1238"),
                 code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
                 reason = "Lobby existiert nicht.",
             ),
@@ -340,7 +340,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             PendingReinforcementsChangedEventSerializer,
             PendingReinforcementsChangedEvent(
-                lobbyCode = LobbyCode("LE01"),
+                lobbyCode = LobbyCode("1207"),
                 playerId = PlayerId(1),
                 delta = 3,
             ),
@@ -348,7 +348,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             TerritoryOwnerChangedEventSerializer,
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("LE02"),
+                lobbyCode = LobbyCode("1208"),
                 territoryId = TerritoryId("omega"),
                 ownerId = PlayerId(2),
                 stateVersion = 12,
@@ -357,7 +357,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             TerritoryTroopsChangedEventSerializer,
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("LE03"),
+                lobbyCode = LobbyCode("1209"),
                 territoryId = TerritoryId("omega"),
                 troopCount = 7,
                 stateVersion = 13,
@@ -366,7 +366,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             TurnStateUpdatedEventSerializer,
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("LE04"),
+                lobbyCode = LobbyCode("1210"),
                 activePlayerId = PlayerId(3),
                 turnPhase = TurnPhase.ATTACK,
                 turnCount = 4,
@@ -379,7 +379,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             PhaseBoundaryEventSerializer,
             PhaseBoundaryEvent(
-                lobbyCode = LobbyCode("LE05"),
+                lobbyCode = LobbyCode("1211"),
                 stateVersion = 21,
                 previousPhase = TurnPhase.REINFORCEMENTS,
                 nextPhase = TurnPhase.ATTACK,
@@ -390,7 +390,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             ReinforcementsGrantedEventSerializer,
             ReinforcementsGrantedEvent(
-                lobbyCode = LobbyCode("LE06"),
+                lobbyCode = LobbyCode("1212"),
                 playerId = PlayerId(5),
                 amount = 6,
                 territoryBonus = 3,
@@ -408,7 +408,7 @@ class LegacySerializerRoundTripCoverageTest {
         assertLegacyRoundTrip(
             PlayerHandUpdatedEventSerializer,
             PlayerHandUpdatedEvent(
-                lobbyCode = LobbyCode("LE07"),
+                lobbyCode = LobbyCode("1213"),
                 recipientPlayerId = PlayerId(6),
                 stateVersion = 33,
                 handCards =
@@ -438,7 +438,7 @@ class LegacySerializerRoundTripCoverageTest {
             )
         val gameState =
             GameState(
-                lobbyCode = LobbyCode("GF01"),
+                lobbyCode = LobbyCode("1168"),
                 players = listOf(player),
                 activePlayer = player,
                 configuredStartPlayerId = player,
@@ -451,7 +451,7 @@ class LegacySerializerRoundTripCoverageTest {
 
         assertEquals(
             PlayerHandUpdatedEvent(
-                lobbyCode = LobbyCode("GF01"),
+                lobbyCode = LobbyCode("1168"),
                 recipientPlayerId = player,
                 stateVersion = 44,
                 handCards =
@@ -466,7 +466,7 @@ class LegacySerializerRoundTripCoverageTest {
         )
         assertEquals(
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("GF01"),
+                lobbyCode = LobbyCode("1168"),
                 activePlayerId = player,
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 8,
@@ -484,21 +484,21 @@ class LegacySerializerRoundTripCoverageTest {
         assertThrows(IllegalStateException::class.java) {
             TurnStateGetResponse.fromGameState(
                 GameState(
-                    lobbyCode = LobbyCode("GF02"),
+                    lobbyCode = LobbyCode("1169"),
                     players = listOf(player),
                 ),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             PendingReinforcementsChangedEvent(
-                lobbyCode = LobbyCode("GF03"),
+                lobbyCode = LobbyCode("1170"),
                 playerId = player,
                 delta = 0,
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("GF04"),
+                lobbyCode = LobbyCode("1171"),
                 territoryId = TerritoryId("invalid-owner"),
                 ownerId = player,
                 stateVersion = -1,
@@ -506,14 +506,14 @@ class LegacySerializerRoundTripCoverageTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("GF05"),
+                lobbyCode = LobbyCode("1172"),
                 territoryId = TerritoryId("invalid-troops"),
                 troopCount = -1,
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("GF06"),
+                lobbyCode = LobbyCode("1173"),
                 activePlayerId = player,
                 turnPhase = TurnPhase.ATTACK,
                 turnCount = 1,
@@ -524,7 +524,7 @@ class LegacySerializerRoundTripCoverageTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             PhaseBoundaryEvent(
-                lobbyCode = LobbyCode("GF07"),
+                lobbyCode = LobbyCode("1174"),
                 stateVersion = 1,
                 previousPhase = TurnPhase.ATTACK,
                 nextPhase = TurnPhase.ATTACK,
@@ -534,7 +534,7 @@ class LegacySerializerRoundTripCoverageTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             ReinforcementsGrantedEvent(
-                lobbyCode = LobbyCode("GF08"),
+                lobbyCode = LobbyCode("1175"),
                 playerId = player,
                 amount = 5,
                 territoryBonus = 2,

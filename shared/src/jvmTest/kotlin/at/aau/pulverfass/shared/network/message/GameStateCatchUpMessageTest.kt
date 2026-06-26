@@ -28,7 +28,7 @@ class GameStateCatchUpMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             GameStateCatchUpRequest(
-                lobbyCode = LobbyCode("CU12"),
+                lobbyCode = LobbyCode("1109"),
                 clientStateVersion = 5,
                 reason = GameStateCatchUpReason.MISSING_DELTA,
             )
@@ -45,7 +45,7 @@ class GameStateCatchUpMessageTest {
     fun `serializer roundtrip response`() {
         val response =
             GameStateCatchUpResponse(
-                lobbyCode = LobbyCode("CU34"),
+                lobbyCode = LobbyCode("1110"),
                 stateVersion = 9,
                 determinism =
                     PublicDeterminismMetadataSnapshot(
@@ -96,7 +96,7 @@ class GameStateCatchUpMessageTest {
         val response =
             GameStateCatchUpErrorResponse(
                 code = GameStateCatchUpErrorCode.PAYLOAD_TOO_LARGE,
-                reason = "Catch-up-Snapshot fuer Lobby 'CU56' ist groesser als 128 Bytes.",
+                reason = "Catch-up-Snapshot fuer Lobby '1111' ist groesser als 128 Bytes.",
             )
 
         val serialized = json.encodeToString(GameStateCatchUpErrorResponse.serializer(), response)

@@ -54,7 +54,7 @@ class KickPlayerIntegrationTest {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
 
-            val lobbyCode = LobbyCode("KICK")
+            val lobbyCode = LobbyCode("1204")
             val ownerId = PlayerId(1)
             val targetId = PlayerId(2)
             val otherPlayerId = PlayerId(3)
@@ -208,7 +208,7 @@ class KickPlayerIntegrationTest {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
 
-            val lobbyCode = LobbyCode("KIC2")
+            val lobbyCode = LobbyCode("1203")
             val ownerId = PlayerId(1)
             val requesterId = PlayerId(2)
             val targetId = PlayerId(3)

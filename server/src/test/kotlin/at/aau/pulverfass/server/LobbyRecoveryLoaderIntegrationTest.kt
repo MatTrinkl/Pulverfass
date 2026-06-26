@@ -82,14 +82,14 @@ class LobbyRecoveryLoaderIntegrationTest {
 
     @Test
     fun `restore returns null when no persisted state exists`() {
-        val restored = createRecoveryLoader().restoreLobby(LobbyCode("RC00"))
+        val restored = createRecoveryLoader().restoreLobby(LobbyCode("1318"))
 
         assertNull(restored)
     }
 
     @Test
     fun `restore rebuilds lobby from latest snapshot and newer events`() {
-        val lobbyCode = LobbyCode("RC11")
+        val lobbyCode = LobbyCode("1320")
         val hostId = PlayerId(1)
         val playerTwoId = PlayerId(2)
         val playerThreeId = PlayerId(3)
@@ -154,7 +154,7 @@ class LobbyRecoveryLoaderIntegrationTest {
 
     @Test
     fun `restore rebuilds lobby from persisted events without snapshot`() {
-        val lobbyCode = LobbyCode("RC12")
+        val lobbyCode = LobbyCode("1321")
         val hostId = PlayerId(1)
         val guestId = PlayerId(2)
 
@@ -212,7 +212,7 @@ class LobbyRecoveryLoaderIntegrationTest {
 
     @Test
     fun `restore rejects persisted event sequences with gaps`() {
-        val lobbyCode = LobbyCode("RC13")
+        val lobbyCode = LobbyCode("1322")
         store.appendEvent(
             lobbyCode = lobbyCode,
             stateVersion = 2,

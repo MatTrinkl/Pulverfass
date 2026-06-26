@@ -170,7 +170,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/AB12/true/Carol",
+                    startDestination = Screen.WaitingRoom.route + "/1003/true/Carol",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
@@ -201,7 +201,7 @@ class ScreenComposableTest {
          * Baum vorhanden sind und nicht, ob jedes Element im aktuellen Ausschnitt
          * liegt.
          */
-        composeTestRule.onNodeWithText("LOBBY: AB12").assertExists()
+        composeTestRule.onNodeWithText("LOBBY: 1003").assertExists()
         composeTestRule.onNodeWithText("DU BIST DER HOST").assertExists()
         composeTestRule.onNodeWithText("CAROL").assertExists()
         composeTestRule.onNodeWithText("(HOST)").assertExists()
@@ -215,7 +215,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/XY99/false/Dave",
+                    startDestination = Screen.WaitingRoom.route + "/4242/false/Dave",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
@@ -255,7 +255,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/ZZ88/false/Eve",
+                    startDestination = Screen.WaitingRoom.route + "/1441/false/Eve",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",

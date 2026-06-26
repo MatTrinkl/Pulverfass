@@ -17,7 +17,7 @@ class MapDeltaEventMessageTest {
     fun `serializer roundtrip territory owner changed event`() {
         val event =
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 territoryId = TerritoryId("alpha"),
                 ownerId = PlayerId(7),
                 stateVersion = 41,
@@ -38,7 +38,7 @@ class MapDeltaEventMessageTest {
     fun `serializer roundtrip territory troops changed event`() {
         val event =
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 territoryId = TerritoryId("beta"),
                 troopCount = 5,
                 stateVersion = 42,

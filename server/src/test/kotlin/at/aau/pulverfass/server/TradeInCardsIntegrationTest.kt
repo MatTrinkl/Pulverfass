@@ -70,7 +70,7 @@ class TradeInCardsIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TRI1")
+            val lobbyCode = LobbyCode("1403")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val cardA = CardState(CardId("card-a"), CardType.A)
@@ -239,7 +239,7 @@ class TradeInCardsIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TRI9")
+            val lobbyCode = LobbyCode("1406")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val tradeCards =
@@ -411,7 +411,7 @@ class TradeInCardsIntegrationTest {
             val invalidC = CardState(CardId("card-c"), CardType.B)
             val state =
                 reinforcementTradeGame(
-                    lobbyCode = LobbyCode("TRI2"),
+                    lobbyCode = LobbyCode("1404"),
                     players = listOf(playerOne, PlayerId(2)),
                     activePlayerId = playerOne,
                     pendingPlayerId = playerOne,
@@ -427,12 +427,12 @@ class TradeInCardsIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingTrade(
-                    lobbyCode = LobbyCode("TRI2"),
+                    lobbyCode = LobbyCode("1404"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         TradeInCardsRequest(
-                            lobbyCode = LobbyCode("TRI2"),
+                            lobbyCode = LobbyCode("1404"),
                             playerId = playerOne,
                             cardIds = listOf(invalidA.cardId, invalidB.cardId, invalidC.cardId),
                         ),
@@ -454,7 +454,7 @@ class TradeInCardsIntegrationTest {
             val cardJ = CardState(CardId("card-j"), CardType.JOKER)
             val state =
                 reinforcementTradeGame(
-                    lobbyCode = LobbyCode("TRNP"),
+                    lobbyCode = LobbyCode("1407"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerTwo,
                     pendingPlayerId = playerTwo,
@@ -470,12 +470,12 @@ class TradeInCardsIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingTrade(
-                    lobbyCode = LobbyCode("TRNP"),
+                    lobbyCode = LobbyCode("1407"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         TradeInCardsRequest(
-                            lobbyCode = LobbyCode("TRNP"),
+                            lobbyCode = LobbyCode("1407"),
                             playerId = playerOne,
                             cardIds = listOf(cardA.cardId, cardB.cardId, cardJ.cardId),
                         ),
@@ -496,7 +496,7 @@ class TradeInCardsIntegrationTest {
             val cardJ = CardState(CardId("card-j"), CardType.JOKER)
             val state =
                 reinforcementTradeGame(
-                    lobbyCode = LobbyCode("TRPM"),
+                    lobbyCode = LobbyCode("1408"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     pendingPlayerId = playerOne,
@@ -513,12 +513,12 @@ class TradeInCardsIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingTrade(
-                    lobbyCode = LobbyCode("TRPM"),
+                    lobbyCode = LobbyCode("1408"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         TradeInCardsRequest(
-                            lobbyCode = LobbyCode("TRPM"),
+                            lobbyCode = LobbyCode("1408"),
                             playerId = playerOne,
                             cardIds = listOf(cardA.cardId, cardB.cardId, cardJ.cardId),
                         ),
@@ -539,7 +539,7 @@ class TradeInCardsIntegrationTest {
             val foreignJ = CardState(CardId("card-j"), CardType.JOKER)
             val state =
                 reinforcementTradeGame(
-                    lobbyCode = LobbyCode("TRI3"),
+                    lobbyCode = LobbyCode("1405"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     pendingPlayerId = playerOne,
@@ -556,12 +556,12 @@ class TradeInCardsIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingTrade(
-                    lobbyCode = LobbyCode("TRI3"),
+                    lobbyCode = LobbyCode("1405"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         TradeInCardsRequest(
-                            lobbyCode = LobbyCode("TRI3"),
+                            lobbyCode = LobbyCode("1405"),
                             playerId = playerOne,
                             cardIds = listOf(ownA.cardId, ownB.cardId, foreignJ.cardId),
                         ),

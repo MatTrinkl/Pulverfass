@@ -25,7 +25,7 @@ class GameStateCatchUpRegistryTest {
     fun `should resolve message type and serialization for catch up request`() {
         val payload =
             GameStateCatchUpRequest(
-                lobbyCode = LobbyCode("CU12"),
+                lobbyCode = LobbyCode("1109"),
                 clientStateVersion = 4,
                 reason = GameStateCatchUpReason.OUT_OF_ORDER,
             )
@@ -42,7 +42,7 @@ class GameStateCatchUpRegistryTest {
     fun `should resolve message type and serialization for catch up response`() {
         val payload =
             GameStateCatchUpResponse(
-                lobbyCode = LobbyCode("CU34"),
+                lobbyCode = LobbyCode("1110"),
                 stateVersion = 10,
                 determinism =
                     PublicDeterminismMetadataSnapshot(

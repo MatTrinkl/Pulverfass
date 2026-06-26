@@ -20,15 +20,15 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should create character select response correctly`() {
-        val response = CharacterSelectResponse(LobbyCode("AB12"), "warrior")
+        val response = CharacterSelectResponse(LobbyCode("1003"), "warrior")
 
-        assertEquals(LobbyCode("AB12"), response.lobbyCode)
+        assertEquals(LobbyCode("1003"), response.lobbyCode)
         assertEquals("warrior", response.characterId)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val response = CharacterSelectResponse(LobbyCode("AB12"), "warrior")
+        val response = CharacterSelectResponse(LobbyCode("1003"), "warrior")
         val payload: NetworkMessagePayload = response
 
         assertEquals(response, payload)
@@ -36,13 +36,13 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should serialize and deserialize character select response`() {
-        val response = CharacterSelectResponse(LobbyCode("AB12"), "warrior")
+        val response = CharacterSelectResponse(LobbyCode("1003"), "warrior")
 
         val serialized = json.encodeToString(CharacterSelectResponse.serializer(), response)
         val deserialized = json.decodeFromString<CharacterSelectResponse>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"AB12","characterId":"warrior"}""",
+            """{"lobbyCode":"1003","characterId":"warrior"}""",
             serialized,
         )
         assertEquals(response, deserialized)
@@ -50,7 +50,7 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should resolve message type and serialization via registry`() {
-        val response = CharacterSelectResponse(LobbyCode("CD34"), "character_03")
+        val response = CharacterSelectResponse(LobbyCode("1071"), "character_03")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(response)
         val serialized = NetworkPayloadRegistry.serializePayload(response)
@@ -62,9 +62,9 @@ class CharacterSelectResponseTest {
 
     @Test
     fun `should satisfy equals and hashCode contract`() {
-        val a = CharacterSelectResponse(LobbyCode("EF56"), "character_04")
-        val b = CharacterSelectResponse(LobbyCode("EF56"), "character_04")
-        val c = CharacterSelectResponse(LobbyCode("EF56"), "character_03")
+        val a = CharacterSelectResponse(LobbyCode("1132"), "character_04")
+        val b = CharacterSelectResponse(LobbyCode("1132"), "character_04")
+        val c = CharacterSelectResponse(LobbyCode("1132"), "character_03")
 
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())
@@ -74,7 +74,7 @@ class CharacterSelectResponseTest {
     @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<CharacterSelectResponse>("""{"lobbyCode":"AB12"}""")
+            json.decodeFromString<CharacterSelectResponse>("""{"lobbyCode":"1003"}""")
         }
     }
 
@@ -100,7 +100,7 @@ class CharacterSelectResponseTest {
             CharacterSelectResponseSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                 ),
             )
         }

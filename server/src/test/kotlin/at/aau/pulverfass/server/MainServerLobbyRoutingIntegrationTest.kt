@@ -111,7 +111,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("MP12")
+            val lobbyCode = LobbyCode("1248")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -206,7 +206,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("MP13")
+            val lobbyCode = LobbyCode("1249")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -437,7 +437,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("RC12")
+            val lobbyCode = LobbyCode("1321")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -558,8 +558,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("DL12")
-            val lobbyB = LobbyCode("DL34")
+            val lobbyA = LobbyCode("1121")
+            val lobbyB = LobbyCode("1122")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -713,7 +713,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("DG12")
+            val lobbyCode = LobbyCode("1120")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -863,7 +863,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     sessionAndConnection.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(MapGetRequest(LobbyCode("ZZ99"))),
+                            data = MessageCodec.encode(MapGetRequest(LobbyCode("1442"))),
                         ),
                     )
 
@@ -871,7 +871,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val error = assertIs<MapGetErrorResponse>(payload)
 
                     assertEquals(MapGetErrorCode.GAME_NOT_FOUND, error.code)
-                    assertEquals("Lobby 'ZZ99' wurde nicht gefunden.", error.reason)
+                    assertEquals("Lobby '1442' wurde nicht gefunden.", error.reason)
 
                     sessionAndConnection.first.close()
                 }
@@ -915,8 +915,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("AB12")
-            val lobbyB = LobbyCode("CD34")
+            val lobbyA = LobbyCode("1003")
+            val lobbyB = LobbyCode("1071")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1045,7 +1045,7 @@ class MainServerLobbyRoutingIntegrationTest {
                             fin = true,
                             data =
                                 MessageCodec.encode(
-                                    JoinLobbyRequest(LobbyCode("ZZ99"), "Alice"),
+                                    JoinLobbyRequest(LobbyCode("1442"), "Alice"),
                                 ),
                         ),
                     )
@@ -1054,7 +1054,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     assertIs<JoinLobbyErrorResponse>(payload)
                     assertEquals(
-                        JoinLobbyErrorResponse("Lobby 'ZZ99' wurde nicht gefunden."),
+                        JoinLobbyErrorResponse("Lobby '1442' wurde nicht gefunden."),
                         payload,
                     )
 
@@ -1093,8 +1093,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("AB12")
-            val lobbyB = LobbyCode("CD34")
+            val lobbyA = LobbyCode("1003")
+            val lobbyB = LobbyCode("1071")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1244,8 +1244,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("EF56")
-            val lobbyB = LobbyCode("GH78")
+            val lobbyA = LobbyCode("1132")
+            val lobbyB = LobbyCode("1178")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1394,7 +1394,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("LJ42")
+            val lobbyCode = LobbyCode("1216")
             val existingPlayers = listOf(PlayerId(1), PlayerId(2), PlayerId(3))
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -1486,7 +1486,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("NL42")
+            val lobbyCode = LobbyCode("1257")
             val activePlayer = PlayerId(1)
             val remainingPlayer = PlayerId(2)
             val leavingPlayer = PlayerId(3)
@@ -1622,7 +1622,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("LF12")
+            val lobbyCode = LobbyCode("1214")
             val leavingPlayer = PlayerId(1)
             val nextPlayer = PlayerId(2)
             val thirdPlayer = PlayerId(3)
@@ -2152,7 +2152,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("RJ42")
+            val lobbyCode = LobbyCode("1331")
             lobbyManager.createLobby(lobbyCode)
             routingService.start(serverScope)
 
@@ -2698,7 +2698,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     SessionContextPersistenceHooks(
                         loadContext = {
                             SessionReconnectContext(
-                                lobbyCode = LobbyCode("PM12"),
+                                lobbyCode = LobbyCode("1292"),
                                 playerDisplayName = "Missing Player",
                             )
                         },
@@ -2716,7 +2716,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         loadContext = {
                             SessionReconnectContext(
                                 playerId = PlayerId(1),
-                                lobbyCode = LobbyCode("NF12"),
+                                lobbyCode = LobbyCode("1255"),
                                 playerDisplayName = "Alice",
                             )
                         },
@@ -2734,14 +2734,14 @@ class MainServerLobbyRoutingIntegrationTest {
                         loadContext = {
                             SessionReconnectContext(
                                 playerId = PlayerId(1),
-                                lobbyCode = LobbyCode("NL12"),
+                                lobbyCode = LobbyCode("1256"),
                                 playerDisplayName = "Alice",
                             )
                         },
                     ),
                 ),
             configureLobby = { lobbyManager ->
-                val lobbyCode = LobbyCode("NL12")
+                val lobbyCode = LobbyCode("1256")
                 lobbyManager.createLobby(
                     lobbyCode = lobbyCode,
                     initialState =

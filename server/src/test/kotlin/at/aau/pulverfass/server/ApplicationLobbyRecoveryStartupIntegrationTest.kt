@@ -102,8 +102,8 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     @Test
     fun `startup restores open and finished lobbies and continues player ids`() =
         testApplication {
-            val openLobbyCode = LobbyCode("OP11")
-            val finishedLobbyCode = LobbyCode("FN22")
+            val openLobbyCode = LobbyCode("1260")
+            val finishedLobbyCode = LobbyCode("1157")
             val openHostToken = SessionToken("123e4567-e89b-12d3-a456-426614174510")
             val openGuestToken = SessionToken("123e4567-e89b-12d3-a456-426614174511")
             val finishedToken = SessionToken("123e4567-e89b-12d3-a456-426614174512")
@@ -240,7 +240,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     @Test
     fun `startup restores persisted reconnect sessions for open lobbies`() =
         testApplication {
-            val lobbyCode = LobbyCode("RC14")
+            val lobbyCode = LobbyCode("1323")
             val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174540")
             val playerId = PlayerId(5)
 
@@ -315,7 +315,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
     @Test
     fun `runtime reconnect falls back to in memory lobby context`() =
         testApplication {
-            val lobbyCode = LobbyCode("RC15")
+            val lobbyCode = LobbyCode("1324")
             val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174541")
             val playerId = PlayerId(6)
 
@@ -419,7 +419,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
         val sessionContextRegistry = SessionContextRegistry()
         val sessionTokenWithoutPlayer = SessionToken("123e4567-e89b-12d3-a456-426614174520")
         val sessionTokenWithPlayer = SessionToken("123e4567-e89b-12d3-a456-426614174521")
-        val lobbyCode = LobbyCode("PS11")
+        val lobbyCode = LobbyCode("1309")
         val playerId = PlayerId(4)
 
         network.sessionManager.restoreDetachedSession(
@@ -467,7 +467,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val lobbyManager = LobbyManager(scope = scope)
-            val lobbyCode = LobbyCode("CL11")
+            val lobbyCode = LobbyCode("1083")
             val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174530")
             val sessionContextRegistry = SessionContextRegistry()
 

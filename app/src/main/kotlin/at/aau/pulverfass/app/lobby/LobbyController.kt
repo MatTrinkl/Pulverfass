@@ -371,7 +371,7 @@ class LobbyController(
         }
 
     fun updateLobbyCode(lobbyCode: String) {
-        _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
+        _state.update { it.copy(lobbyCode = lobbyCode) }
     }
 
     fun setJoining(isJoining: Boolean) {
@@ -501,7 +501,7 @@ class LobbyController(
             _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
-        if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+        if (!isLobbyCodeValid(snapshot.lobbyCode)) {
             _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
             return
         }
@@ -2707,12 +2707,10 @@ class LobbyController(
                 payload = payload,
                 nextState = authoritativeGameState,
             )
-        /**
-         * Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
-         * TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
-         * geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
-         * Fortify umstellen.
-         */
+        // Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
+        // TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
+        // geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
+        // Fortify umstellen.
         val shouldKeepDelayedAttackBoundary =
             isOwnAttackAutoBoundary &&
                 deferredOwnAttackPhaseBoundary != null &&
@@ -2997,7 +2995,7 @@ class LobbyController(
             }
             PendingLobbyAction.JOIN -> {
                 val snapshot = state.value
-                if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+                if (!isLobbyCodeValid(snapshot.lobbyCode)) {
                     pendingLobbyAction = null
                     pendingJoinCallback = null
                     _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
@@ -3111,7 +3109,10 @@ class LobbyController(
         }
     }
 
-    private fun parseLobbyCode(value: String) = LobbyCode(value.uppercase())
+    private fun isLobbyCodeValid(value: String) =
+        value.length == config.lobbyCodeLength && value.all(Char::isDigit)
+
+    private fun parseLobbyCode(value: String) = LobbyCode(value)
 
     private fun resetLobbyMembers() {
         playersById.clear()

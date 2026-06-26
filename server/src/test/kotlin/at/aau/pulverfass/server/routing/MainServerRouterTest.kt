@@ -32,7 +32,7 @@ class MainServerRouterTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
             val mappedEvent = SystemTick(lobbyCode, tick = 1)
             val mapper =
                 fixedMapper(
@@ -66,7 +66,7 @@ class MainServerRouterTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val lobbyCode = LobbyCode("CD34")
+            val lobbyCode = LobbyCode("1071")
             val mapper =
                 fixedMapper(
                     MappedLobbyEvents(
@@ -96,8 +96,8 @@ class MainServerRouterTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val manager = LobbyManager(scope)
-            val mappedLobby = LobbyCode("EF56")
-            val otherLobby = LobbyCode("GH78")
+            val mappedLobby = LobbyCode("1132")
+            val otherLobby = LobbyCode("1178")
             val mapper =
                 fixedMapper(
                     MappedLobbyEvents(
@@ -139,7 +139,7 @@ class MainServerRouterTest {
                         )
                     },
                 )
-            val lobbyCode = LobbyCode("JK90")
+            val lobbyCode = LobbyCode("1201")
             val mapper =
                 fixedMapper(
                     MappedLobbyEvents(
@@ -193,7 +193,7 @@ class MainServerRouterTest {
                             payloadBytes = byteArrayOf(),
                         ),
                 ),
-            payload = JoinLobbyRequest(lobbyCode = LobbyCode("AB12"), playerDisplayName = "Alice"),
+            payload = JoinLobbyRequest(lobbyCode = LobbyCode("1003"), playerDisplayName = "Alice"),
             context = EventContext(connectionId = connectionId, occurredAtEpochMillis = 1),
         )
 

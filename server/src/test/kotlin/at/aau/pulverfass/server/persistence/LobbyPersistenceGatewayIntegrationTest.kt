@@ -99,7 +99,7 @@ class LobbyPersistenceGatewayIntegrationTest {
     @Test
     fun `gateway persists all supported event payload types`() =
         runBlocking {
-            val lobbyCode = LobbyCode("PG11")
+            val lobbyCode = LobbyCode("1282")
             val hostId = PlayerId(1)
             val guestId = PlayerId(2)
             val thirdPlayerId = PlayerId(3)
@@ -283,7 +283,7 @@ class LobbyPersistenceGatewayIntegrationTest {
     @Test
     fun `gateway persists snapshots and tracks readiness on failures`() =
         runBlocking {
-            val lobbyCode = LobbyCode("PG12")
+            val lobbyCode = LobbyCode("1283")
             val gateway = DatabaseBackedLobbyPersistenceGateway(store = store)
             val currentState = runningState(lobbyCode, stateVersion = 4L)
 
@@ -345,7 +345,7 @@ class LobbyPersistenceGatewayIntegrationTest {
     fun `disabled callbacks are no op and close action is executed`() =
         runBlocking {
             val disabled = LobbyPersistenceCallbacks.disabled()
-            val currentState = runningState(LobbyCode("PG13"), stateVersion = 1L)
+            val currentState = runningState(LobbyCode("1284"), stateVersion = 1L)
             val snapshot = snapshotBuilder.buildSnapshotBroadcast(currentState)
 
             disabled.onLobbyEventAccepted(

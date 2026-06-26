@@ -733,12 +733,10 @@ internal fun GameScreenContent(
                 regionStates = uiState.regionStates,
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
-                /**
-                 * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
-                 * werden aber nur weitergereicht, wenn der Client synchron ist.
-                 * Der Reducer entscheidet anschließend phasen- und spielerabhängig,
-                 * ob der Tap eine gültige Auswahl ist.
-                 */
+                    // Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
+                    // werden aber nur weitergereicht, wenn der Client synchron ist.
+                    // Der Reducer entscheidet anschließend phasen- und spielerabhängig,
+                    // ob der Tap eine gültige Auswahl ist.
                     if (canSelectRegion) {
                         onRegionSelected(region.id)
                     }
@@ -3411,12 +3409,11 @@ private fun AttackResultPanel(
 }
 
 /**
- * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ * Zustand der ständig sichtbaren Aktionsleiste am unteren Rand.
  *
- * [onEndPhase] ist bereits vom aufrufenden Screen auf den fachlich korrekten
- * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
- * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
- * in den übrigen Phasen.
+ * @property currentPhase aktuell angezeigte Spielphase.
+ * @property canEndPhase `true`, wenn der lokale Spieler die Phase beenden darf.
+ * @property cardsVisible `true`, wenn die Kartenleiste eingeblendet ist.
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
@@ -3424,6 +3421,20 @@ private data class BottomBarState(
     val cardsVisible: Boolean,
 )
 
+/**
+ * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ *
+ * `onEndPhase` ist bereits vom aufrufenden Screen auf den fachlich korrekten
+ * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
+ * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
+ * in den übrigen Phasen.
+ *
+ * @param state Phasen- und Sichtbarkeitszustand der Leiste.
+ * @param onToggleCards öffnet oder schließt die Kartenleiste.
+ * @param onEndPhase sendet den zur aktuellen Phase passenden Abschlussrequest.
+ * @param modifier Modifier für die gesamte Aktionsleiste.
+ * @param musicManager optionaler SFX-Auslöser für Button-Aktionen.
+ */
 @Composable
 private fun BottomActionClusters(
     state: BottomBarState,

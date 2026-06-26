@@ -68,7 +68,7 @@ class LobbyPlayerCountIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("PC01")
+            val lobbyCode = LobbyCode("1272")
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState =
@@ -157,7 +157,7 @@ class LobbyPlayerCountIntegrationTest {
             try {
                 coroutineScope {
                     val requester = connectSession(client, network)
-                    val unknownLobbyCode = LobbyCode("PC99")
+                    val unknownLobbyCode = LobbyCode("1275")
 
                     requester.first.send(
                         Frame.Binary(
@@ -173,7 +173,7 @@ class LobbyPlayerCountIntegrationTest {
                         LobbyPlayerCountErrorResponse(
                             lobbyCode = unknownLobbyCode,
                             code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
-                            reason = "Lobby 'PC99' wurde nicht gefunden.",
+                            reason = "Lobby '1275' wurde nicht gefunden.",
                         ),
                         receivePayload(requester.first),
                     )

@@ -26,7 +26,7 @@ class FortifyMoveMessageTest {
     fun `serializer roundtrip fortify move request`() {
         val request =
             FortifyMoveRequest(
-                lobbyCode = LobbyCode("FM12"),
+                lobbyCode = LobbyCode("1154"),
                 playerId = PlayerId(7),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -44,7 +44,7 @@ class FortifyMoveMessageTest {
     fun `fortify move request rejects invalid move shape`() {
         assertThrows(IllegalArgumentException::class.java) {
             FortifyMoveRequest(
-                lobbyCode = LobbyCode("FM10"),
+                lobbyCode = LobbyCode("1152"),
                 playerId = PlayerId(7),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -53,7 +53,7 @@ class FortifyMoveMessageTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             FortifyMoveRequest(
-                lobbyCode = LobbyCode("FM11"),
+                lobbyCode = LobbyCode("1153"),
                 playerId = PlayerId(7),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("alpha"),
@@ -72,7 +72,7 @@ class FortifyMoveMessageTest {
                 FortifyMoveRequest.serializer(),
                 """
                 {
-                    "lobbyCode":"FM12",
+                    "lobbyCode":"1154",
                     "fromTerritoryId":"alpha",
                     "toTerritoryId":"beta",
                     "troopCount":1
@@ -83,13 +83,13 @@ class FortifyMoveMessageTest {
         assertThrows(SerializationException::class.java) {
             json.decodeFromString(
                 FortifyMoveRequest.serializer(),
-                """{"lobbyCode":"FM12","playerId":7,"toTerritoryId":"beta","troopCount":1}""",
+                """{"lobbyCode":"1154","playerId":7,"toTerritoryId":"beta","troopCount":1}""",
             )
         }
         assertThrows(SerializationException::class.java) {
             json.decodeFromString(
                 FortifyMoveRequest.serializer(),
-                """{"lobbyCode":"FM12","playerId":7,"fromTerritoryId":"alpha","troopCount":1}""",
+                """{"lobbyCode":"1154","playerId":7,"fromTerritoryId":"alpha","troopCount":1}""",
             )
         }
         assertThrows(SerializationException::class.java) {
@@ -97,7 +97,7 @@ class FortifyMoveMessageTest {
                 FortifyMoveRequest.serializer(),
                 """
                 {
-                    "lobbyCode":"FM12",
+                    "lobbyCode":"1154",
                     "playerId":7,
                     "fromTerritoryId":"alpha",
                     "toTerritoryId":"beta"
@@ -122,12 +122,12 @@ class FortifyMoveMessageTest {
 
     @Test
     fun `serializer roundtrip fortify move response`() {
-        val response = FortifyMoveResponse(lobbyCode = LobbyCode("FM34"))
+        val response = FortifyMoveResponse(lobbyCode = LobbyCode("1155"))
 
         val serialized = json.encodeToString(FortifyMoveResponse.serializer(), response)
         val deserialized = json.decodeFromString(FortifyMoveResponse.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"FM34"}""", serialized)
+        assertEquals("""{"lobbyCode":"1155"}""", serialized)
         assertEquals(response, deserialized)
     }
 

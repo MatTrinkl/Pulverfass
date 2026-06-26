@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference
 class LobbyStateProcessorTest {
     @Test
     fun `aktueller snapshot kann gelesen werden`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val processor = DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
         val playerId = PlayerId(1)
 
@@ -49,7 +49,7 @@ class LobbyStateProcessorTest {
         val processor =
             DefaultLobbyStateProcessor(
                 GameState(
-                    lobbyCode = LobbyCode("CD34"),
+                    lobbyCode = LobbyCode("1071"),
                     players = initialPlayers,
                     turnOrder = initialTurnOrder,
                     activePlayer = firstPlayer,
@@ -71,7 +71,7 @@ class LobbyStateProcessorTest {
 
     @Test
     fun `lesen kollidiert nicht mit eventverarbeitung`() {
-        val lobbyCode = LobbyCode("EF56")
+        val lobbyCode = LobbyCode("1132")
         val processor = DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
         val eventCount = 1_000
         val start = CountDownLatch(1)
@@ -126,7 +126,7 @@ class LobbyStateProcessorTest {
 
     @Test
     fun `interface default apply delegates to processor implementation`() {
-        val lobbyCode = LobbyCode("HI12")
+        val lobbyCode = LobbyCode("1192")
         val processor: LobbyStateProcessor =
             DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
 
@@ -145,7 +145,7 @@ class LobbyStateProcessorTest {
             DefaultLobbyStateProcessor(
                 initialState =
                     GameState.initial(
-                        lobbyCode = LobbyCode("MC12"),
+                        lobbyCode = LobbyCode("1241"),
                         mapDefinition = sampleMapDefinition(),
                         players = listOf(playerOne, playerTwo),
                     ).copy(
@@ -176,7 +176,7 @@ class LobbyStateProcessorTest {
         val updated =
             processor.apply(
                 MoveTroopsCommand(
-                    lobbyCode = LobbyCode("MC12"),
+                    lobbyCode = LobbyCode("1241"),
                     playerId = playerOne,
                     fromTerritoryId = TerritoryId("alpha"),
                     toTerritoryId = TerritoryId("beta"),
@@ -192,7 +192,7 @@ class LobbyStateProcessorTest {
 
     @Test
     fun `processor keeps state unchanged when reducer throws`() {
-        val lobbyCode = LobbyCode("IJ34")
+        val lobbyCode = LobbyCode("1198")
         val processor =
             DefaultLobbyStateProcessor(
                 GameState.initial(lobbyCode),
@@ -220,7 +220,7 @@ class LobbyStateProcessorTest {
         val playerTwo = PlayerId(2)
         val initialState =
             GameState.initial(
-                lobbyCode = LobbyCode("MC34"),
+                lobbyCode = LobbyCode("1242"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(playerOne, playerTwo),
             ).copy(
@@ -265,7 +265,7 @@ class LobbyStateProcessorTest {
 
     @Test
     fun `interface default implementation applies null context`() {
-        val lobbyCode = LobbyCode("KL56")
+        val lobbyCode = LobbyCode("1206")
         val processor: LobbyStateProcessor =
             DefaultLobbyStateProcessor(GameState.initial(lobbyCode))
         val defaultImplsClass =

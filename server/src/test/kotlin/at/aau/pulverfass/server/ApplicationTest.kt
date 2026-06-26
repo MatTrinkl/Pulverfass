@@ -362,7 +362,7 @@ class ApplicationTest {
         )
         sessionContextRegistry.updateLobbyContext(
             sessionToken = sessionToken,
-            lobbyCode = LobbyCode("AB12"),
+            lobbyCode = LobbyCode("1003"),
             playerDisplayName = "Alice",
         )
 
@@ -400,7 +400,7 @@ class ApplicationTest {
             expiresAtEpochMillis = System.currentTimeMillis() + 60_000,
         )
         sessionContextRegistry.assignPlayer(sessionToken, PlayerId(21))
-        sessionContextRegistry.updateLobbyContext(sessionToken, LobbyCode("AB12"), "Alice")
+        sessionContextRegistry.updateLobbyContext(sessionToken, LobbyCode("1003"), "Alice")
 
         persistReconnectSessionIfPossible(
             network = network,
@@ -411,7 +411,7 @@ class ApplicationTest {
 
         assertTrue(connection.committed)
         assertEquals(21L, delete.lastParameters[1])
-        assertEquals("AB12", insert.lastParameters[3])
+        assertEquals("1003", insert.lastParameters[3])
         assertEquals("ALICE", insert.lastParameters[4])
     }
 
@@ -593,7 +593,7 @@ class ApplicationTest {
     fun `cleanupTerminalLobbyState removes lobby without persistence store`() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val lobbyManager = at.aau.pulverfass.server.lobby.runtime.LobbyManager(scope = scope)
-        val lobbyCode = LobbyCode("CL12")
+        val lobbyCode = LobbyCode("1084")
 
         try {
             lobbyManager.createLobby(lobbyCode)
@@ -618,7 +618,7 @@ class ApplicationTest {
         val waiting =
             GameState
                 .initial(
-                    lobbyCode = LobbyCode("ST11"),
+                    lobbyCode = LobbyCode("1351"),
                     mapDefinition = mapDefinition,
                     players = listOf(PlayerId(3), PlayerId(7)),
                 )
@@ -626,7 +626,7 @@ class ApplicationTest {
         val running =
             GameState
                 .initial(
-                    lobbyCode = LobbyCode("ST12"),
+                    lobbyCode = LobbyCode("1352"),
                     mapDefinition = mapDefinition,
                     players = listOf(PlayerId(2)),
                 )
@@ -634,14 +634,14 @@ class ApplicationTest {
         val finished =
             GameState
                 .initial(
-                    lobbyCode = LobbyCode("ST13"),
+                    lobbyCode = LobbyCode("1353"),
                     mapDefinition = mapDefinition,
                 )
                 .copy(status = GameStatus.FINISHED)
         val closed =
             GameState
                 .initial(
-                    lobbyCode = LobbyCode("ST14"),
+                    lobbyCode = LobbyCode("1354"),
                     mapDefinition = mapDefinition,
                 )
                 .copy(status = GameStatus.CLOSED)

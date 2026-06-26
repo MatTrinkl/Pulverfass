@@ -81,7 +81,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA01")
+            val lobbyCode = LobbyCode("1363")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -96,10 +96,10 @@ class TurnAdvanceIntegrationTest {
                     ),
             )
             lobbyManager.createLobby(
-                lobbyCode = LobbyCode("TA99"),
+                lobbyCode = LobbyCode("1381"),
                 initialState =
                     runningTurnStateGame(
-                        lobbyCode = LobbyCode("TA99"),
+                        lobbyCode = LobbyCode("1381"),
                         players = listOf(playerThree),
                         activePlayerId = playerThree,
                         turnPhase = TurnPhase.REINFORCEMENTS,
@@ -244,7 +244,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA08")
+            val lobbyCode = LobbyCode("1370")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -418,7 +418,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA09")
+            val lobbyCode = LobbyCode("1371")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -585,7 +585,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA15")
+            val lobbyCode = LobbyCode("1377")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val drawnCard = CardState(CardId("deck-1"), CardType.A)
@@ -787,7 +787,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA11")
+            val lobbyCode = LobbyCode("1373")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val drawnCard = CardState(CardId("deck-1"), CardType.A)
@@ -976,7 +976,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA13")
+            val lobbyCode = LobbyCode("1375")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val drawnCard = CardState(CardId("drawn-card"), CardType.A)
@@ -1122,7 +1122,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA12")
+            val lobbyCode = LobbyCode("1374")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -1208,10 +1208,10 @@ class TurnAdvanceIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingAdvance(
-                    lobbyCode = LobbyCode("TA02"),
+                    lobbyCode = LobbyCode("1364"),
                     state =
                         runningTurnStateGame(
-                            lobbyCode = LobbyCode("TA02"),
+                            lobbyCode = LobbyCode("1364"),
                             players = listOf(PlayerId(1), PlayerId(2)),
                             activePlayerId = PlayerId(1),
                             turnPhase = TurnPhase.ATTACK,
@@ -1219,7 +1219,7 @@ class TurnAdvanceIntegrationTest {
                     requesterPlayerId = PlayerId(2),
                     request =
                         TurnAdvanceRequest(
-                            lobbyCode = LobbyCode("TA02"),
+                            lobbyCode = LobbyCode("1364"),
                             playerId = PlayerId(2),
                             expectedPhase = TurnPhase.ATTACK,
                         ),
@@ -1234,10 +1234,10 @@ class TurnAdvanceIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingAdvance(
-                    lobbyCode = LobbyCode("TA03"),
+                    lobbyCode = LobbyCode("1365"),
                     state =
                         runningTurnStateGame(
-                            lobbyCode = LobbyCode("TA03"),
+                            lobbyCode = LobbyCode("1365"),
                             players = listOf(PlayerId(1), PlayerId(2)),
                             activePlayerId = PlayerId(1),
                             turnPhase = TurnPhase.FORTIFY,
@@ -1247,7 +1247,7 @@ class TurnAdvanceIntegrationTest {
                     requesterPlayerId = PlayerId(1),
                     request =
                         TurnAdvanceRequest(
-                            lobbyCode = LobbyCode("TA03"),
+                            lobbyCode = LobbyCode("1365"),
                             playerId = PlayerId(1),
                             expectedPhase = TurnPhase.FORTIFY,
                         ),
@@ -1263,10 +1263,10 @@ class TurnAdvanceIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingAdvance(
-                    lobbyCode = LobbyCode("TA04"),
+                    lobbyCode = LobbyCode("1366"),
                     state =
                         runningTurnStateGame(
-                            lobbyCode = LobbyCode("TA04"),
+                            lobbyCode = LobbyCode("1366"),
                             players = listOf(PlayerId(1), PlayerId(2)),
                             activePlayerId = PlayerId(1),
                             turnPhase = TurnPhase.DRAW_CARD,
@@ -1274,7 +1274,7 @@ class TurnAdvanceIntegrationTest {
                     requesterPlayerId = PlayerId(1),
                     request =
                         TurnAdvanceRequest(
-                            lobbyCode = LobbyCode("TA04"),
+                            lobbyCode = LobbyCode("1366"),
                             playerId = PlayerId(1),
                             expectedPhase = TurnPhase.ATTACK,
                         ),
@@ -1287,7 +1287,7 @@ class TurnAdvanceIntegrationTest {
     @Test
     fun `turn advance from reinforcements requires forced card trade in`() =
         testApplication {
-            val lobbyCode = LobbyCode("TA14")
+            val lobbyCode = LobbyCode("1376")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val handCards =
@@ -1330,7 +1330,7 @@ class TurnAdvanceIntegrationTest {
     @Test
     fun `eliminated spectator gets not active player error and no state change`() =
         testApplication {
-            val lobbyCode = LobbyCode("TA10")
+            val lobbyCode = LobbyCode("1372")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -1399,7 +1399,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA05")
+            val lobbyCode = LobbyCode("1367")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -1497,7 +1497,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA06")
+            val lobbyCode = LobbyCode("1368")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -1651,7 +1651,7 @@ class TurnAdvanceIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TA07")
+            val lobbyCode = LobbyCode("1369")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(

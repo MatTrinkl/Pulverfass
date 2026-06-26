@@ -24,7 +24,7 @@ class GameStateSnapshotBroadcastMessageTest {
     fun `serializer roundtrip game state snapshot broadcast`() {
         val payload =
             GameStateSnapshotBroadcast(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 stateVersion = 14,
                 determinism =
                     PublicDeterminismMetadataSnapshot(

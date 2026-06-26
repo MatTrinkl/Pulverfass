@@ -686,12 +686,10 @@ internal fun GameScreenContent(
                 attackVfx = uiState.attackState.latestResult?.toAttackVfxRequest(),
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
-                /**
-                 * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
-                 * werden aber nur weitergereicht, wenn der lokale Spieler gerade
-                 * handeln darf und der Client synchron verbunden ist
-                 * ([canSelectRegion]).
-                 */
+                    // Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
+                    // werden aber nur weitergereicht, wenn der lokale Spieler gerade
+                    // handeln darf und der Client synchron verbunden ist
+                    // ([canSelectRegion]).
                     if (canSelectRegion) {
                         onRegionSelected(region.id)
                     }
@@ -1507,9 +1505,8 @@ private fun OptionsOverlay(
     if (!show) return
     val scrollState = rememberScrollState()
     var showCheatReportPlayers by remember { mutableStateOf(false) }
-    /**
-     * Der eigene Spieler wird nicht angeboten, weil man sich nicht selbst melden darf.
-     */
+
+    // Der eigene Spieler wird nicht angeboten, weil man sich nicht selbst melden darf.
     val reportablePlayers = options.players.filter { it.playerId != options.localPlayerId }
     GameScreenOverlayContainer(
         overlayAlpha = 0.85f,
@@ -3677,12 +3674,11 @@ private fun AttackResultPanel(
 }
 
 /**
- * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ * Zustand der ständig sichtbaren Aktionsleiste am unteren Rand.
  *
- * [onEndPhase] ist bereits vom aufrufenden Screen auf den fachlich korrekten
- * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
- * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
- * in den übrigen Phasen.
+ * @property currentPhase aktuell angezeigte Spielphase.
+ * @property canEndPhase `true`, wenn der lokale Spieler die Phase beenden darf.
+ * @property cardsVisible `true`, wenn die Kartenleiste eingeblendet ist.
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
@@ -3690,6 +3686,20 @@ private data class BottomBarState(
     val cardsVisible: Boolean,
 )
 
+/**
+ * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ *
+ * `onEndPhase` ist bereits vom aufrufenden Screen auf den fachlich korrekten
+ * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
+ * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
+ * in den übrigen Phasen.
+ *
+ * @param state Phasen- und Sichtbarkeitszustand der Leiste.
+ * @param onToggleCards öffnet oder schließt die Kartenleiste.
+ * @param onEndPhase sendet den zur aktuellen Phase passenden Abschlussrequest.
+ * @param modifier Modifier für die gesamte Aktionsleiste.
+ * @param musicManager optionaler SFX-Auslöser für Button-Aktionen.
+ */
 @Composable
 private fun BottomActionClusters(
     state: BottomBarState,

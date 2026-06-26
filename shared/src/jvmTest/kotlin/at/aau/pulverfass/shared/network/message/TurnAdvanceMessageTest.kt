@@ -22,7 +22,7 @@ class TurnAdvanceMessageTest {
     fun `serializer roundtrip request with expected phase`() {
         val request =
             TurnAdvanceRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
                 expectedPhase = TurnPhase.ATTACK,
             )
@@ -30,18 +30,18 @@ class TurnAdvanceMessageTest {
         val serialized = json.encodeToString(TurnAdvanceRequest.serializer(), request)
         val deserialized = json.decodeFromString(TurnAdvanceRequest.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"AB12","playerId":7,"expectedPhase":"ATTACK"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003","playerId":7,"expectedPhase":"ATTACK"}""", serialized)
         assertEquals(request, deserialized)
     }
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = TurnAdvanceResponse(lobbyCode = LobbyCode("CD34"))
+        val response = TurnAdvanceResponse(lobbyCode = LobbyCode("1071"))
 
         val serialized = json.encodeToString(TurnAdvanceResponse.serializer(), response)
         val deserialized = json.decodeFromString(TurnAdvanceResponse.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"CD34"}""", serialized)
+        assertEquals("""{"lobbyCode":"1071"}""", serialized)
         assertEquals(response, deserialized)
     }
 
@@ -64,7 +64,7 @@ class TurnAdvanceMessageTest {
     fun `serializer roundtrip turn state updated broadcast`() {
         val event =
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 activePlayerId = PlayerId(1),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 3,
@@ -87,7 +87,7 @@ class TurnAdvanceMessageTest {
     fun `serializer roundtrip phase boundary broadcast`() {
         val event =
             PhaseBoundaryEvent(
-                lobbyCode = LobbyCode("GH78"),
+                lobbyCode = LobbyCode("1178"),
                 stateVersion = 12,
                 previousPhase = TurnPhase.FORTIFY,
                 nextPhase = TurnPhase.DRAW_CARD,

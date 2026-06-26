@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test
 
 class FortifyMoveValidatorTest {
     private val validator = DefaultFortifyMoveValidator()
-    private val lobbyCode = LobbyCode("FM12")
+    private val lobbyCode = LobbyCode("1154")
     private val playerOne = PlayerId(1)
     private val playerTwo = PlayerId(2)
     private val alpha = TerritoryId("alpha")

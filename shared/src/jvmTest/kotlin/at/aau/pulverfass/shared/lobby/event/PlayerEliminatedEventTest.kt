@@ -11,7 +11,7 @@ class PlayerEliminatedEventTest {
     fun `valid player eliminated event is accepted`() {
         val event =
             PlayerEliminatedEvent(
-                lobbyCode = LobbyCode("PE11"),
+                lobbyCode = LobbyCode("1278"),
                 playerId = PlayerId(1),
                 eliminatedByPlayerId = PlayerId(2),
             )
@@ -23,7 +23,7 @@ class PlayerEliminatedEventTest {
     fun `player eliminated event rejects invalid values`() {
         assertThrows(IllegalArgumentException::class.java) {
             PlayerEliminatedEvent(
-                lobbyCode = LobbyCode("PE11"),
+                lobbyCode = LobbyCode("1278"),
                 playerId = PlayerId(1),
                 eliminatedByPlayerId = PlayerId(1),
             )
@@ -31,7 +31,7 @@ class PlayerEliminatedEventTest {
 
         assertThrows(IllegalArgumentException::class.java) {
             PlayerEliminatedEvent(
-                lobbyCode = LobbyCode("PE11"),
+                lobbyCode = LobbyCode("1278"),
                 playerId = PlayerId(1),
                 eliminatedByPlayerId = PlayerId(2),
                 stateVersion = -1,

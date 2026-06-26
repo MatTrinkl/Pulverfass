@@ -59,7 +59,7 @@ class TurnStateGetIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TS01")
+            val lobbyCode = LobbyCode("1409")
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState =
@@ -155,14 +155,14 @@ class TurnStateGetIntegrationTest {
                     sessionAndConnection.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(TurnStateGetRequest(LobbyCode("TS99"))),
+                            data = MessageCodec.encode(TurnStateGetRequest(LobbyCode("1415"))),
                         ),
                     )
 
                     assertEquals(
                         TurnStateGetErrorResponse(
                             code = TurnStateGetErrorCode.GAME_NOT_FOUND,
-                            reason = "Lobby 'TS99' wurde nicht gefunden.",
+                            reason = "Lobby '1415' wurde nicht gefunden.",
                         ),
                         receivePayload(sessionAndConnection.first),
                     )

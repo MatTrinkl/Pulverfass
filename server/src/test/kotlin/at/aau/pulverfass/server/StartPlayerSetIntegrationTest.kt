@@ -63,7 +63,7 @@ class StartPlayerSetIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("SP11")
+            val lobbyCode = LobbyCode("1344")
             val host = PlayerId(1)
             val player2 = PlayerId(2)
             val outsider = PlayerId(3)
@@ -72,8 +72,8 @@ class StartPlayerSetIntegrationTest {
                 initialState = preGameState(lobbyCode, listOf(host, player2), host),
             )
             lobbyManager.createLobby(
-                lobbyCode = LobbyCode("SP99"),
-                initialState = preGameState(LobbyCode("SP99"), listOf(outsider), outsider),
+                lobbyCode = LobbyCode("1350"),
+                initialState = preGameState(LobbyCode("1350"), listOf(outsider), outsider),
             )
             routingService.start(serverScope)
 
@@ -165,15 +165,15 @@ class StartPlayerSetIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingSet(
-                    lobbyCode = LobbyCode("SP12"),
+                    lobbyCode = LobbyCode("1345"),
                     state =
                         preGameState(
-                            LobbyCode("SP12"),
+                            LobbyCode("1345"),
                             listOf(PlayerId(1), PlayerId(2)),
                             PlayerId(1),
                         ),
                     requesterPlayerId = PlayerId(2),
-                    request = StartPlayerSetRequest(LobbyCode("SP12"), PlayerId(2), PlayerId(2)),
+                    request = StartPlayerSetRequest(LobbyCode("1345"), PlayerId(2), PlayerId(2)),
                 )
 
             assertEquals(StartPlayerSetErrorCode.NOT_HOST, result.first.code)
@@ -185,15 +185,15 @@ class StartPlayerSetIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingSet(
-                    lobbyCode = LobbyCode("SP13"),
+                    lobbyCode = LobbyCode("1346"),
                     state =
                         preGameState(
-                            LobbyCode("SP13"),
+                            LobbyCode("1346"),
                             listOf(PlayerId(1), PlayerId(2)),
                             PlayerId(1),
                         ),
                     requesterPlayerId = PlayerId(1),
-                    request = StartPlayerSetRequest(LobbyCode("SP13"), PlayerId(99), PlayerId(1)),
+                    request = StartPlayerSetRequest(LobbyCode("1346"), PlayerId(99), PlayerId(1)),
                 )
 
             assertEquals(StartPlayerSetErrorCode.PLAYER_NOT_IN_LOBBY, result.first.code)
@@ -205,16 +205,16 @@ class StartPlayerSetIntegrationTest {
         testApplication {
             val result =
                 exerciseFailingSet(
-                    lobbyCode = LobbyCode("SP14"),
+                    lobbyCode = LobbyCode("1347"),
                     state =
                         preGameState(
-                            LobbyCode("SP14"),
+                            LobbyCode("1347"),
                             listOf(PlayerId(1), PlayerId(2)),
                             PlayerId(1),
                         )
                             .copy(gameStarted = true, status = GameStatus.RUNNING),
                     requesterPlayerId = PlayerId(1),
-                    request = StartPlayerSetRequest(LobbyCode("SP14"), PlayerId(2), PlayerId(1)),
+                    request = StartPlayerSetRequest(LobbyCode("1347"), PlayerId(2), PlayerId(1)),
                 )
 
             assertEquals(StartPlayerSetErrorCode.GAME_ALREADY_STARTED, result.first.code)

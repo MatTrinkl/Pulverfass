@@ -178,40 +178,40 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for create lobby response`() {
-        val payload = CreateLobbyResponse(LobbyCode("AB12"))
+        val payload = CreateLobbyResponse(LobbyCode("1003"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_CREATE_RESPONSE, messageType)
-        assertEquals("""{"lobbyCode":"AB12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
     @Test
     fun `should resolve message type and serialization for join lobby request`() {
-        val payload = JoinLobbyRequest(LobbyCode("AB12"), "Alice")
+        val payload = JoinLobbyRequest(LobbyCode("1003"), "Alice")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_JOIN_REQUEST, messageType)
-        assertEquals("""{"lobbyCode":"AB12","playerDisplayName":"Alice"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003","playerDisplayName":"Alice"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
     @Test
     fun `should resolve message type and serialization for join lobby response`() {
-        val payload = JoinLobbyResponse(LobbyCode("CD34"))
+        val payload = JoinLobbyResponse(LobbyCode("1071"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_JOIN_RESPONSE, messageType)
-        assertEquals("""{"lobbyCode":"CD34"}""", serialized)
+        assertEquals("""{"lobbyCode":"1071"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -232,7 +232,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for player joined lobby event`() {
         val payload =
             PlayerJoinedLobbyEvent(
-                LobbyCode("EF56"),
+                LobbyCode("1132"),
                 PlayerId(8),
                 "Bob",
             )
@@ -243,7 +243,7 @@ class NetworkPayloadRegistryTest {
 
         assertEquals(MessageType.LOBBY_PLAYER_JOINED_BROADCAST, messageType)
         assertEquals(
-            """{"lobbyCode":"EF56","playerId":8,"playerDisplayName":"Bob"}""",
+            """{"lobbyCode":"1132","playerId":8,"playerDisplayName":"Bob"}""",
             serialized,
         )
         assertEquals(payload, deserialized)
@@ -253,7 +253,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for player connection lost event`() {
         val payload =
             PlayerConnectionLostEvent(
-                lobbyCode = LobbyCode("EF57"),
+                lobbyCode = LobbyCode("1133"),
                 playerId = PlayerId(18),
                 reason = PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
             )
@@ -264,7 +264,7 @@ class NetworkPayloadRegistryTest {
 
         assertEquals(MessageType.LOBBY_PLAYER_CONNECTION_LOST_BROADCAST, messageType)
         assertEquals(
-            """{"lobbyCode":"EF57","playerId":18,"reason":"HEARTBEAT_TIMEOUT"}""",
+            """{"lobbyCode":"1133","playerId":18,"reason":"HEARTBEAT_TIMEOUT"}""",
             serialized,
         )
         assertEquals(payload, deserialized)
@@ -274,7 +274,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for connection status update event`() {
         val payload =
             ConnectionStatusUpdateEvent(
-                lobbyCode = LobbyCode("EF58"),
+                lobbyCode = LobbyCode("1134"),
                 playerId = PlayerId(19),
                 status = ConnectionStatus.DISCONNECTED,
             )
@@ -285,7 +285,7 @@ class NetworkPayloadRegistryTest {
 
         assertEquals(MessageType.LOBBY_CONNECTION_STATUS_UPDATE_BROADCAST, messageType)
         assertEquals(
-            """{"lobbyCode":"EF58","playerId":19,"status":"DISCONNECTED"}""",
+            """{"lobbyCode":"1134","playerId":19,"status":"DISCONNECTED"}""",
             serialized,
         )
         assertEquals(payload, deserialized)
@@ -295,7 +295,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for reinforcements granted event`() {
         val payload =
             ReinforcementsGrantedEvent(
-                lobbyCode = LobbyCode("RG12"),
+                lobbyCode = LobbyCode("1328"),
                 playerId = PlayerId(8),
                 amount = 6,
                 territoryBonus = 4,
@@ -315,7 +315,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for pending reinforcements changed event`() {
         val payload =
             PendingReinforcementsChangedEvent(
-                lobbyCode = LobbyCode("PR12"),
+                lobbyCode = LobbyCode("1298"),
                 playerId = PlayerId(9),
                 delta = -4,
             )
@@ -332,7 +332,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for attack request`() {
         val payload =
             AttackRequest(
-                lobbyCode = LobbyCode("AT13"),
+                lobbyCode = LobbyCode("1021"),
                 playerId = PlayerId(3),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -351,7 +351,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for attack response`() {
-        val payload = AttackResponse(lobbyCode = LobbyCode("AT14"), requestId = "req-2")
+        val payload = AttackResponse(lobbyCode = LobbyCode("1022"), requestId = "req-2")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -382,7 +382,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for attack resolved event`() {
         val payload =
             AttackResolvedBroadcastEvent(
-                lobbyCode = LobbyCode("AT15"),
+                lobbyCode = LobbyCode("1023"),
                 attackerPlayerId = PlayerId(3),
                 defenderPlayerId = PlayerId(4),
                 fromTerritoryId = TerritoryId("alpha"),
@@ -418,7 +418,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for player eliminated event`() {
         val payload =
             PlayerEliminatedEvent(
-                lobbyCode = LobbyCode("AT16"),
+                lobbyCode = LobbyCode("1024"),
                 playerId = PlayerId(4),
                 eliminatedByPlayerId = PlayerId(3),
                 stateVersion = 8L,
@@ -437,7 +437,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for confirm reinforcements done request`() {
         val payload =
             ConfirmReinforcementsDoneRequest(
-                lobbyCode = LobbyCode("CR12"),
+                lobbyCode = LobbyCode("1086"),
                 playerId = PlayerId(5),
             )
 
@@ -451,7 +451,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for confirm reinforcements done response`() {
-        val payload = ConfirmReinforcementsDoneResponse(lobbyCode = LobbyCode("CR13"))
+        val payload = ConfirmReinforcementsDoneResponse(lobbyCode = LobbyCode("1087"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -481,7 +481,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for place reinforcements request`() {
         val payload =
             PlaceReinforcementsRequest(
-                lobbyCode = LobbyCode("PR13"),
+                lobbyCode = LobbyCode("1299"),
                 playerId = PlayerId(3),
                 placements = listOf(TerritoryPlacement(TerritoryId("alpha"), 2)),
             )
@@ -496,7 +496,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for place reinforcements response`() {
-        val payload = PlaceReinforcementsResponse(lobbyCode = LobbyCode("PR14"))
+        val payload = PlaceReinforcementsResponse(lobbyCode = LobbyCode("1300"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -524,14 +524,14 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for lobby player count request`() {
-        val payload = LobbyPlayerCountRequest(LobbyCode("PC12"))
+        val payload = LobbyPlayerCountRequest(LobbyCode("1273"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_PLAYER_COUNT_REQUEST, messageType)
-        assertEquals("""{"lobbyCode":"PC12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1273"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -539,7 +539,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for lobby player count response`() {
         val payload =
             LobbyPlayerCountResponse(
-                lobbyCode = LobbyCode("PC34"),
+                lobbyCode = LobbyCode("1274"),
                 playerCount = 5,
             )
 
@@ -548,7 +548,7 @@ class NetworkPayloadRegistryTest {
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_PLAYER_COUNT_RESPONSE, messageType)
-        assertEquals("""{"lobbyCode":"PC34","playerCount":5}""", serialized)
+        assertEquals("""{"lobbyCode":"1274","playerCount":5}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -556,9 +556,9 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for lobby player count error response`() {
         val payload =
             LobbyPlayerCountErrorResponse(
-                lobbyCode = LobbyCode("PC99"),
+                lobbyCode = LobbyCode("1275"),
                 code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
-                reason = "Lobby 'PC99' wurde nicht gefunden.",
+                reason = "Lobby '1275' wurde nicht gefunden.",
             )
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
@@ -573,7 +573,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for fortify move request`() {
         val payload =
             FortifyMoveRequest(
-                lobbyCode = LobbyCode("FM12"),
+                lobbyCode = LobbyCode("1154"),
                 playerId = PlayerId(3),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
@@ -590,7 +590,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for fortify move response and error`() {
-        val response = FortifyMoveResponse(LobbyCode("FM34"))
+        val response = FortifyMoveResponse(LobbyCode("1155"))
         val error =
             FortifyMoveErrorResponse(
                 code = FortifyMoveErrorCode.NO_PATH,
@@ -620,10 +620,10 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for cheat reinforcement bonus messages`() {
         val request =
             ClaimCheatReinforcementBonusRequest(
-                lobbyCode = LobbyCode("CH12"),
+                lobbyCode = LobbyCode("1074"),
                 playerId = PlayerId(3),
             )
-        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("CH12"))
+        val response = ClaimCheatReinforcementBonusResponse(lobbyCode = LobbyCode("1074"))
         val error =
             ClaimCheatReinforcementBonusErrorResponse(
                 code = ClaimCheatReinforcementBonusErrorCode.ALREADY_USED,
@@ -657,13 +657,13 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for report cheat messages`() {
         val request =
             ReportCheatRequest(
-                lobbyCode = LobbyCode("RC12"),
+                lobbyCode = LobbyCode("1321"),
                 reporterPlayerId = PlayerId(2),
                 accusedPlayerId = PlayerId(1),
             )
         val response =
             ReportCheatResponse(
-                lobbyCode = LobbyCode("RC12"),
+                lobbyCode = LobbyCode("1321"),
                 accusedPlayerId = PlayerId(1),
                 correct = true,
                 modifierDelta = 3,
@@ -699,53 +699,53 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for leave lobby request`() {
-        val payload = LeaveLobbyRequest(LobbyCode("GH78"))
+        val payload = LeaveLobbyRequest(LobbyCode("1178"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_LEAVE_REQUEST, messageType)
-        assertEquals("""{"lobbyCode":"GH78"}""", serialized)
+        assertEquals("""{"lobbyCode":"1178"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
     @Test
     fun `should resolve message type and serialization for leave lobby response`() {
-        val payload = LeaveLobbyResponse(LobbyCode("IJ90"))
+        val payload = LeaveLobbyResponse(LobbyCode("1199"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_LEAVE_RESPONSE, messageType)
-        assertEquals("""{"lobbyCode":"IJ90"}""", serialized)
+        assertEquals("""{"lobbyCode":"1199"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
     @Test
     fun `should resolve message type and serialization for player left lobby event`() {
-        val payload = PlayerLeftLobbyEvent(LobbyCode("KL12"), PlayerId(9))
+        val payload = PlayerLeftLobbyEvent(LobbyCode("1205"), PlayerId(9))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_PLAYER_LEFT_BROADCAST, messageType)
-        assertEquals("""{"lobbyCode":"KL12","playerId":9}""", serialized)
+        assertEquals("""{"lobbyCode":"1205","playerId":9}""", serialized)
         assertEquals(payload, deserialized)
     }
 
     @Test
     fun `should resolve message type and serialization for map get request`() {
-        val payload = MapGetRequest(LobbyCode("MN34"))
+        val payload = MapGetRequest(LobbyCode("1247"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_MAP_GET_REQUEST, messageType)
-        assertEquals("""{"lobbyCode":"MN34"}""", serialized)
+        assertEquals("""{"lobbyCode":"1247"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -753,7 +753,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for map get response`() {
         val payload =
             MapGetResponse(
-                lobbyCode = LobbyCode("MN34"),
+                lobbyCode = LobbyCode("1247"),
                 schemaVersion = 1,
                 mapHash = "hash",
                 stateVersion = 4,
@@ -807,7 +807,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for territory owner changed event`() {
         val payload =
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("MN34"),
+                lobbyCode = LobbyCode("1247"),
                 territoryId = TerritoryId("alpha"),
                 ownerId = PlayerId(2),
                 stateVersion = 17,
@@ -826,7 +826,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for territory troops changed event`() {
         val payload =
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("MN34"),
+                lobbyCode = LobbyCode("1247"),
                 territoryId = TerritoryId("alpha"),
                 troopCount = 9,
                 stateVersion = 18,
@@ -845,7 +845,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for turn advance request`() {
         val payload =
             TurnAdvanceRequest(
-                lobbyCode = LobbyCode("TA12"),
+                lobbyCode = LobbyCode("1374"),
                 playerId = PlayerId(5),
                 expectedPhase = TurnPhase.ATTACK,
             )
@@ -860,14 +860,14 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for turn advance response`() {
-        val payload = TurnAdvanceResponse(LobbyCode("TA34"))
+        val payload = TurnAdvanceResponse(LobbyCode("1378"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_TURN_ADVANCE_RESPONSE, messageType)
-        assertEquals("""{"lobbyCode":"TA34"}""", serialized)
+        assertEquals("""{"lobbyCode":"1378"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -891,7 +891,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for turn state updated broadcast`() {
         val payload =
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("TA56"),
+                lobbyCode = LobbyCode("1379"),
                 activePlayerId = PlayerId(2),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 4,
@@ -911,7 +911,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for phase boundary broadcast`() {
         val payload =
             PhaseBoundaryEvent(
-                lobbyCode = LobbyCode("PB12"),
+                lobbyCode = LobbyCode("1270"),
                 stateVersion = 9,
                 previousPhase = TurnPhase.ATTACK,
                 nextPhase = TurnPhase.FORTIFY,
@@ -933,19 +933,19 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for game state delta broadcast`() {
         val payload =
             GameStateDeltaEvent(
-                lobbyCode = LobbyCode("GD12"),
+                lobbyCode = LobbyCode("1167"),
                 fromVersion = 7,
                 toVersion = 7,
                 events =
                     listOf(
                         TerritoryOwnerChangedEvent(
-                            lobbyCode = LobbyCode("GD12"),
+                            lobbyCode = LobbyCode("1167"),
                             territoryId = TerritoryId("alpha"),
                             ownerId = PlayerId(2),
                             stateVersion = 7,
                         ),
                         TurnStateUpdatedEvent(
-                            lobbyCode = LobbyCode("GD12"),
+                            lobbyCode = LobbyCode("1167"),
                             activePlayerId = PlayerId(2),
                             turnPhase = TurnPhase.ATTACK,
                             turnCount = 2,
@@ -968,7 +968,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for match ended broadcast`() {
         val payload =
             MatchEndedBroadcastEvent(
-                lobbyCode = LobbyCode("ME12"),
+                lobbyCode = LobbyCode("1244"),
                 reason = MatchEndReason.TERRITORY_DOMINATION,
                 winnerPlayerId = PlayerId(1),
                 stateVersion = 12L,
@@ -988,7 +988,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for game state snapshot broadcast`() {
         val payload =
             GameStateSnapshotBroadcast(
-                lobbyCode = LobbyCode("GS12"),
+                lobbyCode = LobbyCode("1186"),
                 stateVersion = 11,
                 determinism =
                     PublicDeterminismMetadataSnapshot(
@@ -1035,14 +1035,14 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for turn state get request`() {
-        val payload = TurnStateGetRequest(LobbyCode("TS12"))
+        val payload = TurnStateGetRequest(LobbyCode("1410"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
         val deserialized = NetworkPayloadRegistry.deserializePayload(messageType, serialized)
 
         assertEquals(MessageType.LOBBY_TURN_STATE_GET_REQUEST, messageType)
-        assertEquals("""{"lobbyCode":"TS12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1410"}""", serialized)
         assertEquals(payload, deserialized)
     }
 
@@ -1050,7 +1050,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for turn state get response`() {
         val payload =
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("TS34"),
+                lobbyCode = LobbyCode("1411"),
                 activePlayerId = PlayerId(3),
                 turnPhase = TurnPhase.DRAW_CARD,
                 turnCount = 8,
@@ -1088,7 +1088,7 @@ class NetworkPayloadRegistryTest {
     fun `should resolve message type and serialization for start player set request`() {
         val payload =
             StartPlayerSetRequest(
-                lobbyCode = LobbyCode("SP12"),
+                lobbyCode = LobbyCode("1345"),
                 startPlayerId = PlayerId(2),
                 requesterPlayerId = PlayerId(1),
             )
@@ -1103,7 +1103,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for start player set response`() {
-        val payload = StartPlayerSetResponse(LobbyCode("SP34"), PlayerId(9))
+        val payload = StartPlayerSetResponse(LobbyCode("1348"), PlayerId(9))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -1132,7 +1132,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for character select request`() {
-        val payload = CharacterSelectRequest(LobbyCode("CS12"), PlayerId(3), "warrior")
+        val payload = CharacterSelectRequest(LobbyCode("1098"), PlayerId(3), "warrior")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -1144,7 +1144,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for character select response`() {
-        val payload = CharacterSelectResponse(LobbyCode("CS34"), "warrior")
+        val payload = CharacterSelectResponse(LobbyCode("1102"), "warrior")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -1168,7 +1168,7 @@ class NetworkPayloadRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for character selected broadcast`() {
-        val payload = CharacterSelectedBroadcast(LobbyCode("CS56"), PlayerId(5), "character_04")
+        val payload = CharacterSelectedBroadcast(LobbyCode("1105"), PlayerId(5), "character_04")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)

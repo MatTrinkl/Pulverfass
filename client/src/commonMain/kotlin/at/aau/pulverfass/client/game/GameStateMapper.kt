@@ -144,11 +144,9 @@ fun buildRegionStates(
                         ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
                         ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                /**
-                 * Unbeanspruchte und von verlassenen Spielern zurückgelassene
-                 * Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
-                 * bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
-                 */
+                // Unbeanspruchte und von verlassenen Spielern zurückgelassene
+                // Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
+                // bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
                 accentColor = owner?.color ?: NeutralTerritoryColor,
             )
     }.toMap()
