@@ -383,9 +383,17 @@ class LobbyController(
     }
 
     fun connect() {
+        connect(requirePlayerName = true)
+    }
+
+    fun connectForStatus() {
+        connect(requirePlayerName = false)
+    }
+
+    private fun connect(requirePlayerName: Boolean) {
         manualDisconnectRequested = false
         val snapshot = state.value
-        if (snapshot.playerName.isBlank()) {
+        if (requirePlayerName && snapshot.playerName.isBlank()) {
             _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }

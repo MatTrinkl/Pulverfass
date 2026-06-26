@@ -562,6 +562,8 @@ class MainServerLobbyRoutingService(
         playerId: PlayerId,
         reason: String?,
     ) {
+        broadcastGlobalPlayerCount()
+
         val currentConnectionId = connectionIdResolver(playerId)
         if (currentConnectionId != null && currentConnectionId != connectionId) {
             logger.info(
@@ -588,7 +590,6 @@ class MainServerLobbyRoutingService(
 
         // broadcast updated player count to lobby members (disconnect may affect displayed online count)
         broadcastPlayerCount(lobbyCode)
-        broadcastGlobalPlayerCount()
 
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
@@ -622,6 +623,10 @@ class MainServerLobbyRoutingService(
      * damit ein verzögert verarbeitetes Connect-Event keinen Reconnect doppelt meldet.
      */
     suspend fun onConnectionOpened() {
+        broadcastGlobalPlayerCount()
+    }
+
+    suspend fun onConnectionClosed() {
         broadcastGlobalPlayerCount()
     }
 
@@ -1575,6 +1580,10 @@ class MainServerLobbyRoutingService(
         val lobbyCode = lobbyCodeOf(request.payload)
         val previousTurnState = lobbyCode?.let(::currentTurnState)
 
+        if (rejectJoinIntoStartedLobbyIfNeeded(request)) {
+            return
+        }
+
         when (val result = router.route(request)) {
             is LobbyRoutingResult.Success -> {
                 dispatchNetworkMessages(request)
@@ -1621,6 +1630,45 @@ class MainServerLobbyRoutingService(
             }
         }
     }
+
+    private suspend fun rejectJoinIntoStartedLobbyIfNeeded(
+        request: DecodedNetworkRequest,
+    ): Boolean {
+        val payload = request.payload as? JoinLobbyRequest ?: return false
+        val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return false
+        if (!isJoinLocked(currentState)) {
+            return false
+        }
+
+        val reason =
+            "Player '${request.context.playerId}' kann Lobby '${payload.lobbyCode}' " +
+                "nach Spielstart nicht beitreten."
+        dispatchErrorResponse(request, reason)
+        logRequestRejected(
+            request = request,
+            errorCode = "LOBBY_JOIN_LOCKED",
+            reason = reason,
+            cause = IllegalStateException(reason),
+            lobbyCode = payload.lobbyCode,
+        )
+        hooks.onRoutingError(
+            request.connectionId,
+            LobbyRoutingError.InvalidStateTransition(
+                reason = reason,
+                context =
+                    LobbyRoutingContext(
+                        connectionId = request.connectionId,
+                        messageType = request.header.type,
+                        lobbyCode = payload.lobbyCode,
+                    ),
+                cause = IllegalStateException(reason),
+            ),
+        )
+        return true
+    }
+
+    private fun isJoinLocked(state: GameState): Boolean =
+        state.gameStarted || state.status == GameStatus.RUNNING
 
     private suspend fun dispatchNetworkMessages(request: DecodedNetworkRequest) {
         when (val payload = request.payload) {
@@ -1896,7 +1944,7 @@ class MainServerLobbyRoutingService(
         val playerId = request.context.playerId ?: return
         releaseCharacterSelection(payload.lobbyCode, playerId)
         resolveSessionToken(request.connectionId)?.let { sessionToken ->
-            sessionContextRegistry?.clearLobbyContext(sessionToken)
+            sessionContextRegistry?.removeSession(sessionToken)
         }
         val lobby = lobbyManager.getLobby(payload.lobbyCode) ?: return
         val lobbyState = lobby.currentState()
@@ -1937,7 +1985,7 @@ class MainServerLobbyRoutingService(
         releaseCharacterSelection(payload.lobbyCode, payload.targetPlayerId)
         sessionContextRegistry
             ?.sessionTokenForPlayer(payload.targetPlayerId)
-            ?.let(sessionContextRegistry::clearLobbyContext)
+            ?.let(sessionContextRegistry::removeSession)
 
         val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
         val event =

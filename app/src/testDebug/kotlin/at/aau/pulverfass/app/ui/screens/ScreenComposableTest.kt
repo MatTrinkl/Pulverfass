@@ -119,7 +119,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("SPIELERNAME").assertExists()
         composeTestRule.onNodeWithText("LOBBY ERSTELLEN").assertExists()
         composeTestRule.onNodeWithText("LOBBY BEITRETEN").assertExists()
-        composeTestRule.onNodeWithText("MAP-TEST").assertExists()
+        composeTestRule.onAllNodesWithText("MAP-TEST").assertCountEquals(0)
     }
 
     @Test

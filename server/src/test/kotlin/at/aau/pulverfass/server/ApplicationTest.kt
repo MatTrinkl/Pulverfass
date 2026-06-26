@@ -747,6 +747,33 @@ class ApplicationTest {
         }
 
     @Test
+    fun `moduleWithLobbyRuntime broadcasts global count when status only connection closes`() =
+        testApplication {
+            application {
+                moduleWithLobbyRuntime()
+            }
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            val firstSession = client.webSocketSession("/ws")
+            discardConnectionHandshake(firstSession)
+
+            val secondSession = client.webSocketSession("/ws")
+            discardConnectionHandshake(secondSession)
+
+            assertEquals(2, receiveGlobalPlayerCount(secondSession, expectedCount = 2).playerCount)
+
+            firstSession.close()
+
+            assertEquals(1, receiveGlobalPlayerCount(secondSession, expectedCount = 1).playerCount)
+
+            secondSession.close()
+        }
+
+    @Test
     fun `moduleWithLobbyRuntime logs correlated create join snapshot and leave flows`() =
         testApplication {
             val context = LoggerFactory.getILoggerFactory() as LoggerContext
@@ -881,6 +908,20 @@ class ApplicationTest {
         }
         throw AssertionError("Expected lobby payload within 20 messages.")
     }
+
+    private suspend fun receiveGlobalPlayerCount(
+        session: DefaultClientWebSocketSession,
+        expectedCount: Int,
+    ): GlobalPlayerCountEvent =
+        withTimeout<GlobalPlayerCountEvent>(5_000) {
+            while (true) {
+                val payload = receiveRawTestPayload(session)
+                if (payload is GlobalPlayerCountEvent && payload.playerCount == expectedCount) {
+                    return@withTimeout payload
+                }
+            }
+            error("Expected global player count $expectedCount.")
+        }
 
     /**
      * Wartet, bis das [predicate] auf den gesammelten Log-Nachrichten erfüllt ist,
