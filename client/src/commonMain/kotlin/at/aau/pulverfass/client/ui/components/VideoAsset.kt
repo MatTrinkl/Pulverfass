@@ -1,0 +1,32 @@
+package at.aau.pulverfass.client.ui.components
+
+/**
+ * Plattformneutrale Referenz auf ein Video-Asset.
+ *
+ * [fileName] entspricht dem Ressourcennamen ohne Endung: Android löst ihn über
+ * `R.raw` auf, iOS über `NSBundle.mainBundle` (Medien liegen im App-Bundle).
+ */
+enum class VideoAsset(val fileName: String) {
+    STUDIO_INTRO("video_studio_intro"),
+    LOADING_SCREEN("video_loading_screen"),
+    MAIN_MENU_BACKGROUND("video_main_menu_background"),
+    LOBBY_BACKGROUND("video_lobby_background"),
+    OPTIONS_BACKGROUND("video_options_background"),
+    CHARACTER_PICKER_BACKGROUND("video_character_picker_background"),
+    BATTLE_INTRO("video_battle_intro"),
+    GAME_LOADING_BACKGROUND("video_game_loading_background"),
+    CARD_HAND_BACKGROUND("video_card_hand_background"),
+    VICTORY("video_victory"),
+    LOSS("video_loss"),
+    CHARACTER_WALLPAPER_01("character_wallpaper_01_video"),
+    CHARACTER_WALLPAPER_02("character_wallpaper_02_video"),
+    CHARACTER_WALLPAPER_03("character_wallpaper_03_video"),
+    CHARACTER_WALLPAPER_04("character_wallpaper_04_video"),
+    CHARACTER_WALLPAPER_05("character_wallpaper_05_video"),
+    CHARACTER_WALLPAPER_06("character_wallpaper_06_video"),
+    CHARACTER_WALLPAPER_07("character_wallpaper_07_video"),
+    CHARACTER_WALLPAPER_08("character_wallpaper_08_video"),
+    CHARACTER_WALLPAPER_09("character_wallpaper_09_video"),
+    CHARACTER_WALLPAPER_10("character_wallpaper_10_video"),
+    CHARACTER_WALLPAPER_11("character_wallpaper_11_video"),
+}

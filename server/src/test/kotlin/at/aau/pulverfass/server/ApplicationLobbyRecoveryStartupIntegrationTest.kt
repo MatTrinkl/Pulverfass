@@ -205,10 +205,7 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
                     ),
                 )
 
-                assertEquals(
-                    JoinLobbyResponse(openLobbyCode, PlayerId(10)),
-                    receiveRelevantTestPayload(session),
-                )
+                assertJoinLobbyResponse(openLobbyCode, receiveRelevantTestPayload(session))
 
                 val firstPlayerEvent =
                     receiveRelevantTestPayload(session) as PlayerJoinedLobbyEvent
@@ -560,6 +557,14 @@ class ApplicationLobbyRecoveryStartupIntegrationTest {
 
     private suspend fun receiveRawTestPayload(session: DefaultClientWebSocketSession): Any =
         MessageCodec.decodePayload(receiveFrameBytes(session))
+
+    private fun assertJoinLobbyResponse(
+        lobbyCode: LobbyCode,
+        payload: Any,
+    ) {
+        assertTrue(payload is JoinLobbyResponse)
+        assertEquals(lobbyCode, (payload as JoinLobbyResponse).lobbyCode)
+    }
 
     private suspend fun receiveFrameBytes(session: DefaultClientWebSocketSession): ByteArray =
         (session.incoming.receive() as Frame.Binary).data

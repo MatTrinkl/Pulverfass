@@ -1,0 +1,63 @@
+package at.aau.pulverfass.client.game
+
+import at.aau.pulverfass.client.ui.map.PulverfassMapDefaults
+import at.aau.pulverfass.shared.ids.TerritoryId
+import at.aau.pulverfass.shared.map.config.MapConfigLoader
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * Prüft die Übersetzung zwischen Backend-Territories und Android-Regionen.
+ *
+ * Diese Zuordnung ist für Touch-Selektion, Besitz-Overlay und Angriffslogik wichtig,
+ * weil die App mit visuellen Region-IDs arbeitet und der Server Backend-IDs erwartet.
+ */
+class GameMapTerritoryMapperTest {
+    @Test
+    fun `siberia map regions keep their backend territory identity`() {
+        assertEquals(TerritoryId("alaska"), GameMapTerritoryMapper.toTerritoryId("east_siberia"))
+        assertEquals(TerritoryId("sibirien"), GameMapTerritoryMapper.toTerritoryId("siberia"))
+    }
+
+    @Test
+    fun `default map territories are mapped to Android regions`() {
+        val androidRegionIds = PulverfassMapDefaults.regions.map { region -> region.id }.toSet()
+        val unmappedTerritories =
+            MapConfigLoader
+                .loadDefault()
+                .territories
+                .map { territory -> territory.territoryId }
+                .filter { territoryId ->
+                    GameMapTerritoryMapper.toAndroidRegionId(territoryId) !in androidRegionIds
+                }
+
+        assertTrue(
+            actual = unmappedTerritories.isEmpty(),
+            message =
+                "Nicht gemappte TerritoryIds: " +
+                    unmappedTerritories.joinToString { territoryId -> territoryId.value },
+        )
+    }
+
+    @Test
+    fun `mapped territories roundtrip through Android region ids`() {
+        val roundtripFailures =
+            MapConfigLoader
+                .loadDefault()
+                .territories
+                .map { territory -> territory.territoryId }
+                .filter { territoryId ->
+                    val regionId = GameMapTerritoryMapper.toAndroidRegionId(territoryId)
+                    regionId == null ||
+                        GameMapTerritoryMapper.toTerritoryId(regionId) != territoryId
+                }
+
+        assertTrue(
+            actual = roundtripFailures.isEmpty(),
+            message =
+                "Nicht reversible TerritoryMappings: " +
+                    roundtripFailures.joinToString { territoryId -> territoryId.value },
+        )
+    }
+}

@@ -203,6 +203,7 @@ class MainServerLobbyRoutingService(
          * Andere Spieler sollen den Cheat melden können, sobald er sichtbar wird,
          * aber niemand soll viele Runden später noch rückwirkend Bonus erhalten.
          */
+
         const val CHEAT_REPORT_WINDOW_MILLIS = 20_000L
         const val CHEAT_REPORT_REWARD = 3
         const val CHEAT_REPORT_PENALTY = -3
@@ -215,6 +216,7 @@ class MainServerLobbyRoutingService(
      * unnötig, weil erst beim Eintreffen einer Meldung geprüft werden muss, ob
      * das Fenster noch gültig ist.
      */
+
     private data class CheatReportWindow(
         val expiresAtMillis: Long,
     )
@@ -228,6 +230,7 @@ class MainServerLobbyRoutingService(
      * vor der sichtbaren Platzierung und eine spätere Meldung im Meldefenster
      * gehören zur selben Cheat-Aktion und dürfen nicht doppelt belohnt werden.
      */
+
     private data class CheatReportKey(
         val reporterPlayerId: PlayerId,
         val accusedPlayerId: PlayerId,
@@ -240,6 +243,7 @@ class MainServerLobbyRoutingService(
      * Bonus oder Malus, der für die nächste Verstärkungsphase des Reporters
      * vorgemerkt wird.
      */
+
     private data class CheatReportResult(
         val correct: Boolean,
         val modifierDelta: Int,
@@ -251,6 +255,7 @@ class MainServerLobbyRoutingService(
      * [modifier] betrifft den Reporter einer Meldung. [zeroReinforcements]
      * betrifft den Spieler, der korrekt beim Cheaten erwischt wurde.
      */
+
     private data class CheatReinforcementAdjustment(
         val modifier: Int,
         val zeroReinforcements: Boolean,
@@ -999,6 +1004,7 @@ class MainServerLobbyRoutingService(
              * normale sichtbare Meldefenster, eine frühe Meldung darf aber nicht
              * als falsch bestraft werden.
              */
+
             markCheatReportWindowPending(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
@@ -1164,6 +1170,7 @@ class MainServerLobbyRoutingService(
              * Erst nach einer erfolgreichen Platzierung können andere Spieler den
              * Cheat auf der Karte erkennen. Ab diesem Zeitpunkt läuft die Meldefrist.
              */
+
             openPendingCheatReportWindowAfterPlacement(payload.lobbyCode, payload.playerId)
             network.send(
                 request.connectionId,
@@ -1330,6 +1337,7 @@ class MainServerLobbyRoutingService(
                  * werden sie sofort aus den Maps entfernt, damit ein Bonus oder
                  * Malus nie versehentlich in einer späteren Runde erneut wirkt.
                  */
+
                 val modifiers = nextReinforcementModifierByLobby[lobbyCode]
                 val modifier = modifiers?.remove(activePlayerId) ?: 0
                 if (modifiers?.isEmpty() == true) {
@@ -1357,6 +1365,7 @@ class MainServerLobbyRoutingService(
              * Sie sehen normale PendingReinforcement-Events und brauchen keine
              * Sonderlogik für "Cheater bekommt 0".
              */
+
             if (breakdown.total > 0) {
                 lobbyManager.submit(
                     PendingReinforcementsChangedEvent(
@@ -1377,6 +1386,7 @@ class MainServerLobbyRoutingService(
          * effektiv nur -2 angewendet. Der Pending-Pool endet also bei 0 und nicht
          * bei einem fachlich sinnlosen negativen Wert.
          */
+
         val appliedModifier = adjustment.modifier.coerceAtLeast(-breakdown.total)
         if (appliedModifier != 0) {
             lobbyManager.submit(
@@ -1764,6 +1774,7 @@ class MainServerLobbyRoutingService(
         )
 
         playerId ?: return
+
         val lobbyState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return
         val members = lobbyState.players
         val ownDisplayName =
@@ -2566,6 +2577,7 @@ class MainServerLobbyRoutingService(
          * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt; die
          * sichtbare Platzierung setzt später die Ablaufzeit des Meldefensters.
          */
+
         synchronized(cheatReportLock) {
             pendingVisibleCheatByLobby
                 .getOrPut(lobbyCode) { mutableSetOf() }
@@ -2590,6 +2602,7 @@ class MainServerLobbyRoutingService(
              * damit das Fenster immer 20 Sekunden nach der sichtbaren
              * Platzierung endet.
              */
+
             if (cheatReportWindowsByLobby[lobbyCode]?.containsKey(accusedPlayerId) != true) {
                 openCheatReportWindowLocked(lobbyCode, accusedPlayerId)
             }
@@ -2604,6 +2617,7 @@ class MainServerLobbyRoutingService(
          * Statt einen Timer laufen zu lassen, speichere ich nur den Zeitpunkt,
          * bis wann eine Meldung noch gültig ist. Das ist einfacher und robuster.
          */
+
         val window =
             CheatReportWindow(
                 expiresAtMillis = nowEpochMillis() + CHEAT_REPORT_WINDOW_MILLIS,
@@ -2626,6 +2640,7 @@ class MainServerLobbyRoutingService(
              * serverseitig vorgemerkt wurde. Vorgemerkte Cheats haben noch
              * keine Ablaufzeit; diese entsteht erst beim Platzieren.
              */
+
             val window = cheatReportWindowsByLobby[lobbyCode]?.get(accusedPlayerId)
             val now = nowEpochMillis()
             val pendingCheat =
@@ -2663,6 +2678,7 @@ class MainServerLobbyRoutingService(
              * Fehler wie Selbstmeldung oder falsche Connection landen in
              * ReportCheatErrorResponse.
              */
+
             val modifierDelta =
                 if (correct) {
                     CHEAT_REPORT_REWARD
@@ -3089,6 +3105,7 @@ class MainServerLobbyRoutingService(
                         "Turn-Wechsel ist aktuell nicht erlaubt."
                 TurnAdvanceErrorCode.GAME_FINISHED ->
                     "Spiel für Lobby '${payload.lobbyCode.value}' ist bereits beendet."
+
                 TurnAdvanceErrorCode.PHASE_MISMATCH -> {
                     val expectedPhase = payload.expectedPhase
                     val currentPhase =
@@ -3296,11 +3313,13 @@ class MainServerLobbyRoutingService(
                 }
                 ReportCheatErrorCode.GAME_NOT_RUNNING ->
                     "Cheat-Meldungen sind erst in einem laufenden Spiel möglich."
+
                 ReportCheatErrorCode.UNKNOWN_PLAYER ->
                     "Reporter '${payload.reporterPlayerId.value}' oder beschuldigter Spieler " +
                         "'${payload.accusedPlayerId.value}' ist nicht Teil der Lobby."
                 ReportCheatErrorCode.SELF_REPORT ->
                     "Spieler können sich nicht selbst als Cheater melden."
+
                 ReportCheatErrorCode.ALREADY_REPORTED ->
                     "Dieser Cheat wurde von Spieler '${payload.reporterPlayerId.value}' " +
                         "bereits gemeldet."
@@ -3799,6 +3818,7 @@ class MainServerLobbyRoutingService(
             is LeaveLobbyRequest -> LeaveLobbyResponse::class.simpleName
             is KickPlayerRequest -> KickPlayerResponse::class.simpleName
             is StartGameRequest -> StartGameResponse::class.simpleName
+
             else -> null
         }
 

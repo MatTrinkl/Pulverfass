@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ktlint) apply false
@@ -50,6 +51,7 @@ val generateDokkaProductDocs by tasks.registering {
                 appendLine("<ul>")
                 appendLine("""<li><a href="#product-docs">Produktdokumentation</a></li>""")
                 appendLine("""<li><a href="app/index.html">App API</a></li>""")
+                appendLine("""<li><a href="client/index.html">Client API</a></li>""")
                 appendLine("""<li><a href="server/index.html">Server API</a></li>""")
                 appendLine("""<li><a href="shared/index.html">Shared API</a></li>""")
                 appendLine("</ul>")
@@ -58,6 +60,7 @@ val generateDokkaProductDocs by tasks.registering {
                 appendLine()
                 appendLine("<ul>")
                 appendLine("""<li><a href="app/index.html"><strong>app</strong></a>: Android-App und App-seitige Integration</li>""")
+                appendLine("""<li><a href="client/index.html"><strong>client</strong></a>: Compose-Multiplatform-Client (Android + iOS)</li>""")
                 appendLine("""<li><a href="server/index.html"><strong>server</strong></a>: Ktor-Server, Transport und Server-Networklayer</li>""")
                 appendLine("""<li><a href="shared/index.html"><strong>shared</strong></a>: Gemeinsame Netzwerk- und Protokolltypen</li>""")
                 appendLine("</ul>")
@@ -100,7 +103,11 @@ val generateDokkaProductDocs by tasks.registering {
                         appendLine("""<a id="$anchorId"></a>""")
                         appendLine("### `$relativePath`")
                         appendLine()
-                        appendLine(file.readText(Charsets.UTF_8).trim())
+                        val dokkaSafeMarkdown =
+                            file.readText(Charsets.UTF_8)
+                                .trim()
+                                .replace(Regex("(?m)^@"), "&#64;")
+                        appendLine(dokkaSafeMarkdown)
                         appendLine()
                     }
                 }
@@ -124,7 +131,7 @@ dokka {
 }
 
 dependencies {
-    listOf(":app", ":server", ":shared")
+    listOf(":app", ":client", ":server", ":shared")
         .filter { projectPath -> findProject(projectPath) != null }
         .forEach { projectPath ->
             dokka(project(projectPath))

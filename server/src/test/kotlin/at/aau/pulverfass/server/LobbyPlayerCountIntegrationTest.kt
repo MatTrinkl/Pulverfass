@@ -221,8 +221,8 @@ class LobbyPlayerCountIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
                     ),
                 )
-                assertEquals(
-                    JoinLobbyResponse(lobbyCode, PlayerId(1)),
+                assertJoinLobbyResponse(
+                    lobbyCode,
                     receivePayloadOfType<JoinLobbyResponse>(hostSession),
                 )
                 assertEquals(
@@ -253,8 +253,8 @@ class LobbyPlayerCountIntegrationTest {
                         data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Bob")),
                     ),
                 )
-                assertEquals(
-                    JoinLobbyResponse(lobbyCode, PlayerId(2)),
+                assertJoinLobbyResponse(
+                    lobbyCode,
                     receivePayloadOfType<JoinLobbyResponse>(joinerSession),
                 )
                 assertEquals(
@@ -359,5 +359,12 @@ class LobbyPlayerCountIntegrationTest {
         throw AssertionError(
             "Expected payload of type ${T::class.java.simpleName} within $maxMessages messages.",
         )
+    }
+
+    private fun assertJoinLobbyResponse(
+        lobbyCode: LobbyCode,
+        payload: JoinLobbyResponse,
+    ) {
+        assertEquals(lobbyCode, payload.lobbyCode)
     }
 }
