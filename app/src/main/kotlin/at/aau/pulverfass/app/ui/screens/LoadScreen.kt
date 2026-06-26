@@ -98,7 +98,7 @@ fun LoadScreen(
     var minTimeElapsed by remember { mutableStateOf(false) }
     var currentTextIndex by remember { mutableIntStateOf(0) }
 
-    /*
+    /**
      * Loading-Text-Rotation. Default-Intervall ist 2.2s — kurz genug für
      * Lebendigkeit, lang genug zum Lesen.
      */
@@ -110,7 +110,7 @@ fun LoadScreen(
         }
     }
 
-    /*
+    /**
      * Min-Display-Time-Gate. Verhindert dass schneller Preload den Splash
      * sofort wieder wegschiebt — das Video soll auch wirklich sichtbar sein.
      */
@@ -119,7 +119,7 @@ fun LoadScreen(
         minTimeElapsed = true
     }
 
-    /*
+    /**
      * Preload-Logik bleibt 1:1 wie vorher. Kaputte Assets fallen sofort hier
      * auf statt später als leere Karte im GameScreen.
      */
@@ -141,7 +141,7 @@ fun LoadScreen(
         }
     }
 
-    /*
+    /**
      * Navigation erst wenn beide Gates offen sind und kein Error vorliegt.
      */
     LaunchedEffect(assetsReady, minTimeElapsed, loadError) {

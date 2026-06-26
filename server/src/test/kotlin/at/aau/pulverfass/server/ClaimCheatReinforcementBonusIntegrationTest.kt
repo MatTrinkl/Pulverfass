@@ -166,7 +166,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `correct cheat report rewards reporter and zeroes cheater reinforcements`() =
         testApplication {
-            /*
+            /**
              * Hauptszenario der Meldefunktion:
              * 1. Spieler 1 nutzt den Cheatbonus.
              * 2. Die zusätzlichen Truppen werden sichtbar platziert.
@@ -352,7 +352,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report window expires twenty seconds after visible placement`() =
         testApplication {
-            /*
+            /**
              * Der Cheat ist direkt nach dem Claim noch nicht sichtbar. Dieser Test
              * beweist, dass das Meldefenster erst nach der ersten Platzierung der
              * zusätzlichen Truppen geöffnet wird. Wer vorher meldet, liegt falsch
@@ -606,7 +606,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `reporting player without open cheat window penalizes reporter`() =
         testApplication {
-            /*
+            /**
              * Falschmeldung ohne offenen Cheat: Der Server behandelt das nicht als
              * technischen Fehler, sondern als gültige falsche Meldung mit Malus.
              */

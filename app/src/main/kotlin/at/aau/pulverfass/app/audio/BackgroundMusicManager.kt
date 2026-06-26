@@ -58,7 +58,7 @@ class BackgroundMusicManager(context: Context) {
         currentTrack = resId
         currentLoop = loop
         if (isMusicMuted) return
-        /*
+        /**
          * MediaPlayer.prepareAsync verhindert kurze UI-Hänger beim Route-Wechsel,
          * besonders wenn direkt danach ein Compose-Screen mit Video oder Karte
          * aufgebaut wird.

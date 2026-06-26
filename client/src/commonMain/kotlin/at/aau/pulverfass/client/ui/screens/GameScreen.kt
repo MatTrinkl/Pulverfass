@@ -714,7 +714,7 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        /*
+        /**
          * Der eigentliche Spielinhalt bleibt zunächst sichtbar, auch wenn ein
          * sehr kurzer Reconnect- oder Catch-up-Zustand auftritt. Erst nach der
          * Verzögerung wird weich geblurt, damit Attack-Responses nicht als
@@ -733,7 +733,7 @@ internal fun GameScreenContent(
                 regionStates = uiState.regionStates,
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
-                /*
+                /**
                  * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
                  * werden aber nur weitergereicht, wenn der Client synchron ist.
                  * Der Reducer entscheidet anschließend phasen- und spielerabhängig,
@@ -2315,7 +2315,7 @@ private fun endCurrentPhaseAction(
         else -> onAdvanceTurn
     }
 
-/*
+/**
  * Nachschlagetabelle Region-ID -> lesbarer Gebietsname. Die technischen IDs wie
  * "central_europe" tauchen nur intern auf; in den Auswahl-Panels und im
  * Kampfergebnis sollen Spieler den Namen ("Mitteleuropa") sehen.

@@ -62,7 +62,7 @@ private fun cardDrawableFor(type: CardType): Int =
         CardType.JOKER -> R.drawable.game_card_emperor
     }
 
-/*
+/**
  * Fächer-Geometrie: Alle Karten liegen am unteren Rand zentriert übereinander und
  * werden um einen gemeinsamen, weit unter den Karten liegenden Drehpunkt rotiert.
  * Dadurch spreizen sie sich wie eine echte Spielhand auf. Der Drehpunkt wird über
@@ -214,7 +214,7 @@ private fun CardHandHint(canSelect: Boolean) {
     )
 }
 
-/*
+/**
  * Kartenhand als POV-Fächer: am unteren Rand verankert und bewusst ein
  * Stück aus dem Screen geschoben, damit es wirkt, als hielte man die
  * Karten selbst in der Hand. Die Typ-Labels sitzen oben auf der Karte,

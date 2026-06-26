@@ -248,7 +248,7 @@ private fun SubmitInitialCharacterEffect(
     onSubmittedInitialCharacterIdChange: (String) -> Unit,
     onSyncCharacter: (String) -> Unit,
 ) {
-    /*
+    /**
      * Nach einem Join kennt der Client die eigene PlayerId erst, wenn der
      * PlayerJoined-Broadcast zurückkommt. Erst dann kann sicher entschieden
      * werden, welcher Charakter frei ist und an den Server gesendet werden muss.
@@ -926,7 +926,7 @@ private fun CharacterPickerOverlay(
     val selectedCharacterTaken = selectedCharacterId in takenCharacterIds
 
     LaunchedEffect(centerIndex, takenCharacterIds) {
-        /*
+        /**
          * Während ein Klick-Scroll läuft, darf die automatische Korrektur nicht
          * zwischendurch zu einem anderen freien Eintrag springen. Nach Abschluss
          * wird die Auswahl normal validiert und an den Controller gespiegelt.

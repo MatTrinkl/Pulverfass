@@ -281,7 +281,7 @@ class ClientGameStateReducerTest {
 
     @Test
     fun `same version attack delta is applied so the vfx result is exposed`() {
-        /*
+        /**
          * Der Server kodiert Single-Event-Deltas mit fromVersion == toVersion
          * (PublicGameStateBuilder.buildDelta). Liegt ein solches Delta genau eine
          * Version vor dem lokalen Stand, muss der Client es regulär anwenden --

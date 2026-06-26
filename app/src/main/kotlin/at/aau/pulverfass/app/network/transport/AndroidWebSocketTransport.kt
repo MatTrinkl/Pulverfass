@@ -60,7 +60,7 @@ class AndroidWebSocketTransport(
      * @param serverUrl vollständige WebSocket-URL des Ktor-Servers
      */
     suspend fun connect(serverUrl: String) {
-        /*
+        /**
          * Ein expliziter neuer Connect ersetzt immer die alte technische Session.
          * Die fachliche Entscheidung, ob das ein normaler Connect oder Reconnect
          * ist, trifft der LobbyController über ConnectionResponse/ReconnectRequest.
@@ -133,7 +133,7 @@ class AndroidWebSocketTransport(
     private fun startReadLoop(activeSession: DefaultClientWebSocketSession): Job =
         scope.launch {
             try {
-                /*
+                /**
                  * Der Read-Loop emittiert ausschließlich rohe Transportevents.
                  * Header-Decoding und Payload-Decoding bleiben in PacketReceiver
                  * und MessageCodec, damit diese Schicht austauschbar bleibt.

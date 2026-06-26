@@ -81,7 +81,7 @@ class LobbyPersistenceGatewayUnitTest {
                     "pending_reinforcements_set",
                 PendingReinforcementsChangedEvent(lobbyCode, hostId, delta = -2) to
                     "pending_reinforcements_changed",
-                /*
+                /**
                  * Der verbrauchte Cheatbonus muss denselben Weg gehen wie alle
                  * anderen Domain-Events, damit Recovery später den korrekten
                  * GameState wiederherstellen kann.

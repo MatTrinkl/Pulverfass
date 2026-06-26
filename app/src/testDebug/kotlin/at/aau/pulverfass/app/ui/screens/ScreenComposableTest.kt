@@ -195,7 +195,7 @@ class ScreenComposableTest {
                 }
             }
         }
-        /*
+        /**
          * Der Warteraum ist auf Landscape-Breite ausgelegt. Im Test-Viewport
          * reicht Semantik-Sichtbarkeit, weil funktional zählt, dass die Daten im
          * Baum vorhanden sind und nicht, ob jedes Element im aktuellen Ausschnitt
@@ -361,7 +361,7 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_shows_cheat_report_notice_for_four_seconds() {
-        /*
+        /**
          * Das Overlay soll nicht sofort verschwinden: Die Meldung erklärt eine
          * spätere Konsequenz im Spiel. Mit deaktivierter Auto-Advance-Clock kann
          * der Test exakt prüfen, dass es nach ca. vier Sekunden geschlossen wird.
@@ -417,7 +417,7 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_options_reports_selected_cheat_player() {
-        /*
+        /**
          * Dieser UI-Test prüft nicht die Serverlogik, sondern nur die Bedienung:
          * Optionsmenü öffnen, "CHEAT MELDEN" anklicken, Gegner auswählen und
          * sicherstellen, dass dessen PlayerId an den Callback geht.

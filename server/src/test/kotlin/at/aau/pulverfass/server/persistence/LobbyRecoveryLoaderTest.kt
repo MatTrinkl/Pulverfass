@@ -502,7 +502,7 @@ class LobbyRecoveryLoaderTest {
             ).toLobbyEvent(),
         )
         assertEquals(
-            /*
+            /**
              * Recovery muss aus dem Persistenztyp wieder das Domain-Event bauen.
              * Erst danach kann der Reducer den Spieler wieder als "Bonus bereits
              * verwendet" markieren.

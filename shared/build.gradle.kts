@@ -44,7 +44,7 @@ kotlin {
     }
 }
 
-/*
+/**
  * Kompatibilitäts-Task: CI und Doku rufen weiterhin `:shared:test` auf.
  * Im KMP-Modell heißt der JVM-Test-Task `jvmTest`.
  */

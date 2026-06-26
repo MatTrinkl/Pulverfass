@@ -26,7 +26,7 @@ data class ClaimCheatReinforcementBonusResponse(
 
 object ClaimCheatReinforcementBonusResponseSerializer :
     KSerializer<ClaimCheatReinforcementBonusResponse> {
-    /*
+    /**
      * Der explizite Serializer hält das Wire-Format der Erfolgsantwort klein
      * und eindeutig: Es wird nur der LobbyCode übertragen, weil der konkrete
      * State über die Event-/Snapshot-Schiene synchronisiert wird.

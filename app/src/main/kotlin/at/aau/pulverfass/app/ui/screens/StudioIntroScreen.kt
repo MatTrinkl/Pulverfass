@@ -42,7 +42,7 @@ fun StudioIntroScreen(navController: NavController) {
     var hasNavigated by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    /*
+    /**
      * navigateNext ist idempotent — egal wie oft sie aufgerufen wird
      * (click + onCompleted + safety timeout), navigiert nur EINMAL.
      */

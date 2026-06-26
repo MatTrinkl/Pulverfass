@@ -75,7 +75,7 @@ fun LobbyScreen(
     ) {
         LobbyVideoBackground()
 
-        /*
+        /**
          * Oben links: Verbindungsstatus und globale Online-Zahl.
          */
         Row(
@@ -90,7 +90,7 @@ fun LobbyScreen(
             OnlinePlayersPill(count = state.globalPlayerCount)
         }
 
-        /*
+        /**
          * Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht
          * und Map-Test.
          */
@@ -104,7 +104,7 @@ fun LobbyScreen(
                     .padding(end = 24.dp, top = 16.dp),
         )
 
-        /*
+        /**
          * Unten rechts: einblendbare Dev-Verbindungssteuerung.
          */
         DevControlsPanel(
@@ -125,7 +125,7 @@ fun LobbyScreen(
                     .padding(end = 24.dp, bottom = 24.dp),
         )
 
-        /*
+        /**
          * Unten links: zurück zum Hauptmenü.
          */
         MainButton(
@@ -137,7 +137,7 @@ fun LobbyScreen(
                     .padding(start = 24.dp, bottom = 24.dp),
         )
 
-        /*
+        /**
          * Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
          */
         Box(

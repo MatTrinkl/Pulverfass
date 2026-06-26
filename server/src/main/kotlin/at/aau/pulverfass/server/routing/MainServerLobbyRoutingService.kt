@@ -198,7 +198,7 @@ class MainServerLobbyRoutingService(
         const val PLAYER_CONTEXT_MISSING_ERROR_CODE = "PLAYER_CONTEXT_MISSING"
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
 
-        /*
+        /**
          * Cheat-Meldungen haben nur ein kurzes Zeitfenster. Die Idee dahinter:
          * Andere Spieler sollen den Cheat melden können, sobald er sichtbar wird,
          * aber niemand soll viele Runden später noch rückwirkend Bonus erhalten.
@@ -285,7 +285,7 @@ class MainServerLobbyRoutingService(
         val matchEnded: Boolean = events.any { event -> event is MatchEndedEvent }
     }
 
-    /*
+    /**
      * Die Cheat-Meldelogik bleibt auf dem Server.
      * Die App darf nur melden, aber nicht selbst entscheiden, ob die Meldung stimmt.
      * Alle zugehörigen Maps werden gemeinsam unter diesem Lock verändert, damit
@@ -293,14 +293,14 @@ class MainServerLobbyRoutingService(
      */
     private val cheatReportLock = Any()
 
-    /*
+    /**
      * Nach dem Cheat ist der Vorteil für andere Spieler noch nicht sicher sichtbar.
      * Deshalb wartet der Server bis zur nächsten Verstärkungsplatzierung dieses Spielers.
      * Erst dann können die anderen Spieler den Verdacht überhaupt sehen.
      */
     private val pendingVisibleCheatByLobby = mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
-    /*
+    /**
      * Speichert pro Lobby, welcher Spieler gerade ein offenes 20-Sekunden-Meldefenster hat.
      * Es wird kein eigener Timer gestartet; beim Melden wird einfach die Ablaufzeit geprüft.
      * Das spart einen Hintergrundjob und reicht für diese Regel völlig aus.
@@ -308,13 +308,13 @@ class MainServerLobbyRoutingService(
     private val cheatReportWindowsByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, CheatReportWindow>>()
 
-    /*
+    /**
      * Merkt sich, wer eine konkrete Cheat-Aktion schon gemeldet hat.
      * Dadurch kann derselbe Spieler nicht mehrfach für denselben Cheat-Bonus bekommen.
      */
     private val cheatReportsByLobby = mutableMapOf<LobbyCode, MutableSet<CheatReportKey>>()
 
-    /*
+    /**
      * Bonus oder Malus wird nicht sofort angewendet, sondern erst in der nächsten
      * Verstärkungsphase des meldenden Spielers.
      * Mehrere falsche Meldungen addieren sich, werden später aber bei 0 begrenzt.
@@ -322,7 +322,7 @@ class MainServerLobbyRoutingService(
     private val nextReinforcementModifierByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, Int>>()
 
-    /*
+    /**
      * Wenn ein Spieler korrekt beim Cheaten erwischt wird, bekommt er in seiner
      * nächsten Verstärkungsphase 0 Truppen. Auch diese Strafe bleibt am Server.
      */
@@ -991,7 +991,7 @@ class MainServerLobbyRoutingService(
         val payload = request.payload as ClaimCheatReinforcementBonusRequest
 
         runCatching {
-            /*
+            /**
              * Hier wird aus dem App-Signal ("Lichtsensor-Cheat wurde ausgelöst")
              * ein serverautoritativer Spielzug. Der Server baut zuerst die Domain-
              * Events und spielt sie in die Lobby ein. Erst danach antwortet er dem
@@ -999,7 +999,7 @@ class MainServerLobbyRoutingService(
              */
             val events = buildClaimCheatReinforcementBonusEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
-            /*
+            /**
              * Der Cheat ist fachlich sofort aktiv. Die Platzierung öffnet das
              * normale sichtbare Meldefenster, eine frühe Meldung darf aber nicht
              * als falsch bestraft werden.
@@ -1045,7 +1045,7 @@ class MainServerLobbyRoutingService(
         val payload = request.payload as ReportCheatRequest
 
         runCatching {
-            /*
+            /**
              * Die Identitätsprüfung ist hier besonders wichtig: Ein Client darf
              * nicht im Namen eines anderen Spielers melden. Die Connection wurde
              * vorher einem PlayerId-Kontext zugeordnet, und genau dieser Kontext
@@ -1069,7 +1069,7 @@ class MainServerLobbyRoutingService(
             }
             require(payload.reporterPlayerId != payload.accusedPlayerId) { "SELF_REPORT" }
 
-            /*
+            /**
              * Ab hier ist die Meldung formal gültig. Ob sie inhaltlich stimmt,
              * entscheidet resolveCheatReport ausschließlich über das serverseitig
              * gespeicherte Meldefenster.
@@ -1166,7 +1166,7 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildPlaceReinforcementsEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
-            /*
+            /**
              * Erst nach einer erfolgreichen Platzierung können andere Spieler den
              * Cheat auf der Karte erkennen. Ab diesem Zeitpunkt läuft die Meldefrist.
              */
@@ -1301,7 +1301,7 @@ class MainServerLobbyRoutingService(
         if (currentTurnState.turnPhase != TurnPhase.REINFORCEMENTS) {
             return
         }
-        /*
+        /**
          * Eine wartende Lobby zeigt für den konfigurierten Startspieler bereits
          * die Phase REINFORCEMENTS, besitzt aber bis zum tatsächlichen
          * Spielstart noch keinen Verstärkungspool. Nur spätere doppelte
@@ -1331,7 +1331,7 @@ class MainServerLobbyRoutingService(
         val adjustment =
             synchronized(cheatReportLock) {
                 val activePlayerId = currentTurnState.activePlayerId
-                /*
+                /**
                  * Die gespeicherten Folgen von Cheat-Meldungen werden genau beim
                  * Start der nächsten Reinforcements-Phase verbraucht. Danach
                  * werden sie sofort aus den Maps entfernt, damit ein Bonus oder
@@ -1357,7 +1357,7 @@ class MainServerLobbyRoutingService(
             }
 
         if (adjustment.zeroReinforcements) {
-            /*
+            /**
              * Die Cheater-Strafe ist stärker als ein möglicher Bonus oder Malus:
              * In dieser Verstärkungsphase soll der Spieler wirklich bei 0 landen.
              * Darum wird zuerst der normale Basispool gesetzt und danach komplett
@@ -1379,7 +1379,7 @@ class MainServerLobbyRoutingService(
             return
         }
 
-        /*
+        /**
          * Der Malus darf den Verstärkungspool nicht negativ machen.
          * Falls ein Spieler weniger als 3 Verstärkungen bekommt, wird der Malus begrenzt.
          * Beispiel: Hat jemand nur 2 Basisverstärkungen und bekommt -3, werden
@@ -1715,7 +1715,7 @@ class MainServerLobbyRoutingService(
             lobbyState.players.size,
         )
 
-        /*
+        /**
          * Ein echter Reconnect durchläuft keinen JoinRequest mehr. Deshalb muss
          * der reconnectende Client seine Lobby-Spielerliste erneut erhalten,
          * sonst kann die Android-App Owner-IDs aus dem GameState nicht auf Namen
@@ -2445,7 +2445,7 @@ class MainServerLobbyRoutingService(
             state.resolvedTurnState
                 ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
-        /*
+        /**
          * Auch wenn der Client den Cheatbutton nur in der passenden Situation
          * anzeigen soll, vertraut der Server nie auf die UI. Hier werden deshalb
          * alle fachlichen Voraussetzungen noch einmal geprüft:
@@ -2545,7 +2545,7 @@ class MainServerLobbyRoutingService(
             "ALREADY_USED"
         }
 
-        /*
+        /**
          * Der Bonus besteht bewusst aus zwei getrennten Events:
          * 1. CheatReinforcementBonusUsedEvent merkt dauerhaft, dass der Spieler
          *    seinen einmaligen Bonus verbraucht hat.
@@ -2572,7 +2572,7 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
     ) {
-        /*
+        /**
          * Der Spieler hat den Cheat ausgelöst, aber eventuell noch nichts
          * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt; die
          * sichtbare Platzierung setzt später die Ablaufzeit des Meldefensters.
@@ -2597,7 +2597,7 @@ class MainServerLobbyRoutingService(
             if (pendingPlayers.isEmpty()) {
                 pendingVisibleCheatByLobby.remove(lobbyCode)
             }
-            /*
+            /**
              * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist,
              * damit das Fenster immer 20 Sekunden nach der sichtbaren
              * Platzierung endet.
@@ -2613,7 +2613,7 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
     ): CheatReportWindow {
-        /*
+        /**
          * Statt einen Timer laufen zu lassen, speichere ich nur den Zeitpunkt,
          * bis wann eine Meldung noch gültig ist. Das ist einfacher und robuster.
          */
@@ -2633,7 +2633,7 @@ class MainServerLobbyRoutingService(
         accusedPlayerId: PlayerId,
     ): CheatReportResult =
         synchronized(cheatReportLock) {
-            /*
+            /**
              * Hier entscheidet ausschließlich der Server, ob eine Meldung korrekt ist.
              * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch
              * ein gültiges Meldefenster offen ist oder ein Cheat bereits
@@ -2661,14 +2661,14 @@ class MainServerLobbyRoutingService(
                 require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
                     "ALREADY_REPORTED"
                 }
-                /*
+                /**
                  * Der Schummel-Verstärkungsbonus ist pro Spieler einmalig.
                  * Reporter dürfen dieselbe Cheat-Aktion deshalb nur einmal melden,
                  * egal ob vor oder nach der sichtbaren Platzierung.
                  */
             }
 
-            /*
+            /**
              * Korrekte Meldung: +3 für den Melder und 0 Truppen für den Cheater
              * in dessen nächster Verstärkungsphase.
              * Falsche Meldung: -3 für den meldenden Spieler.

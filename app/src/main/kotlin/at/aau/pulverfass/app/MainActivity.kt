@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        /*
+        /**
          * Der Audio-Manager bleibt als Activity-Field erhalten, weil Compose den
          * Inhalt bei Konfigurations- und Navigationsänderungen neu aufbauen darf,
          * die Android-Lifecycle-Callbacks aber dieselbe Instanz pausieren und
@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
          */
         musicManager = BackgroundMusicManager(applicationContext)
 
-        /*
+        /**
          * Vollbild ist eine Eigenschaft der gesamten Activity und nicht eines
          * einzelnen Screens. So bleibt der Modus auch bei Navigation zwischen
          * Studio-Intro, Loading-Screen und Spiel erhalten.
@@ -99,7 +99,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 val lobbyState by lobbyController.state.collectAsState()
 
-                /*
+                /**
                  * Jede Navigation kann neue Window-Inset-Berechnungen auslösen.
                  * Systembars werden daher nach Routenwechsel erneut verborgen;
                  * einzelne Screens dürfen den globalen Modus nicht zurücksetzen.
@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
                     hideSystemBars()
                 }
 
-                /*
+                /**
                  * Musik ist routenbasiert, damit einzelne Screens keine eigenen
                  * globalen Audio-Entscheidungen treffen müssen. Der Warteraum
                  * darf diese Route später temporär überschreiben, wenn der
@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity() {
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        /*
+                        /**
                          * Definiert alle aktuell verfügbaren Routen und Ziele.
                          * Der LobbyController bleibt absichtlich oberhalb des
                          * NavHost, damit Lobby, Warteraum und Spielbildschirm
@@ -188,7 +188,7 @@ class MainActivity : AppCompatActivity() {
                             composable(Screen.LoadGame.route) {
                                 LoadGameScreen(navController = navController)
                             }
-                            /*
+                            /**
                              * Warteraum mit Parametern aus der Navigation.
                              * Der Controller ist trotzdem die Quelle der Wahrheit;
                              * die Argumente sind nur ein Fallback für direkte
@@ -319,7 +319,7 @@ private fun RestoredGameNavigationEffect(
             targetRoute != null &&
             canAutoNavigateToRestoredGame(currentRoute)
         ) {
-            /*
+            /**
              * Der Zielscreen lädt die Kartenassets wie beim normalen Spielstart.
              * launchSingleTop verhindert doppelte Einträge, falls Load- und
              * Lobby-Screen sehr kurz hintereinander denselben Reconnect-Zustand

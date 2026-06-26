@@ -137,7 +137,7 @@ import at.aau.pulverfass.shared.message.connection.ConnectionStatus
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-/*
+/**
  * Gemeinsame HUD-Palette für alle Ingame-Flächen (Topbar, Sidebars, Bottombar,
  * Phasen-Panels). Alle Flächen teilen sich denselben dunklen Look mit Goldrahmen,
  * damit das HUD über der Karte als eine zusammenhängende Ebene wirkt.
@@ -168,7 +168,7 @@ private val PhaseLabelVerticalOffset = (-4).dp
 /** Abstand der Spielerliste vom oberen Screenrand ("Runde X" + Liste). */
 private val PlayerListTopInset = 76.dp
 
-/*
+/**
  * Die rechte Spielerleiste ist bewusst breit gewählt, damit Avatar, Name und
  * Host-Marker im HUD-Spielerlisten-Panel nicht gedrückt wirken.
  */
@@ -183,7 +183,7 @@ private const val PHASE_ACTION_FLASH_DURATION_MILLIS = 1_600L
 /** Seitenverhältnis des ui_lobby_roster_panel-Assets (908x550). */
 private const val LOBBY_ROSTER_PANEL_RATIO = 908f / 550f
 
-/*
+/**
  * Die Cheat-Meldung bleibt länger sichtbar als die automatische Phasenmeldung,
  * weil sie eine echte Spielkonsequenz erklärt: Bonus, Malus oder Strafe in der
  * nächsten Verstärkungsphase.
@@ -193,7 +193,7 @@ private const val COUNTDOWN_STEP_MILLIS = 1_000L
 private const val COUNTDOWN_ZERO_MILLIS = 450L
 private const val ATTACK_RESULT_VISIBLE_MILLIS = 5_000L
 
-/*
+/**
  * Für den Lichtsensor-Cheat wird nicht nur "dunkel" geprüft, sondern ein Wechsel
  * von hell nach dunkel. Dadurch lösen normale niedrige Raumhelligkeit oder ein
  * schon verdeckter Sensor beim Start des Screens nicht sofort den Bonus aus.
@@ -516,7 +516,7 @@ internal fun GameScreenContent(
     val players = contentState.players
     val localPlayerId = contentState.localPlayerId
 
-    /*
+    /**
      * Die obere Navbar sitzt bündig am oberen Screenrand (kein Abstand). Derselbe
      * Wert wird für die darunter liegenden HUD-Elemente (Banner, Sidebars) genutzt.
      */
@@ -629,7 +629,7 @@ internal fun GameScreenContent(
     var isMusicEnabled by remember { mutableStateOf(musicManager?.isMusicMuted?.not() ?: true) }
     var isSfxEnabled by remember { mutableStateOf(musicManager?.isSfxMuted?.not() ?: true) }
 
-    /*
+    /**
      * Reine Anzeige: Verliert ein Mitspieler die Verbindung (= verlässt das
      * Spiel), wird dafür kurz ein Ingame-Toast eingeblendet. Die Erkennung steckt
      * in [PlayerLeftDetector]; hier wird nur die anzuzeigende Nachricht gehalten.
@@ -641,7 +641,7 @@ internal fun GameScreenContent(
         onPlayerLeft = { playerLeftMessage = it },
     )
 
-    /*
+    /**
      * Kurze visuelle Rückmeldung für die ruhigen Phasen: ein Fade-in, wenn der
      * lokale Spieler Verstärkungen platziert oder eine Fortify-Verschiebung
      * abschließt. Die Detektoren spiegeln nur vorhandenen State, ohne Spiellogik.
@@ -666,7 +666,7 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        /*
+        /**
          * Der eigentliche Spielinhalt bleibt zunächst sichtbar, auch wenn ein
          * sehr kurzer Reconnect- oder Catch-up-Zustand auftritt. Erst nach der
          * Verzögerung wird weich geblurt, damit Attack-Responses nicht als
@@ -686,7 +686,7 @@ internal fun GameScreenContent(
                 attackVfx = uiState.attackState.latestResult?.toAttackVfxRequest(),
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
-                /*
+                /**
                  * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
                  * werden aber nur weitergereicht, wenn der lokale Spieler gerade
                  * handeln darf und der Client synchron verbunden ist
@@ -700,7 +700,7 @@ internal fun GameScreenContent(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            /*
+            /**
              * Dunkle Vignette rund um den gesamten Screen: zur Mitte hin
              * transparent, zu den Rändern/Ecken hin abgedunkelt. Liegt über der
              * Karte, aber unter dem HUD, damit die Bedienelemente klar bleiben.
@@ -1427,7 +1427,7 @@ private fun CheatReportNoticeOverlay(
     if (message == null) return
 
     LaunchedEffect(message) {
-        /*
+        /**
          * Das Overlay räumt sich selbst wieder weg. Der Text kommt aus dem
          * LobbyController, weil dort die Serverantwort verarbeitet wird.
          */
@@ -1507,7 +1507,7 @@ private fun OptionsOverlay(
     if (!show) return
     val scrollState = rememberScrollState()
     var showCheatReportPlayers by remember { mutableStateOf(false) }
-    /*
+    /**
      * Der eigene Spieler wird nicht angeboten, weil man sich nicht selbst melden darf.
      */
     val reportablePlayers = options.players.filter { it.playerId != options.localPlayerId }
@@ -1517,7 +1517,7 @@ private fun OptionsOverlay(
         columnModifier =
             Modifier
                 .fillMaxWidth(0.5f)
-                /*
+                /**
                  * hud_player_card dient hier als dekorativer Panel-Hintergrund des
                  * Options-Menüs (nicht mehr in der Spielerliste). FillBounds füllt
                  * das Panel; das großzügige Padding hält den Inhalt innerhalb des
@@ -1548,7 +1548,7 @@ private fun OptionsOverlay(
             onToggle = options.onAutoAttackToggle,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        /*
+        /**
          * Die Meldefunktion liegt in den Optionen, weil sie nur selten gebraucht wird.
          * So bleibt die Karte frei für die normalen Spielaktionen. Außerdem wird
          * sie nur aktiviert, wenn es überhaupt einen anderen Spieler gibt und
@@ -1564,7 +1564,7 @@ private fun OptionsOverlay(
                     !options.isReportCheatPending,
         )
         if (showCheatReportPlayers) {
-            /*
+            /**
              * Erst nach dem Klick auf "CHEAT MELDEN" zeige ich die Spielerliste an.
              * Dadurch nimmt die Funktion im normalen Optionsmenü wenig Platz weg.
              * Der eigene Spieler wurde vorher aus reportablePlayers entfernt,
@@ -1856,7 +1856,7 @@ private fun LightSensorCheatTrigger(
         previousLux = null
         var triggered = false
 
-        /*
+        /**
          * Der Sensor wird nur registriert, solange der Cheat gerade fachlich
          * erlaubt ist. Sobald die Phase wechselt oder der Spieler nicht mehr am
          * Zug ist, räumt DisposableEffect den Listener wieder auf.
@@ -1876,7 +1876,7 @@ private fun LightSensorCheatTrigger(
                     val wasBright = previousLux?.let { it >= CHEAT_LIGHT_BASELINE_LUX } ?: false
                     val isCovered = lux <= CHEAT_LIGHT_COVERED_LUX
 
-                    /*
+                    /**
                      * Der Bonus wird nur einmal pro Aktivierung ausgelöst. Danach
                      * bleibt triggered=true, bis der Effekt durch enabled/context
                      * neu gestartet wird.
@@ -2475,7 +2475,7 @@ private fun endCurrentPhaseAction(
         else -> onAdvanceTurn
     }
 
-/*
+/**
  * Nachschlagetabelle Region-ID -> lesbarer Gebietsname. Die technischen IDs wie
  * "central_europe" tauchen nur intern auf; in den Auswahl-Panels und im
  * Kampfergebnis sollen Spieler den Namen ("Mitteleuropa") sehen.
@@ -2762,7 +2762,7 @@ private fun PlayerSidebar(
         }
     }
 
-    /*
+    /**
      * Kein farbiger/dunkler Flächenhintergrund mehr und kein Goldrand: Allein das
      * dekorative HUD-Spielerlisten-Asset rahmt die Sidebar. So wirkt die Liste
      * sauber freigestellt über der Karte statt wie eine massive Box.
@@ -2771,7 +2771,7 @@ private fun PlayerSidebar(
         modifier =
             modifier
                 .testTag("game_player_panel")
-                /*
+                /**
                  * Crop statt FillBounds: Das Panel-Asset behält seine
                  * Originalproportionen (keine vertikale Streckung) und füllt die
                  * Sidebar, indem Überstehendes beschnitten wird.
@@ -2831,7 +2831,7 @@ private fun PlayerSidebarRow(
         }
     }
 
-    /*
+    /**
      * Hochwertiger, gleichmäßiger Eintrag mit klarer Hierarchie: Avatar, Name
      * (+ Host-Marker) und Verbindungs-Statuspunkt teilen sich eine feste Zeile.
      * Der Name darf nie umbrechen, sondern nutzt Ellipsis im freien Restplatz.
@@ -3078,7 +3078,7 @@ private fun HandCardRow(
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
-        /*
+        /**
          * Holz-Asset als Kartenhintergrund: als matchParentSize-Image hinter dem
          * Label, damit die Zeile sich an der Texthöhe orientiert (statt an der
          * Bild-Intrinsicgröße). Eine ausgewählte Karte bekommt zusätzlich einen
@@ -3698,7 +3698,7 @@ private fun BottomActionClusters(
     modifier: Modifier = Modifier,
     musicManager: BackgroundMusicManager? = null,
 ) {
-    /*
+    /**
      * Buttons liegen frei über der Karte (kein Flächenhintergrund). Box-Layout:
      * "Karten" links (CenterStart), die drei Phasen-Buttons als Gruppe genau in
      * der Bildschirmmitte (Center) -- also direkt unter dem Phase-Header und über
@@ -3739,7 +3739,7 @@ private fun BottomActionClusters(
                     .fillMaxHeight(),
         )
 
-        /*
+        /**
          * Alle drei Phasen-Buttons teilen exakt dieselbe Breite (PhaseButtonWidth)
          * und Höhe (fillMaxHeight) -- identische Größe. Der kleinere Text-Offset
          * (textStartFraction) gibt den langen Wörtern "Verstärken"/"Verschieben"

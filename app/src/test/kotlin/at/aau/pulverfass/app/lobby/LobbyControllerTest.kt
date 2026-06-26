@@ -1149,7 +1149,7 @@ class LobbyControllerTest {
 
     @Test
     fun `reinforcement actions require a local player context`() {
-        /*
+        /**
          * Ohne ownPlayerId kann der Controller keine spielbezogenen Requests
          * sinnvoll adressieren. Der Test stellt sicher, dass diese Fehler lokal
          * abgefangen werden, statt kaputte Payloads an den Server zu schicken.
@@ -1188,7 +1188,7 @@ class LobbyControllerTest {
     @Test
     fun `report cheat response should show result notice`() {
         runBlocking {
-            /*
+            /**
              * Dieser Test deckt die App-Seite der Cheat-Meldung ab:
              * - Selbstmeldung wird lokal blockiert.
              * - Korrekte Serverantwort erzeugt einen positiven Hinweis.
@@ -1752,7 +1752,7 @@ class LobbyControllerTest {
                 waitUntil { controller.state.value.gameState.turnPhase == TurnPhase.ATTACK }
                 controller.selectGameRegion("brazil")
                 controller.selectGameRegion("argentina")
-                /*
+                /**
                  * Slider startet auf Maximum (Quelle 5 -> 4); auf die im Test
                  * gescriptete Kampfstärke von 3 herunterregeln.
                  */
@@ -1913,7 +1913,7 @@ class LobbyControllerTest {
                 server.broadcast(publicSnapshot(2, 4, 2))
                 delay(100)
                 releaseFirstResponse.complete(Unit)
-                /*
+                /**
                  * Der Catch-up löst den noch offenen Kampf auf. Der Startzeitpunkt des
                  * Fortsetzungs-Timers ist in diesem Pfad nicht deterministisch, daher
                  * wird die 500-ms-Verzögerung hier nicht über die Wanduhr geprüft (das
