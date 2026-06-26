@@ -43,7 +43,7 @@ _Ziele lt. LV folgen_
 
 ## Personalressourcen für Sprint 3
 
-Alle Teammitgleider sind durchgehend anwesend (kein Urlaub) und können sich voll in das Projekt einbringen.
+Alle Teammitglieder sind durchgehend anwesend (kein Urlaub) und können sich voll in das Projekt einbringen.
 
 
 
