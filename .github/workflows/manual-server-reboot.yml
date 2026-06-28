@@ -1,0 +1,186 @@
+name: Manual Server Reboot
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Restart target
+        required: true
+        type: choice
+        options:
+          - server
+          - app-stack
+          - host
+        default: server
+      confirm:
+        description: Type REBOOT to confirm
+        required: true
+        type: string
+
+concurrency:
+  group: manual-server-reboot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reboot:
+    name: Reboot Server
+    runs-on: self-hosted
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY || secrets.DEPLOY_HOST_KEY }}
+      DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || secrets.DEPLOY_HEALTH_URL }}
+      DEPLOY_DOKKA_URL: ${{ vars.DEPLOY_DOKKA_URL || secrets.DEPLOY_DOKKA_URL }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      TARGET: ${{ inputs.target }}
+      CONFIRM: ${{ inputs.confirm }}
+      PORT: ${{ vars.PORT || secrets.PORT || '8080' }}
+      DOKKA_PORT: ${{ vars.DOKKA_PORT || secrets.DOKKA_PORT || '8081' }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER || secrets.POSTGRES_USER || vars.DB_USER || secrets.DB_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD || secrets.DB_PASSWORD || vars.DB_PASSWORD }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB || secrets.POSTGRES_DB || vars.DB_NAME || secrets.DB_NAME }}
+      DB_HOST: ${{ vars.DB_HOST || secrets.DB_HOST || 'db' }}
+      DB_PORT: ${{ vars.DB_PORT || secrets.DB_PORT || '5432' }}
+      DB_NAME: ${{ vars.DB_NAME || secrets.DB_NAME || vars.POSTGRES_DB || secrets.POSTGRES_DB }}
+      DB_USER: ${{ vars.DB_USER || secrets.DB_USER || vars.POSTGRES_USER || secrets.POSTGRES_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || secrets.POSTGRES_PASSWORD || vars.POSTGRES_PASSWORD }}
+
+    steps:
+      - name: Validate manual request
+        run: |
+          set -eu
+
+          if [ "${CONFIRM}" != "REBOOT" ]; then
+            echo "Set confirm to REBOOT before running this workflow." >&2
+            exit 1
+          fi
+
+          case "${TARGET}" in
+            server|app-stack|host) ;;
+            *)
+              echo "Unsupported target: ${TARGET}" >&2
+              exit 1
+              ;;
+          esac
+
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_PORT}"
+          test -n "${DEPLOY_SSH_KEY}"
+
+          if [ "${TARGET}" != "host" ]; then
+            test -n "${DEPLOY_PATH}"
+            test -n "${PORT}"
+            test -n "${POSTGRES_USER}"
+            test -n "${POSTGRES_PASSWORD}"
+            test -n "${POSTGRES_DB}"
+            test -n "${DB_HOST}"
+            test -n "${DB_PORT}"
+            test -n "${DB_NAME}"
+            test -n "${DB_USER}"
+            test -n "${DB_PASSWORD}"
+          fi
+
+      - name: Configure SSH
+        run: |
+          set -eu
+
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+
+          if [ -n "${DEPLOY_HOST_KEY}" ]; then
+            printf '%s\n' "${DEPLOY_HOST_KEY}" >> "${HOME}/.ssh/known_hosts"
+          else
+            ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+          fi
+
+      - name: Restart remote target
+        run: |
+          set -eu
+
+          postgres_password_b64="$(printf '%s' "${POSTGRES_PASSWORD}" | base64 -w 0)"
+          db_password_b64="$(printf '%s' "${DB_PASSWORD}" | base64 -w 0)"
+
+          ssh -i "${HOME}/.ssh/deploy_key" -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "DEPLOY_PATH='${DEPLOY_PATH}' TARGET='${TARGET}' PORT='${PORT}' DOKKA_PORT='${DOKKA_PORT}' POSTGRES_USER='${POSTGRES_USER}' POSTGRES_PASSWORD_B64='${postgres_password_b64}' POSTGRES_DB='${POSTGRES_DB}' DB_HOST='${DB_HOST}' DB_PORT='${DB_PORT}' DB_NAME='${DB_NAME}' DB_USER='${DB_USER}' DB_PASSWORD_B64='${db_password_b64}' bash -s" <<'REMOTE_SCRIPT'
+          set -eu
+
+          decode_base64() {
+            printf '%s' "$1" | base64 -d
+          }
+
+          if [ "${TARGET}" = "host" ]; then
+            reboot_cmd="$(command -v reboot || printf '/sbin/reboot')"
+            sudo -n true
+            nohup sh -c "sleep 2; sudo -n ${reboot_cmd}" >/dev/null 2>&1 &
+            echo "Host reboot scheduled."
+            exit 0
+          fi
+
+          cd "${DEPLOY_PATH}"
+          test -f compose.yaml
+
+          POSTGRES_PASSWORD="$(decode_base64 "${POSTGRES_PASSWORD_B64}")"
+          DB_PASSWORD="$(decode_base64 "${DB_PASSWORD_B64}")"
+          export PORT DOKKA_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD
+
+          docker compose ps
+
+          case "${TARGET}" in
+            server)
+              docker compose restart server
+              ;;
+            app-stack)
+              docker compose restart server dokka
+              ;;
+          esac
+
+          docker compose ps
+          REMOTE_SCRIPT
+
+      - name: Smoke test server health endpoint
+        if: inputs.target != 'host'
+        run: |
+          set -eu
+
+          health_url="${DEPLOY_HEALTH_URL}"
+          if [ -z "${health_url}" ]; then
+            health_url="http://${DEPLOY_HOST}:${PORT}/health"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail --silent --show-error "${health_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed for ${health_url}" >&2
+          exit 1
+
+      - name: Smoke test Dokka endpoint
+        if: inputs.target == 'app-stack'
+        run: |
+          set -eu
+
+          dokka_url="${DEPLOY_DOKKA_URL}"
+          if [ -z "${dokka_url}" ]; then
+            dokka_url="http://${DEPLOY_HOST}:${DOKKA_PORT}/index.html"
+          fi
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail --silent --show-error "${dokka_url}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Dokka check failed for ${dokka_url}" >&2
+          exit 1
