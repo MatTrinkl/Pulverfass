@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -723,10 +724,15 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("card_hand_overlay").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Galeone Sahara").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kanone Brasilien").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Pirat Japan").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a").performClick()
+        composeTestRule.onNodeWithContentDescription("Galeone").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Kanone").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Pirat").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Galeone Sahara").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Kanone Brasilien").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Pirat Japan").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithTag("close_cards_button").performClick()
@@ -781,7 +787,7 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Kaiser").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Kaiser").assertIsDisplayed()
     }
 
     @Test

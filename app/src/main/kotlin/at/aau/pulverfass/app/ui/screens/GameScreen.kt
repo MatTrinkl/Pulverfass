@@ -2724,10 +2724,9 @@ private fun rememberHandCardItems(state: PrivateHandPanelState): List<HandCardIt
             state.privateHandCards.map { card ->
                 HandCardItemUi(
                     stableKey = card.cardId.value,
-                    label = card.handCardLabel(typeLabels),
+                    label = typeLabels.getValue(card.type),
                     cardId = card.cardId,
                     isSelected = card.cardId in state.selectedTradeInCardIds,
-                    type = card.type,
                 )
             }
         } else {
@@ -3106,7 +3105,6 @@ internal data class HandCardItemUi(
     val label: String,
     val cardId: CardId? = null,
     val isSelected: Boolean = false,
-    val type: CardType? = null,
 )
 
 /**
@@ -3134,86 +3132,6 @@ internal fun buildHandCardItems(
         )
     }
 }
-
-/**
- * Bildet die sichtbare Kartenbezeichnung aus Typ und codierter Territory-ID.
- */
-private fun PrivateHandCardUi.handCardLabel(typeLabels: Map<CardType, String>): String {
-    val typeLabel = typeLabels.getValue(type)
-    val territoryName = cardId.territoryDisplayName()
-    return if (territoryName == null || type == CardType.JOKER) {
-        typeLabel
-    } else {
-        "$typeLabel $territoryName"
-    }
-}
-
-private fun CardId.territoryDisplayName(): String? {
-    val parts = value.split(":")
-    if (parts.size != 3 || parts[0] != "territory") {
-        return null
-    }
-    return territoryDisplayNames[parts[1]] ?: parts[1].fallbackTerritoryDisplayName()
-}
-
-private fun String.fallbackTerritoryDisplayName(): String =
-    split("_")
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { part ->
-            part.replaceFirstChar { char ->
-                if (char.isLowerCase()) {
-                    char.titlecase()
-                } else {
-                    char.toString()
-                }
-            }
-        }
-
-private fun CardType?.handCardAccentColor(): Color =
-    when (this) {
-        CardType.A -> Color(0xFF1F6D7A)
-        CardType.B -> Color(0xFF8B3F2B)
-        CardType.C -> Color(0xFF5C4D8B)
-        CardType.JOKER -> Color(0xFFB2872E)
-        null -> HudBorderColor
-    }
-
-private fun CardType?.handCardFooter(): String =
-    when (this) {
-        CardType.A -> "A"
-        CardType.B -> "B"
-        CardType.C -> "C"
-        CardType.JOKER -> "JOKER"
-        null -> ""
-    }
-
-private val territoryDisplayNames =
-    mapOf(
-        "argentinien" to "Argentinien",
-        "brasilien" to "Brasilien",
-        "mittelamerika" to "Mittelamerika",
-        "usa" to "USA",
-        "andengemeinschaft" to "Andengemeinschaft",
-        "alaska" to "Alaska",
-        "kanada" to "Kanada",
-        "groenland" to "Groenland",
-        "grossbritannien" to "Grossbritannien",
-        "westeuropa" to "Westeuropa",
-        "skandinavien" to "Skandinavien",
-        "mitteleuropa" to "Mitteleuropa",
-        "russland" to "Russland",
-        "naher_osten" to "Naher Osten",
-        "sibirien" to "Sibirien",
-        "china" to "China",
-        "japan" to "Japan",
-        "ferner_osten" to "Ferner Osten",
-        "australien" to "Australien",
-        "ozeanien" to "Ozeanien",
-        "aegypten" to "Aegypten",
-        "sahara" to "Sahara",
-        "zentral_afrika" to "Zentralafrika",
-        "sued_afrika" to "Suedafrika",
-    )
 
 /**
  * Zeigt die Platzierungssteuerung für ein bereits ausgewähltes eigenes Gebiet.
