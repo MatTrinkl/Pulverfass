@@ -367,4 +367,3 @@ private fun cardTypeLabel(type: CardType): String =
         CardType.C -> stringResource(Res.string.game_card_type_c)
         CardType.JOKER -> stringResource(Res.string.game_card_type_joker)
     }
-
