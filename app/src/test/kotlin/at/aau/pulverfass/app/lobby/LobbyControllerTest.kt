@@ -3885,7 +3885,7 @@ class LobbyControllerTest {
     }
 
     @Test
-    fun `leave lobby should clear persisted session token but keep live session token`() {
+    fun `leave lobby should clear persisted and live session token`() {
         runBlocking {
             val lobbyCode = LobbyCode("1240")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
@@ -3927,14 +3927,19 @@ class LobbyControllerTest {
                 waitUntil { server.activeSessionCount() == 1 }
 
                 controller.leaveLobby()
-                waitUntil { seenPayloads.any { it is LeaveLobbyRequest } }
-                delay(100)
+                waitUntil {
+                    seenPayloads.any { it is LeaveLobbyRequest } &&
+                        store.readSessionToken() == null &&
+                        controller.state.value.sessionToken == null &&
+                        controller.state.value.activeLobbyCode == null &&
+                        !controller.state.value.isConnected
+                }
 
                 assertNull(store.readSessionToken())
-                assertEquals(originalToken.value, controller.state.value.sessionToken)
+                assertNull(controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
-                assertTrue(controller.state.value.isConnected)
-                assertEquals(1, server.activeSessionCount())
+                assertFalse(controller.state.value.isConnected)
+                assertEquals(0, server.activeSessionCount())
                 assertEquals(
                     lobbyCode,
                     seenPayloads.filterIsInstance<LeaveLobbyRequest>().single().lobbyCode,
