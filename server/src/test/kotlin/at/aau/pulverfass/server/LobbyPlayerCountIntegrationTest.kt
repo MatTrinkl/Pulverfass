@@ -5,6 +5,7 @@ import at.aau.pulverfass.server.lobby.runtime.LobbyManager
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingService
 import at.aau.pulverfass.server.routing.MainServerLobbyRoutingServiceHooks
 import at.aau.pulverfass.server.routing.MainServerRouter
+import at.aau.pulverfass.shared.ids.ConnectionId
 import at.aau.pulverfass.shared.ids.LobbyCode
 import at.aau.pulverfass.shared.ids.PlayerId
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
@@ -35,6 +36,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class LobbyPlayerCountIntegrationTest {
@@ -44,6 +46,8 @@ class LobbyPlayerCountIntegrationTest {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val lobbyManager = LobbyManager(serverScope)
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
             val routedPackets = AtomicInteger(0)
             val routingErrors = AtomicInteger(0)
             val router =
@@ -56,7 +60,8 @@ class LobbyPlayerCountIntegrationTest {
                     network = network,
                     router = router,
                     lobbyManager = lobbyManager,
-                    playerIdResolver = { null },
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
                     hooks =
                         MainServerLobbyRoutingServiceHooks(
                             onRouted = { routedPackets.incrementAndGet() },
@@ -88,6 +93,10 @@ class LobbyPlayerCountIntegrationTest {
                 coroutineScope {
                     val requester = connectSession(client, network)
                     val otherClient = connectSession(client, network)
+                    playersByConnection[requester.second] = PlayerId(1)
+                    connectionsByPlayer[PlayerId(1)] = requester.second
+                    playersByConnection[otherClient.second] = PlayerId(2)
+                    connectionsByPlayer[PlayerId(2)] = otherClient.second
 
                     requester.first.send(
                         Frame.Binary(
@@ -99,7 +108,7 @@ class LobbyPlayerCountIntegrationTest {
                     assertEquals(
                         LobbyPlayerCountResponse(
                             lobbyCode = lobbyCode,
-                            playerCount = 3,
+                            playerCount = 2,
                         ),
                         receivePayload(requester.first),
                     )
