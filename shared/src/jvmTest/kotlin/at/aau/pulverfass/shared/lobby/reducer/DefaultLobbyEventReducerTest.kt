@@ -395,7 +395,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `player left clears owned territories and hand cards`() {
+    fun `player left keeps owned territories and troops but clears hand cards`() {
         val lobbyCode = LobbyCode("1248")
         val owner = PlayerId(1)
         val leavingPlayer = PlayerId(2)
@@ -447,8 +447,8 @@ class DefaultLobbyEventReducerTest {
 
         val updated = reducer.apply(state, PlayerLeft(lobbyCode, leavingPlayer))
 
-        assertNull(updated.territoryOwnerOf(TerritoryId("alpha")))
-        assertEquals(0, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(leavingPlayer, updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(4, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
         assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
         assertEquals(listOf(ownerCard), updated.handOf(owner))
         assertEquals(emptyList<CardState>(), updated.handOf(leavingPlayer))
@@ -1523,7 +1523,7 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
-    fun `player kicked clears owned territories and hand cards`() {
+    fun `player kicked keeps owned territories and troops but clears hand cards`() {
         val lobbyCode = LobbyCode("1427")
         val owner = PlayerId(1)
         val targetPlayer = PlayerId(2)
@@ -1569,8 +1569,8 @@ class DefaultLobbyEventReducerTest {
 
         val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
 
-        assertNull(updated.territoryOwnerOf(TerritoryId("alpha")))
-        assertEquals(0, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(targetPlayer, updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(5, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
         assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
         assertEquals(listOf(ownerCard), updated.handOf(owner))
         assertEquals(emptyList<CardState>(), updated.handOf(targetPlayer))

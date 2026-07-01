@@ -1649,7 +1649,9 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertTrue(
                         membershipSnapshot
                             ?.territoryStates
-                            ?.none { territory -> territory.ownerId == leavingPlayer } == true,
+                            ?.any { territory ->
+                                territory.ownerId == leavingPlayer && territory.troopCount > 0
+                            } == true,
                     )
                     assertEquals(
                         PlayerLeftLobbyEvent(lobbyCode, leavingPlayer, newHost = activePlayer),

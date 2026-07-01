@@ -203,7 +203,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             )
         val baseUpdatedState =
             state
-                .withPlayerRemovedFromOwnedTerritories(playerId)
                 .copy(
                     players = updatedPlayers,
                     playerDisplayNames = state.playerDisplayNames - playerId,
@@ -270,7 +269,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             )
         val baseUpdatedState =
             state
-                .withPlayerRemovedFromOwnedTerritories(targetPlayerId)
                 .copy(
                     players = updatedPlayers,
                     playerDisplayNames = state.playerDisplayNames - targetPlayerId,
@@ -1036,22 +1034,6 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
             hasStartedGame(state) && updatedActivePlayers.size <= 1 -> GameStatus.FINISHED
             hasStartedGame(state) && updatedActivePlayers.size >= 2 -> GameStatus.RUNNING
             else -> GameStatus.WAITING_FOR_PLAYERS
-        }
-
-    private fun GameState.withPlayerRemovedFromOwnedTerritories(playerId: PlayerId): GameState =
-        if (!hasMap()) {
-            this
-        } else {
-            copy(
-                territoryStates =
-                    territoryStates.mapValues { (_, territoryState) ->
-                        if (territoryState.ownerId == playerId) {
-                            territoryState.copy(ownerId = null, troopCount = 0)
-                        } else {
-                            territoryState
-                        }
-                    },
-            )
         }
 
     private fun synchronizedTurnStateForLobbySetup(

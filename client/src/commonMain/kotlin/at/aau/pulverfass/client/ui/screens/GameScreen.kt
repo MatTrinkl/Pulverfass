@@ -214,6 +214,7 @@ private val PhaseButtonWidth = 132.dp
 private const val ACTION_PANEL_Z_INDEX = 35f
 private val TopBarHeight = 78.dp
 private val BottomBarHeight = 76.dp
+private val AttackPanelMaxHeight = 280.dp
 private val TopBarHorizontalPadding = 16.dp
 private val PhaseImageHeight = 69.dp
 private val PhaseLabelVerticalOffset = (-4).dp
@@ -3065,10 +3066,12 @@ private fun AttackPanel(
 ) {
     val minimumMoveAfterCapture =
         minimumOccupyingTroopsForAttack(state.attackState.attackTroops)
+    val scrollState = rememberScrollState()
     Surface(
         modifier =
             modifier
                 .widthIn(max = 600.dp)
+                .heightIn(max = AttackPanelMaxHeight)
                 .testTag("attack_panel"),
         shape = RoundedCornerShape(6.dp),
         color = HudSurfaceColor,
@@ -3076,7 +3079,10 @@ private fun AttackPanel(
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
