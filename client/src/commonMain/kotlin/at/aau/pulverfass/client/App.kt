@@ -70,7 +70,7 @@ fun App(musicManager: BackgroundMusicManager) {
             }
         val lobbyState by lobbyController.state.collectAsState()
 
-        /*
+        /**
          * Musik ist routenbasiert, damit einzelne Screens keine eigenen
          * globalen Audio-Entscheidungen treffen müssen. Der Warteraum
          * darf diese Route später temporär überschreiben, wenn der
@@ -106,7 +106,7 @@ fun App(musicManager: BackgroundMusicManager) {
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
-            /*
+            /**
              * Definiert alle aktuell verfügbaren Routen und Ziele.
              */
             NavHost(
@@ -148,7 +148,7 @@ fun App(musicManager: BackgroundMusicManager) {
                 composable(Screen.LoadGame.route) {
                     LoadGameScreen(navController = navController)
                 }
-                /*
+                /**
                  * Warteraum mit Parametern aus der Navigation.
                  * Der Controller ist trotzdem die Quelle der Wahrheit;
                  * die Argumente sind nur ein Fallback für direkte
@@ -225,7 +225,7 @@ private fun RestoredGameNavigationEffect(
             targetRoute != null &&
             canAutoNavigateToRestoredGame(currentRoute)
         ) {
-            /*
+            /**
              * Der Zielscreen lädt die Kartenassets wie beim normalen Spielstart.
              * launchSingleTop verhindert doppelte Einträge, falls Load- und
              * Lobby-Screen sehr kurz hintereinander denselben Reconnect-Zustand

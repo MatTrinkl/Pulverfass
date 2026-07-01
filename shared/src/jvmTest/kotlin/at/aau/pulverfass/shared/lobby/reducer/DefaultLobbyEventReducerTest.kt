@@ -39,6 +39,7 @@ import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.DeckState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
@@ -69,7 +70,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player joined verändert state korrekt`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val playerId = PlayerId(1)
         val context =
             EventContext(
@@ -99,7 +100,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn ended verändert turn information korrekt`() {
-        val lobbyCode = LobbyCode("CD34")
+        val lobbyCode = LobbyCode("1071")
         val firstPlayer = PlayerId(1)
         val secondPlayer = PlayerId(2)
         val runningState =
@@ -136,7 +137,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `ungültige aktion wird erkannt`() {
-        val lobbyCode = LobbyCode("EF56")
+        val lobbyCode = LobbyCode("1132")
         val state = GameState.initial(lobbyCode)
 
         assertThrows(InvalidLobbyEventException::class.java) {
@@ -150,7 +151,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `reducer arbeitet deterministisch`() {
-        val lobbyCode = LobbyCode("GH78")
+        val lobbyCode = LobbyCode("1178")
         val playerId = PlayerId(7)
         val state = GameState.initial(lobbyCode)
         val event = PlayerJoined(lobbyCode, playerId, "Grace")
@@ -171,8 +172,8 @@ class DefaultLobbyEventReducerTest {
     @Test
     fun `lobby code mismatch wird erkannt`() {
         val reducerAsInterface: LobbyEventReducer = reducer
-        val expectedLobbyCode = LobbyCode("AB12")
-        val actualLobbyCode = LobbyCode("CD34")
+        val expectedLobbyCode = LobbyCode("1003")
+        val actualLobbyCode = LobbyCode("1071")
         val state = GameState.initial(expectedLobbyCode)
 
         val exception =
@@ -192,7 +193,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `internal events update metadata without changing turn flow`() {
-        val lobbyCode = LobbyCode("IJ90")
+        val lobbyCode = LobbyCode("1199")
         val baseState = GameState.initial(lobbyCode).copy(closedReason = "old")
 
         val created = reducer.apply(baseState, LobbyCreated(lobbyCode))
@@ -222,7 +223,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `state version increases strictly with each reducer apply`() {
-        val lobbyCode = LobbyCode("SV34")
+        val lobbyCode = LobbyCode("1360")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val baseState =
@@ -251,7 +252,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player joined handles duplicate and status transitions`() {
-        val lobbyCode = LobbyCode("KL12")
+        val lobbyCode = LobbyCode("1205")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
 
@@ -275,6 +276,15 @@ class DefaultLobbyEventReducerTest {
         assertEquals(playerOne, runningState.activePlayer)
         assertEquals(TurnPhase.REINFORCEMENTS, runningState.turnState?.turnPhase)
 
+        val startedState =
+            duplicateState.copy(
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+            )
+        assertThrows(InvalidLobbyEventException::class.java) {
+            reducer.apply(startedState, PlayerJoined(lobbyCode, playerTwo, "BOB"))
+        }
+
         val closedState = duplicateState.copy(status = GameStatus.CLOSED)
         val finishedState = duplicateState.copy(status = GameStatus.FINISHED)
 
@@ -290,7 +300,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player left handles active player and status transitions`() {
-        val lobbyCode = LobbyCode("MN34")
+        val lobbyCode = LobbyCode("1247")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val playerThree = PlayerId(3)
@@ -385,8 +395,69 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
+    fun `player left keeps owned territories and troops but clears hand cards`() {
+        val lobbyCode = LobbyCode("1248")
+        val owner = PlayerId(1)
+        val leavingPlayer = PlayerId(2)
+        val remainingPlayer = PlayerId(3)
+        val mapDefinition = sampleMapDefinition()
+        val ownerCard = CardState(CardId("owner-card"), CardType.A)
+        val leavingCard = CardState(CardId("leaving-card"), CardType.B)
+        val state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(owner, leavingPlayer, remainingPlayer),
+                playerDisplayNames =
+                    mapOf(
+                        owner to "OWNER",
+                        leavingPlayer to "LEFT",
+                        remainingPlayer to "THIRD",
+                    ),
+                lobbyOwner = owner,
+                activePlayer = owner,
+                turnOrder = listOf(owner, leavingPlayer, remainingPlayer),
+                turnState =
+                    TurnState(
+                        activePlayerId = owner,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 2,
+                        startPlayerId = owner,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                mapDefinition = mapDefinition,
+                territoryStates =
+                    mapDefinition.territories.associate { territory ->
+                        territory.territoryId to
+                            when (territory.territoryId.value) {
+                                "alpha" -> TerritoryState(territory.territoryId, leavingPlayer, 4)
+                                "beta" -> TerritoryState(territory.territoryId, owner, 3)
+                                else -> TerritoryState(territory.territoryId, remainingPlayer, 2)
+                            }
+                    },
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                owner to listOf(ownerCard),
+                                leavingPlayer to listOf(leavingCard),
+                            ),
+                    ),
+            )
+
+        val updated = reducer.apply(state, PlayerLeft(lobbyCode, leavingPlayer))
+
+        assertEquals(leavingPlayer, updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(4, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
+        assertEquals(listOf(ownerCard), updated.handOf(owner))
+        assertEquals(emptyList<CardState>(), updated.handOf(leavingPlayer))
+        assertEquals(false, updated.handState.cardsByPlayer.containsKey(leavingPlayer))
+    }
+
+    @Test
     fun `player eliminated removes player from turn order but keeps spectator in lobby`() {
-        val lobbyCode = LobbyCode("EL10")
+        val lobbyCode = LobbyCode("1135")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val baseState =
@@ -440,7 +511,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player eliminated rejects invalid lifecycle and territory preconditions`() {
-        val lobbyCode = LobbyCode("EL12")
+        val lobbyCode = LobbyCode("1137")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val baseState =
@@ -494,7 +565,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player eliminated clears turn state when last active player is removed`() {
-        val lobbyCode = LobbyCode("EL13")
+        val lobbyCode = LobbyCode("1138")
         val eliminatedPlayer = PlayerId(1)
         val attacker = PlayerId(2)
         val state =
@@ -539,7 +610,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `attack resolved rejects invalid reducer preconditions`() {
-        val lobbyCode = LobbyCode("AR21")
+        val lobbyCode = LobbyCode("1010")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val baseState = runningAttackState(lobbyCode, attacker, defender)
@@ -610,7 +681,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `attack resolved rejects invalid capture occupation payload in reducer`() {
-        val lobbyCode = LobbyCode("AR22")
+        val lobbyCode = LobbyCode("1011")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val baseState = runningAttackState(lobbyCode, attacker, defender)
@@ -669,7 +740,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `capture marks turn eligible for one drawn card`() {
-        val lobbyCode = LobbyCode("AR23")
+        val lobbyCode = LobbyCode("1012")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val captureEvent =
@@ -694,7 +765,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `attack without capture does not mark turn eligible for drawn card`() {
-        val lobbyCode = LobbyCode("AR24")
+        val lobbyCode = LobbyCode("1013")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
 
@@ -709,7 +780,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card drawn event moves exactly one deck card to player hand`() {
-        val lobbyCode = LobbyCode("CD23")
+        val lobbyCode = LobbyCode("1068")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val firstCard = CardState(CardId("deck-1"), CardType.A)
@@ -744,7 +815,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card drawn event rejects missing capture or wrong phase`() {
-        val lobbyCode = LobbyCode("CD24")
+        val lobbyCode = LobbyCode("1069")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val firstCard = CardState(CardId("deck-1"), CardType.A)
@@ -779,7 +850,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card drawn event rejects missing turn state or inactive player`() {
-        val lobbyCode = LobbyCode("CD25")
+        val lobbyCode = LobbyCode("1070")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val firstCard = CardState(CardId("deck-1"), CardType.A)
@@ -812,7 +883,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `match ended event finishes running game with reason`() {
-        val lobbyCode = LobbyCode("ME11")
+        val lobbyCode = LobbyCode("1243")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val runningState =
@@ -836,7 +907,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `match ended event stores territory domination winner`() {
-        val lobbyCode = LobbyCode("ME13")
+        val lobbyCode = LobbyCode("1245")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val runningState = runningAttackState(lobbyCode, playerOne, playerTwo)
@@ -858,7 +929,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `match ended event rejects non running game`() {
-        val lobbyCode = LobbyCode("ME12")
+        val lobbyCode = LobbyCode("1244")
         val state = GameState.initial(lobbyCode)
 
         assertThrows(InvalidLobbyEventException::class.java) {
@@ -871,7 +942,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory owner changed finishes match when one player controls all territories`() {
-        val lobbyCode = LobbyCode("ME14")
+        val lobbyCode = LobbyCode("1246")
         val winner = PlayerId(1)
         val defender = PlayerId(2)
         val baseState =
@@ -916,7 +987,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player eliminated transfers defender cards and sets next reinforcement trade flag`() {
-        val lobbyCode = LobbyCode("EL11")
+        val lobbyCode = LobbyCode("1136")
         val attacker = PlayerId(1)
         val defender = PlayerId(2)
         val attackerCardA = CardState(CardId("a-1"), CardType.A)
@@ -988,7 +1059,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn ended validates active player`() {
-        val lobbyCode = LobbyCode("OP56")
+        val lobbyCode = LobbyCode("1262")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val runningState =
@@ -1026,7 +1097,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn ended increments round count only when start player becomes active again`() {
-        val lobbyCode = LobbyCode("OP58")
+        val lobbyCode = LobbyCode("1263")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         var state =
@@ -1061,7 +1132,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn state updated event applies all fields atomically`() {
-        val lobbyCode = LobbyCode("TS62")
+        val lobbyCode = LobbyCode("1412")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val baseState =
@@ -1110,7 +1181,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `fortify events update troops and turn flag through reducer only`() {
-        val lobbyCode = LobbyCode("FT10")
+        val lobbyCode = LobbyCode("1159")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1164,7 +1235,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn change resets fortify used flag for next player turn`() {
-        val lobbyCode = LobbyCode("FT12")
+        val lobbyCode = LobbyCode("1160")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val state =
@@ -1205,7 +1276,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `phase change preserves captured territory flag during same player turn`() {
-        val lobbyCode = LobbyCode("FT13")
+        val lobbyCode = LobbyCode("1161")
         val playerOne = PlayerId(1)
         val state =
             GameState(
@@ -1242,7 +1313,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn state updated event rejects invalid player and decreasing turn count`() {
-        val lobbyCode = LobbyCode("TS64")
+        val lobbyCode = LobbyCode("1413")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val baseState =
@@ -1319,7 +1390,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn state respects stable player order during wrap around`() {
-        val lobbyCode = LobbyCode("OP60")
+        val lobbyCode = LobbyCode("1264")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val playerThree = PlayerId(3)
@@ -1348,7 +1419,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `interface default implementation applies null context`() {
-        val lobbyCode = LobbyCode("QR78")
+        val lobbyCode = LobbyCode("1313")
         val reducerClass =
             Class.forName(
                 "at.aau.pulverfass.shared.lobby.reducer.LobbyEventReducer\$DefaultImpls",
@@ -1381,7 +1452,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player kicked requires owner permission`() {
-        val lobbyCode = LobbyCode("ST90")
+        val lobbyCode = LobbyCode("1355")
         val owner = PlayerId(1)
         val targetPlayer = PlayerId(2)
         val nonOwner = PlayerId(3)
@@ -1405,7 +1476,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player kicked validates target player exists`() {
-        val lobbyCode = LobbyCode("UV12")
+        val lobbyCode = LobbyCode("1424")
         val owner = PlayerId(1)
         val nonExistentPlayer = PlayerId(99)
         val stateWithOwner =
@@ -1428,7 +1499,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player kicked removes player and updates state correctly`() {
-        val lobbyCode = LobbyCode("WX34")
+        val lobbyCode = LobbyCode("1426")
         val owner = PlayerId(1)
         val targetPlayer = PlayerId(2)
         val thirdPlayer = PlayerId(3)
@@ -1452,8 +1523,63 @@ class DefaultLobbyEventReducerTest {
     }
 
     @Test
+    fun `player kicked keeps owned territories and troops but clears hand cards`() {
+        val lobbyCode = LobbyCode("1427")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val thirdPlayer = PlayerId(3)
+        val mapDefinition = sampleMapDefinition()
+        val ownerCard = CardState(CardId("kick-owner-card"), CardType.A)
+        val targetCard = CardState(CardId("kick-target-card"), CardType.C)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer, thirdPlayer),
+                turnOrder = listOf(owner, targetPlayer, thirdPlayer),
+                activePlayer = targetPlayer,
+                turnState =
+                    TurnState(
+                        activePlayerId = targetPlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 3,
+                        startPlayerId = owner,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                mapDefinition = mapDefinition,
+                territoryStates =
+                    mapDefinition.territories.associate { territory ->
+                        territory.territoryId to
+                            when (territory.territoryId.value) {
+                                "alpha" -> TerritoryState(territory.territoryId, targetPlayer, 5)
+                                "beta" -> TerritoryState(territory.territoryId, owner, 4)
+                                else -> TerritoryState(territory.territoryId, thirdPlayer, 2)
+                            }
+                    },
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                owner to listOf(ownerCard),
+                                targetPlayer to listOf(targetCard),
+                            ),
+                    ),
+            )
+
+        val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
+
+        assertEquals(targetPlayer, updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(5, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
+        assertEquals(listOf(ownerCard), updated.handOf(owner))
+        assertEquals(emptyList<CardState>(), updated.handOf(targetPlayer))
+        assertEquals(false, updated.handState.cardsByPlayer.containsKey(targetPlayer))
+    }
+
+    @Test
     fun `player kicked handles single player removal`() {
-        val lobbyCode = LobbyCode("YZ56")
+        val lobbyCode = LobbyCode("1436")
         val owner = PlayerId(1)
         val targetPlayer = PlayerId(2)
         val stateWithOwner =
@@ -1476,7 +1602,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player kicked transitions status when below 2 players`() {
-        val lobbyCode = LobbyCode("AB78")
+        val lobbyCode = LobbyCode("1004")
         val owner = PlayerId(1)
         val targetPlayer = PlayerId(2)
         val stateWithOwner =
@@ -1497,7 +1623,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `game started transitions status to running and initializes first turn`() {
-        val lobbyCode = LobbyCode("GS01")
+        val lobbyCode = LobbyCode("1182")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val player3 = PlayerId(3)
@@ -1597,7 +1723,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `game started requires at least 3 players`() {
-        val lobbyCode = LobbyCode("GS02")
+        val lobbyCode = LobbyCode("1183")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val stateWithOwner =
@@ -1622,7 +1748,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `game started requires not already started`() {
-        val lobbyCode = LobbyCode("GS03")
+        val lobbyCode = LobbyCode("1184")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val player3 = PlayerId(3)
@@ -1650,7 +1776,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `start player configured updates setup turn state before game start`() {
-        val lobbyCode = LobbyCode("SP01")
+        val lobbyCode = LobbyCode("1340")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val preGameState =
@@ -1691,7 +1817,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `start player configured rejects non member and after started`() {
-        val lobbyCode = LobbyCode("SP02")
+        val lobbyCode = LobbyCode("1341")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val preGameState =
@@ -1737,7 +1863,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `game started uses configured start player as initial active player`() {
-        val lobbyCode = LobbyCode("SP03")
+        val lobbyCode = LobbyCode("1342")
         val owner = PlayerId(1)
         val player2 = PlayerId(2)
         val player3 = PlayerId(3)
@@ -1775,7 +1901,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory owner changed aktualisiert owner`() {
-        val lobbyCode = LobbyCode("TM10")
+        val lobbyCode = LobbyCode("1392")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1795,7 +1921,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory troops changed aktualisiert troop count`() {
-        val lobbyCode = LobbyCode("TM12")
+        val lobbyCode = LobbyCode("1393")
         val initialState =
             GameState.initial(
                 lobbyCode = lobbyCode,
@@ -1813,7 +1939,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `cheat reinforcement bonus used marks player`() {
-        val lobbyCode = LobbyCode("CH01")
+        val lobbyCode = LobbyCode("1072")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1828,7 +1954,7 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
-        /*
+        /**
          * Der Reducer trägt den Spieler in das Set der bereits verwendeten
          * Cheatboni ein. Genau dieses Set verhindert später eine zweite Nutzung.
          */
@@ -1840,7 +1966,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `cheat reinforcement bonus cannot be used twice by same player`() {
-        val lobbyCode = LobbyCode("CH02")
+        val lobbyCode = LobbyCode("1073")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1855,7 +1981,7 @@ class DefaultLobbyEventReducerTest {
                 CheatReinforcementBonusUsedEvent(lobbyCode, playerOne),
             )
 
-        /*
+        /**
          * Auch wenn die Hauptprüfung im Server-Routing sitzt, schützt der Reducer
          * den State zusätzlich davor, dass dasselbe Event fachlich zweimal
          * angewendet wird.
@@ -1876,7 +2002,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `pending reinforcements set und change aktualisieren state deterministisch`() {
-        val lobbyCode = LobbyCode("TM13")
+        val lobbyCode = LobbyCode("1394")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1908,7 +2034,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `pending reinforcements cannot go negative`() {
-        val lobbyCode = LobbyCode("TM15")
+        val lobbyCode = LobbyCode("1396")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1940,7 +2066,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `pending reinforcements change cannot overflow int`() {
-        val lobbyCode = LobbyCode("TM16")
+        val lobbyCode = LobbyCode("1397")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -1972,7 +2098,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card set traded in increments global count deterministically`() {
-        val lobbyCode = LobbyCode("TM17")
+        val lobbyCode = LobbyCode("1398")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -2010,7 +2136,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card set traded in clears next reinforcement trade requirement`() {
-        val lobbyCode = LobbyCode("T17A")
+        val lobbyCode = LobbyCode("1362")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -2036,7 +2162,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `player cards removed event updates hand deterministically`() {
-        val lobbyCode = LobbyCode("TM18")
+        val lobbyCode = LobbyCode("1399")
         val playerOne = PlayerId(1)
         val cardOne = CardState(CardId("card-1"), CardType.A)
         val cardTwo = CardState(CardId("card-2"), CardType.B)
@@ -2067,7 +2193,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory event mit unknown territory fuehrt zu fail`() {
-        val lobbyCode = LobbyCode("TM14")
+        val lobbyCode = LobbyCode("1395")
         val initialState =
             GameState.initial(
                 lobbyCode = lobbyCode,
@@ -2091,7 +2217,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory events require loaded map and known owner`() {
-        val lobbyCode = LobbyCode("TM18")
+        val lobbyCode = LobbyCode("1399")
         val playerOne = PlayerId(1)
 
         assertThrows(InvalidLobbyEventException::class.java) {
@@ -2118,7 +2244,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `start player configuration rejects invalid lobby lifecycle and requester`() {
-        val lobbyCode = LobbyCode("SP04")
+        val lobbyCode = LobbyCode("1343")
         val owner = PlayerId(1)
         val playerTwo = PlayerId(2)
         val baseState =
@@ -2147,7 +2273,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `game start rejects closed state and missing map`() {
-        val lobbyCode = LobbyCode("GS05")
+        val lobbyCode = LobbyCode("1185")
         val owner = PlayerId(1)
         val playerTwo = PlayerId(2)
         val playerThree = PlayerId(3)
@@ -2171,7 +2297,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `turn state update rejects invalid start and pause players`() {
-        val lobbyCode = LobbyCode("TS66")
+        val lobbyCode = LobbyCode("1414")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val baseState =
@@ -2206,7 +2332,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `bonus query reagiert korrekt auf event sequenz`() {
-        val lobbyCode = LobbyCode("TM16")
+        val lobbyCode = LobbyCode("1397")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val initialState =
@@ -2241,7 +2367,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `territory ownership finishes running game when one player owns all territories`() {
-        val lobbyCode = LobbyCode("WX78")
+        val lobbyCode = LobbyCode("1427")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val runningState =
@@ -2275,7 +2401,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card set traded in rejects wrong trade index and wrong value`() {
-        val lobbyCode = LobbyCode("TM19")
+        val lobbyCode = LobbyCode("1400")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -2324,7 +2450,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `card set traded in rejects unknown player`() {
-        val lobbyCode = LobbyCode("TM20")
+        val lobbyCode = LobbyCode("1401")
         val playerOne = PlayerId(1)
         val initialState =
             GameState.initial(
@@ -2349,7 +2475,7 @@ class DefaultLobbyEventReducerTest {
 
     @Test
     fun `pending reinforcements changed rejects cross player modification`() {
-        val lobbyCode = LobbyCode("TM21")
+        val lobbyCode = LobbyCode("1402")
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
         val initialState =

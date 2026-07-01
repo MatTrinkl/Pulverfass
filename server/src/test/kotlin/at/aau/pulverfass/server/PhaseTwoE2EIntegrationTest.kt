@@ -56,7 +56,7 @@ class PhaseTwoE2EIntegrationTest {
     @Test
     fun `normal attack without capture stays in attack phase`() =
         testApplication {
-            val lobbyCode = LobbyCode("P2E1")
+            val lobbyCode = LobbyCode("1265")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -166,7 +166,7 @@ class PhaseTwoE2EIntegrationTest {
     @Test
     fun `attack with capture applies moveAfterCapture and public capture data`() =
         testApplication {
-            val lobbyCode = LobbyCode("P2E2")
+            val lobbyCode = LobbyCode("1266")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -300,7 +300,7 @@ class PhaseTwoE2EIntegrationTest {
     @Test
     fun `elimination transfers cards and updates spectator and turn order`() =
         testApplication {
-            val lobbyCode = LobbyCode("P2E3")
+            val lobbyCode = LobbyCode("1267")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -420,7 +420,7 @@ class PhaseTwoE2EIntegrationTest {
     @Test
     fun `no valid attacks auto ends phase to fortify`() =
         testApplication {
-            val lobbyCode = LobbyCode("P2E4")
+            val lobbyCode = LobbyCode("1268")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val fromTerritoryId = TerritoryId("alpha")
@@ -543,7 +543,7 @@ class PhaseTwoE2EIntegrationTest {
     @Test
     fun `manual confirm attack done ends phase to fortify`() =
         testApplication {
-            val lobbyCode = LobbyCode("P2E5")
+            val lobbyCode = LobbyCode("1269")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val initialState =

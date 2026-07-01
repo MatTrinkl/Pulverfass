@@ -79,7 +79,7 @@ class JdbcLobbyReconnectSessionStoreTest {
                     listOf(
                         mapOf(
                             "player_id" to 7L,
-                            "lobby_code" to "AB12",
+                            "lobby_code" to "1003",
                             "player_display_name" to "Bob",
                             "expires_at" to Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")),
                             "revoked_at" to Timestamp.from(Instant.parse("2026-01-01T00:01:00Z")),
@@ -96,7 +96,7 @@ class JdbcLobbyReconnectSessionStoreTest {
         assertEquals(
             SessionReconnectContext(
                 playerId = PlayerId(7),
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Bob",
             ),
             context,
@@ -127,7 +127,7 @@ class JdbcLobbyReconnectSessionStoreTest {
         val context =
             SessionReconnectContext(
                 playerId = PlayerId(11),
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
 
@@ -140,7 +140,7 @@ class JdbcLobbyReconnectSessionStoreTest {
         assertEquals(sessionToken.storageHashForTest(), delete.lastParameters[2])
         assertEquals(sessionToken.storageHashForTest(), insert.lastParameters[1])
         assertEquals(11L, insert.lastParameters[2])
-        assertEquals("AB12", insert.lastParameters[3])
+        assertEquals("1003", insert.lastParameters[3])
         assertEquals("Alice", insert.lastParameters[4])
         assertEquals(
             Timestamp.from(Instant.ofEpochMilli(1_700_000_000_000)),
@@ -176,7 +176,7 @@ class JdbcLobbyReconnectSessionStoreTest {
                     context =
                         SessionReconnectContext(
                             playerId = PlayerId(12),
-                            lobbyCode = LobbyCode("CD34"),
+                            lobbyCode = LobbyCode("1071"),
                             playerDisplayName = "Carol",
                         ),
                 )
@@ -204,7 +204,7 @@ class JdbcLobbyReconnectSessionStoreTest {
                 context =
                     SessionReconnectContext(
                         playerId = null,
-                        lobbyCode = LobbyCode("EF56"),
+                        lobbyCode = LobbyCode("1132"),
                         playerDisplayName = "Dora",
                     ),
             )
@@ -241,8 +241,8 @@ class JdbcLobbyReconnectSessionStoreTest {
                 ),
             )
 
-        assertEquals(2, store.clearLobbyContextForLobby(LobbyCode("GH78")))
-        assertEquals("GH78", clear.lastParameters[1])
+        assertEquals(2, store.clearLobbyContextForLobby(LobbyCode("1178")))
+        assertEquals("1178", clear.lastParameters[1])
         assertEquals(1, store.deleteSession(SessionToken("123e4567-e89b-12d3-a456-426614174906")))
         assertEquals(
             SessionToken("123e4567-e89b-12d3-a456-426614174906").storageHashForTest(),

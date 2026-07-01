@@ -68,7 +68,7 @@ class PlaceReinforcementsIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("PRI1")
+            val lobbyCode = LobbyCode("1302")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -240,7 +240,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when requester does not own all territories`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI2")
+            val lobbyCode = LobbyCode("1303")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -281,7 +281,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when requester is not active player`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI3")
+            val lobbyCode = LobbyCode("1304")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -317,7 +317,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when phase is not reinforcements`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI4")
+            val lobbyCode = LobbyCode("1305")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -353,7 +353,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when placements overspend pending pool`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI5")
+            val lobbyCode = LobbyCode("1306")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -390,7 +390,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when placement sum overflows int`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI6")
+            val lobbyCode = LobbyCode("1307")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId
@@ -433,7 +433,7 @@ class PlaceReinforcementsIntegrationTest {
     @Test
     fun `invalid request is rejected when troop count would overflow int`() =
         testApplication {
-            val lobbyCode = LobbyCode("PRI7")
+            val lobbyCode = LobbyCode("1308")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val territoryA = defaultMapDefinition().territories[0].territoryId

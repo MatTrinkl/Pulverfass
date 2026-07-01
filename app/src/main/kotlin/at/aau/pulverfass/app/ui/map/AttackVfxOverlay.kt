@@ -30,7 +30,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/*
+/**
  * Zeitachse der Clash-Animation. Die Phasen laufen nacheinander beziehungsweise
  * leicht überlappend: erst wachsen die Angriffslinien zur Mitte, dann zündet
  * die Explosion, während die Verlustlabels neben den Truppen-Chips aufsteigen.
@@ -92,7 +92,7 @@ data class ClashColors(
 internal class AttackVfxController {
     private val queue = mutableStateListOf<AttackVfxRequest>()
 
-    /*
+    /**
      * Es wird nur der zuletzt fertig abgespielte Kampf unterdrückt, nicht die
      * gesamte Historie. So wird ein erneut emittiertes Ergebnis (Recomposition
      * oder State-Catch-up) nicht doppelt animiert, ein echter neuer Angriff aber
@@ -251,7 +251,7 @@ private fun DrawScope.drawClashLines(
         return
     }
 
-    /*
+    /**
      * Die Linien wachsen von beiden Chips zur Mitte und blenden aus, sobald die
      * Explosion übernimmt. So bleibt der Fokus immer auf genau einer Phase.
      */
@@ -349,7 +349,7 @@ private fun DrawScope.drawDamageLabels(
         return
     }
 
-    /*
+    /**
      * Schnelles Einblenden, langsames Ausblenden: Das Label ist sofort lesbar
      * und verschwindet, bevor der Chip auf den echten Stand synchronisiert.
      */

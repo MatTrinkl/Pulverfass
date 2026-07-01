@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 class GameStatePrivateGetCodecTest {
     @Test
     fun `should encode and decode private get request payload directly`() {
-        val payload = GameStatePrivateGetRequest(LobbyCode("PG12"), PlayerId(5))
+        val payload = GameStatePrivateGetRequest(LobbyCode("1283"), PlayerId(5))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -24,7 +24,7 @@ class GameStatePrivateGetCodecTest {
     fun `should encode and decode private get response payload directly`() {
         val payload =
             GameStatePrivateGetResponse(
-                lobbyCode = LobbyCode("PG34"),
+                lobbyCode = LobbyCode("1285"),
                 recipientPlayerId = PlayerId(5),
                 stateVersion = 12,
                 handCards = listOf("infantry", "artillery"),

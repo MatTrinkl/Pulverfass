@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
 class LobbyEventTest {
     @Test
     fun `should instantiate sample lobby events consistently`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val playerId = PlayerId(7)
 
         val events =
@@ -117,7 +117,7 @@ class LobbyEventTest {
 
     @Test
     fun `should support exhaustive when over event hierarchies`() {
-        val lobbyCode = LobbyCode("CD34")
+        val lobbyCode = LobbyCode("1071")
 
         val rootResult =
             when (val event: LobbyEvent = LobbyCreated(lobbyCode)) {
@@ -167,14 +167,14 @@ class LobbyEventTest {
                 is TurnStateUpdatedEvent -> event.turnPhase.name
             }
 
-        assertEquals("internal:CD34", rootResult)
+        assertEquals("internal:1071", rootResult)
         assertEquals("fortify:3", externalResult)
         assertEquals("done", internalResult)
     }
 
     @Test
     fun `should forward lobby code through relevant events`() {
-        val lobbyCode = LobbyCode("ZX90")
+        val lobbyCode = LobbyCode("1440")
         val playerId = PlayerId(4)
 
         val events =
@@ -262,8 +262,8 @@ class LobbyEventTest {
 
     @Test
     fun `should expose player left reason consistently`() {
-        val leftWithReason = PlayerLeft(LobbyCode("PL12"), PlayerId(9), "quit")
-        val leftWithoutReason = PlayerLeft(LobbyCode("PL12"), PlayerId(9))
+        val leftWithReason = PlayerLeft(LobbyCode("1291"), PlayerId(9), "quit")
+        val leftWithoutReason = PlayerLeft(LobbyCode("1291"), PlayerId(9))
 
         assertEquals("quit", leftWithReason.reason)
         assertEquals(null, leftWithoutReason.reason)
@@ -273,16 +273,16 @@ class LobbyEventTest {
     fun `should expose technical event properties consistently`() {
         val fortifyApplied =
             FortifyMoveAppliedEvent(
-                LobbyCode("AA10"),
+                LobbyCode("1000"),
                 PlayerId(3),
                 TerritoryId("alpha"),
                 TerritoryId("beta"),
                 2,
             )
-        val fortifyUsed = FortifyUsedSetEvent(LobbyCode("AA12"), used = true)
-        val invalidAction = InvalidActionDetected(LobbyCode("AA11"), PlayerId(2), "invalid")
-        val tick = SystemTick(LobbyCode("BB22"), 4)
-        val timeout = TimeoutTriggered(LobbyCode("CC33"), "turn", 3_000)
+        val fortifyUsed = FortifyUsedSetEvent(LobbyCode("1002"), used = true)
+        val invalidAction = InvalidActionDetected(LobbyCode("1001"), PlayerId(2), "invalid")
+        val tick = SystemTick(LobbyCode("1048"), 4)
+        val timeout = TimeoutTriggered(LobbyCode("1058"), "turn", 3_000)
 
         assertEquals(PlayerId(3), fortifyApplied.playerId)
         assertEquals(TerritoryId("alpha"), fortifyApplied.fromTerritoryId)
@@ -298,7 +298,7 @@ class LobbyEventTest {
     fun `should validate technical event arguments`() {
         assertThrows(IllegalArgumentException::class.java) {
             CardSetTradedInEvent(
-                lobbyCode = LobbyCode("CC44"),
+                lobbyCode = LobbyCode("1060"),
                 playerId = PlayerId(1),
                 cardIds = listOf(CardId("card-a"), CardId("card-b")),
                 value = 2,
@@ -307,7 +307,7 @@ class LobbyEventTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             CardSetTradedInEvent(
-                lobbyCode = LobbyCode("CC55"),
+                lobbyCode = LobbyCode("1065"),
                 playerId = PlayerId(1),
                 cardIds = listOf(CardId("card-a"), CardId("card-a"), CardId("card-b")),
                 value = 2,
@@ -316,21 +316,21 @@ class LobbyEventTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             PlayerCardsRemovedEvent(
-                lobbyCode = LobbyCode("CC56"),
+                lobbyCode = LobbyCode("1066"),
                 playerId = PlayerId(1),
                 cardIds = emptyList(),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             PlayerCardsRemovedEvent(
-                lobbyCode = LobbyCode("CC57"),
+                lobbyCode = LobbyCode("1067"),
                 playerId = PlayerId(1),
                 cardIds = listOf(CardId("card-a"), CardId("card-a")),
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             FortifyMoveAppliedEvent(
-                LobbyCode("FC10"),
+                LobbyCode("1139"),
                 PlayerId(1),
                 TerritoryId("alpha"),
                 TerritoryId("alpha"),
@@ -339,7 +339,7 @@ class LobbyEventTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             FortifyMoveAppliedEvent(
-                LobbyCode("FC12"),
+                LobbyCode("1140"),
                 PlayerId(1),
                 TerritoryId("alpha"),
                 TerritoryId("beta"),
@@ -347,20 +347,20 @@ class LobbyEventTest {
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
-            InvalidActionDetected(LobbyCode("DD44"), reason = " ")
+            InvalidActionDetected(LobbyCode("1116"), reason = " ")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            SystemTick(LobbyCode("EE55"), -1)
+            SystemTick(LobbyCode("1131"), -1)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TimeoutTriggered(LobbyCode("FF66"), "", 1_000)
+            TimeoutTriggered(LobbyCode("1141"), "", 1_000)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            TimeoutTriggered(LobbyCode("GG77"), "turn", 0)
+            TimeoutTriggered(LobbyCode("1176"), "turn", 0)
         }
         assertThrows(IllegalArgumentException::class.java) {
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("HH88"),
+                lobbyCode = LobbyCode("1191"),
                 activePlayerId = PlayerId(1),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 0,
@@ -369,7 +369,7 @@ class LobbyEventTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("II99"),
+                lobbyCode = LobbyCode("1197"),
                 activePlayerId = PlayerId(1),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 1,

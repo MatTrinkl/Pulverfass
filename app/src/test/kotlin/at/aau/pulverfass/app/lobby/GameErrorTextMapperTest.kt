@@ -381,7 +381,7 @@ class GameErrorTextMapperTest {
 
     @Test
     fun `cheat reinforcement bonus errors are translated for UI`() {
-        /*
+        /**
          * Der Server liefert technische Fehlercodes. Dieser Test stellt sicher,
          * dass jeder Cheatbonus-Fehler einen verständlichen UI-Text bekommt und
          * nicht als roher Servertext beim Spieler landet.

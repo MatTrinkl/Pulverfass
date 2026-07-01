@@ -37,7 +37,7 @@ data class LobbyUiState(
     val autoAttackEnabled: Boolean = false,
     val characterSelectError: String? = null,
     val autoPhaseNoticeText: String? = null,
-    /*
+    /**
      * Kurze Ergebnis-Rückmeldung nach einer Cheat-Meldung. Sie liegt im
      * LobbyUiState, obwohl sie im GameScreen angezeigt wird, weil die Antwort
      * als Netzwerkpayload im LobbyController ankommt.

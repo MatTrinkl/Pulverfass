@@ -18,12 +18,12 @@ class TurnStateGetMessageTest {
 
     @Test
     fun `serializer roundtrip request`() {
-        val request = TurnStateGetRequest(lobbyCode = LobbyCode("AB12"))
+        val request = TurnStateGetRequest(lobbyCode = LobbyCode("1003"))
 
         val serialized = json.encodeToString(TurnStateGetRequest.serializer(), request)
         val deserialized = json.decodeFromString(TurnStateGetRequest.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"AB12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003"}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -31,7 +31,7 @@ class TurnStateGetMessageTest {
     fun `serializer roundtrip response`() {
         val response =
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 activePlayerId = PlayerId(2),
                 turnPhase = TurnPhase.FORTIFY,
                 turnCount = 5,
@@ -57,14 +57,14 @@ class TurnStateGetMessageTest {
         val response =
             TurnStateGetErrorResponse(
                 code = TurnStateGetErrorCode.GAME_NOT_FOUND,
-                reason = "Lobby 'ZZ99' wurde nicht gefunden.",
+                reason = "Lobby '1442' wurde nicht gefunden.",
             )
 
         val serialized = json.encodeToString(TurnStateGetErrorResponse.serializer(), response)
         val deserialized = json.decodeFromString(TurnStateGetErrorResponse.serializer(), serialized)
 
         assertEquals(
-            """{"code":"GAME_NOT_FOUND","reason":"Lobby 'ZZ99' wurde nicht gefunden."}""",
+            """{"code":"GAME_NOT_FOUND","reason":"Lobby '1442' wurde nicht gefunden."}""",
             serialized,
         )
         assertEquals(response, deserialized)

@@ -20,7 +20,7 @@ class TradeInCardsRegistryTest {
     fun `should resolve message type and serialization for trade in request`() {
         val payload =
             TradeInCardsRequest(
-                lobbyCode = LobbyCode("TI12"),
+                lobbyCode = LobbyCode("1389"),
                 playerId = PlayerId(4),
                 cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
             )
@@ -35,7 +35,7 @@ class TradeInCardsRegistryTest {
 
     @Test
     fun `should resolve message type and serialization for trade in response`() {
-        val payload = TradeInCardsResponse(LobbyCode("TI34"))
+        val payload = TradeInCardsResponse(LobbyCode("1390"))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -65,7 +65,7 @@ class TradeInCardsRegistryTest {
     fun `should resolve message type and serialization for player hand updated event`() {
         val payload =
             PlayerHandUpdatedEvent(
-                lobbyCode = LobbyCode("TI56"),
+                lobbyCode = LobbyCode("1391"),
                 recipientPlayerId = PlayerId(4),
                 stateVersion = 7,
                 handCards = listOf(PrivateHandCardSnapshot(CardId("card-j"), CardType.JOKER)),

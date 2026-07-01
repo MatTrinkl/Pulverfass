@@ -27,6 +27,7 @@ import at.aau.pulverfass.shared.lobby.event.AttackResolvedEvent
 import at.aau.pulverfass.shared.lobby.event.CardDrawnEvent
 import at.aau.pulverfass.shared.lobby.event.CardSetTradedInEvent
 import at.aau.pulverfass.shared.lobby.event.CheatReinforcementBonusUsedEvent
+import at.aau.pulverfass.shared.lobby.event.LobbyClosed
 import at.aau.pulverfass.shared.lobby.event.LobbyCreated
 import at.aau.pulverfass.shared.lobby.event.LobbyEvent
 import at.aau.pulverfass.shared.lobby.event.MatchEndReason
@@ -38,6 +39,7 @@ import at.aau.pulverfass.shared.lobby.event.PlayerEliminatedEvent
 import at.aau.pulverfass.shared.lobby.event.StartPlayerConfigured
 import at.aau.pulverfass.shared.lobby.event.TerritoryOwnerChangedEvent
 import at.aau.pulverfass.shared.lobby.event.TerritoryTroopsChangedEvent
+import at.aau.pulverfass.shared.lobby.event.TimeoutTriggered
 import at.aau.pulverfass.shared.lobby.event.TurnStateUpdatedEvent
 import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayName
 import at.aau.pulverfass.shared.lobby.normalizePlayerDisplayNameOrFallback
@@ -179,6 +181,8 @@ class MainServerLobbyRoutingService(
     private val mapCommandRuleService: MapCommandRuleService =
         DefaultMapCommandRuleService(fortifyMoveValidator = fortifyMoveValidator),
     private val attackAutoAdvanceDelayMillis: Long = ATTACK_AUTO_ADVANCE_DELAY_MILLIS,
+    private val waitingPlayerSkipTimeoutMillis: Long = WAITING_PLAYER_SKIP_TIMEOUT_MILLIS,
+    private val inactiveLobbyCleanupTimeoutMillis: Long = INACTIVE_LOBBY_CLEANUP_TIMEOUT_MILLIS,
     private val hooks: MainServerLobbyRoutingServiceHooks = MainServerLobbyRoutingServiceHooks(),
 ) {
     private companion object {
@@ -197,8 +201,10 @@ class MainServerLobbyRoutingService(
         const val CHARACTER_ALREADY_ASSIGNED_ERROR_CODE = "CHARACTER_ALREADY_ASSIGNED"
         const val PLAYER_CONTEXT_MISSING_ERROR_CODE = "PLAYER_CONTEXT_MISSING"
         const val ATTACK_AUTO_ADVANCE_DELAY_MILLIS = 2_500L
+        const val WAITING_PLAYER_SKIP_TIMEOUT_MILLIS = 60_000L
+        const val INACTIVE_LOBBY_CLEANUP_TIMEOUT_MILLIS = 30 * 60 * 1000L
 
-        /*
+        /**
          * Cheat-Meldungen haben nur ein kurzes Zeitfenster. Die Idee dahinter:
          * Andere Spieler sollen den Cheat melden können, sobald er sichtbar wird,
          * aber niemand soll viele Runden später noch rückwirkend Bonus erhalten.
@@ -261,6 +267,12 @@ class MainServerLobbyRoutingService(
         val zeroReinforcements: Boolean,
     )
 
+    private data class WaitingPlayerSkipJob(
+        val playerId: PlayerId,
+        val turnCount: Int,
+        val job: Job,
+    )
+
     private val logger = ServerLoggers.technical("MainServerLobbyRoutingService")
     private val lifecycleLock = Any()
     private var routingJob: Job? = null
@@ -277,6 +289,8 @@ class MainServerLobbyRoutingService(
     private val publicGameStateBuilder = PublicGameStateBuilder()
     private val roundHistoryByLobby = ConcurrentHashMap<LobbyCode, RoundHistoryBuffer>()
     private val charactersByLobby = ConcurrentHashMap<LobbyCode, ConcurrentHashMap<String, Long>>()
+    private val waitingPlayerSkipJobs = ConcurrentHashMap<LobbyCode, WaitingPlayerSkipJob>()
+    private val inactiveLobbyCleanupJobs = ConcurrentHashMap<LobbyCode, Job>()
 
     private data class TurnAdvancePlan(
         val events: List<LobbyEvent>,
@@ -285,7 +299,7 @@ class MainServerLobbyRoutingService(
         val matchEnded: Boolean = events.any { event -> event is MatchEndedEvent }
     }
 
-    /*
+    /**
      * Die Cheat-Meldelogik bleibt auf dem Server.
      * Die App darf nur melden, aber nicht selbst entscheiden, ob die Meldung stimmt.
      * Alle zugehörigen Maps werden gemeinsam unter diesem Lock verändert, damit
@@ -293,14 +307,14 @@ class MainServerLobbyRoutingService(
      */
     private val cheatReportLock = Any()
 
-    /*
+    /**
      * Nach dem Cheat ist der Vorteil für andere Spieler noch nicht sicher sichtbar.
      * Deshalb wartet der Server bis zur nächsten Verstärkungsplatzierung dieses Spielers.
      * Erst dann können die anderen Spieler den Verdacht überhaupt sehen.
      */
     private val pendingVisibleCheatByLobby = mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
-    /*
+    /**
      * Speichert pro Lobby, welcher Spieler gerade ein offenes 20-Sekunden-Meldefenster hat.
      * Es wird kein eigener Timer gestartet; beim Melden wird einfach die Ablaufzeit geprüft.
      * Das spart einen Hintergrundjob und reicht für diese Regel völlig aus.
@@ -308,13 +322,13 @@ class MainServerLobbyRoutingService(
     private val cheatReportWindowsByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, CheatReportWindow>>()
 
-    /*
+    /**
      * Merkt sich, wer eine konkrete Cheat-Aktion schon gemeldet hat.
      * Dadurch kann derselbe Spieler nicht mehrfach für denselben Cheat-Bonus bekommen.
      */
     private val cheatReportsByLobby = mutableMapOf<LobbyCode, MutableSet<CheatReportKey>>()
 
-    /*
+    /**
      * Bonus oder Malus wird nicht sofort angewendet, sondern erst in der nächsten
      * Verstärkungsphase des meldenden Spielers.
      * Mehrere falsche Meldungen addieren sich, werden später aber bei 0 begrenzt.
@@ -322,7 +336,7 @@ class MainServerLobbyRoutingService(
     private val nextReinforcementModifierByLobby =
         mutableMapOf<LobbyCode, MutableMap<PlayerId, Int>>()
 
-    /*
+    /**
      * Wenn ein Spieler korrekt beim Cheaten erwischt wird, bekommt er in seiner
      * nächsten Verstärkungsphase 0 Truppen. Auch diese Strafe bleibt am Server.
      */
@@ -330,6 +344,12 @@ class MainServerLobbyRoutingService(
         mutableMapOf<LobbyCode, MutableSet<PlayerId>>()
 
     init {
+        require(waitingPlayerSkipTimeoutMillis > 0L) {
+            "waitingPlayerSkipTimeoutMillis muss positiv sein."
+        }
+        require(inactiveLobbyCleanupTimeoutMillis > 0L) {
+            "inactiveLobbyCleanupTimeoutMillis muss positiv sein."
+        }
         lobbyManager.registerAcceptedEventListener(::broadcastAcceptedLobbyEvent)
     }
 
@@ -562,6 +582,8 @@ class MainServerLobbyRoutingService(
         playerId: PlayerId,
         reason: String?,
     ) {
+        broadcastGlobalPlayerCount()
+
         val currentConnectionId = connectionIdResolver(playerId)
         if (currentConnectionId != null && currentConnectionId != connectionId) {
             logger.info(
@@ -588,7 +610,7 @@ class MainServerLobbyRoutingService(
 
         // broadcast updated player count to lobby members (disconnect may affect displayed online count)
         broadcastPlayerCount(lobbyCode)
-        broadcastGlobalPlayerCount()
+        scheduleInactiveLobbyCleanupIfNeeded(lobbyCode)
 
         val previousTurnState = currentTurnState(lobbyCode)
         val currentState = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
@@ -625,6 +647,10 @@ class MainServerLobbyRoutingService(
         broadcastGlobalPlayerCount()
     }
 
+    suspend fun onConnectionClosed() {
+        broadcastGlobalPlayerCount()
+    }
+
     /**
      * Reagiert auf eine neue oder wiederhergestellte Verbindung eines Spielers.
      *
@@ -643,6 +669,7 @@ class MainServerLobbyRoutingService(
                 status = ConnectionStatus.CONNECTED,
             )
             broadcastPlayerCount(lobbyCode)
+            scheduleInactiveLobbyCleanupIfNeeded(lobbyCode)
         }
         broadcastGlobalPlayerCount()
     }
@@ -991,7 +1018,7 @@ class MainServerLobbyRoutingService(
         val payload = request.payload as ClaimCheatReinforcementBonusRequest
 
         runCatching {
-            /*
+            /**
              * Hier wird aus dem App-Signal ("Lichtsensor-Cheat wurde ausgelöst")
              * ein serverautoritativer Spielzug. Der Server baut zuerst die Domain-
              * Events und spielt sie in die Lobby ein. Erst danach antwortet er dem
@@ -999,7 +1026,7 @@ class MainServerLobbyRoutingService(
              */
             val events = buildClaimCheatReinforcementBonusEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
-            /*
+            /**
              * Der Cheat ist fachlich sofort aktiv. Die Platzierung öffnet das
              * normale sichtbare Meldefenster, eine frühe Meldung darf aber nicht
              * als falsch bestraft werden.
@@ -1045,7 +1072,7 @@ class MainServerLobbyRoutingService(
         val payload = request.payload as ReportCheatRequest
 
         runCatching {
-            /*
+            /**
              * Die Identitätsprüfung ist hier besonders wichtig: Ein Client darf
              * nicht im Namen eines anderen Spielers melden. Die Connection wurde
              * vorher einem PlayerId-Kontext zugeordnet, und genau dieser Kontext
@@ -1069,7 +1096,7 @@ class MainServerLobbyRoutingService(
             }
             require(payload.reporterPlayerId != payload.accusedPlayerId) { "SELF_REPORT" }
 
-            /*
+            /**
              * Ab hier ist die Meldung formal gültig. Ob sie inhaltlich stimmt,
              * entscheidet resolveCheatReport ausschließlich über das serverseitig
              * gespeicherte Meldefenster.
@@ -1166,7 +1193,7 @@ class MainServerLobbyRoutingService(
         runCatching {
             val events = buildPlaceReinforcementsEvents(request, payload)
             lobbyManager.submitAll(payload.lobbyCode, events, request.context)
-            /*
+            /**
              * Erst nach einer erfolgreichen Platzierung können andere Spieler den
              * Cheat auf der Karte erkennen. Ab diesem Zeitpunkt läuft die Meldefrist.
              */
@@ -1301,7 +1328,7 @@ class MainServerLobbyRoutingService(
         if (currentTurnState.turnPhase != TurnPhase.REINFORCEMENTS) {
             return
         }
-        /*
+        /**
          * Eine wartende Lobby zeigt für den konfigurierten Startspieler bereits
          * die Phase REINFORCEMENTS, besitzt aber bis zum tatsächlichen
          * Spielstart noch keinen Verstärkungspool. Nur spätere doppelte
@@ -1331,12 +1358,11 @@ class MainServerLobbyRoutingService(
         val adjustment =
             synchronized(cheatReportLock) {
                 val activePlayerId = currentTurnState.activePlayerId
-                /*
-                 * Die gespeicherten Folgen von Cheat-Meldungen werden genau beim
-                 * Start der nächsten Reinforcements-Phase verbraucht. Danach
-                 * werden sie sofort aus den Maps entfernt, damit ein Bonus oder
-                 * Malus nie versehentlich in einer späteren Runde erneut wirkt.
-                 */
+
+                // Die gespeicherten Folgen von Cheat-Meldungen werden genau beim
+                // Start der nächsten Reinforcements-Phase verbraucht. Danach
+                // werden sie sofort aus den Maps entfernt, damit ein Bonus oder
+                // Malus nie versehentlich in einer späteren Runde erneut wirkt.
 
                 val modifiers = nextReinforcementModifierByLobby[lobbyCode]
                 val modifier = modifiers?.remove(activePlayerId) ?: 0
@@ -1357,7 +1383,7 @@ class MainServerLobbyRoutingService(
             }
 
         if (adjustment.zeroReinforcements) {
-            /*
+            /**
              * Die Cheater-Strafe ist stärker als ein möglicher Bonus oder Malus:
              * In dieser Verstärkungsphase soll der Spieler wirklich bei 0 landen.
              * Darum wird zuerst der normale Basispool gesetzt und danach komplett
@@ -1379,7 +1405,7 @@ class MainServerLobbyRoutingService(
             return
         }
 
-        /*
+        /**
          * Der Malus darf den Verstärkungspool nicht negativ machen.
          * Falls ein Spieler weniger als 3 Verstärkungen bekommt, wird der Malus begrenzt.
          * Beispiel: Hat jemand nur 2 Basisverstärkungen und bekommt -3, werden
@@ -1576,6 +1602,10 @@ class MainServerLobbyRoutingService(
         val lobbyCode = lobbyCodeOf(request.payload)
         val previousTurnState = lobbyCode?.let(::currentTurnState)
 
+        if (rejectJoinIntoStartedLobbyIfNeeded(request)) {
+            return
+        }
+
         when (val result = router.route(request)) {
             is LobbyRoutingResult.Success -> {
                 dispatchNetworkMessages(request)
@@ -1596,6 +1626,7 @@ class MainServerLobbyRoutingService(
                             grantForGameStart = request.payload is StartGameRequest,
                         )
                     }
+                    pauseActiveDisconnectedTurnIfNeeded(lobbyCode, request.context)
                     broadcastTurnStateIfChanged(
                         lobbyCode = lobbyCode,
                         previousTurnState = previousTurnState,
@@ -1605,6 +1636,7 @@ class MainServerLobbyRoutingService(
                         lobbyCode = lobbyCode,
                         payload = request.payload,
                     )
+                    scheduleInactiveLobbyCleanupIfNeeded(lobbyCode)
                 }
                 hooks.onRouted(request.connectionId)
             }
@@ -1622,6 +1654,45 @@ class MainServerLobbyRoutingService(
             }
         }
     }
+
+    private suspend fun rejectJoinIntoStartedLobbyIfNeeded(
+        request: DecodedNetworkRequest,
+    ): Boolean {
+        val payload = request.payload as? JoinLobbyRequest ?: return false
+        val currentState = lobbyManager.getLobby(payload.lobbyCode)?.currentState() ?: return false
+        if (!isJoinLocked(currentState)) {
+            return false
+        }
+
+        val reason =
+            "Player '${request.context.playerId}' kann Lobby '${payload.lobbyCode}' " +
+                "nach Spielstart nicht beitreten."
+        dispatchErrorResponse(request, reason)
+        logRequestRejected(
+            request = request,
+            errorCode = "LOBBY_JOIN_LOCKED",
+            reason = reason,
+            cause = IllegalStateException(reason),
+            lobbyCode = payload.lobbyCode,
+        )
+        hooks.onRoutingError(
+            request.connectionId,
+            LobbyRoutingError.InvalidStateTransition(
+                reason = reason,
+                context =
+                    LobbyRoutingContext(
+                        connectionId = request.connectionId,
+                        messageType = request.header.type,
+                        lobbyCode = payload.lobbyCode,
+                    ),
+                cause = IllegalStateException(reason),
+            ),
+        )
+        return true
+    }
+
+    private fun isJoinLocked(state: GameState): Boolean =
+        state.gameStarted || state.status == GameStatus.RUNNING
 
     private suspend fun dispatchNetworkMessages(request: DecodedNetworkRequest) {
         when (val payload = request.payload) {
@@ -1715,7 +1786,7 @@ class MainServerLobbyRoutingService(
             lobbyState.players.size,
         )
 
-        /*
+        /**
          * Ein echter Reconnect durchläuft keinen JoinRequest mehr. Deshalb muss
          * der reconnectende Client seine Lobby-Spielerliste erneut erhalten,
          * sonst kann die Android-App Owner-IDs aus dem GameState nicht auf Namen
@@ -1839,7 +1910,7 @@ class MainServerLobbyRoutingService(
         )
 
         // broadcast updated player count to lobby members
-        val count = lobbyState.players.size
+        val count = connectedPlayerCount(lobbyState)
         members
             .mapNotNull(connectionIdResolver)
             .distinct()
@@ -1888,6 +1959,10 @@ class MainServerLobbyRoutingService(
         }
     }
 
+    private fun releaseLobbyCharacters(lobbyCode: LobbyCode) {
+        charactersByLobby.remove(lobbyCode)
+    }
+
     private suspend fun dispatchLeaveNetworkMessages(
         request: DecodedNetworkRequest,
         payload: LeaveLobbyRequest,
@@ -1897,7 +1972,8 @@ class MainServerLobbyRoutingService(
         val playerId = request.context.playerId ?: return
         releaseCharacterSelection(payload.lobbyCode, playerId)
         resolveSessionToken(request.connectionId)?.let { sessionToken ->
-            sessionContextRegistry?.clearLobbyContext(sessionToken)
+            sessionContextRegistry?.removeSession(sessionToken)
+            network.sessionManager.invalidate(sessionToken)
         }
         val lobby = lobbyManager.getLobby(payload.lobbyCode) ?: return
         val lobbyState = lobby.currentState()
@@ -1921,13 +1997,14 @@ class MainServerLobbyRoutingService(
             }
 
         // broadcast updated player count to lobby members
-        val count = lobbyState.players.size
+        val count = connectedPlayerCount(lobbyState)
         members
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
                 network.send(connectionId, PlayerCountUpdateEvent(payload.lobbyCode, count))
             }
+        scheduleInactiveLobbyCleanupIfNeeded(payload.lobbyCode)
     }
 
     private suspend fun dispatchKickNetworkMessages(
@@ -1936,9 +2013,13 @@ class MainServerLobbyRoutingService(
     ) {
         network.send(request.connectionId, KickPlayerResponse())
         releaseCharacterSelection(payload.lobbyCode, payload.targetPlayerId)
-        sessionContextRegistry
-            ?.sessionTokenForPlayer(payload.targetPlayerId)
-            ?.let(sessionContextRegistry::clearLobbyContext)
+        val targetSessionToken =
+            sessionContextRegistry
+                ?.sessionTokenForPlayer(payload.targetPlayerId)
+        targetSessionToken
+            ?.let(sessionContextRegistry::removeSession)
+        targetSessionToken
+            ?.let(network.sessionManager::invalidate)
 
         val members = lobbyManager.getLobby(payload.lobbyCode)?.currentState()?.players.orEmpty()
         val event =
@@ -1960,13 +2041,18 @@ class MainServerLobbyRoutingService(
             }
 
         // broadcast updated player count to lobby members
-        val count = members.size
+        val count =
+            lobbyManager.getLobby(payload.lobbyCode)
+                ?.currentState()
+                ?.let(::connectedPlayerCount)
+                ?: 0
         members
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
                 network.send(connectionId, PlayerCountUpdateEvent(payload.lobbyCode, count))
             }
+        scheduleInactiveLobbyCleanupIfNeeded(payload.lobbyCode)
     }
 
     private suspend fun dispatchStartGameNetworkMessages(
@@ -2445,7 +2531,7 @@ class MainServerLobbyRoutingService(
             state.resolvedTurnState
                 ?: throw IllegalArgumentException("NOT_ACTIVE_PLAYER")
 
-        /*
+        /**
          * Auch wenn der Client den Cheatbutton nur in der passenden Situation
          * anzeigen soll, vertraut der Server nie auf die UI. Hier werden deshalb
          * alle fachlichen Voraussetzungen noch einmal geprüft:
@@ -2545,7 +2631,7 @@ class MainServerLobbyRoutingService(
             "ALREADY_USED"
         }
 
-        /*
+        /**
          * Der Bonus besteht bewusst aus zwei getrennten Events:
          * 1. CheatReinforcementBonusUsedEvent merkt dauerhaft, dass der Spieler
          *    seinen einmaligen Bonus verbraucht hat.
@@ -2572,7 +2658,7 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
     ) {
-        /*
+        /**
          * Der Spieler hat den Cheat ausgelöst, aber eventuell noch nichts
          * Sichtbares gemacht. Frühe Meldungen bleiben dadurch korrekt; die
          * sichtbare Platzierung setzt später die Ablaufzeit des Meldefensters.
@@ -2597,7 +2683,7 @@ class MainServerLobbyRoutingService(
             if (pendingPlayers.isEmpty()) {
                 pendingVisibleCheatByLobby.remove(lobbyCode)
             }
-            /*
+            /**
              * Ab der ersten Platzierung nach dem Cheat beginnt die Meldefrist,
              * damit das Fenster immer 20 Sekunden nach der sichtbaren
              * Platzierung endet.
@@ -2613,7 +2699,7 @@ class MainServerLobbyRoutingService(
         lobbyCode: LobbyCode,
         accusedPlayerId: PlayerId,
     ): CheatReportWindow {
-        /*
+        /**
          * Statt einen Timer laufen zu lassen, speichere ich nur den Zeitpunkt,
          * bis wann eine Meldung noch gültig ist. Das ist einfacher und robuster.
          */
@@ -2633,7 +2719,7 @@ class MainServerLobbyRoutingService(
         accusedPlayerId: PlayerId,
     ): CheatReportResult =
         synchronized(cheatReportLock) {
-            /*
+            /**
              * Hier entscheidet ausschließlich der Server, ob eine Meldung korrekt ist.
              * Eine Meldung ist korrekt, wenn für den beschuldigten Spieler noch
              * ein gültiges Meldefenster offen ist oder ein Cheat bereits
@@ -2661,14 +2747,14 @@ class MainServerLobbyRoutingService(
                 require(cheatReportsByLobby.getOrPut(lobbyCode) { mutableSetOf() }.add(key)) {
                     "ALREADY_REPORTED"
                 }
-                /*
+                /**
                  * Der Schummel-Verstärkungsbonus ist pro Spieler einmalig.
                  * Reporter dürfen dieselbe Cheat-Aktion deshalb nur einmal melden,
                  * egal ob vor oder nach der sichtbaren Platzierung.
                  */
             }
 
-            /*
+            /**
              * Korrekte Meldung: +3 für den Melder und 0 Truppen für den Cheater
              * in dessen nächster Verstärkungsphase.
              * Falsche Meldung: -3 für den meldenden Spieler.
@@ -2975,7 +3061,7 @@ class MainServerLobbyRoutingService(
 
         return LobbyPlayerCountResponse(
             lobbyCode = payload.lobbyCode,
-            playerCount = state.players.size,
+            playerCount = connectedPlayerCount(state),
         ).also { response ->
             logger.info(
                 "Sent messageType={} connectionId={} lobbyCode={} playerCount={}",
@@ -2988,11 +3074,9 @@ class MainServerLobbyRoutingService(
     }
 
     private suspend fun broadcastPlayerCount(lobbyCode: LobbyCode) {
-        val count = lobbyManager.getLobby(lobbyCode)?.currentState()?.players?.size ?: 0
-        lobbyManager.getLobby(lobbyCode)
-            ?.currentState()
-            ?.players
-            .orEmpty()
+        val state = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        val count = connectedPlayerCount(state)
+        state.players
             .mapNotNull(connectionIdResolver)
             .distinct()
             .forEach { connectionId ->
@@ -3904,6 +3988,7 @@ class MainServerLobbyRoutingService(
             stateVersion = currentState.stateVersion,
             event = payload,
         )
+        scheduleWaitingPlayerSkipIfNeeded(lobbyCode)
     }
 
     private suspend fun broadcastFullSnapshotOnTurnChangeIfNeeded(
@@ -4015,6 +4100,246 @@ class MainServerLobbyRoutingService(
             payload = payload,
         )
     }
+
+    private suspend fun pauseActiveDisconnectedTurnIfNeeded(
+        lobbyCode: LobbyCode,
+        context: EventContext,
+    ) {
+        val state = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        val currentTurnState = state.turnState ?: return
+        if (
+            state.status != GameStatus.RUNNING ||
+            currentTurnState.isPaused ||
+            isPlayerConnected(currentTurnState.activePlayerId)
+        ) {
+            return
+        }
+
+        lobbyManager.submit(
+            waitingForPlayerTurnStateEvent(
+                lobbyCode = lobbyCode,
+                turnState = currentTurnState,
+                pausedPlayerId = currentTurnState.activePlayerId,
+            ),
+            context,
+        )
+        logger.info(
+            "Turn pause triggered for disconnected active player: lobbyCode={} playerId={}",
+            lobbyCode.value,
+            currentTurnState.activePlayerId.value,
+        )
+    }
+
+    private suspend fun scheduleWaitingPlayerSkipIfNeeded(lobbyCode: LobbyCode) {
+        val state = lobbyManager.getLobby(lobbyCode)?.currentState()
+        val turnState = state?.turnState
+        val pausedPlayerId = turnState?.pausedPlayerId
+        if (
+            state == null ||
+            turnState == null ||
+            state.status != GameStatus.RUNNING ||
+            !turnState.isPaused ||
+            turnState.pauseReason != TurnPauseReasons.WAITING_FOR_PLAYER ||
+            pausedPlayerId == null ||
+            isPlayerConnected(pausedPlayerId)
+        ) {
+            waitingPlayerSkipJobs.remove(lobbyCode)?.job?.cancel()
+            return
+        }
+
+        val existing = waitingPlayerSkipJobs[lobbyCode]
+        if (
+            existing != null &&
+            existing.playerId == pausedPlayerId &&
+            existing.turnCount == turnState.turnCount &&
+            existing.job.isActive
+        ) {
+            return
+        }
+        existing?.job?.cancel()
+
+        val job =
+            CoroutineScope(coroutineContext).launch {
+                delay(waitingPlayerSkipTimeoutMillis)
+                runCatching {
+                    skipWaitingPlayerTurnIfStillDisconnected(
+                        lobbyCode = lobbyCode,
+                        playerId = pausedPlayerId,
+                        expectedTurnCount = turnState.turnCount,
+                    )
+                }.onFailure { cause ->
+                    logger.warn(
+                        "Waiting-player timeout failed: lobbyCode={} playerId={}",
+                        lobbyCode.value,
+                        pausedPlayerId.value,
+                        cause,
+                    )
+                }
+            }
+        waitingPlayerSkipJobs[lobbyCode] =
+            WaitingPlayerSkipJob(
+                playerId = pausedPlayerId,
+                turnCount = turnState.turnCount,
+                job = job,
+            )
+        logger.info(
+            "Waiting-player timeout scheduled: lobbyCode={} playerId={} timeoutMillis={}",
+            lobbyCode.value,
+            pausedPlayerId.value,
+            waitingPlayerSkipTimeoutMillis,
+        )
+    }
+
+    private suspend fun skipWaitingPlayerTurnIfStillDisconnected(
+        lobbyCode: LobbyCode,
+        playerId: PlayerId,
+        expectedTurnCount: Int,
+    ) {
+        waitingPlayerSkipJobs.remove(lobbyCode)
+        val state = lobbyManager.getLobby(lobbyCode)?.currentState() ?: return
+        val currentTurnState = state.turnState ?: return
+        if (
+            state.status != GameStatus.RUNNING ||
+            !currentTurnState.isPaused ||
+            currentTurnState.pauseReason != TurnPauseReasons.WAITING_FOR_PLAYER ||
+            currentTurnState.pausedPlayerId != playerId ||
+            currentTurnState.turnCount != expectedTurnCount ||
+            isPlayerConnected(playerId)
+        ) {
+            return
+        }
+
+        val skippedTurnState = skipCurrentPlayerTurn(currentTurnState, state.turnOrder) ?: return
+        val nextTurnState =
+            if (isPlayerConnected(skippedTurnState.activePlayerId)) {
+                skippedTurnState
+            } else {
+                skippedTurnState.copy(
+                    isPaused = true,
+                    pauseReason = TurnPauseReasons.WAITING_FOR_PLAYER,
+                    pausedPlayerId = skippedTurnState.activePlayerId,
+                )
+            }
+        val context =
+            EventContext(
+                occurredAtEpochMillis = nowEpochMillis(),
+                correlationId = CorrelationId("srv-timeout-${requestSequence.getAndIncrement()}"),
+            )
+        val turnStateUpdate = nextTurnState.toUpdatedEvent(lobbyCode)
+        lobbyManager.submitAll(
+            lobbyCode = lobbyCode,
+            events =
+                listOf(
+                    TimeoutTriggered(
+                        lobbyCode = lobbyCode,
+                        target = "WAITING_FOR_PLAYER:${playerId.value}",
+                        timeoutMillis = waitingPlayerSkipTimeoutMillis,
+                    ),
+                    turnStateUpdate,
+                ),
+            context = context,
+        )
+        grantBaseReinforcementsOnPhaseStart(
+            lobbyCode = lobbyCode,
+            previousTurnState = currentTurnState,
+            context = context,
+        )
+        logger.info(
+            "Disconnected player turn skipped: lobbyCode={} skippedPlayerId={} nextPlayerId={}",
+            lobbyCode.value,
+            playerId.value,
+            nextTurnState.activePlayerId.value,
+        )
+        broadcastPhaseBoundaryIfChanged(lobbyCode, currentTurnState)
+        broadcastTurnStateIfChanged(lobbyCode, currentTurnState)
+        broadcastFullSnapshotOnTurnChangeIfNeeded(lobbyCode, currentTurnState)
+    }
+
+    private fun skipCurrentPlayerTurn(
+        turnState: TurnState,
+        turnOrder: List<PlayerId>,
+    ): TurnState? {
+        val activePlayerId = turnState.activePlayerId
+        if (turnOrder.distinct().size <= 1) {
+            return null
+        }
+
+        var advanced =
+            turnState.copy(
+                isPaused = false,
+                pauseReason = null,
+                pausedPlayerId = null,
+            )
+        repeat(TurnPhase.values().size) {
+            advanced = TurnStateMachine.advance(advanced, turnOrder)
+            if (advanced.activePlayerId != activePlayerId) {
+                return advanced
+            }
+        }
+        return null
+    }
+
+    private suspend fun scheduleInactiveLobbyCleanupIfNeeded(lobbyCode: LobbyCode) {
+        val state = lobbyManager.getLobby(lobbyCode)?.currentState()
+        if (state == null || !isLobbyInactive(state)) {
+            inactiveLobbyCleanupJobs.remove(lobbyCode)?.cancel()
+            return
+        }
+        if (inactiveLobbyCleanupJobs[lobbyCode]?.isActive == true) {
+            return
+        }
+
+        inactiveLobbyCleanupJobs[lobbyCode] =
+            CoroutineScope(coroutineContext).launch {
+                delay(inactiveLobbyCleanupTimeoutMillis)
+                runCatching {
+                    removeInactiveLobbyIfStillInactive(lobbyCode)
+                }.onFailure { cause ->
+                    logger.warn(
+                        "Inactive lobby cleanup failed: lobbyCode={}",
+                        lobbyCode.value,
+                        cause,
+                    )
+                }
+            }
+        logger.info(
+            "Inactive lobby cleanup scheduled: lobbyCode={} timeoutMillis={}",
+            lobbyCode.value,
+            inactiveLobbyCleanupTimeoutMillis,
+        )
+    }
+
+    private suspend fun removeInactiveLobbyIfStillInactive(lobbyCode: LobbyCode) {
+        inactiveLobbyCleanupJobs.remove(lobbyCode)
+        val runtime = lobbyManager.getLobby(lobbyCode) ?: return
+        val state = runtime.currentState()
+        if (!isLobbyInactive(state)) {
+            return
+        }
+
+        if (state.status != GameStatus.CLOSED) {
+            lobbyManager.submit(
+                LobbyClosed(
+                    lobbyCode = lobbyCode,
+                    reason = "Lobby inactive for $inactiveLobbyCleanupTimeoutMillis ms.",
+                ),
+                EventContext(
+                    occurredAtEpochMillis = nowEpochMillis(),
+                    correlationId =
+                        CorrelationId("srv-cleanup-${requestSequence.getAndIncrement()}"),
+                ),
+            )
+        }
+        sessionContextRegistry?.clearLobbyContextForLobby(lobbyCode)
+        releaseLobbyCharacters(lobbyCode)
+        lobbyManager.removeLobby(lobbyCode)
+        roundHistoryByLobby.remove(lobbyCode)
+        waitingPlayerSkipJobs.remove(lobbyCode)?.job?.cancel()
+        logger.info("Inactive lobby removed: lobbyCode={}", lobbyCode.value)
+    }
+
+    private fun isLobbyInactive(state: GameState): Boolean =
+        state.players.isEmpty() || state.players.none(::isPlayerConnected)
 
     private fun waitingForPlayerTurnStateEvent(
         lobbyCode: LobbyCode,
@@ -4177,6 +4502,9 @@ class MainServerLobbyRoutingService(
     private fun isPlayerConnected(playerId: PlayerId): Boolean =
         connectionIdResolver(playerId) != null
 
+    private fun connectedPlayerCount(state: GameState): Int =
+        state.players.count(::isPlayerConnected)
+
     private fun roundHistoryBuffer(lobbyCode: LobbyCode): RoundHistoryBuffer =
         roundHistoryByLobby.computeIfAbsent(lobbyCode) { RoundHistoryBuffer() }
 
@@ -4283,6 +4611,10 @@ class MainServerLobbyRoutingService(
 
         activeJob.cancel()
         activeJob.join()
+        waitingPlayerSkipJobs.values.forEach { scheduled -> scheduled.job.cancel() }
+        waitingPlayerSkipJobs.clear()
+        inactiveLobbyCleanupJobs.values.forEach(Job::cancel)
+        inactiveLobbyCleanupJobs.clear()
     }
 
     private fun connectionNotAssignedToLobby(lobbyCode: LobbyCode): String =

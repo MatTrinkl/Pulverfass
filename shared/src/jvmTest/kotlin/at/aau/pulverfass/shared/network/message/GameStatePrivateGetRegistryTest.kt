@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
 class GameStatePrivateGetRegistryTest {
     @Test
     fun `should resolve message type and serialization for private get request`() {
-        val payload = GameStatePrivateGetRequest(LobbyCode("PG12"), PlayerId(4))
+        val payload = GameStatePrivateGetRequest(LobbyCode("1283"), PlayerId(4))
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)
         val serialized = NetworkPayloadRegistry.serializePayload(payload)
@@ -28,7 +28,7 @@ class GameStatePrivateGetRegistryTest {
     fun `should resolve message type and serialization for private get response`() {
         val payload =
             GameStatePrivateGetResponse(
-                lobbyCode = LobbyCode("PG34"),
+                lobbyCode = LobbyCode("1285"),
                 recipientPlayerId = PlayerId(7),
                 stateVersion = 11,
                 handCards = listOf("infantry"),
@@ -48,7 +48,7 @@ class GameStatePrivateGetRegistryTest {
         val payload =
             GameStatePrivateGetErrorResponse(
                 code = GameStatePrivateGetErrorCode.NOT_IN_GAME,
-                reason = "Spieler '9' ist nicht Teil der Lobby 'PG56'.",
+                reason = "Spieler '9' ist nicht Teil der Lobby '1286'.",
             )
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(payload)

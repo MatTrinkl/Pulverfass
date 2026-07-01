@@ -85,7 +85,7 @@ class MessageCodecTest {
     fun `should encode and decode create lobby response payload directly`() {
         val payload =
             CreateLobbyResponse(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
             )
 
         val bytes = MessageCodec.encode(payload)
@@ -98,7 +98,7 @@ class MessageCodecTest {
     fun `should encode and decode join lobby request payload directly`() {
         val payload =
             JoinLobbyRequest(
-                LobbyCode("AB12"),
+                LobbyCode("1003"),
                 "Alice",
             )
 
@@ -110,7 +110,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode join lobby response payload directly`() {
-        val payload = JoinLobbyResponse(LobbyCode("CD34"))
+        val payload = JoinLobbyResponse(LobbyCode("1071"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -132,7 +132,7 @@ class MessageCodecTest {
     fun `should encode and decode join lobby request payload with display name directly`() {
         val payload =
             JoinLobbyRequest(
-                LobbyCode("BC23"),
+                LobbyCode("1049"),
                 "Bob",
             )
 
@@ -146,7 +146,7 @@ class MessageCodecTest {
     fun `should encode and decode player joined lobby event payload directly`() {
         val payload =
             PlayerJoinedLobbyEvent(
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 playerId = PlayerId(7),
                 playerDisplayName = "Carol",
             )
@@ -161,7 +161,7 @@ class MessageCodecTest {
     fun `should encode and decode player connection lost event payload directly`() {
         val payload =
             PlayerConnectionLostEvent(
-                lobbyCode = LobbyCode("EF57"),
+                lobbyCode = LobbyCode("1133"),
                 playerId = PlayerId(15),
                 reason = PlayerConnectionLostReason.HEARTBEAT_TIMEOUT,
             )
@@ -174,7 +174,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode lobby player count request payload directly`() {
-        val payload = LobbyPlayerCountRequest(LobbyCode("PC12"))
+        val payload = LobbyPlayerCountRequest(LobbyCode("1273"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -184,7 +184,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode lobby player count response payload directly`() {
-        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("PC34"), playerCount = 6)
+        val payload = LobbyPlayerCountResponse(lobbyCode = LobbyCode("1274"), playerCount = 6)
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -196,9 +196,9 @@ class MessageCodecTest {
     fun `should encode and decode lobby player count error payload directly`() {
         val payload =
             LobbyPlayerCountErrorResponse(
-                lobbyCode = LobbyCode("PC99"),
+                lobbyCode = LobbyCode("1275"),
                 code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
-                reason = "Lobby 'PC99' wurde nicht gefunden.",
+                reason = "Lobby '1275' wurde nicht gefunden.",
             )
 
         val bytes = MessageCodec.encode(payload)
@@ -211,13 +211,13 @@ class MessageCodecTest {
     fun `should encode and decode fortify move payloads directly`() {
         val request =
             FortifyMoveRequest(
-                lobbyCode = LobbyCode("FM12"),
+                lobbyCode = LobbyCode("1154"),
                 playerId = PlayerId(6),
                 fromTerritoryId = TerritoryId("alpha"),
                 toTerritoryId = TerritoryId("beta"),
                 troopCount = 2,
             )
-        val response = FortifyMoveResponse(lobbyCode = LobbyCode("FM34"))
+        val response = FortifyMoveResponse(lobbyCode = LobbyCode("1155"))
         val error =
             FortifyMoveErrorResponse(
                 code = FortifyMoveErrorCode.FORTIFY_ALREADY_USED,
@@ -231,7 +231,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode leave lobby request payload directly`() {
-        val payload = LeaveLobbyRequest(LobbyCode("FG67"))
+        val payload = LeaveLobbyRequest(LobbyCode("1142"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -241,7 +241,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode leave lobby response payload directly`() {
-        val payload = LeaveLobbyResponse(LobbyCode("GH78"))
+        val payload = LeaveLobbyResponse(LobbyCode("1178"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -251,7 +251,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode player left lobby event payload directly`() {
-        val payload = PlayerLeftLobbyEvent(lobbyCode = LobbyCode("HI89"), playerId = PlayerId(6))
+        val payload = PlayerLeftLobbyEvent(lobbyCode = LobbyCode("1193"), playerId = PlayerId(6))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -261,7 +261,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode map get request payload directly`() {
-        val payload = MapGetRequest(LobbyCode("IJ90"))
+        val payload = MapGetRequest(LobbyCode("1199"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -273,7 +273,7 @@ class MessageCodecTest {
     fun `should encode and decode map get response payload directly`() {
         val payload =
             MapGetResponse(
-                lobbyCode = LobbyCode("JK01"),
+                lobbyCode = LobbyCode("1200"),
                 schemaVersion = 1,
                 mapHash = "hash",
                 stateVersion = 3,
@@ -308,7 +308,7 @@ class MessageCodecTest {
     fun `should encode and decode territory owner changed payload directly`() {
         val payload =
             TerritoryOwnerChangedEvent(
-                lobbyCode = LobbyCode("LM12"),
+                lobbyCode = LobbyCode("1217"),
                 territoryId = TerritoryId("alpha"),
                 ownerId = PlayerId(4),
                 stateVersion = 11,
@@ -324,7 +324,7 @@ class MessageCodecTest {
     fun `should encode and decode territory troops changed payload directly`() {
         val payload =
             TerritoryTroopsChangedEvent(
-                lobbyCode = LobbyCode("NO34"),
+                lobbyCode = LobbyCode("1259"),
                 territoryId = TerritoryId("beta"),
                 troopCount = 8,
                 stateVersion = 12,
@@ -340,7 +340,7 @@ class MessageCodecTest {
     fun `should encode and decode turn advance request payload directly`() {
         val payload =
             TurnAdvanceRequest(
-                lobbyCode = LobbyCode("TA12"),
+                lobbyCode = LobbyCode("1374"),
                 playerId = PlayerId(7),
                 expectedPhase = TurnPhase.ATTACK,
             )
@@ -353,7 +353,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode turn advance response payload directly`() {
-        val payload = TurnAdvanceResponse(lobbyCode = LobbyCode("TA34"))
+        val payload = TurnAdvanceResponse(lobbyCode = LobbyCode("1378"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -366,7 +366,7 @@ class MessageCodecTest {
         val payload =
             TurnAdvanceErrorResponse(
                 code = TurnAdvanceErrorCode.GAME_PAUSED,
-                reason = "Lobby 'TA56' ist pausiert; Turn-Wechsel ist aktuell nicht erlaubt.",
+                reason = "Lobby '1379' ist pausiert; Turn-Wechsel ist aktuell nicht erlaubt.",
             )
 
         val bytes = MessageCodec.encode(payload)
@@ -379,7 +379,7 @@ class MessageCodecTest {
     fun `should encode and decode turn state updated broadcast payload directly`() {
         val payload =
             TurnStateUpdatedEvent(
-                lobbyCode = LobbyCode("TA78"),
+                lobbyCode = LobbyCode("1380"),
                 activePlayerId = PlayerId(1),
                 turnPhase = TurnPhase.DRAW_CARD,
                 turnCount = 4,
@@ -396,7 +396,7 @@ class MessageCodecTest {
     fun `should encode and decode phase boundary broadcast payload directly`() {
         val payload =
             PhaseBoundaryEvent(
-                lobbyCode = LobbyCode("PB34"),
+                lobbyCode = LobbyCode("1271"),
                 stateVersion = 5,
                 previousPhase = TurnPhase.FORTIFY,
                 nextPhase = TurnPhase.DRAW_CARD,
@@ -414,7 +414,7 @@ class MessageCodecTest {
     fun `should encode and decode game state snapshot broadcast payload directly`() {
         val payload =
             GameStateSnapshotBroadcast(
-                lobbyCode = LobbyCode("GS34"),
+                lobbyCode = LobbyCode("1187"),
                 stateVersion = 8,
                 determinism =
                     PublicDeterminismMetadataSnapshot(
@@ -457,7 +457,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode turn state get request payload directly`() {
-        val payload = TurnStateGetRequest(LobbyCode("TS12"))
+        val payload = TurnStateGetRequest(LobbyCode("1410"))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -469,7 +469,7 @@ class MessageCodecTest {
     fun `should encode and decode turn state get response payload directly`() {
         val payload =
             TurnStateGetResponse(
-                lobbyCode = LobbyCode("TS34"),
+                lobbyCode = LobbyCode("1411"),
                 activePlayerId = PlayerId(9),
                 turnPhase = TurnPhase.ATTACK,
                 turnCount = 6,
@@ -488,7 +488,7 @@ class MessageCodecTest {
         val payload =
             TurnStateGetErrorResponse(
                 code = TurnStateGetErrorCode.GAME_NOT_FOUND,
-                reason = "Lobby 'TS99' wurde nicht gefunden.",
+                reason = "Lobby '1415' wurde nicht gefunden.",
             )
 
         val bytes = MessageCodec.encode(payload)
@@ -499,7 +499,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode start player set request payload directly`() {
-        val payload = StartPlayerSetRequest(LobbyCode("SP12"), PlayerId(2), PlayerId(1))
+        val payload = StartPlayerSetRequest(LobbyCode("1345"), PlayerId(2), PlayerId(1))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -509,7 +509,7 @@ class MessageCodecTest {
 
     @Test
     fun `should encode and decode start player set response payload directly`() {
-        val payload = StartPlayerSetResponse(LobbyCode("SP34"), PlayerId(8))
+        val payload = StartPlayerSetResponse(LobbyCode("1348"), PlayerId(8))
 
         val bytes = MessageCodec.encode(payload)
         val result = MessageCodec.decodePayload(bytes)
@@ -536,7 +536,7 @@ class MessageCodecTest {
         val packet =
             NetworkPacket(
                 header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
-                payload = JoinLobbyRequest(LobbyCode("CD34"), "Dora"),
+                payload = JoinLobbyRequest(LobbyCode("1071"), "Dora"),
             )
 
         val bytes = MessageCodec.encode(packet, JoinLobbyRequest.serializer())
@@ -548,7 +548,7 @@ class MessageCodecTest {
 
     @Test
     fun `should decode payload directly from received packet without reframing`() {
-        val payload = JoinLobbyRequest(LobbyCode("DE45"), "Eve")
+        val payload = JoinLobbyRequest(LobbyCode("1117"), "Eve")
         val encoded = MessageCodec.encode(payload)
         val unpacked = PacketCodec.unpack(encoded)
         val receivedPacket =

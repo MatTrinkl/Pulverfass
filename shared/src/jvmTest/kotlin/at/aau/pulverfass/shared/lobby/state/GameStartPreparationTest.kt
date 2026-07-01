@@ -13,7 +13,7 @@ class GameStartPreparationTest {
         val mapDefinition = MapConfigLoader.loadDefault()
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("GP10"),
+                lobbyCode = LobbyCode("1179"),
                 mapDefinition = mapDefinition,
                 players = listOf(PlayerId(1), PlayerId(2)),
             )
@@ -35,7 +35,7 @@ class GameStartPreparationTest {
         val mapDefinition = MapConfigLoader.loadDefault()
         val state =
             GameState.initial(
-                lobbyCode = LobbyCode("GP30"),
+                lobbyCode = LobbyCode("1180"),
                 mapDefinition = mapDefinition,
                 players = players,
             )

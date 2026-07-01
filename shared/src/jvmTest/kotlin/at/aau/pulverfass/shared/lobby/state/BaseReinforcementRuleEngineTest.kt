@@ -20,7 +20,7 @@ class BaseReinforcementRuleEngineTest {
     fun `owned smaller than nine yields minimum territory bonus of three`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
-        val lobbyCode = LobbyCode("RB13")
+        val lobbyCode = LobbyCode("1316")
         val baseState =
             GameState.initial(
                 lobbyCode = lobbyCode,
@@ -50,7 +50,7 @@ class BaseReinforcementRuleEngineTest {
     fun `continent ownership contributes configured sum deterministically`() {
         val playerOne = PlayerId(1)
         val playerTwo = PlayerId(2)
-        val lobbyCode = LobbyCode("RB14")
+        val lobbyCode = LobbyCode("1317")
         val baseState =
             GameState.initial(
                 lobbyCode = lobbyCode,

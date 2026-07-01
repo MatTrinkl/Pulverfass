@@ -111,7 +111,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("MP12")
+            val lobbyCode = LobbyCode("1248")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -206,7 +206,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("MP13")
+            val lobbyCode = LobbyCode("1249")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -437,7 +437,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("RC12")
+            val lobbyCode = LobbyCode("1321")
             val playerId = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
@@ -558,8 +558,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("DL12")
-            val lobbyB = LobbyCode("DL34")
+            val lobbyA = LobbyCode("1121")
+            val lobbyB = LobbyCode("1122")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -713,7 +713,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("DG12")
+            val lobbyCode = LobbyCode("1120")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -863,7 +863,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     sessionAndConnection.first.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(MapGetRequest(LobbyCode("ZZ99"))),
+                            data = MessageCodec.encode(MapGetRequest(LobbyCode("1442"))),
                         ),
                     )
 
@@ -871,7 +871,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     val error = assertIs<MapGetErrorResponse>(payload)
 
                     assertEquals(MapGetErrorCode.GAME_NOT_FOUND, error.code)
-                    assertEquals("Lobby 'ZZ99' wurde nicht gefunden.", error.reason)
+                    assertEquals("Lobby '1442' wurde nicht gefunden.", error.reason)
 
                     sessionAndConnection.first.close()
                 }
@@ -915,8 +915,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("AB12")
-            val lobbyB = LobbyCode("CD34")
+            val lobbyA = LobbyCode("1003")
+            val lobbyB = LobbyCode("1071")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1045,7 +1045,7 @@ class MainServerLobbyRoutingIntegrationTest {
                             fin = true,
                             data =
                                 MessageCodec.encode(
-                                    JoinLobbyRequest(LobbyCode("ZZ99"), "Alice"),
+                                    JoinLobbyRequest(LobbyCode("1442"), "Alice"),
                                 ),
                         ),
                     )
@@ -1054,7 +1054,7 @@ class MainServerLobbyRoutingIntegrationTest {
 
                     assertIs<JoinLobbyErrorResponse>(payload)
                     assertEquals(
-                        JoinLobbyErrorResponse("Lobby 'ZZ99' wurde nicht gefunden."),
+                        JoinLobbyErrorResponse("Lobby '1442' wurde nicht gefunden."),
                         payload,
                     )
 
@@ -1093,8 +1093,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("AB12")
-            val lobbyB = LobbyCode("CD34")
+            val lobbyA = LobbyCode("1003")
+            val lobbyB = LobbyCode("1071")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1244,8 +1244,8 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyA = LobbyCode("EF56")
-            val lobbyB = LobbyCode("GH78")
+            val lobbyA = LobbyCode("1132")
+            val lobbyB = LobbyCode("1178")
             lobbyManager.createLobby(lobbyA)
             lobbyManager.createLobby(lobbyB)
             routingService.start(serverScope)
@@ -1369,6 +1369,447 @@ class MainServerLobbyRoutingIntegrationTest {
         }
 
     @Test
+    fun `join after game start returns error and keeps lobby roster unchanged`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("1216")
+            val existingPlayers = listOf(PlayerId(1), PlayerId(2), PlayerId(3))
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = existingPlayers,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val existingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = PlayerId(1),
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val lateJoinSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = PlayerId(4),
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    lateJoinSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Dave")),
+                        ),
+                    )
+
+                    val error =
+                        assertIs<JoinLobbyErrorResponse>(
+                            receivePayload(lateJoinSessionAndConnection.first),
+                        )
+                    assertTrue(error.reason.contains("nach Spielstart"))
+                    assertNull(receivePayloadOrNull(existingSessionAndConnection.first))
+                    assertEquals(
+                        existingPlayers,
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
+                    )
+
+                    existingSessionAndConnection.first.close()
+                    lateJoinSessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `existing player join request after game start is rejected by lobby lock`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("1217")
+            val existingPlayers = listOf(PlayerId(1), PlayerId(2), PlayerId(3))
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = existingPlayers,
+                        activePlayerId = PlayerId(1),
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val existingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = PlayerId(1),
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    existingSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Alice")),
+                        ),
+                    )
+
+                    val error =
+                        assertIs<JoinLobbyErrorResponse>(
+                            receivePayload(existingSessionAndConnection.first),
+                        )
+                    assertTrue(error.reason.contains("nach Spielstart"))
+                    assertEquals(
+                        existingPlayers,
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
+                    )
+
+                    existingSessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `non active leave in running game broadcasts removal and membership snapshot`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("1257")
+            val activePlayer = PlayerId(1)
+            val remainingPlayer = PlayerId(2)
+            val leavingPlayer = PlayerId(3)
+            val players = listOf(activePlayer, remainingPlayer, leavingPlayer)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = players,
+                        activePlayerId = activePlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val activeSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = activePlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val remainingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = remainingPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val leavingSessionAndConnection =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = leavingPlayer,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    leavingSessionAndConnection.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+
+                    assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
+                        receivePayload(leavingSessionAndConnection.first),
+                    )
+
+                    var leaveEvent: PlayerLeftLobbyEvent? = null
+                    var membershipSnapshot: GameStateSnapshotBroadcast? = null
+                    var attempts = 0
+                    while ((leaveEvent == null || membershipSnapshot == null) && attempts < 10) {
+                        when (val payload = receiveAnyPayload(activeSessionAndConnection.first)) {
+                            is PlayerLeftLobbyEvent -> leaveEvent = payload
+                            is GameStateSnapshotBroadcast -> membershipSnapshot = payload
+                        }
+                        attempts += 1
+                    }
+
+                    assertEquals(
+                        PlayerLeftLobbyEvent(lobbyCode, leavingPlayer, newHost = activePlayer),
+                        leaveEvent,
+                    )
+                    assertEquals(activePlayer, membershipSnapshot?.turnState?.activePlayerId)
+                    assertEquals(TurnPhase.ATTACK, membershipSnapshot?.turnState?.turnPhase)
+                    assertTrue(
+                        membershipSnapshot
+                            ?.territoryStates
+                            ?.any { territory ->
+                                territory.ownerId == leavingPlayer && territory.troopCount > 0
+                            } == true,
+                    )
+                    assertEquals(
+                        PlayerLeftLobbyEvent(lobbyCode, leavingPlayer, newHost = activePlayer),
+                        receivePayloadOfType<PlayerLeftLobbyEvent>(
+                            session = remainingSessionAndConnection.first,
+                            maxMessages = 10,
+                        ),
+                    )
+
+                    waitUntilProcessed(lobbyManager, lobbyCode, expectedCount = 1)
+                    val updatedState =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("Expected lobby state after non-active leave.")
+                    assertEquals(listOf(activePlayer, remainingPlayer), updatedState.players)
+                    assertEquals(activePlayer, updatedState.activePlayer)
+                    assertEquals(GameStatus.RUNNING, updatedState.status)
+
+                    activeSessionAndConnection.first.close()
+                    remainingSessionAndConnection.first.close()
+                    leavingSessionAndConnection.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `active leave clears session identity and rejects reconnect with old token`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val sessionContextRegistry = SessionContextRegistry()
+            val nextPlayerId = AtomicInteger(4)
+
+            fun ensurePlayerId(sessionToken: SessionToken): PlayerId {
+                sessionContextRegistry.playerIdForSession(sessionToken)?.let { return it }
+                val assignedPlayerId = PlayerId(nextPlayerId.getAndIncrement().toLong())
+                sessionContextRegistry.assignPlayer(sessionToken, assignedPlayerId)
+                return assignedPlayerId
+            }
+
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    sessionContextRegistry = sessionContextRegistry,
+                    playerIdResolver = { connectionId ->
+                        network.sessionManager
+                            .getByConnectionId(connectionId)
+                            ?.sessionToken
+                            ?.let(::ensurePlayerId)
+                    },
+                    connectionIdResolver = { playerId ->
+                        sessionContextRegistry
+                            .sessionTokenForPlayer(playerId)
+                            ?.let(network.sessionManager::getByToken)
+                            ?.connectionId
+                    },
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("1258")
+            val activePlayer = PlayerId(1)
+            val remainingPlayer = PlayerId(2)
+            val leavingPlayer = PlayerId(3)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    createRunningGameState(
+                        lobbyCode = lobbyCode,
+                        players = listOf(activePlayer, remainingPlayer, leavingPlayer),
+                        activePlayerId = activePlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val activeSession = client.webSocketSession("/ws")
+                    val activeToken = discardConnectionHandshake(activeSession)
+                    sessionContextRegistry.assignPlayer(activeToken, activePlayer)
+
+                    val remainingSession = client.webSocketSession("/ws")
+                    val remainingToken = discardConnectionHandshake(remainingSession)
+                    sessionContextRegistry.assignPlayer(remainingToken, remainingPlayer)
+
+                    val leavingSession = client.webSocketSession("/ws")
+                    val leavingToken = discardConnectionHandshake(leavingSession)
+                    sessionContextRegistry.assignPlayer(leavingToken, leavingPlayer)
+
+                    leavingSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+
+                    assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
+                        receivePayload(leavingSession),
+                    )
+                    assertNull(sessionContextRegistry.playerIdForSession(leavingToken))
+
+                    val reconnectSession = client.webSocketSession("/ws")
+                    discardConnectionHandshake(reconnectSession)
+                    reconnectSession.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(ReconnectRequest(leavingToken)),
+                        ),
+                    )
+
+                    val reconnectResponse =
+                        assertIs<ReconnectResponse>(
+                            receivePayload(reconnectSession),
+                        )
+                    assertEquals(false, reconnectResponse.success)
+                    assertEquals(ReconnectErrorCode.TOKEN_REVOKED, reconnectResponse.errorCode)
+                    assertEquals(
+                        null,
+                        sessionContextRegistry.playerIdForSession(leavingToken),
+                    )
+                    assertEquals(
+                        listOf(activePlayer, remainingPlayer),
+                        lobbyManager.getLobby(lobbyCode)?.currentState()?.players,
+                    )
+
+                    activeSession.close()
+                    remainingSession.close()
+                    leavingSession.close()
+                    reconnectSession.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
     fun `active leave in running game grants reinforcements to next player`() =
         testApplication {
             val network = ServerNetwork()
@@ -1394,7 +1835,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("LF12")
+            val lobbyCode = LobbyCode("1214")
             val leavingPlayer = PlayerId(1)
             val nextPlayer = PlayerId(2)
             val thirdPlayer = PlayerId(3)
@@ -1924,7 +2365,7 @@ class MainServerLobbyRoutingIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("RJ42")
+            val lobbyCode = LobbyCode("1331")
             lobbyManager.createLobby(lobbyCode)
             routingService.start(serverScope)
 
@@ -2470,7 +2911,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     SessionContextPersistenceHooks(
                         loadContext = {
                             SessionReconnectContext(
-                                lobbyCode = LobbyCode("PM12"),
+                                lobbyCode = LobbyCode("1292"),
                                 playerDisplayName = "Missing Player",
                             )
                         },
@@ -2488,7 +2929,7 @@ class MainServerLobbyRoutingIntegrationTest {
                         loadContext = {
                             SessionReconnectContext(
                                 playerId = PlayerId(1),
-                                lobbyCode = LobbyCode("NF12"),
+                                lobbyCode = LobbyCode("1255"),
                                 playerDisplayName = "Alice",
                             )
                         },
@@ -2506,14 +2947,14 @@ class MainServerLobbyRoutingIntegrationTest {
                         loadContext = {
                             SessionReconnectContext(
                                 playerId = PlayerId(1),
-                                lobbyCode = LobbyCode("NL12"),
+                                lobbyCode = LobbyCode("1256"),
                                 playerDisplayName = "Alice",
                             )
                         },
                     ),
                 ),
             configureLobby = { lobbyManager ->
-                val lobbyCode = LobbyCode("NL12")
+                val lobbyCode = LobbyCode("1256")
                 lobbyManager.createLobby(
                     lobbyCode = lobbyCode,
                     initialState =

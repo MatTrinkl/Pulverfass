@@ -27,7 +27,7 @@ class AttackResolvedReplayTest {
         val defender = PlayerId(2)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("AT12"),
+                lobbyCode = LobbyCode("1020"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(attacker, defender),
             ).copy(
@@ -78,7 +78,7 @@ class AttackResolvedReplayTest {
         val departedDefender = PlayerId(99)
         val baseState =
             GameState.initial(
-                lobbyCode = LobbyCode("AT13"),
+                lobbyCode = LobbyCode("1021"),
                 mapDefinition = sampleMapDefinition(),
                 players = listOf(attacker),
             ).copy(

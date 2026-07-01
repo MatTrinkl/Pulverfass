@@ -28,7 +28,7 @@ data class LobbyControllerConfig(
     val errorPacketDecode: String = "Paket konnte nicht dekodiert werden",
     val errorCreateFailed: String = "Create request fehlgeschlagen",
     val errorJoinFailed: String = "Join request fehlgeschlagen",
-    val errorLobbyCodeLength: String = "Lobbycode muss 4-stellig sein",
+    val errorLobbyCodeLength: String = "Lobbycode muss aus 4 Ziffern bestehen",
     val errorLobbyMissing: String = "Keine aktive Lobby gefunden",
     val errorStartGameFailed: String = "Spielstart fehlgeschlagen",
     val errorCatchUpFailed: String = "Spielstand konnte nicht synchronisiert werden",

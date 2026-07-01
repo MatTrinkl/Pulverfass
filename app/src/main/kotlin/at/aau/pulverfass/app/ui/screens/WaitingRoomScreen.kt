@@ -223,14 +223,12 @@ fun WaitingRoomScreen(
                 coinAnimCharacter = Characters.byId(id)
                 controller.selectCharacter(id)
             },
-            /*
-             * Reines Durchblättern im Carousel darf den Charakter NICHT
-             * übernehmen. Sonst würde der Wert lokal als state.characterId
-             * committet (inkl. Spielerfarbe und In-Game-Charakter) und sogar
-             * persistiert, ohne je per SPEICHERN bestätigt oder an den Server
-             * gesendet worden zu sein. Startet der Host währenddessen das Spiel,
-             * liefe der Spieler mit einem nie gespeicherten Charakter los.
-             */
+            // Reines Durchblättern im Carousel darf den Charakter NICHT
+            // übernehmen. Sonst würde der Wert lokal als state.characterId
+            // committet (inkl. Spielerfarbe und In-Game-Charakter) und sogar
+            // persistiert, ohne je per SPEICHERN bestätigt oder an den Server
+            // gesendet worden zu sein. Startet der Host währenddessen das Spiel,
+            // liefe der Spieler mit einem nie gespeicherten Charakter los.
             onSelect = {},
             onCoinComplete = {
                 coinAnimCharacter?.let { controller.updateCharacter(it.id) }
@@ -252,7 +250,7 @@ private fun SubmitInitialCharacterEffect(
     onSubmittedInitialCharacterIdChange: (String) -> Unit,
     onSyncCharacter: (String) -> Unit,
 ) {
-    /*
+    /**
      * Nach einem Join kennt der Client die eigene PlayerId erst, wenn der
      * PlayerJoined-Broadcast zurückkommt. Erst dann kann sicher entschieden
      * werden, welcher Charakter frei ist und an den Server gesendet werden muss.
@@ -918,7 +916,7 @@ private fun CharacterPickerOverlay(
     val selectedCharacterTaken = selectedCharacterId in takenCharacterIds
 
     LaunchedEffect(centerIndex, takenCharacterIds) {
-        /*
+        /**
          * Während ein Klick-Scroll läuft, darf die automatische Korrektur nicht
          * zwischendurch zu einem anderen freien Eintrag springen. Nach Abschluss
          * wird die Auswahl normal validiert und an den Controller gespiegelt.

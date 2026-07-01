@@ -11,7 +11,7 @@ import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
 
 private val NeutralTerritoryColor = Color(0xFFC2C2C2)
 
-/*
+/**
  * Übergangsfarbe für das kurze Fenster zwischen Lobby-Join und Charakter-
  * Synchronisierung, in dem ein Spieler noch keine Charakter-ID hat. Im Normalfall
  * trägt jeder Spieler die Akzentfarbe seines Charakters.
@@ -26,7 +26,7 @@ private val UnassignedPlayerColor = Color(0xFF9E9E9E)
  * einer Stelle, bis beide Seiten dieselben IDs verwenden.
  */
 object GameMapTerritoryMapper {
-    /*
+    /**
      * Diese Tabelle ist die aktuelle Brücke zwischen Backend und Bildassets.
      * Links stehen die TerritoryIds aus shared/server, rechts die IDs der
      * Android-Masken und der Farbhitmap. Sobald beide Seiten dieselben IDs
@@ -125,7 +125,7 @@ fun buildRegionStates(
     territoryStates: Map<TerritoryId, GameTerritoryUiState>,
     players: List<LobbyPlayerUi>,
 ): Map<String, GameMapRegionState> {
-    /*
+    /**
      * Der Renderer kennt nur Android-Region-IDs. Deshalb ist dies der letzte
      * Schritt vor der UI: fachliche TerritoryStates werden auf sichtbare
      * Regionen, Ownernamen, Truppenzahlen und Farben reduziert.
@@ -144,11 +144,9 @@ fun buildRegionStates(
                         ?: territory.ownerId?.let { DEPARTED_OWNER_NAME }
                         ?: NEUTRAL_OWNER_NAME,
                 troopCount = territory.troopCount,
-                /*
-                 * Unbeanspruchte und von verlassenen Spielern zurückgelassene
-                 * Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
-                 * bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
-                 */
+                // Unbeanspruchte und von verlassenen Spielern zurückgelassene
+                // Gebiete teilen sich dasselbe neutrale Grau. Der Unterschied
+                // bleibt nur über Name/Truppen sichtbar, nicht über die Farbe.
                 accentColor = owner?.color ?: NeutralTerritoryColor,
             )
     }.toMap()

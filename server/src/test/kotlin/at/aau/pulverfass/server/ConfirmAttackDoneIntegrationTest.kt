@@ -66,7 +66,7 @@ class ConfirmAttackDoneIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CAD1")
+            val lobbyCode = LobbyCode("1050")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -191,17 +191,17 @@ class ConfirmAttackDoneIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingConfirm(
                     builder = this,
-                    lobbyCode = LobbyCode("CAD2"),
+                    lobbyCode = LobbyCode("1051"),
                     state =
                         attackState(
-                            lobbyCode = LobbyCode("CAD2"),
+                            lobbyCode = LobbyCode("1051"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerTwo,
                         ),
                     requesterPlayerId = playerOne,
                     request =
                         ConfirmAttackDoneRequest(
-                            lobbyCode = LobbyCode("CAD2"),
+                            lobbyCode = LobbyCode("1051"),
                             playerId = playerOne,
                         ),
                 )
@@ -219,10 +219,10 @@ class ConfirmAttackDoneIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingConfirm(
                     builder = this,
-                    lobbyCode = LobbyCode("CAD3"),
+                    lobbyCode = LobbyCode("1052"),
                     state =
                         attackState(
-                            lobbyCode = LobbyCode("CAD3"),
+                            lobbyCode = LobbyCode("1052"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.FORTIFY,
@@ -230,7 +230,7 @@ class ConfirmAttackDoneIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         ConfirmAttackDoneRequest(
-                            lobbyCode = LobbyCode("CAD3"),
+                            lobbyCode = LobbyCode("1052"),
                             playerId = playerOne,
                         ),
                 )
@@ -248,10 +248,10 @@ class ConfirmAttackDoneIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingConfirm(
                     builder = this,
-                    lobbyCode = LobbyCode("CAD4"),
+                    lobbyCode = LobbyCode("1053"),
                     state =
                         attackState(
-                            lobbyCode = LobbyCode("CAD4"),
+                            lobbyCode = LobbyCode("1053"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             isPaused = true,
@@ -259,7 +259,7 @@ class ConfirmAttackDoneIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         ConfirmAttackDoneRequest(
-                            lobbyCode = LobbyCode("CAD4"),
+                            lobbyCode = LobbyCode("1053"),
                             playerId = playerOne,
                         ),
                 )
@@ -277,17 +277,17 @@ class ConfirmAttackDoneIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingConfirm(
                     builder = this,
-                    lobbyCode = LobbyCode("CAD5"),
+                    lobbyCode = LobbyCode("1054"),
                     state =
                         attackState(
-                            lobbyCode = LobbyCode("CAD5"),
+                            lobbyCode = LobbyCode("1054"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                         ),
                     requesterPlayerId = playerOne,
                     request =
                         ConfirmAttackDoneRequest(
-                            lobbyCode = LobbyCode("CAD5"),
+                            lobbyCode = LobbyCode("1054"),
                             playerId = playerTwo,
                         ),
                 )
@@ -345,7 +345,7 @@ class ConfirmAttackDoneIntegrationTest {
                             data =
                                 MessageCodec.encode(
                                     ConfirmAttackDoneRequest(
-                                        lobbyCode = LobbyCode("MS11"),
+                                        lobbyCode = LobbyCode("1253"),
                                         playerId = PlayerId(1),
                                     ),
                                 ),

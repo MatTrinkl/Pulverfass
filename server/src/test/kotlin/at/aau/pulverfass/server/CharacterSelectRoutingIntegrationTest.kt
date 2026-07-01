@@ -54,7 +54,7 @@ class CharacterSelectRoutingIntegrationTest {
 
             application { module(network) }
 
-            val lobbyCode = LobbyCode("CS10")
+            val lobbyCode = LobbyCode("1097")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -136,7 +136,7 @@ class CharacterSelectRoutingIntegrationTest {
 
             application { module(network) }
 
-            val lobbyCode = LobbyCode("CS15")
+            val lobbyCode = LobbyCode("1099")
             val playerOne = PlayerId(11)
             val playerTwo = PlayerId(12)
             lobbyManager.createLobby(
@@ -235,7 +235,7 @@ class CharacterSelectRoutingIntegrationTest {
 
             application { module(network) }
 
-            val lobbyCode = LobbyCode("CS20")
+            val lobbyCode = LobbyCode("1100")
             val playerOne = PlayerId(3)
             val playerTwo = PlayerId(4)
             lobbyManager.createLobby(
@@ -314,7 +314,7 @@ class CharacterSelectRoutingIntegrationTest {
 
             application { module(network) }
 
-            val lobbyCode = LobbyCode("CS30")
+            val lobbyCode = LobbyCode("1101")
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,
                 initialState = preGameState(lobbyCode, PlayerId(5), PlayerId(6)),
@@ -371,7 +371,7 @@ class CharacterSelectRoutingIntegrationTest {
 
             application { module(network) }
 
-            val lobbyCode = LobbyCode("CS40")
+            val lobbyCode = LobbyCode("1103")
             val playerOne = PlayerId(7)
             val playerTwo = PlayerId(8)
             lobbyManager.createLobby(

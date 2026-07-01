@@ -19,7 +19,7 @@ class NetworkPacketTest {
 
     @Test
     fun `should create network packet correctly`() {
-        val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
+        val payload = JoinLobbyRequest(LobbyCode("1003"), "alice")
 
         val packet =
             NetworkPacket(header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST), payload = payload)
@@ -33,12 +33,12 @@ class NetworkPacketTest {
         val first =
             NetworkPacket(
                 header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
-                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
+                payload = JoinLobbyRequest(LobbyCode("1003"), "alice"),
             )
         val second =
             NetworkPacket(
                 header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
-                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
+                payload = JoinLobbyRequest(LobbyCode("1003"), "alice"),
             )
 
         assertEquals(first, second)
@@ -50,12 +50,12 @@ class NetworkPacketTest {
         val first =
             NetworkPacket(
                 header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
-                payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
+                payload = JoinLobbyRequest(LobbyCode("1003"), "alice"),
             )
         val second =
             NetworkPacket(
                 header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
-                payload = JoinLobbyRequest(LobbyCode("AB12"), "bob"),
+                payload = JoinLobbyRequest(LobbyCode("1003"), "bob"),
             )
 
         assertNotEquals(first, second)
@@ -67,7 +67,7 @@ class NetworkPacketTest {
             assertThrows(PayloadTypeMismatchException::class.java) {
                 NetworkPacket(
                     header = MessageHeader(MessageType.LOGOUT_REQUEST),
-                    payload = JoinLobbyRequest(LobbyCode("AB12"), "alice"),
+                    payload = JoinLobbyRequest(LobbyCode("1003"), "alice"),
                 )
             }
 

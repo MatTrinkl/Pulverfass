@@ -18,7 +18,7 @@ class StartPlayerSetMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             StartPlayerSetRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 startPlayerId = PlayerId(2),
                 requesterPlayerId = PlayerId(1),
             )
@@ -32,12 +32,12 @@ class StartPlayerSetMessageTest {
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = StartPlayerSetResponse(LobbyCode("CD34"), PlayerId(7))
+        val response = StartPlayerSetResponse(LobbyCode("1071"), PlayerId(7))
 
         val serialized = json.encodeToString(StartPlayerSetResponse.serializer(), response)
         val deserialized = json.decodeFromString(StartPlayerSetResponse.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"CD34","startPlayerId":7}""", serialized)
+        assertEquals("""{"lobbyCode":"1071","startPlayerId":7}""", serialized)
         assertEquals(response, deserialized)
     }
 

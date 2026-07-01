@@ -163,7 +163,7 @@ object ExampleRequestSerializer : KSerializer<ExampleRequest> {
 // NOTES FOR VARIATIONS
 // ============================================================================
 
-/*
+/**
 VARIATION 1: Simple payload with 1 field
 =======================================
 @Serializable(with = SimpleRequestSerializer::class)

@@ -22,7 +22,7 @@ class TradeInCardsMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             TradeInCardsRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
                 cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c")),
             )
@@ -36,7 +36,7 @@ class TradeInCardsMessageTest {
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = TradeInCardsResponse(lobbyCode = LobbyCode("CD34"))
+        val response = TradeInCardsResponse(lobbyCode = LobbyCode("1071"))
 
         val serialized = json.encodeToString(TradeInCardsResponse.serializer(), response)
         val deserialized = json.decodeFromString(TradeInCardsResponse.serializer(), serialized)
@@ -64,7 +64,7 @@ class TradeInCardsMessageTest {
     fun `serializer roundtrip private hand updated event`() {
         val event =
             PlayerHandUpdatedEvent(
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 recipientPlayerId = PlayerId(4),
                 stateVersion = 9,
                 handCards =

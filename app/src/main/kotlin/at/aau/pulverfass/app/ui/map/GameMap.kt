@@ -54,7 +54,7 @@ private const val MAP_IMAGE_HEIGHT_PX = 2160
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 5f
 
-/*
+/**
  * Statt jedes Territory ganzflächig einzufärben, zeichnen wir nur einen Rand in
  * Besitzerfarbe. So bleibt die Kartenkunst im Inneren sichtbar, während Besitz
  * über Outline und Truppen-Chip eindeutig lesbar bleibt. Die Randform steckt
@@ -64,7 +64,7 @@ private const val MAX_ZOOM = 5f
 private const val OWNED_BORDER_ALPHA = 0xFF
 private const val NEUTRAL_BORDER_ALPHA = 0x70
 
-/*
+/**
  * Durchmesser des Truppen-Chips. Bewusst kompakt, damit kleine Gebiete beim
  * Herauszoomen nicht vom Chip verdeckt werden.
  */
@@ -380,7 +380,7 @@ fun InteractiveGameMap(
     val context = LocalContext.current
     val resources = context.resources
 
-    /*
+    /**
      * Der Tap-Callback wird über rememberUpdatedState immer aktuell gehalten. Sonst
      * würde der pointerInput-Block die zum Startzeitpunkt gefangene Lambda behalten:
      * Wird der Spieler nach dem Zug eines anderen wieder aktiv, ändert sich der
@@ -390,7 +390,7 @@ fun InteractiveGameMap(
      */
     val currentOnRegionSelected = rememberUpdatedState(onRegionSelected)
 
-    /*
+    /**
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
      * Tap -> Kartenpixel -> RGB-Farbe -> GameMapRegion.
      */
@@ -399,7 +399,7 @@ fun InteractiveGameMap(
             BitmapFactory.decodeResource(resources, options.regionIdMapResId)
         }
 
-    /*
+    /**
      * Die Owner-Farben kommen aus dem serverautoritativen GameState. Für noch
      * neutrale oder unbekannte Territories bleibt die Karte bewusst grau.
      */
@@ -408,7 +408,7 @@ fun InteractiveGameMap(
             region.id to (regionStates[region.id]?.accentColor ?: NeutralRegionColor)
         }
 
-    /*
+    /**
      * Die Rand-Masken werden genau einmal pro Kartenladung dekodiert. Das ist der
      * teure Schritt (24 große PNGs) und hängt nur an der Maskenform, nicht an den
      * Besitzerfarben.
@@ -418,7 +418,7 @@ fun InteractiveGameMap(
             decodeTerritoryMasks(resources = resources, regions = regions)
         }
 
-    /*
+    /**
      * Nur das Einfärben des Overlays hängt an den Besitzerfarben. Da hier lediglich
      * die wenigen Randpixel gesetzt werden, ist ein Besitzwechsel günstig und löst
      * kein erneutes Dekodieren aus.
@@ -449,7 +449,7 @@ fun InteractiveGameMap(
                     .fillMaxSize()
                     .onSizeChanged { viewportSize = it }
                     .pointerInput(regions, layoutMetrics, viewportState, regionIdBitmap) {
-                        /*
+                        /**
                          * Die sichtbare Karte und die technische ID-Map teilen
                          * sich dasselbe Koordinatensystem. Darum genügt eine
                          * Rückprojektion vom Bildschirmpunkt auf den Pixel der
@@ -471,7 +471,7 @@ fun InteractiveGameMap(
                         }
                     }
                     .pointerInput(layoutMetrics) {
-                        /*
+                        /**
                          * Pan und Pinch-Zoom verändern ausschließlich den
                          * Viewport. Die fachliche Auswahl bleibt im Reducer und
                          * wird nicht mit Gestenlogik vermischt.
@@ -520,7 +520,7 @@ fun InteractiveGameMap(
                     labelPosition.isFinite() &&
                     labelPosition.isWithin(layoutMetrics.viewportSize)
                 ) {
-                    /*
+                    /**
                      * Der Counter liegt als Compose-Element über dem Canvas,
                      * damit Text nicht in die Bitmap gerendert werden muss und
                      * Test-Tags für UI-Tests stabil bleiben.
@@ -932,7 +932,7 @@ internal fun calculateMaskCenter(
     require(width > 0)
     require(height > 0)
 
-    /*
+    /**
      * Schwerpunkt der sichtbaren Maskenpixel. Das ist robuster als manuelle
      * Labelkoordinaten, weil neue Masken automatisch sinnvolle Counterpositionen
      * liefern. Einzelne Ausreißer an der Küste fallen durch die Mittelung kaum
@@ -982,7 +982,7 @@ private fun RegionTroopCounter(
     isSelected: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    /*
+    /**
      * Der Chip trägt die Besitzerfarbe. So bleibt der Besitz auch bei sehr
      * kleinen Gebieten eindeutig, in denen der Rand allein schwer zu treffen ist.
      * Die ausgewählte Region behält den kräftigen Kontrast-Look.
@@ -1086,7 +1086,7 @@ private fun decodeTerritoryMasks(
     val pixelsByRegion = mutableMapOf<String, RegionMaskPixels>()
     val anchors = mutableMapOf<String, MapPoint>()
 
-    /*
+    /**
      * Jede Territory-Maske ist ein vorgebackener Rand-Ring: Ihre sichtbaren Pixel
      * beschreiben nur die Außenlinie des Gebiets. Dieses Dekodieren ist der teure
      * Teil und hängt nicht an den Besitzerfarben, läuft daher nur einmal. Wir
@@ -1096,7 +1096,7 @@ private fun decodeTerritoryMasks(
         val bitmap = BitmapFactory.decodeResource(resources, region.maskResId) ?: return@forEach
         try {
             if (bitmap.width != targetWidth || bitmap.height != targetHeight) {
-                /*
+                /**
                  * Fallback für Asset-Sets mit abweichender Zielgröße. In der
                  * aktuellen Karte sollten alle Masken gleich groß sein; falls
                  * nicht, bleibt der Renderer trotzdem konsistent.

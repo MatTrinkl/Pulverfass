@@ -25,7 +25,7 @@ class ReportCheatMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             ReportCheatRequest(
-                lobbyCode = LobbyCode("RC12"),
+                lobbyCode = LobbyCode("1321"),
                 reporterPlayerId = PlayerId(2),
                 accusedPlayerId = PlayerId(1),
             )
@@ -42,7 +42,7 @@ class ReportCheatMessageTest {
     fun `serializer roundtrip response`() {
         val response =
             ReportCheatResponse(
-                lobbyCode = LobbyCode("RC12"),
+                lobbyCode = LobbyCode("1321"),
                 accusedPlayerId = PlayerId(1),
                 correct = true,
                 modifierDelta = 3,

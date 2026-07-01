@@ -80,7 +80,7 @@ class FortifyMoveIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("FM01")
+            val lobbyCode = LobbyCode("1143")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -369,7 +369,7 @@ class FortifyMoveIntegrationTest {
             val playerOne = PlayerId(1)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM02"),
+                    lobbyCode = LobbyCode("1144"),
                     players = listOf(playerOne, PlayerId(2)),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -389,12 +389,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM02"),
+                    lobbyCode = LobbyCode("1144"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM02"),
+                            lobbyCode = LobbyCode("1144"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -405,7 +405,7 @@ class FortifyMoveIntegrationTest {
             assertEquals(
                 FortifyMoveErrorResponse(
                     code = FortifyMoveErrorCode.GAME_PAUSED,
-                    reason = "Lobby 'FM02' ist pausiert; Fortify ist aktuell nicht erlaubt.",
+                    reason = "Lobby '1144' ist pausiert; Fortify ist aktuell nicht erlaubt.",
                 ),
                 error,
             )
@@ -421,7 +421,7 @@ class FortifyMoveIntegrationTest {
             val playerTwo = PlayerId(2)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM03"),
+                    lobbyCode = LobbyCode("1145"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -440,12 +440,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM03"),
+                    lobbyCode = LobbyCode("1145"),
                     state = state,
                     requesterPlayerId = playerTwo,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM03"),
+                            lobbyCode = LobbyCode("1145"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -466,7 +466,7 @@ class FortifyMoveIntegrationTest {
             val playerTwo = PlayerId(2)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM04"),
+                    lobbyCode = LobbyCode("1146"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -485,12 +485,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM04"),
+                    lobbyCode = LobbyCode("1146"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM04"),
+                            lobbyCode = LobbyCode("1146"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -517,7 +517,7 @@ class FortifyMoveIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM05"),
+                            lobbyCode = LobbyCode("1147"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -528,7 +528,7 @@ class FortifyMoveIntegrationTest {
             assertEquals(
                 FortifyMoveErrorResponse(
                     code = FortifyMoveErrorCode.GAME_NOT_FOUND,
-                    reason = "Lobby 'FM05' wurde nicht gefunden.",
+                    reason = "Lobby '1147' wurde nicht gefunden.",
                 ),
                 error,
             )
@@ -541,7 +541,7 @@ class FortifyMoveIntegrationTest {
             val playerTwo = PlayerId(2)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM06"),
+                    lobbyCode = LobbyCode("1148"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -560,12 +560,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM06"),
+                    lobbyCode = LobbyCode("1148"),
                     state = state,
                     requesterPlayerId = playerTwo,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM06"),
+                            lobbyCode = LobbyCode("1148"),
                             playerId = playerTwo,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -585,7 +585,7 @@ class FortifyMoveIntegrationTest {
             val playerOne = PlayerId(1)
             val fortifyState =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM07"),
+                    lobbyCode = LobbyCode("1149"),
                     players = listOf(playerOne, PlayerId(2)),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -608,12 +608,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM07"),
+                    lobbyCode = LobbyCode("1149"),
                     state = attackState,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM07"),
+                            lobbyCode = LobbyCode("1149"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -633,7 +633,7 @@ class FortifyMoveIntegrationTest {
             val playerTwo = PlayerId(2)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM08"),
+                    lobbyCode = LobbyCode("1150"),
                     players = listOf(playerOne, playerTwo),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -652,12 +652,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM08"),
+                    lobbyCode = LobbyCode("1150"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM08"),
+                            lobbyCode = LobbyCode("1150"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -677,7 +677,7 @@ class FortifyMoveIntegrationTest {
             val playerOne = PlayerId(1)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FM09"),
+                    lobbyCode = LobbyCode("1151"),
                     players = listOf(playerOne, PlayerId(2)),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -696,12 +696,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FM09"),
+                    lobbyCode = LobbyCode("1151"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FM09"),
+                            lobbyCode = LobbyCode("1151"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),
@@ -721,7 +721,7 @@ class FortifyMoveIntegrationTest {
             val playerOne = PlayerId(1)
             val state =
                 fortifyReadyGame(
-                    lobbyCode = LobbyCode("FMA0"),
+                    lobbyCode = LobbyCode("1156"),
                     players = listOf(playerOne, PlayerId(2)),
                     activePlayerId = playerOne,
                     territoryOwners =
@@ -741,12 +741,12 @@ class FortifyMoveIntegrationTest {
 
             val (error, snapshot) =
                 exerciseFailingFortify(
-                    lobbyCode = LobbyCode("FMA0"),
+                    lobbyCode = LobbyCode("1156"),
                     state = state,
                     requesterPlayerId = playerOne,
                     request =
                         FortifyMoveRequest(
-                            lobbyCode = LobbyCode("FMA0"),
+                            lobbyCode = LobbyCode("1156"),
                             playerId = playerOne,
                             fromTerritoryId = TerritoryId("alpha"),
                             toTerritoryId = TerritoryId("gamma"),

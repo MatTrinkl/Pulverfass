@@ -62,7 +62,7 @@ private fun cardDrawableFor(type: CardType): Int =
         CardType.JOKER -> R.drawable.game_card_emperor
     }
 
-/*
+/**
  * Fächer-Geometrie: Alle Karten liegen am unteren Rand zentriert übereinander und
  * werden um einen gemeinsamen, weit unter den Karten liegenden Drehpunkt rotiert.
  * Dadurch spreizen sie sich wie eine echte Spielhand auf. Der Drehpunkt wird über
@@ -73,8 +73,8 @@ private const val FAN_MAX_ANGLE_PER_CARD = 11f
 private const val FAN_TOTAL_ANGLE = 60f
 private const val SELECTED_SCALE = 1.06f
 
-/** Anteil der Kartenhöhe, um den der Fächer unter den Screenrand rutscht. */
-private const val CARD_OFFSCREEN_FRACTION = 0.22f
+/** Anteil der Kartenhöhe, um den der Fächer leicht unter den Screenrand rutscht. */
+private const val CARD_OFFSCREEN_FRACTION = 0.06f
 
 /**
  * Vollbild-Kartenscreen im Stil der Charakterauswahl.
@@ -214,11 +214,11 @@ private fun CardHandHint(canSelect: Boolean) {
     )
 }
 
-/*
+/**
  * Kartenhand als POV-Fächer: am unteren Rand verankert und bewusst ein
  * Stück aus dem Screen geschoben, damit es wirkt, als hielte man die
- * Karten selbst in der Hand. Die Typ-Labels sitzen oben auf der Karte,
- * damit sie auch bei abgeschnittener Unterkante lesbar bleiben.
+ * Karten selbst in der Hand. Die neuen Kartenbilder enthalten ihre Bezeichnung,
+ * daher bleibt die Karte selbst frei von zusätzlichen Text-Badges.
  */
 @Composable
 private fun BoxScope.CardHandBody(
@@ -368,7 +368,7 @@ private fun FannedHand(
                             indication = null,
                         ) { onToggle(card.cardId) }
                         .testTag("card_hand_card_${card.cardId.value}"),
-                contentAlignment = Alignment.TopCenter,
+                contentAlignment = Alignment.Center,
             ) {
                 Image(
                     painter = painterResource(id = cardDrawableFor(card.type)),
@@ -376,41 +376,20 @@ private fun FannedHand(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
-                Text(
-                    text = cardLabel,
-                    color = PulverfassColors.TextOnDark,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.42f))
-                            .padding(vertical = 3.dp),
-                )
             }
         }
     }
 }
 
 /**
- * Baut das sichtbare Kartenlabel aus Kartentyp und optionalem Gebietsnamen.
+ * Baut die zugängliche Kartenbezeichnung aus dem Kartentyp.
  *
  * @param card Private Karteninformation aus dem Server-State.
- * @return Piratisch benanntes Kartenlabel, bei Gebietskarten inklusive Gebiet.
+ * @return Kartenlabel ohne Territory-/Gebietsnamen.
  */
 @Composable
 private fun cardDisplayLabel(card: PrivateHandCardUi): String {
-    val typeLabel = cardTypeLabel(card.type)
-    val territoryName = card.cardId.territoryDisplayName()
-    return if (territoryName == null || card.type == CardType.JOKER) {
-        typeLabel
-    } else {
-        "$typeLabel $territoryName"
-    }
+    return cardTypeLabel(card.type)
 }
 
 @Composable
@@ -422,53 +401,4 @@ private fun cardTypeLabel(type: CardType): String =
         CardType.JOKER -> stringResource(id = R.string.game_card_type_joker)
     }
 
-private fun CardId.territoryDisplayName(): String? {
-    val parts = value.split(":")
-    if (parts.size != 3 || parts[0] != "territory") {
-        return null
-    }
-    return territoryDisplayNames[parts[1]] ?: parts[1].fallbackTerritoryDisplayName()
-}
-
-private fun String.fallbackTerritoryDisplayName(): String =
-    split("_")
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { part ->
-            part.replaceFirstChar { char ->
-                if (char.isLowerCase()) {
-                    char.titlecase()
-                } else {
-                    char.toString()
-                }
-            }
-        }
-
-private val territoryDisplayNames =
-    mapOf(
-        "argentinien" to "Argentinien",
-        "brasilien" to "Brasilien",
-        "mittelamerika" to "Mittelamerika",
-        "usa" to "USA",
-        "andengemeinschaft" to "Andengemeinschaft",
-        "alaska" to "Alaska",
-        "kanada" to "Kanada",
-        "groenland" to "Grönland",
-        "grossbritannien" to "Großbritannien",
-        "westeuropa" to "Westeuropa",
-        "skandinavien" to "Skandinavien",
-        "mitteleuropa" to "Mitteleuropa",
-        "russland" to "Russland",
-        "naher_osten" to "Naher Osten",
-        "sibirien" to "Sibirien",
-        "china" to "China",
-        "japan" to "Japan",
-        "ferner_osten" to "Ferner Osten",
-        "australien" to "Australien",
-        "ozeanien" to "Ozeanien",
-        "aegypten" to "Ägypten",
-        "sahara" to "Sahara",
-        "zentral_afrika" to "Zentralafrika",
-        "sued_afrika" to "Südafrika",
-    )
-
-private const val CARD_ASPECT_RATIO = 2f / 3f
+private const val CARD_ASPECT_RATIO = 4f / 5f

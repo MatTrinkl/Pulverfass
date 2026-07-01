@@ -76,7 +76,7 @@ class TurnSystemIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TSI1")
+            val lobbyCode = LobbyCode("1416")
             val hostId = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -295,7 +295,7 @@ class TurnSystemIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("TSI2")
+            val lobbyCode = LobbyCode("1417")
             val hostId = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)

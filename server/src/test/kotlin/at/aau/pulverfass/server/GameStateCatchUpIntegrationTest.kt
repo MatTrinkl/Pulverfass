@@ -56,7 +56,7 @@ class GameStateCatchUpIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CU01")
+            val lobbyCode = LobbyCode("1106")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val definition = defaultMapDefinition()
@@ -148,7 +148,7 @@ class GameStateCatchUpIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CU02")
+            val lobbyCode = LobbyCode("1107")
             val playerOne = PlayerId(1)
             val outsider = PlayerId(99)
             lobbyManager.createLobby(
@@ -195,7 +195,7 @@ class GameStateCatchUpIntegrationTest {
                     assertEquals(
                         GameStateCatchUpErrorResponse(
                             code = GameStateCatchUpErrorCode.NOT_IN_GAME,
-                            reason = "Spieler '99' ist nicht Teil von Lobby 'CU02'.",
+                            reason = "Spieler '99' ist nicht Teil von Lobby '1107'.",
                         ),
                         receivePayload(outsiderSession.first),
                     )
@@ -236,7 +236,7 @@ class GameStateCatchUpIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("CU03")
+            val lobbyCode = LobbyCode("1108")
             val playerOne = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,

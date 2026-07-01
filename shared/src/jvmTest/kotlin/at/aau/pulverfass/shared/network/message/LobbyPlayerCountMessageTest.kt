@@ -14,13 +14,13 @@ class LobbyPlayerCountMessageTest {
 
     @Test
     fun `serializer roundtrip request`() {
-        val request = LobbyPlayerCountRequest(lobbyCode = LobbyCode("AB12"))
+        val request = LobbyPlayerCountRequest(lobbyCode = LobbyCode("1003"))
 
         val serialized = json.encodeToString(LobbyPlayerCountRequest.serializer(), request)
         val deserialized =
             json.decodeFromString(LobbyPlayerCountRequest.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"AB12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003"}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -28,7 +28,7 @@ class LobbyPlayerCountMessageTest {
     fun `serializer roundtrip response`() {
         val response =
             LobbyPlayerCountResponse(
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 playerCount = 4,
             )
 
@@ -36,7 +36,7 @@ class LobbyPlayerCountMessageTest {
         val deserialized =
             json.decodeFromString(LobbyPlayerCountResponse.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"CD34","playerCount":4}""", serialized)
+        assertEquals("""{"lobbyCode":"1071","playerCount":4}""", serialized)
         assertEquals(response, deserialized)
     }
 
@@ -44,9 +44,9 @@ class LobbyPlayerCountMessageTest {
     fun `serializer roundtrip error response`() {
         val response =
             LobbyPlayerCountErrorResponse(
-                lobbyCode = LobbyCode("ZZ99"),
+                lobbyCode = LobbyCode("1442"),
                 code = LobbyPlayerCountErrorCode.LOBBY_NOT_FOUND,
-                reason = "Lobby 'ZZ99' wurde nicht gefunden.",
+                reason = "Lobby '1442' wurde nicht gefunden.",
             )
 
         val serialized =
@@ -56,7 +56,7 @@ class LobbyPlayerCountMessageTest {
 
         assertEquals(
             """
-            {"lobbyCode":"ZZ99","code":"LOBBY_NOT_FOUND","reason":"Lobby 'ZZ99' wurde nicht gefunden."}
+            {"lobbyCode":"1442","code":"LOBBY_NOT_FOUND","reason":"Lobby '1442' wurde nicht gefunden."}
             """.trimIndent(),
             serialized,
         )

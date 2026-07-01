@@ -19,7 +19,7 @@ import org.jetbrains.compose.resources.getSystemResourceEnvironment
  * Dekodierung ist beim eigentlichen Kartenaufbau bereits warmgelaufen.
  */
 object MapAssetPreloader {
-    /*
+    /**
      * Enthält Weltkarte, Farb-ID-Karte und alle Territory-Masken der Spielkarte.
      * Wenn eines davon fehlt, wäre entweder das Rendering oder die farbbasierte
      * Region-Selektion unzuverlässig.

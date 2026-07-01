@@ -59,6 +59,7 @@ import at.aau.pulverfass.shared.message.lobby.response.GameStateCatchUpResponse
 import at.aau.pulverfass.shared.message.lobby.response.GameStatePrivateGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.JoinLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapDefinitionSnapshot
+import at.aau.pulverfass.shared.message.lobby.response.MapGetResponse
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryDefinitionSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryEdgeSnapshot
 import at.aau.pulverfass.shared.message.lobby.response.MapTerritoryStateSnapshot
@@ -182,9 +183,31 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `join lobby should reject non numeric lobby code`() {
+        val controller = createController()
+        try {
+            var didNavigate = false
+            controller.updatePlayerName("Alice")
+            controller.updateLobbyCode("12A4")
+
+            controller.joinLobby {
+                didNavigate = true
+            }
+
+            val state = controller.state.value
+            assertFalse(didNavigate)
+            assertFalse(state.isConnecting)
+            assertFalse(state.isConnected)
+            assertEquals("Lobbycode muss aus 4 Ziffern bestehen", state.errorText)
+        } finally {
+            controller.close()
+        }
+    }
+
+    @Test
     fun `create lobby flow should auto-connect and navigate after create and join responses`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -255,7 +278,7 @@ class LobbyControllerTest {
     @Test
     fun `join lobby flow should navigate and update player list`() {
         runBlocking {
-            val lobbyCode = LobbyCode("Z9Y8")
+            val lobbyCode = LobbyCode("1437")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -314,7 +337,7 @@ class LobbyControllerTest {
     @Test
     fun `start game should send backend request and trigger catch up after game started event`() {
         runBlocking {
-            val lobbyCode = LobbyCode("S123")
+            val lobbyCode = LobbyCode("1334")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
@@ -389,7 +412,7 @@ class LobbyControllerTest {
     @Test
     fun `player connection lost event should mark lobby member as disconnected`() {
         runBlocking {
-            val lobbyCode = LobbyCode("DL42")
+            val lobbyCode = LobbyCode("1123")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -471,7 +494,7 @@ class LobbyControllerTest {
     @Test
     fun `connection status updates should synchronize disconnect and reconnect`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CS42")
+            val lobbyCode = LobbyCode("1104")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -553,7 +576,7 @@ class LobbyControllerTest {
     @Test
     fun `player left event should promote the announced new host`() {
         runBlocking {
-            val lobbyCode = LobbyCode("HT42")
+            val lobbyCode = LobbyCode("1196")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -612,9 +635,123 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `player left event should remove player and render their territories neutral`() {
+        runBlocking {
+            val lobbyCode = LobbyCode("1239")
+            val departedPlayerId = PlayerId(1)
+            val ownPlayerId = PlayerId(2)
+            val neutralColor = Color(0xFFC2C2C2)
+            val server =
+                startProtocolServer(
+                    onOpenPayload =
+                        ConnectionResponse(
+                            SessionToken("123e4567-e89b-12d3-a456-426614174243"),
+                        ),
+                ) { payload, outgoing ->
+                    if (payload is JoinLobbyRequest) {
+                        outgoing.sendPayload(
+                            JoinLobbyResponse(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                playerDisplayName = "Alice",
+                                isHost = true,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            CharacterSelectedBroadcast(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = departedPlayerId,
+                                characterId = "character_04",
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            PlayerJoinedLobbyEvent(
+                                lobbyCode = payload.lobbyCode,
+                                playerId = ownPlayerId,
+                                playerDisplayName = payload.playerDisplayName,
+                            ),
+                        )
+                        outgoing.sendPayload(
+                            MapGetResponse(
+                                lobbyCode = payload.lobbyCode,
+                                schemaVersion = 1,
+                                mapHash = "leave-test-map",
+                                stateVersion = 1L,
+                                definition =
+                                    MapDefinitionSnapshot(
+                                        territories =
+                                            listOf(
+                                                MapTerritoryDefinitionSnapshot(
+                                                    territoryId = TerritoryId("brasilien"),
+                                                    edges = emptyList(),
+                                                ),
+                                            ),
+                                        continents = emptyList(),
+                                    ),
+                                territoryStates =
+                                    listOf(
+                                        MapTerritoryStateSnapshot(
+                                            territoryId = TerritoryId("brasilien"),
+                                            ownerId = departedPlayerId,
+                                            troopCount = 3,
+                                        ),
+                                    ),
+                            ),
+                        )
+                    }
+                }
+            val controller = createController(playerNameStore = InMemoryPlayerNameStore("Bob"))
+            try {
+                controller.updateServerUrl(server.url)
+                controller.updateLobbyCode(lobbyCode.value)
+
+                controller.joinLobby { }
+                waitUntil {
+                    controller.state.value.gameState.regionStates["brazil"]?.ownerName == "ALICE"
+                }
+
+                val occupiedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertTrue(occupiedTerritory.accentColor != neutralColor)
+                assertTrue(controller.state.value.players.any { it.playerId == departedPlayerId })
+
+                server.broadcast(
+                    PlayerLeftLobbyEvent(
+                        lobbyCode = lobbyCode,
+                        playerId = departedPlayerId,
+                        newHost = ownPlayerId,
+                    ),
+                )
+
+                waitUntil {
+                    controller.state.value.players.none { it.playerId == departedPlayerId } &&
+                        controller.state.value.gameState
+                            .regionStates["brazil"]
+                            ?.ownerName == "Verlassener Spieler"
+                }
+
+                val departedTerritory =
+                    controller.state.value.gameState.regionStates.getValue("brazil")
+                assertEquals(departedPlayerId.value.toString(), departedTerritory.ownerPlayerId)
+                assertEquals("Verlassener Spieler", departedTerritory.ownerName)
+                assertEquals(neutralColor, departedTerritory.accentColor)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `refresh game state should request public turn and private snapshots`() {
         runBlocking {
-            val lobbyCode = LobbyCode("R123")
+            val lobbyCode = LobbyCode("1314")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer { payload, outgoing ->
@@ -673,7 +810,7 @@ class LobbyControllerTest {
     @Test
     fun `reinforcement actions send backend requests and consume private card updates`() {
         runBlocking {
-            val lobbyCode = LobbyCode("RF12")
+            val lobbyCode = LobbyCode("1327")
             val playerId = PlayerId(1)
             val cardIds = listOf(CardId("card-a"), CardId("card-b"), CardId("card-c"))
             val config = LobbyControllerConfig()
@@ -1041,7 +1178,7 @@ class LobbyControllerTest {
     @Test
     fun `attack actions send backend requests and display server battle result`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT12")
+            val lobbyCode = LobbyCode("1020")
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val config = LobbyControllerConfig()
@@ -1293,7 +1430,7 @@ class LobbyControllerTest {
     @Test
     fun `server auto attack boundary waits for visible result delay`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT02")
+            val lobbyCode = LobbyCode("1015")
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val server =
@@ -1488,7 +1625,7 @@ class LobbyControllerTest {
     @Test
     fun `manual attack phase end before auto boundary suppresses delayed notice`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT04")
+            val lobbyCode = LobbyCode("1017")
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val seenPayloads = CopyOnWriteArrayList<Any>()
@@ -1672,7 +1809,7 @@ class LobbyControllerTest {
     @Test
     fun `manual attack phase end consumes deferred server boundary without stale request`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT05")
+            val lobbyCode = LobbyCode("1018")
             val playerId = PlayerId(1)
             val opponentId = PlayerId(2)
             val seenPayloads = CopyOnWriteArrayList<Any>()
@@ -1842,7 +1979,7 @@ class LobbyControllerTest {
     @Test
     fun `server auto attack boundary notice is only shown to attacker`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT03")
+            val lobbyCode = LobbyCode("1016")
             val attackerId = PlayerId(1)
             val observerId = PlayerId(2)
             val server =
@@ -1974,7 +2111,7 @@ class LobbyControllerTest {
     @Test
     fun `fortify action sends backend request and marks move as consumed`() {
         runBlocking {
-            val lobbyCode = LobbyCode("FT12")
+            val lobbyCode = LobbyCode("1160")
             val playerId = PlayerId(1)
             val config = LobbyControllerConfig()
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
@@ -2197,7 +2334,7 @@ class LobbyControllerTest {
     @Test
     fun `fortify phase without available moves is advanced automatically`() {
         runBlocking {
-            val lobbyCode = LobbyCode("FT00")
+            val lobbyCode = LobbyCode("1158")
             val playerId = PlayerId(1)
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
             val server =
@@ -2345,7 +2482,7 @@ class LobbyControllerTest {
     @Test
     fun `attack phase without available attacks waits for server auto boundary`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AT00")
+            val lobbyCode = LobbyCode("1014")
             val playerId = PlayerId(1)
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
             val server =
@@ -2494,7 +2631,7 @@ class LobbyControllerTest {
     @Test
     fun `auto phase notices are shown sequentially when attack and fortify are skipped`() {
         runBlocking {
-            val lobbyCode = LobbyCode("AQ00")
+            val lobbyCode = LobbyCode("1008")
             val playerId = PlayerId(1)
             val nextPlayerId = PlayerId(2)
             val seenPayloads = Collections.synchronizedList(mutableListOf<Any>())
@@ -2639,7 +2776,7 @@ class LobbyControllerTest {
     @Test
     fun `reconnect should reuse old session token and request catch up`() {
         runBlocking {
-            val lobbyCode = LobbyCode("RC01")
+            val lobbyCode = LobbyCode("1319")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174202")
             val replacementToken = SessionToken("123e4567-e89b-12d3-a456-426614174203")
             val reconnectPayloads = CopyOnWriteArrayList<Any>()
@@ -2764,7 +2901,7 @@ class LobbyControllerTest {
     @Test
     fun `manual connect with active lobby session should reconnect`() {
         runBlocking {
-            val lobbyCode = LobbyCode("MR01")
+            val lobbyCode = LobbyCode("1251")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174212")
             val payloads = CopyOnWriteArrayList<Any>()
             val server =
@@ -2864,7 +3001,7 @@ class LobbyControllerTest {
     @Test
     fun `startup reconnect should reuse persisted token`() {
         runBlocking {
-            val lobbyCode = LobbyCode("PR35")
+            val lobbyCode = LobbyCode("1301")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174210")
             val reconnectPayloads = CopyOnWriteArrayList<Any>()
             val server =
@@ -2989,7 +3126,7 @@ class LobbyControllerTest {
     @Test
     fun `leave lobby should clear persisted session token`() {
         runBlocking {
-            val lobbyCode = LobbyCode("LV42")
+            val lobbyCode = LobbyCode("1240")
             val originalToken = SessionToken("123e4567-e89b-12d3-a456-426614174230")
             val store = InMemoryReconnectSessionStore()
             val server =
@@ -3111,7 +3248,7 @@ class LobbyControllerTest {
     @Test
     fun `character select response updates characterId in state`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC10")
+            val lobbyCode = LobbyCode("1055")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -3177,7 +3314,7 @@ class LobbyControllerTest {
     @Test
     fun `character select error response sets error and clearCharacterSelectError clears it`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC20")
+            val lobbyCode = LobbyCode("1056")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -3242,7 +3379,7 @@ class LobbyControllerTest {
     @Test
     fun `character selected broadcast updates existing player characterId`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC30")
+            val lobbyCode = LobbyCode("1057")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -3314,7 +3451,7 @@ class LobbyControllerTest {
     @Test
     fun `character selected broadcast is silently ignored for unknown player id`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC40")
+            val lobbyCode = LobbyCode("1059")
             val server =
                 startProtocolServer(
                     onOpenPayload =
@@ -3384,7 +3521,7 @@ class LobbyControllerTest {
     @Test
     fun `saved character is selected automatically after own lobby player is known`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC45")
+            val lobbyCode = LobbyCode("1061")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
@@ -3447,7 +3584,7 @@ class LobbyControllerTest {
     @Test
     fun `saved character auto selection falls back when preferred character is taken`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC46")
+            val lobbyCode = LobbyCode("1062")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(
@@ -3538,7 +3675,7 @@ class LobbyControllerTest {
     @Test
     fun `selectCharacter sends CharacterSelectRequest when lobby and player are set`() {
         runBlocking {
-            val lobbyCode = LobbyCode("CC50")
+            val lobbyCode = LobbyCode("1064")
             val seenPayloads = CopyOnWriteArrayList<Any>()
             val server =
                 startProtocolServer(

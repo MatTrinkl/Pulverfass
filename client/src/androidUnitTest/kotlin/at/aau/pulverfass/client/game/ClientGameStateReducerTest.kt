@@ -1376,7 +1376,7 @@ class ClientGameStateReducerTest {
         )
 
     private companion object {
-        val lobbyCode = LobbyCode("T123")
+        val lobbyCode = LobbyCode("1361")
         val aliceId = PlayerId(1)
         val bobId = PlayerId(2)
         val players =

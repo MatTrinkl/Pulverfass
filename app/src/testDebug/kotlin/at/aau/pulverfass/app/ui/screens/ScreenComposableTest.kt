@@ -17,9 +17,11 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -119,7 +121,7 @@ class ScreenComposableTest {
         composeTestRule.onNodeWithText("SPIELERNAME").assertExists()
         composeTestRule.onNodeWithText("LOBBY ERSTELLEN").assertExists()
         composeTestRule.onNodeWithText("LOBBY BEITRETEN").assertExists()
-        composeTestRule.onNodeWithText("MAP-TEST").assertExists()
+        composeTestRule.onAllNodesWithText("MAP-TEST").assertCountEquals(0)
     }
 
     @Test
@@ -170,7 +172,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/AB12/true/Carol",
+                    startDestination = Screen.WaitingRoom.route + "/1003/true/Carol",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
@@ -195,13 +197,13 @@ class ScreenComposableTest {
                 }
             }
         }
-        /*
+        /**
          * Der Warteraum ist auf Landscape-Breite ausgelegt. Im Test-Viewport
          * reicht Semantik-Sichtbarkeit, weil funktional zählt, dass die Daten im
          * Baum vorhanden sind und nicht, ob jedes Element im aktuellen Ausschnitt
          * liegt.
          */
-        composeTestRule.onNodeWithText("LOBBY: AB12").assertExists()
+        composeTestRule.onNodeWithText("LOBBY: 1003").assertExists()
         composeTestRule.onNodeWithText("DU BIST DER HOST").assertExists()
         composeTestRule.onNodeWithText("CAROL").assertExists()
         composeTestRule.onNodeWithText("(HOST)").assertExists()
@@ -215,7 +217,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/XY99/false/Dave",
+                    startDestination = Screen.WaitingRoom.route + "/4242/false/Dave",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
@@ -255,7 +257,7 @@ class ScreenComposableTest {
                 val controller = LobbyController()
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.WaitingRoom.route + "/ZZ88/false/Eve",
+                    startDestination = Screen.WaitingRoom.route + "/1441/false/Eve",
                 ) {
                     composable(
                         route = Screen.WaitingRoom.route + "/{lobbyCode}/{isHost}/{playerName}",
@@ -361,7 +363,7 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_shows_cheat_report_notice_for_four_seconds() {
-        /*
+        /**
          * Das Overlay soll nicht sofort verschwinden: Die Meldung erklärt eine
          * spätere Konsequenz im Spiel. Mit deaktivierter Auto-Advance-Clock kann
          * der Test exakt prüfen, dass es nach ca. vier Sekunden geschlossen wird.
@@ -417,7 +419,7 @@ class ScreenComposableTest {
 
     @Test
     fun game_screen_options_reports_selected_cheat_player() {
-        /*
+        /**
          * Dieser UI-Test prüft nicht die Serverlogik, sondern nur die Bedienung:
          * Optionsmenü öffnen, "CHEAT MELDEN" anklicken, Gegner auswählen und
          * sicherstellen, dass dessen PlayerId an den Callback geht.
@@ -723,10 +725,15 @@ class ScreenComposableTest {
         }
 
         composeTestRule.onNodeWithTag("card_hand_overlay").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Galeone Sahara").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Kanone Brasilien").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Pirat Japan").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a").performClick()
+        composeTestRule.onNodeWithContentDescription("Galeone").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Kanone").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Pirat").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Galeone Sahara").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Kanone Brasilien").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Pirat Japan").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("card_hand_card_territory:sahara:a")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("trade_in_cards_button").assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithTag("close_cards_button").performClick()
@@ -781,7 +788,7 @@ class ScreenComposableTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Kaiser").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Kaiser").assertIsDisplayed()
     }
 
     @Test
@@ -997,7 +1004,11 @@ class ScreenComposableTest {
         ) { setProgress ->
             setProgress(4f)
         }
-        composeTestRule.onNodeWithTag("attack_submit_button").assertIsEnabled().performClick()
+        composeTestRule
+            .onNodeWithTag("attack_submit_button")
+            .assertIsEnabled()
+            .performScrollTo()
+            .performClick()
         composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
 
         assertEquals(1, attackAdjustment)

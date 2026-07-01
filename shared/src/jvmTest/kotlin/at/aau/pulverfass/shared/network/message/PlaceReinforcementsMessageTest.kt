@@ -21,7 +21,7 @@ class PlaceReinforcementsMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             PlaceReinforcementsRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
                 placements =
                     listOf(
@@ -40,7 +40,7 @@ class PlaceReinforcementsMessageTest {
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = PlaceReinforcementsResponse(lobbyCode = LobbyCode("CD34"))
+        val response = PlaceReinforcementsResponse(lobbyCode = LobbyCode("1071"))
 
         val serialized = json.encodeToString(PlaceReinforcementsResponse.serializer(), response)
         val deserialized =
@@ -70,7 +70,7 @@ class PlaceReinforcementsMessageTest {
     fun `serializer roundtrip pending reinforcements changed event`() {
         val event =
             PendingReinforcementsChangedEvent(
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 playerId = PlayerId(4),
                 delta = -3,
             )

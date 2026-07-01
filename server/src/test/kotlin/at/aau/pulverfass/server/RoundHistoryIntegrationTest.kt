@@ -62,7 +62,7 @@ class RoundHistoryIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("RHIT")
+            val lobbyCode = LobbyCode("1330")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(

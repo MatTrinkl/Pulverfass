@@ -14,7 +14,7 @@ class ReinforcementsGrantedEventMessageTest {
     fun `serializer roundtrip reinforcements granted event`() {
         val event =
             ReinforcementsGrantedEvent(
-                lobbyCode = LobbyCode("RG12"),
+                lobbyCode = LobbyCode("1328"),
                 playerId = PlayerId(7),
                 amount = 5,
                 territoryBonus = 3,

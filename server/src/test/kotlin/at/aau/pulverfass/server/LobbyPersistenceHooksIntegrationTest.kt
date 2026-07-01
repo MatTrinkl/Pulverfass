@@ -95,7 +95,7 @@ class LobbyPersistenceHooksIntegrationTest {
     @Test
     fun `turn advance persists accepted event rows including automatic attack skip`() =
         testApplication {
-            val fixture = createRunningLobbyFixture("PS11")
+            val fixture = createRunningLobbyFixture("1511")
             application {
                 module(fixture.network)
             }
@@ -155,7 +155,7 @@ class LobbyPersistenceHooksIntegrationTest {
     @Test
     fun `full turn change persists snapshot row with determinism and turn state`() =
         testApplication {
-            val fixture = createRunningLobbyFixture("PS22")
+            val fixture = createRunningLobbyFixture("1522")
             application {
                 module(fixture.network)
             }

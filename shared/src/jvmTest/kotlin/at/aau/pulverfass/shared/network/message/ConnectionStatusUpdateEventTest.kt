@@ -21,13 +21,13 @@ class ConnectionStatusUpdateEventTest {
     fun `should create connection status update event correctly`() {
         val event =
             ConnectionStatusUpdateEvent(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
                 status = ConnectionStatus.CONNECTED,
             )
         val payload: NetworkMessagePayload = event
 
-        assertEquals(LobbyCode("AB12"), event.lobbyCode)
+        assertEquals(LobbyCode("1003"), event.lobbyCode)
         assertEquals(PlayerId(7), event.playerId)
         assertEquals(ConnectionStatus.CONNECTED, event.status)
         assertEquals(event, payload)
@@ -38,7 +38,7 @@ class ConnectionStatusUpdateEventTest {
         ConnectionStatus.entries.forEach { status ->
             val event =
                 ConnectionStatusUpdateEvent(
-                    lobbyCode = LobbyCode("CD34"),
+                    lobbyCode = LobbyCode("1071"),
                     playerId = PlayerId(8),
                     status = status,
                 )
@@ -47,7 +47,7 @@ class ConnectionStatusUpdateEventTest {
             val deserialized = json.decodeFromString<ConnectionStatusUpdateEvent>(serialized)
 
             assertEquals(
-                """{"lobbyCode":"CD34","playerId":8,"status":"${status.name}"}""",
+                """{"lobbyCode":"1071","playerId":8,"status":"${status.name}"}""",
                 serialized,
             )
             assertEquals(event, deserialized)
@@ -58,8 +58,8 @@ class ConnectionStatusUpdateEventTest {
     fun `should reject every missing field during deserialization`() {
         listOf(
             """{"playerId":8,"status":"CONNECTED"}""",
-            """{"lobbyCode":"CD34","status":"CONNECTED"}""",
-            """{"lobbyCode":"CD34","playerId":8}""",
+            """{"lobbyCode":"1071","status":"CONNECTED"}""",
+            """{"lobbyCode":"1071","playerId":8}""",
         ).forEach { serialized ->
             assertThrows(SerializationException::class.java) {
                 json.decodeFromString<ConnectionStatusUpdateEvent>(serialized)

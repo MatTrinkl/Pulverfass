@@ -29,7 +29,7 @@ import org.junit.jupiter.api.assertThrows
 class KickPlayerMessageTest {
     @Test
     fun `KickPlayerRequest serializes and deserializes correctly`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val targetPlayerId = PlayerId(2)
         val requesterPlayerId = PlayerId(1)
         val request = KickPlayerRequest(lobbyCode, targetPlayerId, requesterPlayerId)
@@ -53,7 +53,7 @@ class KickPlayerMessageTest {
 
     @Test
     fun `KickPlayerRequest throws MissingFieldException when targetPlayerId is missing`() {
-        val json = """{"lobbyCode":"AB12","requesterPlayerId":1}"""
+        val json = """{"lobbyCode":"1003","requesterPlayerId":1}"""
         assertThrows<MissingFieldException> {
             Json.decodeFromString(KickPlayerRequestSerializer, json)
         }
@@ -61,7 +61,7 @@ class KickPlayerMessageTest {
 
     @Test
     fun `KickPlayerRequest throws MissingFieldException when requesterPlayerId is missing`() {
-        val json = """{"lobbyCode":"AB12","targetPlayerId":2}"""
+        val json = """{"lobbyCode":"1003","targetPlayerId":2}"""
         assertThrows<MissingFieldException> {
             Json.decodeFromString(KickPlayerRequestSerializer, json)
         }
@@ -99,7 +99,7 @@ class KickPlayerMessageTest {
 
     @Test
     fun `PlayerKickedLobbyEvent serializes and deserializes correctly`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val targetPlayerId = PlayerId(2)
         val requesterPlayerId = PlayerId(1)
         val event = PlayerKickedLobbyEvent(lobbyCode, targetPlayerId, requesterPlayerId)
@@ -123,7 +123,7 @@ class KickPlayerMessageTest {
 
     @Test
     fun `PlayerKickedLobbyEvent throws MissingFieldException when targetPlayerId is missing`() {
-        val json = """{"lobbyCode":"AB12","requesterPlayerId":1}"""
+        val json = """{"lobbyCode":"1003","requesterPlayerId":1}"""
         assertThrows<MissingFieldException> {
             Json.decodeFromString(PlayerKickedLobbyEventSerializer, json)
         }
@@ -131,7 +131,7 @@ class KickPlayerMessageTest {
 
     @Test
     fun `PlayerKickedLobbyEvent throws MissingFieldException when requesterPlayerId is missing`() {
-        val json = """{"lobbyCode":"AB12","targetPlayerId":2}"""
+        val json = """{"lobbyCode":"1003","targetPlayerId":2}"""
         assertThrows<MissingFieldException> {
             Json.decodeFromString(PlayerKickedLobbyEventSerializer, json)
         }

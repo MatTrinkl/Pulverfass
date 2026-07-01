@@ -26,7 +26,7 @@ class LobbyRuntimeTest {
     fun `runtime startet und stoppt kontrolliert`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
             val starts = AtomicInteger(0)
             val stops = AtomicInteger(0)
             val runtime =
@@ -62,7 +62,7 @@ class LobbyRuntimeTest {
     fun `events werden an den internen event loop weitergeleitet`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("CD34")
+            val lobbyCode = LobbyCode("1071")
             val acceptedEvents = AtomicInteger(0)
             val runtime =
                 LobbyRuntime(
@@ -95,7 +95,7 @@ class LobbyRuntimeTest {
     fun `direkter externer state zugriff ist nicht notwendig`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("EF56")
+            val lobbyCode = LobbyCode("1132")
             val mutablePlayers = mutableListOf(PlayerId(1))
             val mutableOrder = mutableListOf(PlayerId(1))
             val runtime =
@@ -141,7 +141,7 @@ class LobbyRuntimeTest {
     fun `runtime meldet ablehnung über hooks und verhindert doppelten start`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("GH78")
+            val lobbyCode = LobbyCode("1178")
             var rejected = 0
             val runtime =
                 LobbyRuntime(
@@ -174,7 +174,7 @@ class LobbyRuntimeTest {
     fun `accepted hook fehler werden geloggt aber nicht als event fehler behandelt`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("IJ90")
+            val lobbyCode = LobbyCode("1199")
             var accepted = 0
             var rejected = 0
             val runtime =
@@ -210,7 +210,7 @@ class LobbyRuntimeTest {
     fun `batch ablehnung meldet event context und aktuellen state an hook`(): Unit =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val lobbyCode = LobbyCode("KL12")
+            val lobbyCode = LobbyCode("1205")
             val context =
                 EventContext(
                     connectionId = ConnectionId(99),

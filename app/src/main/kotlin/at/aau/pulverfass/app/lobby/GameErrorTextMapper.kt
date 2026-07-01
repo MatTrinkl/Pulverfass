@@ -182,7 +182,7 @@ object GameErrorTextMapper {
                 "In diesem Zug wurde bereits eine Truppenverschiebung genutzt."
         }
 
-    /*
+    /**
      * Der Server liefert beim Schummelbonus einen stabilen Fehlercode. Diese
      * Funktion übersetzt ihn in einen Text, der für Spieler verständlich ist.
      * Dadurch bleibt die Netzwerklogik technisch sauber, während die App frei

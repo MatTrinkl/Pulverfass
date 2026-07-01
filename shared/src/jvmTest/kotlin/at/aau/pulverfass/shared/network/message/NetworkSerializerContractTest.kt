@@ -104,7 +104,7 @@ class NetworkSerializerContractTest {
         )
 
         // Test 2: Missing playerDisplayName in JoinLobbyRequest
-        val missingName = "{\"lobbyCode\":\"AB12\"}"
+        val missingName = "{\"lobbyCode\":\"1003\"}"
         val exception2 =
             assertThrows(MissingFieldException::class.java) {
                 json.decodeFromString(JoinLobbyRequestSerializer, missingName)
@@ -147,7 +147,7 @@ class NetworkSerializerContractTest {
 
         val original =
             JoinLobbyRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
 
@@ -178,11 +178,11 @@ class NetworkSerializerContractTest {
         val testCases =
             listOf(
                 JoinLobbyRequest(
-                    lobbyCode = LobbyCode("CD34"),
+                    lobbyCode = LobbyCode("1071"),
                     playerDisplayName = "TEST",
                 ),
                 JoinLobbyRequest(
-                    lobbyCode = LobbyCode("EF56"),
+                    lobbyCode = LobbyCode("1132"),
                     playerDisplayName = "ALICE",
                 ),
             )
@@ -283,11 +283,11 @@ class NetworkSerializerContractTest {
 
         val original =
             JoinLobbyRequest(
-                lobbyCode = LobbyCode("TEST"),
+                lobbyCode = LobbyCode("1382"),
                 playerDisplayName = "Player",
             )
 
-        assertEquals(LobbyCode("TEST"), original.lobbyCode)
+        assertEquals(LobbyCode("1382"), original.lobbyCode)
         assertEquals("Player", original.playerDisplayName)
 
         // Both fields are mandatory - no null defaults

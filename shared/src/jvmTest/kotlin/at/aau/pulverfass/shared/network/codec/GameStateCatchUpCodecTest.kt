@@ -23,7 +23,7 @@ class GameStateCatchUpCodecTest {
     fun `should encode and decode catch up request payload directly`() {
         val payload =
             GameStateCatchUpRequest(
-                lobbyCode = LobbyCode("CU12"),
+                lobbyCode = LobbyCode("1109"),
                 clientStateVersion = 4,
                 reason = GameStateCatchUpReason.AFTER_RECONNECT,
             )
@@ -38,7 +38,7 @@ class GameStateCatchUpCodecTest {
     fun `should encode and decode catch up response payload directly`() {
         val payload =
             GameStateCatchUpResponse(
-                lobbyCode = LobbyCode("CU34"),
+                lobbyCode = LobbyCode("1110"),
                 stateVersion = 12,
                 determinism =
                     PublicDeterminismMetadataSnapshot(
@@ -84,7 +84,7 @@ class GameStateCatchUpCodecTest {
         val payload =
             GameStateCatchUpErrorResponse(
                 code = GameStateCatchUpErrorCode.GAME_NOT_FOUND,
-                reason = "Lobby 'CU99' wurde nicht gefunden.",
+                reason = "Lobby '1112' wurde nicht gefunden.",
             )
 
         val bytes = MessageCodec.encode(payload)

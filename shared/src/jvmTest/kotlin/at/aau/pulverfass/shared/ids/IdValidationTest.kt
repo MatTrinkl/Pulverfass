@@ -2,6 +2,7 @@ package at.aau.pulverfass.shared.ids
 
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 
 class IdValidationTest {
     @Test
@@ -40,16 +41,21 @@ class IdValidationTest {
     }
 
     @Test
-    fun `lobbyCode muss genau 4 zeichen haben`() {
+    fun `lobbyCode akzeptiert vier ziffern`() {
+        assertEquals("1234", LobbyCode("1234").value)
+    }
+
+    @Test
+    fun `lobbyCode muss genau 4 ziffern haben`() {
         assertThrows(IllegalArgumentException::class.java) {
-            LobbyCode("ABC")
+            LobbyCode("123")
         }
     }
 
     @Test
-    fun `lobbyCode darf keine kleinbuchstaben enthalten`() {
+    fun `lobbyCode darf keine buchstaben enthalten`() {
         assertThrows(IllegalArgumentException::class.java) {
-            LobbyCode("ab12")
+            LobbyCode("12A4")
         }
     }
 

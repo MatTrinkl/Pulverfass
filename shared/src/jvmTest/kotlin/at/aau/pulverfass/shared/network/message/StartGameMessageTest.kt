@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test
 class StartGameMessageTest {
     @Test
     fun `StartGameRequest serializes and deserializes correctly`() {
-        val lobbyCode = LobbyCode("SG01")
+        val lobbyCode = LobbyCode("1336")
         val request = StartGameRequest(lobbyCode)
 
         val json = Json.encodeToString(StartGameRequestSerializer, request)
@@ -79,7 +79,7 @@ class StartGameMessageTest {
 
     @Test
     fun `GameStartedEvent serializes and deserializes correctly`() {
-        val lobbyCode = LobbyCode("SG02")
+        val lobbyCode = LobbyCode("1337")
         val event = GameStartedEvent(lobbyCode)
 
         val json = Json.encodeToString(GameStartedEventSerializer, event)

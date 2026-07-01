@@ -713,15 +713,18 @@ private fun Application.installLobbyRuntime(
                 }
 
                 is Network.Event.Disconnected<ConnectionId> -> {
-                    event.sessionToken
-                        ?.let(sessionContextRegistry::playerIdForSession)
-                        ?.let { playerId ->
-                            routingService.onPlayerDisconnected(
-                                connectionId = event.connectionId,
-                                playerId = playerId,
-                                reason = event.reason,
-                            )
-                        }
+                    val playerId =
+                        event.sessionToken
+                            ?.let(sessionContextRegistry::playerIdForSession)
+                    if (playerId == null) {
+                        routingService.onConnectionClosed()
+                    } else {
+                        routingService.onPlayerDisconnected(
+                            connectionId = event.connectionId,
+                            playerId = playerId,
+                            reason = event.reason,
+                        )
+                    }
                 }
 
                 else -> Unit

@@ -73,7 +73,7 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val payload = JoinLobbyRequest(LobbyCode("AB12"), "alice")
+            val payload = JoinLobbyRequest(LobbyCode("1003"), "alice")
 
             coroutineScope {
                 val receivedDeferred =
@@ -181,7 +181,7 @@ class ServerNetworkIntegrationTest {
                 createClient {
                     install(WebSockets)
                 }
-            val payload = JoinLobbyRequest(LobbyCode("CD34"), "bob")
+            val payload = JoinLobbyRequest(LobbyCode("1071"), "bob")
 
             coroutineScope {
                 val connectedDeferred =
@@ -348,7 +348,7 @@ class ServerNetworkIntegrationTest {
                             context =
                                 SessionReconnectContext(
                                     playerId = PlayerId(7),
-                                    lobbyCode = LobbyCode("ZX12"),
+                                    lobbyCode = LobbyCode("1438"),
                                     playerDisplayName = "ALICE",
                                 ),
                             expiresAtEpochMillis = System.currentTimeMillis() + 60_000,
@@ -384,7 +384,7 @@ class ServerNetworkIntegrationTest {
                     ReconnectResponse(
                         success = true,
                         playerId = PlayerId(7),
-                        lobbyCode = LobbyCode("ZX12"),
+                        lobbyCode = LobbyCode("1438"),
                         playerDisplayName = "ALICE",
                     ),
                     response,
@@ -413,7 +413,7 @@ class ServerNetworkIntegrationTest {
                             context =
                                 SessionReconnectContext(
                                     playerId = PlayerId(8),
-                                    lobbyCode = LobbyCode("ZX13"),
+                                    lobbyCode = LobbyCode("1439"),
                                     playerDisplayName = "Expired Alice",
                                 ),
                             expiresAtEpochMillis = 49_999L,

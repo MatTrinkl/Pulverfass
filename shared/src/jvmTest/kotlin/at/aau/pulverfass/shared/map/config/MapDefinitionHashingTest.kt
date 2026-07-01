@@ -169,7 +169,7 @@ class MapDefinitionHashingTest {
         val definition = MapConfigLoader.loadFromJson(validEdgesJson())
         val gameState =
             GameState.initial(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 mapDefinition = definition,
                 players = listOf(PlayerId(1)),
             )

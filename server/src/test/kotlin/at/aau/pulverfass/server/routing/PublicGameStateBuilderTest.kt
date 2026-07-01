@@ -179,7 +179,7 @@ class PublicGameStateBuilderTest {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
                 builder.buildDelta(
-                    lobbyCode = LobbyCode("PGB1"),
+                    lobbyCode = LobbyCode("1288"),
                     fromVersion = 4,
                     toVersion = 4,
                     payloads =
@@ -544,7 +544,7 @@ class PublicGameStateBuilderTest {
     fun `buildSnapshot throws when game state has no turn state`() {
         val gameState =
             GameState.initial(
-                lobbyCode = LobbyCode("PGB2"),
+                lobbyCode = LobbyCode("1289"),
                 mapDefinition = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault(),
             ).copy(
                 turnState = null,
@@ -567,7 +567,7 @@ class PublicGameStateBuilderTest {
     fun `buildSnapshot throws when game state has no map definition`() {
         val gameState =
             GameState(
-                lobbyCode = LobbyCode("PGB3"),
+                lobbyCode = LobbyCode("1290"),
                 players = listOf(PlayerId(1)),
                 playerDisplayNames = mapOf(PlayerId(1) to "One"),
                 activePlayer = PlayerId(1),
@@ -598,7 +598,7 @@ class PublicGameStateBuilderTest {
     fun `fortify move event projects two troop updates into a public delta`() {
         val reducer = DefaultLobbyEventReducer()
         val playerOne = PlayerId(1)
-        val lobbyCode = LobbyCode("PGB2")
+        val lobbyCode = LobbyCode("1289")
         val baseState =
             sampleGameState().copy(
                 lobbyCode = lobbyCode,
@@ -682,7 +682,7 @@ class PublicGameStateBuilderTest {
 
     private fun sampleGameState(): GameState =
         GameState.initial(
-            lobbyCode = LobbyCode("PGB0"),
+            lobbyCode = LobbyCode("1287"),
             mapDefinition = at.aau.pulverfass.shared.map.config.MapConfigLoader.loadDefault(),
             players = listOf(PlayerId(1), PlayerId(2)),
             playerDisplayNames =

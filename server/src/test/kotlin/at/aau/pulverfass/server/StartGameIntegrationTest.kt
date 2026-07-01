@@ -60,7 +60,7 @@ class StartGameIntegrationTest {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
 
-            val lobbyCode = LobbyCode("STG1")
+            val lobbyCode = LobbyCode("1356")
             val ownerId = PlayerId(1)
             val player2Id = PlayerId(2)
             val player3Id = PlayerId(3)
@@ -244,7 +244,7 @@ class StartGameIntegrationTest {
             val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
             val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
 
-            val lobbyCode = LobbyCode("STG3")
+            val lobbyCode = LobbyCode("1357")
             val ownerId = PlayerId(1)
             val player2Id = PlayerId(2)
             lobbyManager.createLobby(

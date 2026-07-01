@@ -21,16 +21,16 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should create character selected broadcast correctly`() {
-        val broadcast = CharacterSelectedBroadcast(LobbyCode("AB12"), PlayerId(3), "warrior")
+        val broadcast = CharacterSelectedBroadcast(LobbyCode("1003"), PlayerId(3), "warrior")
 
-        assertEquals(LobbyCode("AB12"), broadcast.lobbyCode)
+        assertEquals(LobbyCode("1003"), broadcast.lobbyCode)
         assertEquals(PlayerId(3), broadcast.playerId)
         assertEquals("warrior", broadcast.characterId)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val broadcast = CharacterSelectedBroadcast(LobbyCode("AB12"), PlayerId(3), "warrior")
+        val broadcast = CharacterSelectedBroadcast(LobbyCode("1003"), PlayerId(3), "warrior")
         val payload: NetworkMessagePayload = broadcast
 
         assertEquals(broadcast, payload)
@@ -38,13 +38,13 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should serialize and deserialize character selected broadcast`() {
-        val broadcast = CharacterSelectedBroadcast(LobbyCode("AB12"), PlayerId(3), "warrior")
+        val broadcast = CharacterSelectedBroadcast(LobbyCode("1003"), PlayerId(3), "warrior")
 
         val serialized = json.encodeToString(CharacterSelectedBroadcast.serializer(), broadcast)
         val deserialized = json.decodeFromString<CharacterSelectedBroadcast>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"AB12","playerId":3,"characterId":"warrior"}""",
+            """{"lobbyCode":"1003","playerId":3,"characterId":"warrior"}""",
             serialized,
         )
         assertEquals(broadcast, deserialized)
@@ -52,7 +52,7 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should resolve message type and serialization via registry`() {
-        val broadcast = CharacterSelectedBroadcast(LobbyCode("CD34"), PlayerId(7), "character_04")
+        val broadcast = CharacterSelectedBroadcast(LobbyCode("1071"), PlayerId(7), "character_04")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(broadcast)
         val serialized = NetworkPayloadRegistry.serializePayload(broadcast)
@@ -64,9 +64,9 @@ class CharacterSelectedBroadcastTest {
 
     @Test
     fun `should satisfy equals and hashCode contract`() {
-        val a = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_03")
-        val b = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_03")
-        val c = CharacterSelectedBroadcast(LobbyCode("EF56"), PlayerId(9), "character_04")
+        val a = CharacterSelectedBroadcast(LobbyCode("1132"), PlayerId(9), "character_03")
+        val b = CharacterSelectedBroadcast(LobbyCode("1132"), PlayerId(9), "character_03")
+        val c = CharacterSelectedBroadcast(LobbyCode("1132"), PlayerId(9), "character_04")
 
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())
@@ -76,7 +76,7 @@ class CharacterSelectedBroadcastTest {
     @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<CharacterSelectedBroadcast>("""{"lobbyCode":"AB12"}""")
+            json.decodeFromString<CharacterSelectedBroadcast>("""{"lobbyCode":"1003"}""")
         }
     }
 
@@ -104,7 +104,7 @@ class CharacterSelectedBroadcastTest {
             CharacterSelectedBroadcastSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                 ),
             )
         }
@@ -116,7 +116,7 @@ class CharacterSelectedBroadcastTest {
             CharacterSelectedBroadcastSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, 1, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                     scalarLong = 3L,
                 ),
             )

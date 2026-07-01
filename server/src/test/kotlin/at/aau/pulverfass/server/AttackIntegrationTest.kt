@@ -60,7 +60,7 @@ class AttackIntegrationTest {
     @Test
     fun `happy path accepts one attack request and broadcasts resulting delta`() =
         testApplication {
-            val lobbyCode = LobbyCode("ATK1")
+            val lobbyCode = LobbyCode("1033")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -181,7 +181,7 @@ class AttackIntegrationTest {
     @Test
     fun `attack flow integrates manual phase end through router service and runtime`() =
         testApplication {
-            val lobbyCode = LobbyCode("AT12")
+            val lobbyCode = LobbyCode("1020")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -343,7 +343,7 @@ class AttackIntegrationTest {
     @Test
     fun `attack resolved details are public to uninvolved watcher`() =
         testApplication {
-            val lobbyCode = LobbyCode("AT13")
+            val lobbyCode = LobbyCode("1021")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val watcher = PlayerId(3)
@@ -469,7 +469,7 @@ class AttackIntegrationTest {
     @Test
     fun `capture transfers owner and moves troops according to moveAfterCapture`() =
         testApplication {
-            val lobbyCode = LobbyCode("ATK7")
+            val lobbyCode = LobbyCode("1039")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -616,7 +616,7 @@ class AttackIntegrationTest {
     @Test
     fun `capture that completes territory domination broadcasts match ended`() =
         testApplication {
-            val lobbyCode = LobbyCode("ATKW")
+            val lobbyCode = LobbyCode("1042")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -712,7 +712,7 @@ class AttackIntegrationTest {
     @Test
     fun `attack can capture territory owned by player who left the lobby`() =
         testApplication {
-            val lobbyCode = LobbyCode("ATKX")
+            val lobbyCode = LobbyCode("1043")
             val attacker = PlayerId(1)
             val bystander = PlayerId(2)
             val departedDefender = PlayerId(99)
@@ -788,7 +788,7 @@ class AttackIntegrationTest {
     @Test
     fun `elimination keeps hand updates private and phase changes public`() =
         testApplication {
-            val lobbyCode = LobbyCode("AT14")
+            val lobbyCode = LobbyCode("1022")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val watcher = PlayerId(3)
@@ -1061,10 +1061,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK8"),
+                    lobbyCode = LobbyCode("1040"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK8"),
+                            lobbyCode = LobbyCode("1040"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.ATTACK,
@@ -1080,7 +1080,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK8"),
+                            lobbyCode = LobbyCode("1040"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,
@@ -1099,7 +1099,7 @@ class AttackIntegrationTest {
     @Test
     fun `attack auto advances to fortify when no valid attacks remain`() =
         testApplication {
-            val lobbyCode = LobbyCode("AT11")
+            val lobbyCode = LobbyCode("1019")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = isolatedFallbackMapDefinition()
@@ -1226,7 +1226,7 @@ class AttackIntegrationTest {
     @Test
     fun `eliminated player attack request is denied while spectator stays connected`() =
         testApplication {
-            val lobbyCode = LobbyCode("ATK9")
+            val lobbyCode = LobbyCode("1041")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -1317,7 +1317,7 @@ class AttackIntegrationTest {
     @Test
     fun `elimination transfers cards and defers forced trade to reinforcement`() =
         testApplication {
-            val lobbyCode = LobbyCode("AK10")
+            val lobbyCode = LobbyCode("1007")
             val attacker = PlayerId(1)
             val defender = PlayerId(2)
             val map = defaultMapDefinition()
@@ -1448,10 +1448,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK2"),
+                    lobbyCode = LobbyCode("1034"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK2"),
+                            lobbyCode = LobbyCode("1034"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerTwo,
                             turnPhase = TurnPhase.ATTACK,
@@ -1467,7 +1467,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK2"),
+                            lobbyCode = LobbyCode("1034"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,
@@ -1492,10 +1492,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK3"),
+                    lobbyCode = LobbyCode("1035"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK3"),
+                            lobbyCode = LobbyCode("1035"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.REINFORCEMENTS,
@@ -1511,7 +1511,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK3"),
+                            lobbyCode = LobbyCode("1035"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,
@@ -1536,10 +1536,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK4"),
+                    lobbyCode = LobbyCode("1036"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK4"),
+                            lobbyCode = LobbyCode("1036"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.ATTACK,
@@ -1555,7 +1555,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK4"),
+                            lobbyCode = LobbyCode("1036"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,
@@ -1580,10 +1580,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK5"),
+                    lobbyCode = LobbyCode("1037"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK5"),
+                            lobbyCode = LobbyCode("1037"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.ATTACK,
@@ -1599,7 +1599,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK5"),
+                            lobbyCode = LobbyCode("1037"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,
@@ -1624,10 +1624,10 @@ class AttackIntegrationTest {
             val (error, snapshot) =
                 exerciseFailingAttack(
                     builder = this,
-                    lobbyCode = LobbyCode("ATK6"),
+                    lobbyCode = LobbyCode("1038"),
                     state =
                         attackGame(
-                            lobbyCode = LobbyCode("ATK6"),
+                            lobbyCode = LobbyCode("1038"),
                             players = listOf(playerOne, playerTwo),
                             activePlayerId = playerOne,
                             turnPhase = TurnPhase.ATTACK,
@@ -1643,7 +1643,7 @@ class AttackIntegrationTest {
                     requesterPlayerId = playerOne,
                     request =
                         AttackRequest(
-                            lobbyCode = LobbyCode("ATK6"),
+                            lobbyCode = LobbyCode("1038"),
                             playerId = playerOne,
                             fromTerritoryId = fromTerritoryId,
                             toTerritoryId = toTerritoryId,

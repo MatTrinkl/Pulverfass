@@ -28,7 +28,7 @@ data class ClaimCheatReinforcementBonusRequest(
 
 object ClaimCheatReinforcementBonusRequestSerializer :
     KSerializer<ClaimCheatReinforcementBonusRequest> {
-    /*
+    /**
      * Für diese Nachricht wird ein expliziter Serializer verwendet, damit das
      * Netzwerkformat stabil bleibt. Das ist bei Client-Server-Protokollen
      * wichtig: Beide Seiten müssen dieselben Feldnamen und dieselbe Reihenfolge

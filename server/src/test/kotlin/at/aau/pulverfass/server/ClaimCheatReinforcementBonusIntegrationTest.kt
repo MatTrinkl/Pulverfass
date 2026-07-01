@@ -62,7 +62,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `valid request grants three pending reinforcements and marks bonus as used`() =
         testApplication {
-            val lobbyCode = LobbyCode("CHS1")
+            val lobbyCode = LobbyCode("1078")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -166,14 +166,14 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `correct cheat report rewards reporter and zeroes cheater reinforcements`() =
         testApplication {
-            /*
+            /**
              * Hauptszenario der Meldefunktion:
              * 1. Spieler 1 nutzt den Cheatbonus.
              * 2. Die zusätzlichen Truppen werden sichtbar platziert.
              * 3. Spieler 2 meldet rechtzeitig.
              * 4. Spieler 2 bekommt später +3, Spieler 1 bekommt später 0.
              */
-            val lobbyCode = LobbyCode("CHR1")
+            val lobbyCode = LobbyCode("1075")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -352,13 +352,13 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report window expires twenty seconds after visible placement`() =
         testApplication {
-            /*
+            /**
              * Der Cheat ist direkt nach dem Claim noch nicht sichtbar. Dieser Test
              * beweist, dass das Meldefenster erst nach der ersten Platzierung der
              * zusätzlichen Truppen geöffnet wird. Wer vorher meldet, liegt falsch
              * und bekommt den -3-Malus.
              */
-            val lobbyCode = LobbyCode("CHR3")
+            val lobbyCode = LobbyCode("1077")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -606,11 +606,11 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `reporting player without open cheat window penalizes reporter`() =
         testApplication {
-            /*
+            /**
              * Falschmeldung ohne offenen Cheat: Der Server behandelt das nicht als
              * technischen Fehler, sondern als gültige falsche Meldung mit Malus.
              */
-            val lobbyCode = LobbyCode("CHR2")
+            val lobbyCode = LobbyCode("1076")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -701,7 +701,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `request is rejected when bonus was already used`() =
         testApplication {
-            val lobbyCode = LobbyCode("CHS2")
+            val lobbyCode = LobbyCode("1079")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -735,7 +735,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `request is rejected outside reinforcements phase`() =
         testApplication {
-            val lobbyCode = LobbyCode("CHS3")
+            val lobbyCode = LobbyCode("1080")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -767,7 +767,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `request is rejected when requester does not match payload player`() =
         testApplication {
-            val lobbyCode = LobbyCode("CHS4")
+            val lobbyCode = LobbyCode("1081")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -800,7 +800,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `request is rejected while game is paused`() =
         testApplication {
-            val lobbyCode = LobbyCode("CHS5")
+            val lobbyCode = LobbyCode("1082")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -842,7 +842,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report is rejected when requester does not match reporter`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRE1")
+            val lobbyCode = LobbyCode("1088")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -875,7 +875,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report is rejected when player reports himself`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRE2")
+            val lobbyCode = LobbyCode("1089")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =
@@ -908,7 +908,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report is rejected for unknown accused player`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRE3")
+            val lobbyCode = LobbyCode("1090")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val unknownPlayer = PlayerId(99)
@@ -942,7 +942,7 @@ class ClaimCheatReinforcementBonusIntegrationTest {
     @Test
     fun `cheat report is rejected before game has started`() =
         testApplication {
-            val lobbyCode = LobbyCode("CRE4")
+            val lobbyCode = LobbyCode("1091")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val baseState =

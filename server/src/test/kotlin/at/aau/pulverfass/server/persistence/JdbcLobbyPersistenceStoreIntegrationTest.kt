@@ -59,8 +59,8 @@ class JdbcLobbyPersistenceStoreIntegrationTest {
 
     @Test
     fun `event retention keeps only the latest two rounds per lobby`() {
-        val targetLobby = LobbyCode("RET1")
-        val untouchedLobby = LobbyCode("KEEP")
+        val targetLobby = LobbyCode("1326")
+        val untouchedLobby = LobbyCode("1202")
         var stateVersion = 1L
 
         store.appendEvent(
@@ -97,8 +97,8 @@ class JdbcLobbyPersistenceStoreIntegrationTest {
 
     @Test
     fun `snapshot retention keeps only the latest four snapshots per lobby`() {
-        val targetLobby = LobbyCode("SNP1")
-        val untouchedLobby = LobbyCode("SNP2")
+        val targetLobby = LobbyCode("1338")
+        val untouchedLobby = LobbyCode("1339")
 
         store.appendSnapshot(
             lobbyCode = untouchedLobby,
@@ -127,8 +127,8 @@ class JdbcLobbyPersistenceStoreIntegrationTest {
 
     @Test
     fun `deleteLobbyState removes all persisted events and snapshots for lobby`() {
-        val targetLobby = LobbyCode("DEL1")
-        val untouchedLobby = LobbyCode("DEL2")
+        val targetLobby = LobbyCode("1118")
+        val untouchedLobby = LobbyCode("1119")
 
         store.appendEvent(
             lobbyCode = targetLobby,

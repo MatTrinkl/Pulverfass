@@ -23,12 +23,12 @@ class MapGetMessageTest {
 
     @Test
     fun `serializer roundtrip request`() {
-        val request = MapGetRequest(lobbyCode = LobbyCode("AB12"))
+        val request = MapGetRequest(lobbyCode = LobbyCode("1003"))
 
         val serialized = json.encodeToString(MapGetRequest.serializer(), request)
         val deserialized = json.decodeFromString(MapGetRequest.serializer(), serialized)
 
-        assertEquals("""{"lobbyCode":"AB12"}""", serialized)
+        assertEquals("""{"lobbyCode":"1003"}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -51,7 +51,7 @@ class MapGetMessageTest {
         val response =
             MapGetErrorResponse(
                 code = MapGetErrorCode.PAYLOAD_TOO_LARGE,
-                reason = "Map-Snapshot fuer Lobby 'ZZ99' ist groesser als 128 Bytes.",
+                reason = "Map-Snapshot fuer Lobby '1442' ist groesser als 128 Bytes.",
             )
 
         val serialized = json.encodeToString(MapGetErrorResponse.serializer(), response)
@@ -62,7 +62,7 @@ class MapGetMessageTest {
 
     private fun sampleResponse(): MapGetResponse =
         MapGetResponse(
-            lobbyCode = LobbyCode("AB12"),
+            lobbyCode = LobbyCode("1003"),
             schemaVersion = 1,
             mapHash = "abc123",
             stateVersion = 7,

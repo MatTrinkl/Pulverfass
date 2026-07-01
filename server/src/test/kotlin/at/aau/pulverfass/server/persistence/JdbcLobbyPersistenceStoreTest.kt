@@ -37,13 +37,13 @@ class JdbcLobbyPersistenceStoreTest {
         val store = JdbcLobbyPersistenceStore(dataSource)
 
         assertThrows(IllegalArgumentException::class.java) {
-            store.appendEvent(LobbyCode("AB12"), -1, 0, "event", jsonPayload("x"))
+            store.appendEvent(LobbyCode("1003"), -1, 0, "event", jsonPayload("x"))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            store.appendEvent(LobbyCode("AB12"), 1, -1, "event", jsonPayload("x"))
+            store.appendEvent(LobbyCode("1003"), 1, -1, "event", jsonPayload("x"))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            store.appendEvent(LobbyCode("AB12"), 1, 0, " ", jsonPayload("x"))
+            store.appendEvent(LobbyCode("1003"), 1, 0, " ", jsonPayload("x"))
         }
 
         assertEquals(0, dataSource.openedConnections)
@@ -69,7 +69,7 @@ class JdbcLobbyPersistenceStoreTest {
             )
 
         store.appendEvent(
-            lobbyCode = LobbyCode("AB12"),
+            lobbyCode = LobbyCode("1003"),
             stateVersion = 4,
             turnCount = 3,
             eventType = "turn_state_updated",
@@ -77,14 +77,14 @@ class JdbcLobbyPersistenceStoreTest {
         )
 
         assertTrue(connection.committed)
-        assertEquals("AB12", insert.lastParameters[1])
+        assertEquals("1003", insert.lastParameters[1])
         assertEquals(4L, insert.lastParameters[2])
         assertEquals(3, insert.lastParameters[3])
         assertEquals("turn_state_updated", insert.lastParameters[4])
         val jsonb = assertInstanceOf(PGobject::class.java, insert.lastParameters[5])
         assertEquals("jsonb", jsonb.type)
         assertEquals("""{"value":"payload"}""", jsonb.value)
-        assertEquals("AB12", cleanup.lastParameters[1])
+        assertEquals("1003", cleanup.lastParameters[1])
         assertEquals(2, cleanup.lastParameters[2])
     }
 
@@ -108,20 +108,20 @@ class JdbcLobbyPersistenceStoreTest {
             )
 
         store.appendSnapshot(
-            lobbyCode = LobbyCode("CD34"),
+            lobbyCode = LobbyCode("1071"),
             stateVersion = 8,
             turnCount = 5,
             snapshotJson = jsonPayload("snapshot"),
         )
 
         assertTrue(connection.committed)
-        assertEquals("CD34", insert.lastParameters[1])
+        assertEquals("1071", insert.lastParameters[1])
         assertEquals(8L, insert.lastParameters[2])
         assertEquals(5, insert.lastParameters[3])
         val jsonb = assertInstanceOf(PGobject::class.java, insert.lastParameters[4])
         assertEquals("""{"value":"snapshot"}""", jsonb.value)
-        assertEquals("CD34", cleanup.lastParameters[1])
-        assertEquals("CD34", cleanup.lastParameters[2])
+        assertEquals("1071", cleanup.lastParameters[1])
+        assertEquals("1071", cleanup.lastParameters[2])
         assertEquals(4, cleanup.lastParameters[3])
     }
 
@@ -148,12 +148,12 @@ class JdbcLobbyPersistenceStoreTest {
                     ),
             )
 
-        assertEquals(3, store.cleanupEventsForLobby(LobbyCode("EF56"), currentRound = 0))
-        assertEquals("EF56", cleanupEvents.lastParameters[1])
+        assertEquals(3, store.cleanupEventsForLobby(LobbyCode("1132"), currentRound = 0))
+        assertEquals("1132", cleanupEvents.lastParameters[1])
         assertEquals(0, cleanupEvents.lastParameters[2])
-        assertEquals(2, store.cleanupSnapshotsForLobby(LobbyCode("EF56")))
-        assertEquals("EF56", cleanupSnapshots.lastParameters[1])
-        assertEquals("EF56", cleanupSnapshots.lastParameters[2])
+        assertEquals(2, store.cleanupSnapshotsForLobby(LobbyCode("1132")))
+        assertEquals("1132", cleanupSnapshots.lastParameters[1])
+        assertEquals("1132", cleanupSnapshots.lastParameters[2])
     }
 
     @Test
@@ -166,7 +166,7 @@ class JdbcLobbyPersistenceStoreTest {
                     listOf(
                         mapOf(
                             "id" to 1L,
-                            "lobby_code" to "AB12",
+                            "lobby_code" to "1003",
                             "state_version" to 3L,
                             "turn_count" to 2,
                             "event_type" to "turn_state_updated",
@@ -182,7 +182,7 @@ class JdbcLobbyPersistenceStoreTest {
                     listOf(
                         mapOf(
                             "id" to 4L,
-                            "lobby_code" to "AB12",
+                            "lobby_code" to "1003",
                             "state_version" to 5L,
                             "turn_count" to 3,
                             "snapshot_json" to """{"value":"snapshot"}""",
@@ -204,7 +204,7 @@ class JdbcLobbyPersistenceStoreTest {
             listOf(
                 PersistedLobbyEventRecord(
                     id = 1L,
-                    lobbyCode = LobbyCode("AB12"),
+                    lobbyCode = LobbyCode("1003"),
                     stateVersion = 3L,
                     turnCount = 2,
                     eventType = "turn_state_updated",
@@ -212,20 +212,20 @@ class JdbcLobbyPersistenceStoreTest {
                     createdAt = createdAt.toInstant(),
                 ),
             ),
-            store.listEvents(LobbyCode("AB12")),
+            store.listEvents(LobbyCode("1003")),
         )
         assertEquals(
             listOf(
                 PersistedLobbySnapshotRecord(
                     id = 4L,
-                    lobbyCode = LobbyCode("AB12"),
+                    lobbyCode = LobbyCode("1003"),
                     stateVersion = 5L,
                     turnCount = 3,
                     snapshotJson = """{"value":"snapshot"}""",
                     createdAt = createdAt.toInstant(),
                 ),
             ),
-            store.listSnapshots(LobbyCode("AB12")),
+            store.listSnapshots(LobbyCode("1003")),
         )
     }
 
@@ -239,7 +239,7 @@ class JdbcLobbyPersistenceStoreTest {
                     listOf(
                         mapOf(
                             "id" to 6L,
-                            "lobby_code" to "GH78",
+                            "lobby_code" to "1178",
                             "state_version" to 9L,
                             "turn_count" to 4,
                             "snapshot_json" to """{"value":"latest"}""",
@@ -255,7 +255,7 @@ class JdbcLobbyPersistenceStoreTest {
                     listOf(
                         mapOf(
                             "id" to 7L,
-                            "lobby_code" to "GH78",
+                            "lobby_code" to "1178",
                             "state_version" to 10L,
                             "turn_count" to 5,
                             "event_type" to "player_joined",
@@ -271,8 +271,8 @@ class JdbcLobbyPersistenceStoreTest {
                         "FROM lobby_snapshots",
                 rows =
                     listOf(
-                        mapOf("lobby_code" to "GH78"),
-                        mapOf("lobby_code" to "IJ90"),
+                        mapOf("lobby_code" to "1178"),
+                        mapOf("lobby_code" to "1199"),
                     ),
             )
         val deleteEvents =
@@ -297,20 +297,20 @@ class JdbcLobbyPersistenceStoreTest {
                 ),
             )
 
-        assertEquals(9L, store.loadLatestSnapshot(LobbyCode("GH78"))?.stateVersion)
+        assertEquals(9L, store.loadLatestSnapshot(LobbyCode("1178"))?.stateVersion)
         assertEquals(
             listOf(10L),
-            store.loadEventsAfter(LobbyCode("GH78"), 9L).map { it.stateVersion },
+            store.loadEventsAfter(LobbyCode("1178"), 9L).map { it.stateVersion },
         )
         assertEquals(
-            setOf(LobbyCode("GH78"), LobbyCode("IJ90")),
+            setOf(LobbyCode("1178"), LobbyCode("1199")),
             store.findLobbyCodesWithPersistedState(),
         )
 
-        store.deleteLobbyState(LobbyCode("GH78"))
+        store.deleteLobbyState(LobbyCode("1178"))
 
-        assertEquals("GH78", deleteEvents.lastParameters[1])
-        assertEquals("GH78", deleteSnapshots.lastParameters[1])
+        assertEquals("1178", deleteEvents.lastParameters[1])
+        assertEquals("1178", deleteSnapshots.lastParameters[1])
     }
 
     @Test
@@ -325,7 +325,7 @@ class JdbcLobbyPersistenceStoreTest {
                 FakeJdbcDataSource(listOf(FakeConnectionScript(listOf(latestSnapshot)))),
             )
 
-        assertEquals(null, store.loadLatestSnapshot(LobbyCode("ZZ99")))
+        assertEquals(null, store.loadLatestSnapshot(LobbyCode("1442")))
     }
 
     private fun jsonPayload(value: String) =

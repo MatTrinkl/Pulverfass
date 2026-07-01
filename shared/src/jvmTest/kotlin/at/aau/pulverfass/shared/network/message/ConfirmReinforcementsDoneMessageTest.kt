@@ -18,7 +18,7 @@ class ConfirmReinforcementsDoneMessageTest {
     fun `serializer roundtrip request`() {
         val request =
             ConfirmReinforcementsDoneRequest(
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerId = PlayerId(7),
             )
 
@@ -32,7 +32,7 @@ class ConfirmReinforcementsDoneMessageTest {
 
     @Test
     fun `serializer roundtrip response`() {
-        val response = ConfirmReinforcementsDoneResponse(lobbyCode = LobbyCode("CD34"))
+        val response = ConfirmReinforcementsDoneResponse(lobbyCode = LobbyCode("1071"))
 
         val serialized =
             json.encodeToString(ConfirmReinforcementsDoneResponse.serializer(), response)

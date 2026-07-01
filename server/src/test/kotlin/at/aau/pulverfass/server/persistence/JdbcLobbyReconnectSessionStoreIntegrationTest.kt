@@ -69,7 +69,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
         val context =
             SessionReconnectContext(
                 playerId = PlayerId(11),
-                lobbyCode = LobbyCode("AB12"),
+                lobbyCode = LobbyCode("1003"),
                 playerDisplayName = "Alice",
             )
 
@@ -94,7 +94,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
             ),
             SessionReconnectContext(
                 playerId = PlayerId(12),
-                lobbyCode = LobbyCode("CD34"),
+                lobbyCode = LobbyCode("1071"),
                 playerDisplayName = "Bob",
             ),
         )
@@ -106,12 +106,12 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
             ),
             SessionReconnectContext(
                 playerId = PlayerId(13),
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 playerDisplayName = "Carol",
             ),
         )
 
-        store.clearLobbyContextForLobby(LobbyCode("CD34"))
+        store.clearLobbyContextForLobby(LobbyCode("1071"))
 
         assertEquals(
             SessionReconnectContext(playerId = PlayerId(12)),
@@ -120,7 +120,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
         assertEquals(
             SessionReconnectContext(
                 playerId = PlayerId(13),
-                lobbyCode = LobbyCode("EF56"),
+                lobbyCode = LobbyCode("1132"),
                 playerDisplayName = "Carol",
             ),
             store.loadContext(secondToken),
@@ -138,7 +138,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
             ),
             SessionReconnectContext(
                 playerId = PlayerId(14),
-                lobbyCode = LobbyCode("GH78"),
+                lobbyCode = LobbyCode("1178"),
                 playerDisplayName = "Dora",
             ),
         )
@@ -161,7 +161,7 @@ class JdbcLobbyReconnectSessionStoreIntegrationTest {
             ),
             SessionReconnectContext(
                 playerId = PlayerId(15),
-                lobbyCode = LobbyCode("IJ90"),
+                lobbyCode = LobbyCode("1199"),
                 playerDisplayName = "Eve",
             ),
         )

@@ -72,7 +72,7 @@ fun OptionsScreen(
                 .fillMaxSize()
                 .background(PulverfassColors.SurfaceVoid),
     ) {
-        /*
+        /**
          * Video-Hintergrund ohne eigene Tonspur; Musik kommt routenbasiert aus
          * der Activity.
          */
@@ -83,7 +83,7 @@ fun OptionsScreen(
             muted = true,
             modifier = Modifier.fillMaxSize(),
         )
-        /*
+        /**
          * Dunkles Overlay hält Formular und Titel vor wechselnden Videoframes
          * lesbar.
          */
@@ -101,7 +101,7 @@ fun OptionsScreen(
                     .padding(horizontal = 48.dp, vertical = 48.dp),
             contentAlignment = Alignment.Center,
         ) {
-            /*
+            /**
              * Scrollbarer Inhalt mit einer Mindesthöhe in Viewport-Größe.
              * Dadurch bleiben kleine Screens bedienbar, ohne dass Tastaturfokus
              * den Screen neu ausrichtet.
@@ -139,7 +139,7 @@ fun OptionsScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
-                /*
+                /**
                  * Gemeinsame Audiokarte für Musik und SFX mit sofortiger
                  * Persistenz.
                  */

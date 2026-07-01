@@ -27,7 +27,7 @@ class DefaultNetworkToLobbyEventMapperTest {
 
     @Test
     fun `join request wird korrekt auf domain event gemappt`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val playerId = PlayerId(7)
         val request =
             DecodedNetworkRequest(
@@ -55,7 +55,7 @@ class DefaultNetworkToLobbyEventMapperTest {
 
     @Test
     fun `leave request wird korrekt auf domain event gemappt`() {
-        val lobbyCode = LobbyCode("GH78")
+        val lobbyCode = LobbyCode("1178")
         val playerId = PlayerId(11)
         val request =
             DecodedNetworkRequest(
@@ -90,7 +90,7 @@ class DefaultNetworkToLobbyEventMapperTest {
                         ConnectionId(2),
                         MessageHeader(MessageType.LOBBY_CREATE_REQUEST),
                     ),
-                payload = JoinLobbyRequest(LobbyCode("CD34"), "Bob"),
+                payload = JoinLobbyRequest(LobbyCode("1071"), "Bob"),
                 context =
                     EventContext(
                         connectionId = ConnectionId(2),
@@ -139,7 +139,7 @@ class DefaultNetworkToLobbyEventMapperTest {
                         ConnectionId(4),
                         MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                     ),
-                payload = JoinLobbyRequest(LobbyCode("EF56"), "Carol"),
+                payload = JoinLobbyRequest(LobbyCode("1132"), "Carol"),
                 context =
                     EventContext(
                         connectionId = ConnectionId(4),
@@ -184,7 +184,7 @@ class DefaultNetworkToLobbyEventMapperTest {
 
     @Test
     fun `kick request wird korrekt auf domain event gemappt`() {
-        val lobbyCode = LobbyCode("AB12")
+        val lobbyCode = LobbyCode("1003")
         val requesterPlayerId = PlayerId(1)
         val targetPlayerId = PlayerId(2)
         val request =
@@ -216,7 +216,7 @@ class DefaultNetworkToLobbyEventMapperTest {
 
     @Test
     fun `start game request wird korrekt auf domain event gemappt`() {
-        val lobbyCode = LobbyCode("ZZ88")
+        val lobbyCode = LobbyCode("1441")
         val playerId = PlayerId(99)
         val request =
             DecodedNetworkRequest(

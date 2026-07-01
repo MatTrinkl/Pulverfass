@@ -79,8 +79,8 @@ private const val FAN_PIVOT_Y = 2.4f
 private const val FAN_MAX_ANGLE_PER_CARD = 11f
 private const val FAN_TOTAL_ANGLE = 60f
 private const val SELECTED_SCALE = 1.06f
-private const val CARD_OFFSCREEN_FRACTION = 0.22f
-private const val CARD_ASPECT_RATIO = 2f / 3f
+private const val CARD_OFFSCREEN_FRACTION = 0.06f
+private const val CARD_ASPECT_RATIO = 4f / 5f
 
 @Composable
 internal fun CardHandOverlay(
@@ -340,28 +340,13 @@ private fun FannedHand(
                                 indication = null,
                             ) { onToggle(card.cardId) }
                             .testTag("card_hand_card_${card.cardId.value}"),
-                    contentAlignment = Alignment.TopCenter,
+                    contentAlignment = Alignment.Center,
                 ) {
                     Image(
                         painter = painterResource(cardDrawableFor(card.type)),
                         contentDescription = cardLabel,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
-                    )
-                    Text(
-                        text = cardLabel,
-                        color = PulverfassColors.TextOnDark,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .background(PulverfassColors.SurfaceVoid.copy(alpha = 0.42f))
-                                .padding(vertical = 3.dp),
                     )
                 }
             }
@@ -371,13 +356,7 @@ private fun FannedHand(
 
 @Composable
 private fun cardDisplayLabel(card: PrivateHandCardUi): String {
-    val typeLabel = cardTypeLabel(card.type)
-    val territoryName = card.cardId.territoryDisplayName()
-    return if (territoryName == null || card.type == CardType.JOKER) {
-        typeLabel
-    } else {
-        "$typeLabel $territoryName"
-    }
+    return cardTypeLabel(card.type)
 }
 
 @Composable
@@ -388,52 +367,3 @@ private fun cardTypeLabel(type: CardType): String =
         CardType.C -> stringResource(Res.string.game_card_type_c)
         CardType.JOKER -> stringResource(Res.string.game_card_type_joker)
     }
-
-private fun CardId.territoryDisplayName(): String? {
-    val parts = value.split(":")
-    if (parts.size != 3 || parts[0] != "territory") {
-        return null
-    }
-    return territoryDisplayNames[parts[1]] ?: parts[1].fallbackTerritoryDisplayName()
-}
-
-private fun String.fallbackTerritoryDisplayName(): String =
-    split("_")
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { part ->
-            part.replaceFirstChar { char ->
-                if (char.isLowerCase()) {
-                    char.titlecase()
-                } else {
-                    char.toString()
-                }
-            }
-        }
-
-private val territoryDisplayNames =
-    mapOf(
-        "argentinien" to "Argentinien",
-        "brasilien" to "Brasilien",
-        "mittelamerika" to "Mittelamerika",
-        "usa" to "USA",
-        "andengemeinschaft" to "Andengemeinschaft",
-        "alaska" to "Alaska",
-        "kanada" to "Kanada",
-        "groenland" to "Grönland",
-        "grossbritannien" to "Großbritannien",
-        "westeuropa" to "Westeuropa",
-        "skandinavien" to "Skandinavien",
-        "mitteleuropa" to "Mitteleuropa",
-        "russland" to "Russland",
-        "naher_osten" to "Naher Osten",
-        "sibirien" to "Sibirien",
-        "china" to "China",
-        "japan" to "Japan",
-        "ferner_osten" to "Ferner Osten",
-        "australien" to "Australien",
-        "ozeanien" to "Ozeanien",
-        "aegypten" to "Ägypten",
-        "sahara" to "Sahara",
-        "zentral_afrika" to "Zentralafrika",
-        "sued_afrika" to "Südafrika",
-    )

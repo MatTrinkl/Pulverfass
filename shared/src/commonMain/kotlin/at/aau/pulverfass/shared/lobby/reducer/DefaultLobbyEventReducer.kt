@@ -135,6 +135,12 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 "Player '$playerId' ist bereits Teil der Lobby '${state.lobbyCode}'.",
             )
         }
+        if (hasStartedGame(state)) {
+            throw InvalidLobbyEventException(
+                "Player '$playerId' kann Lobby '${state.lobbyCode}' " +
+                    "nach Spielstart nicht beitreten.",
+            )
+        }
 
         val updatedPlayers = state.players + playerId
         val updatedTurnOrder = TurnOrderPolicy.normalize(state.turnOrder + playerId)
@@ -196,27 +202,32 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 removedPlayerId = playerId,
             )
         val baseUpdatedState =
-            state.copy(
-                players = updatedPlayers,
-                playerDisplayNames = state.playerDisplayNames - playerId,
-                lobbyOwner = updatedLobbyOwner,
-                activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
-                pendingReinforcements =
-                    state.pendingReinforcements?.takeIf { it.playerId != playerId },
-                setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
-                tradeRequiredOnNextReinforcementPhaseByPlayer =
-                    state.tradeRequiredOnNextReinforcementPhaseByPlayer - playerId,
-                usedCheatReinforcementBonusByPlayer =
-                    state.usedCheatReinforcementBonusByPlayer - playerId,
-                configuredStartPlayerId = updatedTurnState?.startPlayerId,
-                turnOrder = updatedTurnOrder,
-                turnState =
-                    state.turnState?.takeIf { turnState ->
-                        updatedPlayers.contains(turnState.activePlayerId) &&
-                            updatedPlayers.contains(turnState.startPlayerId)
-                    },
-                status = updatedStatus,
-            )
+            state
+                .copy(
+                    players = updatedPlayers,
+                    playerDisplayNames = state.playerDisplayNames - playerId,
+                    lobbyOwner = updatedLobbyOwner,
+                    activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                    pendingReinforcements =
+                        state.pendingReinforcements?.takeIf { it.playerId != playerId },
+                    setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - playerId,
+                    tradeRequiredOnNextReinforcementPhaseByPlayer =
+                        state.tradeRequiredOnNextReinforcementPhaseByPlayer - playerId,
+                    usedCheatReinforcementBonusByPlayer =
+                        state.usedCheatReinforcementBonusByPlayer - playerId,
+                    handState =
+                        state.handState.copy(
+                            cardsByPlayer = state.handState.cardsByPlayer - playerId,
+                        ),
+                    configuredStartPlayerId = updatedTurnState?.startPlayerId,
+                    turnOrder = updatedTurnOrder,
+                    turnState =
+                        state.turnState?.takeIf { turnState ->
+                            updatedPlayers.contains(turnState.activePlayerId) &&
+                                updatedPlayers.contains(turnState.startPlayerId)
+                        },
+                    status = updatedStatus,
+                )
 
         return updatedTurnState?.let {
             applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
@@ -257,26 +268,31 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
                 removedPlayerId = targetPlayerId,
             )
         val baseUpdatedState =
-            state.copy(
-                players = updatedPlayers,
-                playerDisplayNames = state.playerDisplayNames - targetPlayerId,
-                activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
-                pendingReinforcements =
-                    state.pendingReinforcements?.takeIf { it.playerId != targetPlayerId },
-                setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
-                tradeRequiredOnNextReinforcementPhaseByPlayer =
-                    state.tradeRequiredOnNextReinforcementPhaseByPlayer - targetPlayerId,
-                usedCheatReinforcementBonusByPlayer =
-                    state.usedCheatReinforcementBonusByPlayer - targetPlayerId,
-                configuredStartPlayerId = updatedTurnState?.startPlayerId,
-                turnOrder = updatedTurnOrder,
-                turnState =
-                    state.turnState?.takeIf { turnState ->
-                        updatedPlayers.contains(turnState.activePlayerId) &&
-                            updatedPlayers.contains(turnState.startPlayerId)
-                    },
-                status = updatedStatus,
-            )
+            state
+                .copy(
+                    players = updatedPlayers,
+                    playerDisplayNames = state.playerDisplayNames - targetPlayerId,
+                    activePlayer = state.activePlayer?.takeIf(updatedPlayers::contains),
+                    pendingReinforcements =
+                        state.pendingReinforcements?.takeIf { it.playerId != targetPlayerId },
+                    setupTroopsToPlaceByPlayer = state.setupTroopsToPlaceByPlayer - targetPlayerId,
+                    tradeRequiredOnNextReinforcementPhaseByPlayer =
+                        state.tradeRequiredOnNextReinforcementPhaseByPlayer - targetPlayerId,
+                    usedCheatReinforcementBonusByPlayer =
+                        state.usedCheatReinforcementBonusByPlayer - targetPlayerId,
+                    handState =
+                        state.handState.copy(
+                            cardsByPlayer = state.handState.cardsByPlayer - targetPlayerId,
+                        ),
+                    configuredStartPlayerId = updatedTurnState?.startPlayerId,
+                    turnOrder = updatedTurnOrder,
+                    turnState =
+                        state.turnState?.takeIf { turnState ->
+                            updatedPlayers.contains(turnState.activePlayerId) &&
+                                updatedPlayers.contains(turnState.startPlayerId)
+                        },
+                    status = updatedStatus,
+                )
 
         return updatedTurnState?.let {
             applyTurnStateUpdate(baseUpdatedState, turnStateUpdatedEvent(baseUpdatedState, it))
@@ -640,7 +656,7 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         state: GameState,
         event: CheatReinforcementBonusUsedEvent,
     ): GameState {
-        /*
+        /**
          * Der Reducer speichert nur, dass der Bonus verbraucht wurde.
          * Die fachliche Prüfung, ob der Spieler gerade aktiv ist, in der
          * Reinforcements-Phase steht und keinen Pflicht-Kartentausch offen hat,
@@ -657,11 +673,9 @@ class DefaultLobbyEventReducer : LobbyEventReducer {
         }
 
         return state.copy(
-            /*
-             * Set statt Boolean pro Spieler: So bleibt die Information klein und
-             * lässt sich beim Entfernen eines Spielers einfach wieder aus dem
-             * State herausnehmen.
-             */
+            // Set statt Boolean pro Spieler: So bleibt die Information klein und
+            // lässt sich beim Entfernen eines Spielers einfach wieder aus dem
+            // State herausnehmen.
             usedCheatReinforcementBonusByPlayer =
                 state.usedCheatReinforcementBonusByPlayer + event.playerId,
         )

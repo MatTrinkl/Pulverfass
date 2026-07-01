@@ -369,7 +369,7 @@ fun InteractiveGameMap(
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     val currentOnRegionSelected = rememberUpdatedState(onRegionSelected)
 
-    /*
+    /**
      * Die ID-Map wird nie gezeichnet. Sie ist nur ein Lookup-Bild für Eingaben:
      * Tap -> Kartenpixel -> RGB-Farbe -> GameMapRegion.
      */
@@ -379,7 +379,7 @@ fun InteractiveGameMap(
             regionIdImage.toPixelMap()
         }
 
-    /*
+    /**
      * Masken werden einmal geladen und gecacht (imageResource cached intern).
      * Die Owner-Farben kommen aus dem serverautoritativen GameState und werden
      * erst beim Zeichnen als Tint angewendet; Besitzwechsel lösen daher kein
@@ -390,7 +390,7 @@ fun InteractiveGameMap(
             region to imageResource(region.maskResId)
         }
 
-    /*
+    /**
      * Anker (Maskenschwerpunkte) hängen nur von den Masken ab, nicht von den
      * Farben, und werden deshalb genau einmal berechnet.
      */
@@ -424,7 +424,7 @@ fun InteractiveGameMap(
                     .fillMaxSize()
                     .onSizeChanged { viewportSize = it }
                     .pointerInput(regions, layoutMetrics, viewportState, regionIdPixelMap) {
-                        /*
+                        /**
                          * Die sichtbare Karte und die technische ID-Map teilen
                          * sich dasselbe Koordinatensystem. Darum genügt eine
                          * Rückprojektion vom Bildschirmpunkt auf den Pixel der
@@ -446,7 +446,7 @@ fun InteractiveGameMap(
                         }
                     }
                     .pointerInput(layoutMetrics) {
-                        /*
+                        /**
                          * Pan und Pinch-Zoom verändern ausschließlich den
                          * Viewport. Die fachliche Auswahl bleibt im Reducer und
                          * wird nicht mit Gestenlogik vermischt.
@@ -496,7 +496,7 @@ fun InteractiveGameMap(
                     labelPosition.isFinite() &&
                     labelPosition.isWithin(layoutMetrics.viewportSize)
                 ) {
-                    /*
+                    /**
                      * Der Counter liegt als Compose-Element über dem Canvas,
                      * damit Text nicht in die Bitmap gerendert werden muss und
                      * Test-Tags für UI-Tests stabil bleiben.
@@ -923,7 +923,7 @@ internal fun calculateMaskCenter(
     require(width > 0)
     require(height > 0)
 
-    /*
+    /**
      * Schwerpunkt der sichtbaren Maskenpixel. Das ist robuster als manuelle
      * Labelkoordinaten, weil neue Masken automatisch sinnvolle Counterpositionen
      * liefern. Einzelne Ausreißer an der Küste fallen durch die Mittelung kaum
@@ -1039,7 +1039,7 @@ private fun DrawScope.drawGameMap(
                 height = layoutMetrics.mapSize.height.roundToInt(),
             )
 
-        /*
+        /**
          * Alpha kommt aus der Maske, RGB aus dem GameState: der SrcIn-Tint
          * ersetzt die Maskenfarbe vollständig durch die Owner-Farbe und
          * erhält dabei Küsten/Antialiasing der Maske.

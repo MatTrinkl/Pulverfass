@@ -214,6 +214,7 @@ private val PhaseButtonWidth = 132.dp
 private const val ACTION_PANEL_Z_INDEX = 35f
 private val TopBarHeight = 78.dp
 private val BottomBarHeight = 76.dp
+private val AttackPanelMaxHeight = 280.dp
 private val TopBarHorizontalPadding = 16.dp
 private val PhaseImageHeight = 69.dp
 private val PhaseLabelVerticalOffset = (-4).dp
@@ -714,7 +715,7 @@ internal fun GameScreenContent(
                 .background(Color.Black)
                 .testTag("game_screen_root"),
     ) {
-        /*
+        /**
          * Der eigentliche Spielinhalt bleibt zunächst sichtbar, auch wenn ein
          * sehr kurzer Reconnect- oder Catch-up-Zustand auftritt. Erst nach der
          * Verzögerung wird weich geblurt, damit Attack-Responses nicht als
@@ -733,12 +734,10 @@ internal fun GameScreenContent(
                 regionStates = uiState.regionStates,
                 selectedRegionId = uiState.selectedRegionId,
                 onRegionSelected = { region ->
-                /*
-                 * Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
-                 * werden aber nur weitergereicht, wenn der Client synchron ist.
-                 * Der Reducer entscheidet anschließend phasen- und spielerabhängig,
-                 * ob der Tap eine gültige Auswahl ist.
-                 */
+                    // Die Karte bleibt immer zoombar und sichtbar. Fachliche Eingaben
+                    // werden aber nur weitergereicht, wenn der Client synchron ist.
+                    // Der Reducer entscheidet anschließend phasen- und spielerabhängig,
+                    // ob der Tap eine gültige Auswahl ist.
                     if (canSelectRegion) {
                         onRegionSelected(region.id)
                     }
@@ -1992,6 +1991,7 @@ private fun BoxScope.ReinforcementPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2015,6 +2015,7 @@ private fun BoxScope.AttackPanelHost(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(ACTION_PANEL_Z_INDEX)
+                        .navigationBarsPadding()
                         .padding(bottom = BottomBarHeight + 8.dp),
             )
         }
@@ -2062,6 +2063,7 @@ private fun BoxScope.AttackPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2103,6 +2105,7 @@ private fun BoxScope.FortifyPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2315,7 +2318,7 @@ private fun endCurrentPhaseAction(
         else -> onAdvanceTurn
     }
 
-/*
+/**
  * Nachschlagetabelle Region-ID -> lesbarer Gebietsname. Die technischen IDs wie
  * "central_europe" tauchen nur intern auf; in den Auswahl-Panels und im
  * Kampfergebnis sollen Spieler den Namen ("Mitteleuropa") sehen.
@@ -3063,10 +3066,12 @@ private fun AttackPanel(
 ) {
     val minimumMoveAfterCapture =
         minimumOccupyingTroopsForAttack(state.attackState.attackTroops)
+    val scrollState = rememberScrollState()
     Surface(
         modifier =
             modifier
                 .widthIn(max = 600.dp)
+                .heightIn(max = AttackPanelMaxHeight)
                 .testTag("attack_panel"),
         shape = RoundedCornerShape(6.dp),
         color = HudSurfaceColor,
@@ -3074,7 +3079,10 @@ private fun AttackPanel(
         border = BorderStroke(1.dp, HudBorderColor),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -3411,12 +3419,11 @@ private fun AttackResultPanel(
 }
 
 /**
- * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ * Zustand der ständig sichtbaren Aktionsleiste am unteren Rand.
  *
- * [onEndPhase] ist bereits vom aufrufenden Screen auf den fachlich korrekten
- * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
- * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
- * in den übrigen Phasen.
+ * @property currentPhase aktuell angezeigte Spielphase.
+ * @property canEndPhase `true`, wenn der lokale Spieler die Phase beenden darf.
+ * @property cardsVisible `true`, wenn die Kartenleiste eingeblendet ist.
  */
 private data class BottomBarState(
     val currentPhase: TurnPhase?,
@@ -3424,6 +3431,20 @@ private data class BottomBarState(
     val cardsVisible: Boolean,
 )
 
+/**
+ * Rendert die ständig sichtbare Aktionsleiste am unteren Rand.
+ *
+ * `onEndPhase` ist bereits vom aufrufenden Screen auf den fachlich korrekten
+ * Request abgebildet: `ConfirmReinforcementsDone` nach vollständigem Verbrauch
+ * des Restpools, `ConfirmAttackDone` in der Angriffsphase und `TurnAdvance`
+ * in den übrigen Phasen.
+ *
+ * @param state Phasen- und Sichtbarkeitszustand der Leiste.
+ * @param onToggleCards öffnet oder schließt die Kartenleiste.
+ * @param onEndPhase sendet den zur aktuellen Phase passenden Abschlussrequest.
+ * @param modifier Modifier für die gesamte Aktionsleiste.
+ * @param musicManager optionaler SFX-Auslöser für Button-Aktionen.
+ */
 @Composable
 private fun BottomActionClusters(
     state: BottomBarState,

@@ -25,7 +25,7 @@ class DecodedNetworkRequestTest {
         val request =
             DecodedNetworkRequest(
                 receivedPacket = packet,
-                payload = JoinLobbyRequest(LobbyCode("AB12"), "Alice"),
+                payload = JoinLobbyRequest(LobbyCode("1003"), "Alice"),
                 context = EventContext(connectionId = ConnectionId(1), occurredAtEpochMillis = 123),
             )
 
@@ -45,7 +45,7 @@ class DecodedNetworkRequestTest {
                             header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                             packet = SerializedPacket(byteArrayOf(1), byteArrayOf()),
                         ),
-                    payload = JoinLobbyRequest(LobbyCode("AB12"), "Alice"),
+                    payload = JoinLobbyRequest(LobbyCode("1003"), "Alice"),
                     context =
                         EventContext(
                             connectionId = ConnectionId(2),
@@ -70,7 +70,7 @@ class DecodedNetworkRequestTest {
                         header = MessageHeader(MessageType.LOBBY_JOIN_REQUEST),
                         packet = SerializedPacket(byteArrayOf(1), byteArrayOf()),
                     ),
-                payload = JoinLobbyRequest(LobbyCode("CD34"), "Bob"),
+                payload = JoinLobbyRequest(LobbyCode("1071"), "Bob"),
                 context = EventContext(occurredAtEpochMillis = 789),
             )
 

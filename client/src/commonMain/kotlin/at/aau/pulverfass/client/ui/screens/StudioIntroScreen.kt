@@ -44,7 +44,7 @@ fun StudioIntroScreen(
 ) {
     var hasNavigated by remember { mutableStateOf(false) }
 
-    /*
+    /**
      * navigateNext ist idempotent — egal wie oft sie aufgerufen wird
      * (click + onCompleted + safety timeout), navigiert nur EINMAL.
      */

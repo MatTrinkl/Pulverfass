@@ -59,7 +59,7 @@ class GameStatePrivateGetIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("PG01")
+            val lobbyCode = LobbyCode("1279")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -144,7 +144,7 @@ class GameStatePrivateGetIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("PG02")
+            val lobbyCode = LobbyCode("1280")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             lobbyManager.createLobby(
@@ -235,7 +235,7 @@ class GameStatePrivateGetIntegrationTest {
                 module(network)
             }
 
-            val lobbyCode = LobbyCode("PG03")
+            val lobbyCode = LobbyCode("1281")
             val playerOne = PlayerId(1)
             lobbyManager.createLobby(
                 lobbyCode = lobbyCode,

@@ -134,7 +134,7 @@ data class GameState(
         require(activePlayer == null || players.contains(activePlayer)) {
             "GameState.activePlayer muss Teil der Spielerliste sein."
         }
-        /*
+        /**
          * Der Cheatbonus ist an einen echten Lobby-Spieler gebunden. Wenn hier
          * eine fremde PlayerId erlaubt wäre, könnten spätere Reducer- oder
          * Routing-Schritte nicht mehr sauber unterscheiden, ob ein Spieler den

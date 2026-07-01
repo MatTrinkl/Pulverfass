@@ -40,8 +40,8 @@ class LobbyRuntimeRegistryTest {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
                 registry.startLobby(
-                    lobbyCode = LobbyCode("NO34"),
-                    initialState = GameState.initial(LobbyCode("PQ56")),
+                    lobbyCode = LobbyCode("1259"),
+                    initialState = GameState.initial(LobbyCode("1296")),
                 )
             }
 
@@ -53,7 +53,7 @@ class LobbyRuntimeRegistryTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val registry = LobbyRuntimeRegistry(scope)
-            val lobbyCode = LobbyCode("AB12")
+            val lobbyCode = LobbyCode("1003")
             val firstPlayer = PlayerId(1)
             val secondPlayer = PlayerId(2)
             val thirdPlayer = PlayerId(3)
@@ -91,8 +91,8 @@ class LobbyRuntimeRegistryTest {
     @Test
     fun `zwei lobbys können parallel events verarbeiten`() =
         runBlocking {
-            val blockedLobby = LobbyCode("CD34")
-            val freeLobby = LobbyCode("EF56")
+            val blockedLobby = LobbyCode("1071")
+            val freeLobby = LobbyCode("1132")
             val enteredBlockedReducer = CountDownLatch(1)
             val releaseBlockedReducer = CountDownLatch(1)
             val reducer =
@@ -135,7 +135,7 @@ class LobbyRuntimeRegistryTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val registry = LobbyRuntimeRegistry(scope)
-            val lobbyCode = LobbyCode("GH78")
+            val lobbyCode = LobbyCode("1178")
             val eventCount = 1_000L
 
             try {
@@ -162,7 +162,7 @@ class LobbyRuntimeRegistryTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val registry = LobbyRuntimeRegistry(scope)
-            val lobbyCode = LobbyCode("JK90")
+            val lobbyCode = LobbyCode("1201")
 
             try {
                 registry.startLobby(lobbyCode)
@@ -200,7 +200,7 @@ class LobbyRuntimeRegistryTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val registry = LobbyRuntimeRegistry(scope)
-            val lobbyCode = LobbyCode("LM12")
+            val lobbyCode = LobbyCode("1217")
 
             try {
                 assertNull(registry.runtime(lobbyCode))
@@ -236,14 +236,14 @@ class LobbyRuntimeRegistryTest {
                 val exception =
                     assertThrows(IllegalArgumentException::class.java) {
                         registry.startLobby(
-                            lobbyCode = LobbyCode("NO34"),
-                            initialState = GameState.initial(LobbyCode("PQ56")),
+                            lobbyCode = LobbyCode("1259"),
+                            initialState = GameState.initial(LobbyCode("1296")),
                         )
                     }
                 assertTrue(exception.message!!.contains("passt nicht zu Lobby"))
 
                 assertThrowsSuspend(IllegalStateException::class.java) {
-                    registry.submit(SystemTick(LobbyCode("RS78"), 1))
+                    registry.submit(SystemTick(LobbyCode("1332"), 1))
                 }
             } finally {
                 registry.shutdown()
@@ -254,7 +254,7 @@ class LobbyRuntimeRegistryTest {
     @Test
     fun `registry stop lobby deckt suspendierenden pfad ab`() =
         runBlocking {
-            val blockedLobby = LobbyCode("TU12")
+            val blockedLobby = LobbyCode("1418")
             val enteredBlockedReducer = CountDownLatch(1)
             val releaseBlockedReducer = CountDownLatch(1)
             val reducer =

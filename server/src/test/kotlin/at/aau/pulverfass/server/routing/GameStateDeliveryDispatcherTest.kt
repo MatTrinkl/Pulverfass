@@ -17,7 +17,7 @@ class GameStateDeliveryDispatcherTest {
     @Test
     fun `broadcast public delta sends one shared delta to all connected lobby members`() =
         runBlocking {
-            val lobbyCode = LobbyCode("DLV1")
+            val lobbyCode = LobbyCode("1124")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val playerThree = PlayerId(3)
@@ -81,7 +81,7 @@ class GameStateDeliveryDispatcherTest {
     @Test
     fun `private state reaches only the addressed player connection`() =
         runBlocking {
-            val lobbyCode = LobbyCode("DLV2")
+            val lobbyCode = LobbyCode("1125")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val connectionOne = ConnectionId(101)
@@ -123,7 +123,7 @@ class GameStateDeliveryDispatcherTest {
     @Test
     fun `private state for non member is rejected before any send`() =
         runBlocking {
-            val lobbyCode = LobbyCode("DLV3")
+            val lobbyCode = LobbyCode("1126")
             val playerOne = PlayerId(1)
             val outsider = PlayerId(99)
             val sentPayloads = mutableListOf<Pair<ConnectionId, NetworkMessagePayload>>()
@@ -157,7 +157,7 @@ class GameStateDeliveryDispatcherTest {
                 }
 
             assertEquals(
-                "Spieler '99' ist nicht Teil der Lobby 'DLV3'.",
+                "Spieler '99' ist nicht Teil der Lobby '1126'.",
                 exception.message,
             )
             assertEquals(emptyList<Pair<ConnectionId, NetworkMessagePayload>>(), sentPayloads)
@@ -166,7 +166,7 @@ class GameStateDeliveryDispatcherTest {
     @Test
     fun `broadcast public state ignores per connection send failures`() =
         runBlocking {
-            val lobbyCode = LobbyCode("DLV4")
+            val lobbyCode = LobbyCode("1127")
             val playerOne = PlayerId(1)
             val playerTwo = PlayerId(2)
             val connectionOne = ConnectionId(101)
@@ -212,7 +212,7 @@ class GameStateDeliveryDispatcherTest {
     @Test
     fun `best effort private state ignores send failures after membership check`() =
         runBlocking {
-            val lobbyCode = LobbyCode("DLV5")
+            val lobbyCode = LobbyCode("1128")
             val playerOne = PlayerId(1)
             val connectionOne = ConnectionId(101)
             val payload = FakePrivateEvent(recipientPlayerId = playerOne, secret = "hand-cards")

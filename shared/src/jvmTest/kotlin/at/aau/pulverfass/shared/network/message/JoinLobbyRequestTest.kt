@@ -20,15 +20,15 @@ class JoinLobbyRequestTest {
 
     @Test
     fun `should create join lobby request correctly`() {
-        val request = JoinLobbyRequest(LobbyCode("AB12"), "Alice")
+        val request = JoinLobbyRequest(LobbyCode("1003"), "Alice")
 
-        assertEquals(LobbyCode("AB12"), request.lobbyCode)
+        assertEquals(LobbyCode("1003"), request.lobbyCode)
         assertEquals("Alice", request.playerDisplayName)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val request = JoinLobbyRequest(LobbyCode("CD34"), "Bob")
+        val request = JoinLobbyRequest(LobbyCode("1071"), "Bob")
         val payload: NetworkMessagePayload = request
 
         assertEquals(request, payload)
@@ -36,12 +36,12 @@ class JoinLobbyRequestTest {
 
     @Test
     fun `should serialize and deserialize join lobby request`() {
-        val request = JoinLobbyRequest(LobbyCode("EF56"), "Carol")
+        val request = JoinLobbyRequest(LobbyCode("1132"), "Carol")
 
         val serialized = json.encodeToString(JoinLobbyRequest.serializer(), request)
         val deserialized = json.decodeFromString<JoinLobbyRequest>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56","playerDisplayName":"Carol"}""", serialized)
+        assertEquals("""{"lobbyCode":"1132","playerDisplayName":"Carol"}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -49,7 +49,7 @@ class JoinLobbyRequestTest {
     fun `should reject blank player display name`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                JoinLobbyRequest(LobbyCode("AB12"), "   ")
+                JoinLobbyRequest(LobbyCode("1003"), "   ")
             }
 
         assertTrue(exception.message.orEmpty().contains("playerDisplayName"))
@@ -59,7 +59,7 @@ class JoinLobbyRequestTest {
     fun `should reject player display name longer than max length`() {
         val exception =
             assertThrows(IllegalArgumentException::class.java) {
-                JoinLobbyRequest(LobbyCode("AB12"), "a".repeat(MAX_PLAYER_DISPLAY_NAME_LENGTH + 1))
+                JoinLobbyRequest(LobbyCode("1003"), "a".repeat(MAX_PLAYER_DISPLAY_NAME_LENGTH + 1))
             }
 
         assertTrue(exception.message.orEmpty().contains(MAX_PLAYER_DISPLAY_NAME_LENGTH.toString()))
@@ -78,16 +78,16 @@ class JoinLobbyRequestTest {
                 )
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", "Dora", null) as JoinLobbyRequest
+        val valid = constructor.newInstance("1178", "Dora", null) as JoinLobbyRequest
 
-        assertEquals(LobbyCode("GH78"), valid.lobbyCode)
+        assertEquals(LobbyCode("1178"), valid.lobbyCode)
         assertEquals("Dora", valid.playerDisplayName)
 
         assertThrows(InvocationTargetException::class.java) {
             constructor.newInstance(null, "Dora", null)
         }
         assertThrows(InvocationTargetException::class.java) {
-            constructor.newInstance("GH78", null, null)
+            constructor.newInstance("1178", null, null)
         }
     }
 

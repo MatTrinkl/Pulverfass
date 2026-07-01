@@ -174,7 +174,7 @@ class LobbyController(
         )
     val state: StateFlow<LobbyUiState> = _state.asStateFlow()
 
-    /*
+    /**
      * Die Lobby-Playerliste kommt als einzelne Join/Leave/Kick-Events. Eine Map
      * nach PlayerId verhindert Duplikate und erlaubt späteres Publizieren als
      * geordnete UI-Liste.
@@ -187,7 +187,7 @@ class LobbyController(
     private var pendingLobbyAction: PendingLobbyAction? = null
     private var pendingLegacyOwnPlayerSelectionJob: Job? = null
 
-    /*
+    /**
      * Reconnect-Zustand getrennt vom UI-State: Die UI darf sehen, dass reconnectet
      * wird, aber nicht den provisorischen neuen Token überschreiben. Der alte
      * Token wird hier gehalten, bis der Server die Session bestätigt.
@@ -208,7 +208,7 @@ class LobbyController(
 
     init {
         scope.launch {
-            /*
+            /**
              * Transportevents beschreiben nur Socket-Lifecycle. Fachliche
              * Entscheidungen wie "Reconnect starten" oder "Pending Create senden"
              * liegen bewusst hier im Controller.
@@ -239,7 +239,7 @@ class LobbyController(
         }
 
         scope.launch {
-            /*
+            /**
              * Alle fachlichen Pakete laufen durch denselben Decoder. Danach
              * entscheidet handlePayload, ob das Paket Lobby, Reconnect oder Game
              * betrifft.
@@ -263,7 +263,7 @@ class LobbyController(
             }
         }
 
-        /*
+        /**
          * Wenn die App nach einem Prozessende neu startet, gibt es keinen
          * In-Memory-Zustand mehr. Ein gespeicherter Token ist deshalb das
          * Signal, direkt eine neue technische Verbindung aufzubauen und danach
@@ -375,7 +375,7 @@ class LobbyController(
         }
 
     fun updateLobbyCode(lobbyCode: String) {
-        _state.update { it.copy(lobbyCode = lobbyCode.uppercase()) }
+        _state.update { it.copy(lobbyCode = lobbyCode) }
     }
 
     fun setJoining(isJoining: Boolean) {
@@ -383,9 +383,17 @@ class LobbyController(
     }
 
     fun connect() {
+        connect(requirePlayerName = true)
+    }
+
+    fun connectForStatus() {
+        connect(requirePlayerName = false)
+    }
+
+    private fun connect(requirePlayerName: Boolean) {
         manualDisconnectRequested = false
         val snapshot = state.value
-        if (snapshot.playerName.isBlank()) {
+        if (requirePlayerName && snapshot.playerName.isBlank()) {
             _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
@@ -457,7 +465,7 @@ class LobbyController(
             _state.update { it.copy(errorText = config.errorPlayerNameRequired) }
             return
         }
-        if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+        if (!isLobbyCodeValid(snapshot.lobbyCode)) {
             _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
             return
         }
@@ -814,7 +822,7 @@ class LobbyController(
         ) {
             return
         }
-        /*
+        /**
          * Der Server beendet leere Angriffsphasen autoritativ mit eigenem Delay.
          * Ein zusätzlicher Client-Confirm würde gegen diesen Timer rennen und
          * kann nach dem serverseitigen Wechsel nur noch ein Fehler-Popup erzeugen.
@@ -1823,7 +1831,7 @@ class LobbyController(
     }
 
     fun selectGameRegion(regionId: String) {
-        /*
+        /**
          * Die Karte liefert nur eine Android-Region-ID. Die fachliche Validierung
          * passiert im Reducer, weil dort TurnPhase, Owner und lokaler Spieler
          * gemeinsam verfügbar sind.
@@ -2065,7 +2073,7 @@ class LobbyController(
     }
 
     private fun handleConnectionResponse(payload: ConnectionResponse) {
-        /*
+        /**
          * Bei einem normalen Connect ist die ConnectionResponse die Quelle für
          * den ersten stabilen Token. Während eines Reconnects sendet der Server
          * aber zunächst ebenfalls eine technische ConnectionResponse für die
@@ -2087,7 +2095,7 @@ class LobbyController(
         reconnectSessionToken = null
 
         if (!payload.success) {
-            /*
+            /**
              * TOKEN_INVALID, TOKEN_EXPIRED und TOKEN_REVOKED bedeuten, dass der
              * lokal gespeicherte Schlüssel nicht mehr zu einer Server-Session
              * gehört. Der Client löscht ihn sofort, damit der nächste App-Start
@@ -2228,7 +2236,7 @@ class LobbyController(
     }
 
     private fun handlePayload(payload: NetworkMessagePayload) {
-        /*
+        /**
          * Der Controller ist der zentrale Demultiplexer für Server-Payloads:
          * technische Connection-Payloads bleiben hier, Lobby-Events pflegen die
          * Playerliste und Game-Payloads werden an den GameStateReducer delegiert.
@@ -2720,12 +2728,10 @@ class LobbyController(
                 payload = payload,
                 nextState = nextState,
             )
-        /*
-         * Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
-         * TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
-         * geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
-         * Fortify umstellen.
-         */
+        // Der Server sendet beim Attack-Auto-Skip die Boundary vor dem
+        // TurnState-Delta. Wenn die Boundary bereits für das Result-Delay
+        // geparkt ist, darf das nachlaufende Delta die Topbar nicht früher auf
+        // Fortify umstellen.
         val shouldKeepDelayedAttackBoundary =
             isOwnAttackAutoBoundary &&
                 deferredOwnAttackPhaseBoundary != null &&
@@ -2990,7 +2996,7 @@ class LobbyController(
             }
             PendingLobbyAction.JOIN -> {
                 val snapshot = state.value
-                if (snapshot.lobbyCode.length != config.lobbyCodeLength) {
+                if (!isLobbyCodeValid(snapshot.lobbyCode)) {
                     pendingLobbyAction = null
                     pendingJoinCallback = null
                     _state.update { it.copy(errorText = config.errorLobbyCodeLength) }
@@ -3106,7 +3112,10 @@ class LobbyController(
         }
     }
 
-    private fun parseLobbyCode(value: String) = LobbyCode(value.uppercase())
+    private fun isLobbyCodeValid(value: String) =
+        value.length == config.lobbyCodeLength && value.all(Char::isDigit)
+
+    private fun parseLobbyCode(value: String) = LobbyCode(value)
 
     private fun resetLobbyMembers() {
         playersById.clear()

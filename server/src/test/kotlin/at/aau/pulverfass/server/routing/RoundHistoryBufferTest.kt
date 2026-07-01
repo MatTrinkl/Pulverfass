@@ -23,7 +23,7 @@ class RoundHistoryBufferTest {
 
     @Test
     fun `buffer tracks state version boundaries across all record types`() {
-        val lobbyCode = LobbyCode("RH01")
+        val lobbyCode = LobbyCode("1329")
         val playerId = PlayerId(7)
         val buffer = RoundHistoryBuffer(maxRounds = 2)
 

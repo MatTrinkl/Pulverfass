@@ -1,12 +1,10 @@
 package at.aau.pulverfass.client.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,19 +19,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -72,11 +63,12 @@ fun LobbyScreen(
 ) {
     val state by controller.state.collectAsState()
     val uiScope = rememberCoroutineScope()
-    val screenWidth = screenWidthDp()
     val screenHeight = screenHeightDp()
-    var showDevPanel by remember { mutableStateOf(false) }
     val compactHeight = screenHeight < 430.dp
-    val showDebugPanels = !compactHeight && screenWidth >= 980.dp
+
+    LaunchedEffect(Unit) {
+        controller.connectForStatus()
+    }
 
     Box(
         modifier =
@@ -86,52 +78,27 @@ fun LobbyScreen(
     ) {
         LobbyVideoBackground()
 
-        // Oben links: Verbindungsstatus und globale Online-Zahl.
-        Row(
+        /*
+         * Oben links bleibt nur der Verbindungsstatus.
+         */
+        ServerStatusPill(
+            isConnected = state.isConnected,
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 24.dp, top = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ServerStatusPill(isConnected = state.isConnected)
-            OnlinePlayersPill(count = state.globalPlayerCount)
-        }
+        )
 
-        if (showDebugPanels) {
-            // Oben rechts: kompakte Debug-Infos für Server-URL, letzte Nachricht und Map-Test.
-            DevInfoPanel(
-                serverUrl = state.serverUrl,
-                lastMessageType = state.lastMessageType,
-                onMapTestClick = { navController.navigate(Screen.LoadGame.route) },
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 24.dp, top = 16.dp),
-            )
-        }
-
-        if (showDebugPanels) {
-            // Unten rechts: einblendbare Dev-Verbindungssteuerung.
-            DevControlsPanel(
-                controlsState =
-                    DevControlsState(
-                        isConnected = state.isConnected,
-                        isConnecting = state.isConnecting,
-                        serverUrl = state.serverUrl,
-                    ),
-                showDevPanel = showDevPanel,
-                onToggleDevMod = { showDevPanel = !showDevPanel },
-                onConnectClick = controller::connect,
-                onDisconnectClick = controller::disconnect,
-                onUpdateServerUrl = controller::updateServerUrl,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 24.dp, bottom = 24.dp),
-            )
-        }
+        /*
+         * Oben rechts steht die globale Online-Zahl spiegelgleich zum Serverstatus.
+         */
+        OnlinePlayersPill(
+            count = state.globalPlayerCount,
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 24.dp, top = 16.dp),
+        )
 
         // Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
         BoxWithConstraints(
@@ -280,14 +247,13 @@ private fun JoinLobbyForm(
         MainInputField(
             value = lobbyCode,
             onValueChange = { input ->
-                val uppercase = input.uppercase()
-                if (uppercase.length <= 4 && uppercase.all { it.isLetterOrDigit() }) {
-                    onLobbyCodeChange(uppercase)
+                if (input.length <= 4 && input.all { it.isDigit() }) {
+                    onLobbyCodeChange(input)
                 }
             },
             placeholder = "4-STELLIGER LOBBY-CODE",
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
         Spacer(modifier = Modifier.height(16.dp))
         MainInputField(
@@ -411,142 +377,6 @@ private fun OnlinePlayersPill(
             text = "ONLINE: ${count ?: "—"}",
             color = PulverfassColors.TextOnDark,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-        )
-    }
-}
-
-@Composable
-private fun DevInfoPanel(
-    serverUrl: String,
-    lastMessageType: String?,
-    onMapTestClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(
-                    color = PulverfassColors.SurfaceDark.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(4.dp),
-                )
-                .padding(8.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        Text(
-            text = "S-URL: $serverUrl",
-            color = PulverfassColors.TextOnDark,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = "S-MESSAGE: ${lastMessageType ?: "—"}",
-            color = PulverfassColors.TextOnDark,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        DevPillButton(text = "MAP-TEST", onClick = onMapTestClick)
-    }
-}
-
-/**
- * Gruppiert die Verbindungswerte des DevPanels.
- *
- * @param isConnected `true`, wenn die WebSocket-Verbindung aktiv ist.
- * @param isConnecting `true`, solange ein Connect-Versuch läuft.
- * @param serverUrl aktuell editierbare Server-URL.
- */
-private data class DevControlsState(
-    val isConnected: Boolean,
-    val isConnecting: Boolean,
-    val serverUrl: String,
-)
-
-@Composable
-private fun DevControlsPanel(
-    controlsState: DevControlsState,
-    showDevPanel: Boolean,
-    onToggleDevMod: () -> Unit,
-    onConnectClick: () -> Unit,
-    onDisconnectClick: () -> Unit,
-    onUpdateServerUrl: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            DevPillButton(text = "DEV-MOD", onClick = onToggleDevMod)
-            DevPillButton(
-                text =
-                    when {
-                        controlsState.isConnecting -> "CONNECTING..."
-                        controlsState.isConnected -> "DISCONNECT"
-                        else -> "CONNECTION TEST"
-                    },
-                onClick = if (controlsState.isConnected) onDisconnectClick else onConnectClick,
-                enabled = !controlsState.isConnecting,
-            )
-        }
-        if (showDevPanel) {
-            OutlinedTextField(
-                value = controlsState.serverUrl,
-                onValueChange = onUpdateServerUrl,
-                modifier = Modifier.width(220.dp),
-                label = { Text(text = "SERVER URL", fontSize = 8.sp) },
-                textStyle = LocalTextStyle.current.copy(fontSize = 10.sp),
-                singleLine = true,
-                colors =
-                    OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PulverfassColors.GoldDark,
-                        unfocusedBorderColor = PulverfassColors.GoldDark.copy(alpha = 0.5f),
-                        focusedTextColor = PulverfassColors.TextOnDark,
-                        unfocusedTextColor = PulverfassColors.TextOnDark,
-                        focusedLabelColor = PulverfassColors.Gold,
-                        unfocusedLabelColor = PulverfassColors.GoldMuted,
-                        cursorColor = PulverfassColors.Gold,
-                        focusedContainerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                        unfocusedContainerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun DevPillButton(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier =
-            Modifier
-                .border(
-                    width = 1.dp,
-                    color = PulverfassColors.GoldDark,
-                    shape = RoundedCornerShape(2.dp),
-                ),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = PulverfassColors.SurfaceDark.copy(alpha = 0.85f),
-                contentColor = PulverfassColors.Gold,
-            ),
-        shape = RoundedCornerShape(2.dp),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = text,
-            fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
         )

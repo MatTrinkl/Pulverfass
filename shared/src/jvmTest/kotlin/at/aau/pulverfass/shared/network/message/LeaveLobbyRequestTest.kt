@@ -18,14 +18,14 @@ class LeaveLobbyRequestTest {
 
     @Test
     fun `should create leave lobby request correctly`() {
-        val request = LeaveLobbyRequest(LobbyCode("AB12"))
+        val request = LeaveLobbyRequest(LobbyCode("1003"))
 
-        assertEquals(LobbyCode("AB12"), request.lobbyCode)
+        assertEquals(LobbyCode("1003"), request.lobbyCode)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val request = LeaveLobbyRequest(LobbyCode("CD34"))
+        val request = LeaveLobbyRequest(LobbyCode("1071"))
         val payload: NetworkMessagePayload = request
 
         assertEquals(request, payload)
@@ -33,12 +33,12 @@ class LeaveLobbyRequestTest {
 
     @Test
     fun `should serialize and deserialize leave lobby request`() {
-        val request = LeaveLobbyRequest(LobbyCode("EF56"))
+        val request = LeaveLobbyRequest(LobbyCode("1132"))
 
         val serialized = json.encodeToString(LeaveLobbyRequest.serializer(), request)
         val deserialized = json.decodeFromString<LeaveLobbyRequest>(serialized)
 
-        assertEquals("""{"lobbyCode":"EF56"}""", serialized)
+        assertEquals("""{"lobbyCode":"1132"}""", serialized)
         assertEquals(request, deserialized)
     }
 
@@ -54,9 +54,9 @@ class LeaveLobbyRequestTest {
                 )
             }
         constructor.isAccessible = true
-        val valid = constructor.newInstance("GH78", null) as LeaveLobbyRequest
+        val valid = constructor.newInstance("1178", null) as LeaveLobbyRequest
 
-        assertEquals(LobbyCode("GH78"), valid.lobbyCode)
+        assertEquals(LobbyCode("1178"), valid.lobbyCode)
 
         assertThrows(InvocationTargetException::class.java) {
             constructor.newInstance(null, null)

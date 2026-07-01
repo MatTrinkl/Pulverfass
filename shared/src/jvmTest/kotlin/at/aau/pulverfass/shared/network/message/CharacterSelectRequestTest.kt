@@ -21,16 +21,16 @@ class CharacterSelectRequestTest {
 
     @Test
     fun `should create character select request correctly`() {
-        val request = CharacterSelectRequest(LobbyCode("AB12"), PlayerId(5), "warrior")
+        val request = CharacterSelectRequest(LobbyCode("1003"), PlayerId(5), "warrior")
 
-        assertEquals(LobbyCode("AB12"), request.lobbyCode)
+        assertEquals(LobbyCode("1003"), request.lobbyCode)
         assertEquals(PlayerId(5), request.playerId)
         assertEquals("warrior", request.characterId)
     }
 
     @Test
     fun `should implement network message payload`() {
-        val request = CharacterSelectRequest(LobbyCode("AB12"), PlayerId(5), "warrior")
+        val request = CharacterSelectRequest(LobbyCode("1003"), PlayerId(5), "warrior")
         val payload: NetworkMessagePayload = request
 
         assertEquals(request, payload)
@@ -38,13 +38,13 @@ class CharacterSelectRequestTest {
 
     @Test
     fun `should serialize and deserialize character select request`() {
-        val request = CharacterSelectRequest(LobbyCode("AB12"), PlayerId(5), "warrior")
+        val request = CharacterSelectRequest(LobbyCode("1003"), PlayerId(5), "warrior")
 
         val serialized = json.encodeToString(CharacterSelectRequest.serializer(), request)
         val deserialized = json.decodeFromString<CharacterSelectRequest>(serialized)
 
         assertEquals(
-            """{"lobbyCode":"AB12","playerId":5,"characterId":"warrior"}""",
+            """{"lobbyCode":"1003","playerId":5,"characterId":"warrior"}""",
             serialized,
         )
         assertEquals(request, deserialized)
@@ -52,7 +52,7 @@ class CharacterSelectRequestTest {
 
     @Test
     fun `should resolve message type and serialization via registry`() {
-        val request = CharacterSelectRequest(LobbyCode("CD34"), PlayerId(7), "character_04")
+        val request = CharacterSelectRequest(LobbyCode("1071"), PlayerId(7), "character_04")
 
         val messageType = NetworkPayloadRegistry.messageTypeFor(request)
         val serialized = NetworkPayloadRegistry.serializePayload(request)
@@ -64,9 +64,9 @@ class CharacterSelectRequestTest {
 
     @Test
     fun `should satisfy equals and hashCode contract`() {
-        val a = CharacterSelectRequest(LobbyCode("EF56"), PlayerId(9), "character_03")
-        val b = CharacterSelectRequest(LobbyCode("EF56"), PlayerId(9), "character_03")
-        val c = CharacterSelectRequest(LobbyCode("EF56"), PlayerId(9), "character_04")
+        val a = CharacterSelectRequest(LobbyCode("1132"), PlayerId(9), "character_03")
+        val b = CharacterSelectRequest(LobbyCode("1132"), PlayerId(9), "character_03")
+        val c = CharacterSelectRequest(LobbyCode("1132"), PlayerId(9), "character_04")
 
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())
@@ -76,7 +76,7 @@ class CharacterSelectRequestTest {
     @Test
     fun `should reject missing fields during deserialization`() {
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<CharacterSelectRequest>("""{"lobbyCode":"AB12"}""")
+            json.decodeFromString<CharacterSelectRequest>("""{"lobbyCode":"1003"}""")
         }
     }
 
@@ -102,7 +102,7 @@ class CharacterSelectRequestTest {
             CharacterSelectRequestSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                 ),
             )
         }
@@ -114,7 +114,7 @@ class CharacterSelectRequestTest {
             CharacterSelectRequestSerializer.deserialize(
                 SerializerTestDecoder(
                     intArrayOf(0, 1, CompositeDecoder.DECODE_DONE),
-                    scalarString = "AB12",
+                    scalarString = "1003",
                     scalarLong = 5L,
                 ),
             )

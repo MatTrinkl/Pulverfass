@@ -21,7 +21,7 @@ class RestoredGameNavigationTest {
             LobbyUiState(
                 isConnected = true,
                 sessionToken = "session-token",
-                activeLobbyCode = "ABCD",
+                activeLobbyCode = "1005",
                 ownPlayerId = PlayerId(3),
                 gameStarted = true,
             )
@@ -36,7 +36,7 @@ class RestoredGameNavigationTest {
                 isConnected = true,
                 isReconnecting = true,
                 sessionToken = "session-token",
-                activeLobbyCode = "ABCD",
+                activeLobbyCode = "1005",
                 ownPlayerId = PlayerId(3),
                 gameStarted = true,
             )
@@ -50,7 +50,7 @@ class RestoredGameNavigationTest {
             LobbyUiState(
                 isConnected = true,
                 sessionToken = "session-token",
-                activeLobbyCode = "ABCD",
+                activeLobbyCode = "1005",
                 gameStarted = true,
             )
         val stateWithoutLobby =

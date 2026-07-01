@@ -562,7 +562,7 @@ internal fun PersistedLobbyEventRecord.toLobbyEvent(): LobbyEvent {
                 playerId = PlayerId(jsonObject.long("playerId")),
                 delta = jsonObject.int("delta"),
             )
-        /*
+        /**
          * Beim Wiederherstellen der Lobby wird aus dem persistierten Typ wieder
          * dasselbe Domain-Event gebaut. Der Reducer setzt daraus erneut
          * usedCheatReinforcementBonusByPlayer im GameState.

@@ -452,7 +452,7 @@ object ClientGameStateReducer {
             )
         }
 
-        /*
+        /**
          * Die Platzierungs-UI öffnet nur für eigene Gebiete. Ein Tap auf ein
          * fremdes Gebiet wird bewusst ignoriert, statt einen Fehlerbanner zu
          * erzeugen oder ein bereits sinnvoll gewähltes Ziel zu verlieren.
@@ -465,7 +465,7 @@ object ClientGameStateReducer {
         }
 
         if (current.turnPhase == TurnPhase.REINFORCEMENTS) {
-            /*
+            /**
              * Verstärkungen benötigen nur ein Zielgebiet. `selectionFrom` und
              * `selectionTo` gehören zu mehrstufigen Kartenaktionen und bleiben
              * hier leer, damit kein Zustand für eine nicht existierende
@@ -1221,7 +1221,7 @@ object ClientGameStateReducer {
     private fun GameUiState.applyReinforcementsGranted(
         event: ReinforcementsGrantedEvent,
     ): GameUiState {
-        /*
+        /**
          * Zu Beginn einer Verstärkungsphase liefert der Server einen Basisgrant
          * mit Gebiets-/Kontinentbonus. Ein späterer Kartentausch liefert einen
          * zusätzlichen Grant mit ausschließlich Kartenbonus; dessen Betrag
@@ -1265,7 +1265,7 @@ object ClientGameStateReducer {
     private fun GameUiState.applyPendingReinforcementsChanged(
         event: PendingReinforcementsChangedEvent,
     ): GameUiState {
-        /*
+        /**
          * Der Server bleibt für den Restpool autoritativ: Platzierungen senden
          * negative Deltas, Kartentausch positive. Events anderer Spieler oder
          * Deltas vor der initialen Grant-/Snapshot-Basis dürfen den lokalen
