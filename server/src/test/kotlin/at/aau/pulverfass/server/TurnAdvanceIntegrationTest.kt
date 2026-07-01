@@ -31,7 +31,9 @@ import at.aau.pulverfass.shared.message.lobby.event.PlayerConnectionLostReason
 import at.aau.pulverfass.shared.message.lobby.event.PlayerHandUpdatedEvent
 import at.aau.pulverfass.shared.message.lobby.event.PrivateHandCardSnapshot
 import at.aau.pulverfass.shared.message.lobby.event.ReinforcementsGrantedEvent
+import at.aau.pulverfass.shared.message.lobby.request.LeaveLobbyRequest
 import at.aau.pulverfass.shared.message.lobby.request.TurnAdvanceRequest
+import at.aau.pulverfass.shared.message.lobby.response.LeaveLobbyResponse
 import at.aau.pulverfass.shared.message.lobby.response.TurnAdvanceResponse
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorCode
 import at.aau.pulverfass.shared.message.lobby.response.error.TurnAdvanceErrorResponse
@@ -48,14 +50,54 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentHashMap
 
 class TurnAdvanceIntegrationTest {
+    @Test
+    fun `routing service rejects non-positive disconnect timeout settings`() {
+        val network = ServerNetwork()
+        val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lobbyManager = LobbyManager(serverScope)
+        val router =
+            MainServerRouter(
+                lobbyManager = lobbyManager,
+                mapper = DefaultNetworkToLobbyEventMapper(),
+            )
+
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { null },
+                    waitingPlayerSkipTimeoutMillis = 0,
+                )
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { null },
+                    inactiveLobbyCleanupTimeoutMillis = 0,
+                )
+            }
+        } finally {
+            runBlocking {
+                lobbyManager.shutdownAll()
+            }
+            serverScope.cancel()
+        }
+    }
+
     @Test
     fun `active player can advance and lobby receives exactly one turn state update`() =
         testApplication {
@@ -1706,7 +1748,10 @@ class TurnAdvanceIntegrationTest {
                         while (
                             lobbyManager.getLobby(lobbyCode)
                                 ?.currentState()
-                                ?.activePlayer != playerTwo
+                                ?.let { state ->
+                                    state.activePlayer == playerTwo &&
+                                        state.pendingReinforcementsFor(playerTwo) == 3
+                                } != true
                         ) {
                             delay(10)
                         }
@@ -1721,6 +1766,129 @@ class TurnAdvanceIntegrationTest {
                     assertEquals(3, snapshot.pendingReinforcementsFor(playerTwo))
 
                     playerTwoSession.first.close()
+                }
+            } finally {
+                routingService.stop()
+                lobbyManager.shutdownAll()
+                serverScope.cancel()
+            }
+        }
+
+    @Test
+    fun `membership route pauses active player when connection mapping is already gone`() =
+        testApplication {
+            val network = ServerNetwork()
+            val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val lobbyManager = LobbyManager(serverScope)
+            val router =
+                MainServerRouter(
+                    lobbyManager = lobbyManager,
+                    mapper = DefaultNetworkToLobbyEventMapper(),
+                )
+            val playersByConnection = ConcurrentHashMap<ConnectionId, PlayerId>()
+            val connectionsByPlayer = ConcurrentHashMap<PlayerId, ConnectionId>()
+            val routingService =
+                MainServerLobbyRoutingService(
+                    network = network,
+                    router = router,
+                    lobbyManager = lobbyManager,
+                    playerIdResolver = { connectionId -> playersByConnection[connectionId] },
+                    connectionIdResolver = { playerId -> connectionsByPlayer[playerId] },
+                    waitingPlayerSkipTimeoutMillis = 5_000,
+                    hooks = MainServerLobbyRoutingServiceHooks(),
+                )
+
+            application {
+                module(network)
+            }
+
+            val lobbyCode = LobbyCode("1373")
+            val playerOne = PlayerId(1)
+            val playerTwo = PlayerId(2)
+            val playerThree = PlayerId(3)
+            lobbyManager.createLobby(
+                lobbyCode = lobbyCode,
+                initialState =
+                    runningTurnStateGame(
+                        lobbyCode = lobbyCode,
+                        players = listOf(playerOne, playerTwo, playerThree),
+                        activePlayerId = playerOne,
+                        turnPhase = TurnPhase.REINFORCEMENTS,
+                    ),
+            )
+            routingService.start(serverScope)
+
+            val client =
+                createClient {
+                    install(WebSockets)
+                }
+
+            try {
+                coroutineScope {
+                    val playerOneSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerOne,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val playerTwoSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerTwo,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+                    val playerThreeSession =
+                        connectSessionWithConnection(
+                            client = client,
+                            network = network,
+                            playerId = playerThree,
+                            playersByConnection = playersByConnection,
+                            connectionsByPlayer = connectionsByPlayer,
+                        )
+
+                    connectionsByPlayer.remove(playerOne)
+
+                    playerThreeSession.first.send(
+                        Frame.Binary(
+                            fin = true,
+                            data = MessageCodec.encode(LeaveLobbyRequest(lobbyCode)),
+                        ),
+                    )
+
+                    assertEquals(
+                        LeaveLobbyResponse(lobbyCode),
+                        receivePayload(playerThreeSession.first),
+                    )
+                    withTimeout(1_000) {
+                        while (
+                            lobbyManager.getLobby(lobbyCode)
+                                ?.currentState()
+                                ?.turnState
+                                ?.isPaused != true
+                        ) {
+                            delay(10)
+                        }
+                    }
+                    val snapshot =
+                        lobbyManager.getLobby(lobbyCode)?.currentState()
+                            ?: error("snapshot missing")
+                    assertEquals(listOf(playerOne, playerTwo), snapshot.players)
+                    assertEquals(playerOne, snapshot.activePlayer)
+                    assertEquals(TurnPhase.REINFORCEMENTS, snapshot.turnState?.turnPhase)
+                    assertEquals(true, snapshot.turnState?.isPaused)
+                    assertEquals(
+                        TurnPauseReasons.WAITING_FOR_PLAYER,
+                        snapshot.turnState?.pauseReason,
+                    )
+                    assertEquals(playerOne, snapshot.turnState?.pausedPlayerId)
+
+                    playerOneSession.first.close()
+                    playerTwoSession.first.close()
+                    playerThreeSession.first.close()
                 }
             } finally {
                 routingService.stop()
