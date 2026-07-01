@@ -78,18 +78,27 @@ fun LobbyScreen(
     ) {
         LobbyVideoBackground()
 
-        // Oben links: Verbindungsstatus und globale Online-Zahl.
-        Row(
+        /*
+         * Oben links bleibt nur der Verbindungsstatus.
+         */
+        ServerStatusPill(
+            isConnected = state.isConnected,
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 24.dp, top = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ServerStatusPill(isConnected = state.isConnected)
-            OnlinePlayersPill(count = state.globalPlayerCount)
-        }
+        )
+
+        /*
+         * Oben rechts steht die globale Online-Zahl spiegelgleich zum Serverstatus.
+         */
+        OnlinePlayersPill(
+            count = state.globalPlayerCount,
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 24.dp, top = 16.dp),
+        )
 
         // Mitte: Create-Form oder Join-Form, abhängig vom aktuellen UI-Modus.
         BoxWithConstraints(
