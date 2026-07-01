@@ -1649,7 +1649,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     assertTrue(
                         membershipSnapshot
                             ?.territoryStates
-                            ?.any { territory -> territory.ownerId == leavingPlayer } == true,
+                            ?.none { territory -> territory.ownerId == leavingPlayer } == true,
                     )
                     assertEquals(
                         PlayerLeftLobbyEvent(lobbyCode, leavingPlayer, newHost = activePlayer),
@@ -1679,7 +1679,7 @@ class MainServerLobbyRoutingIntegrationTest {
         }
 
     @Test
-    fun `active leave clears session identity before a later join request`() =
+    fun `active leave clears session identity and rejects reconnect with old token`() =
         testApplication {
             val network = ServerNetwork()
             val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -1771,20 +1771,23 @@ class MainServerLobbyRoutingIntegrationTest {
                     )
                     assertNull(sessionContextRegistry.playerIdForSession(leavingToken))
 
-                    leavingSession.send(
+                    val reconnectSession = client.webSocketSession("/ws")
+                    discardConnectionHandshake(reconnectSession)
+                    reconnectSession.send(
                         Frame.Binary(
                             fin = true,
-                            data = MessageCodec.encode(JoinLobbyRequest(lobbyCode, "Carol")),
+                            data = MessageCodec.encode(ReconnectRequest(leavingToken)),
                         ),
                     )
 
-                    val error =
-                        assertIs<JoinLobbyErrorResponse>(
-                            receivePayload(leavingSession),
+                    val reconnectResponse =
+                        assertIs<ReconnectResponse>(
+                            receivePayload(reconnectSession),
                         )
-                    assertTrue(error.reason.contains("nach Spielstart"))
+                    assertEquals(false, reconnectResponse.success)
+                    assertEquals(ReconnectErrorCode.TOKEN_REVOKED, reconnectResponse.errorCode)
                     assertEquals(
-                        PlayerId(4),
+                        null,
                         sessionContextRegistry.playerIdForSession(leavingToken),
                     )
                     assertEquals(
@@ -1795,6 +1798,7 @@ class MainServerLobbyRoutingIntegrationTest {
                     activeSession.close()
                     remainingSession.close()
                     leavingSession.close()
+                    reconnectSession.close()
                 }
             } finally {
                 routingService.stop()

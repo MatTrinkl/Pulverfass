@@ -555,6 +555,13 @@ class LobbyController(
                         trackPending = false,
                     )
                 }
+                if (snapshot.isConnected) {
+                    runCatching { network.disconnect(config.disconnectReason) }
+                }
+            }
+        } else if (snapshot.isConnected) {
+            scope.launch {
+                runCatching { network.disconnect(config.disconnectReason) }
             }
         }
         _state.update {
@@ -565,7 +572,7 @@ class LobbyController(
                 players = emptyList(),
                 ownPlayerId = null,
                 gameStarted = false,
-                sessionToken = snapshot.sessionToken.takeIf { snapshot.isConnected },
+                sessionToken = null,
                 gameState = GameUiState().withAutoAttackPreference(it.autoAttackEnabled),
                 pendingCommandKeys = emptySet(),
                 autoPhaseNoticeText = null,
