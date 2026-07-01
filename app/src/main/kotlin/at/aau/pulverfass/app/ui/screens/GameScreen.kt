@@ -98,6 +98,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import at.aau.pulverfass.app.R
 import at.aau.pulverfass.app.audio.BackgroundMusicManager
 import at.aau.pulverfass.app.game.AttackResultUiState
@@ -155,6 +156,7 @@ private val PhaseHeaderTextColor = PulverfassColors.TextOnParchment
 
 /** Einheitliche Breite der drei mittleren Phasen-Buttons der Bottom-Bar. */
 private val PhaseButtonWidth = 132.dp
+private const val ACTION_PANEL_Z_INDEX = 35f
 private val TopBarHeight = 78.dp
 private val BottomBarHeight = 76.dp
 
@@ -2126,6 +2128,8 @@ private fun BoxScope.ReinforcementPanelHost(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2153,6 +2157,8 @@ private fun BoxScope.AttackPanelHost(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
+                    .zIndex(ACTION_PANEL_Z_INDEX)
+                    .navigationBarsPadding()
                     .padding(bottom = bottomPadding),
         )
     }
@@ -2202,6 +2208,8 @@ private fun BoxScope.AttackPanelHost(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2242,6 +2250,8 @@ private fun BoxScope.FortifyPanelHost(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
+                .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }

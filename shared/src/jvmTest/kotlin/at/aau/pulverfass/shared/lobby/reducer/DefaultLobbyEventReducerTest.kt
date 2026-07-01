@@ -39,6 +39,7 @@ import at.aau.pulverfass.shared.lobby.state.CardType
 import at.aau.pulverfass.shared.lobby.state.DeckState
 import at.aau.pulverfass.shared.lobby.state.GameState
 import at.aau.pulverfass.shared.lobby.state.GameStatus
+import at.aau.pulverfass.shared.lobby.state.HandState
 import at.aau.pulverfass.shared.lobby.state.PendingReinforcements
 import at.aau.pulverfass.shared.lobby.state.TerritoryState
 import at.aau.pulverfass.shared.lobby.state.TurnPauseReasons
@@ -391,6 +392,67 @@ class DefaultLobbyEventReducerTest {
             GameStatus.FINISHED,
             reducer.apply(finishedState, PlayerLeft(lobbyCode, playerThree)).status,
         )
+    }
+
+    @Test
+    fun `player left clears owned territories and hand cards`() {
+        val lobbyCode = LobbyCode("1248")
+        val owner = PlayerId(1)
+        val leavingPlayer = PlayerId(2)
+        val remainingPlayer = PlayerId(3)
+        val mapDefinition = sampleMapDefinition()
+        val ownerCard = CardState(CardId("owner-card"), CardType.A)
+        val leavingCard = CardState(CardId("leaving-card"), CardType.B)
+        val state =
+            GameState(
+                lobbyCode = lobbyCode,
+                players = listOf(owner, leavingPlayer, remainingPlayer),
+                playerDisplayNames =
+                    mapOf(
+                        owner to "OWNER",
+                        leavingPlayer to "LEFT",
+                        remainingPlayer to "THIRD",
+                    ),
+                lobbyOwner = owner,
+                activePlayer = owner,
+                turnOrder = listOf(owner, leavingPlayer, remainingPlayer),
+                turnState =
+                    TurnState(
+                        activePlayerId = owner,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 2,
+                        startPlayerId = owner,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                mapDefinition = mapDefinition,
+                territoryStates =
+                    mapDefinition.territories.associate { territory ->
+                        territory.territoryId to
+                            when (territory.territoryId.value) {
+                                "alpha" -> TerritoryState(territory.territoryId, leavingPlayer, 4)
+                                "beta" -> TerritoryState(territory.territoryId, owner, 3)
+                                else -> TerritoryState(territory.territoryId, remainingPlayer, 2)
+                            }
+                    },
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                owner to listOf(ownerCard),
+                                leavingPlayer to listOf(leavingCard),
+                            ),
+                    ),
+            )
+
+        val updated = reducer.apply(state, PlayerLeft(lobbyCode, leavingPlayer))
+
+        assertNull(updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(0, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
+        assertEquals(listOf(ownerCard), updated.handOf(owner))
+        assertEquals(emptyList<CardState>(), updated.handOf(leavingPlayer))
+        assertEquals(false, updated.handState.cardsByPlayer.containsKey(leavingPlayer))
     }
 
     @Test
@@ -1458,6 +1520,61 @@ class DefaultLobbyEventReducerTest {
         assertEquals(thirdPlayer, updated.activePlayer)
         assertEquals(TurnPhase.REINFORCEMENTS, updated.turnState?.turnPhase)
         assertEquals(GameStatus.RUNNING, updated.status)
+    }
+
+    @Test
+    fun `player kicked clears owned territories and hand cards`() {
+        val lobbyCode = LobbyCode("1427")
+        val owner = PlayerId(1)
+        val targetPlayer = PlayerId(2)
+        val thirdPlayer = PlayerId(3)
+        val mapDefinition = sampleMapDefinition()
+        val ownerCard = CardState(CardId("kick-owner-card"), CardType.A)
+        val targetCard = CardState(CardId("kick-target-card"), CardType.C)
+        val stateWithOwner =
+            GameState(
+                lobbyCode = lobbyCode,
+                lobbyOwner = owner,
+                players = listOf(owner, targetPlayer, thirdPlayer),
+                turnOrder = listOf(owner, targetPlayer, thirdPlayer),
+                activePlayer = targetPlayer,
+                turnState =
+                    TurnState(
+                        activePlayerId = targetPlayer,
+                        turnPhase = TurnPhase.ATTACK,
+                        turnCount = 3,
+                        startPlayerId = owner,
+                    ),
+                gameStarted = true,
+                status = GameStatus.RUNNING,
+                mapDefinition = mapDefinition,
+                territoryStates =
+                    mapDefinition.territories.associate { territory ->
+                        territory.territoryId to
+                            when (territory.territoryId.value) {
+                                "alpha" -> TerritoryState(territory.territoryId, targetPlayer, 5)
+                                "beta" -> TerritoryState(territory.territoryId, owner, 4)
+                                else -> TerritoryState(territory.territoryId, thirdPlayer, 2)
+                            }
+                    },
+                handState =
+                    HandState(
+                        cardsByPlayer =
+                            mapOf(
+                                owner to listOf(ownerCard),
+                                targetPlayer to listOf(targetCard),
+                            ),
+                    ),
+            )
+
+        val updated = reducer.apply(stateWithOwner, PlayerKicked(lobbyCode, targetPlayer, owner))
+
+        assertNull(updated.territoryOwnerOf(TerritoryId("alpha")))
+        assertEquals(0, updated.requireTerritoryState(TerritoryId("alpha")).troopCount)
+        assertEquals(owner, updated.territoryOwnerOf(TerritoryId("beta")))
+        assertEquals(listOf(ownerCard), updated.handOf(owner))
+        assertEquals(emptyList<CardState>(), updated.handOf(targetPlayer))
+        assertEquals(false, updated.handState.cardsByPlayer.containsKey(targetPlayer))
     }
 
     @Test

@@ -229,6 +229,34 @@ class LobbyControllerTest {
     }
 
     @Test
+    fun `connect for status should not require player name`() {
+        runBlocking {
+            val sessionToken = SessionToken("123e4567-e89b-12d3-a456-426614174240")
+            val server =
+                startProtocolServer(
+                    onOpenPayload = ConnectionResponse(sessionToken),
+                ) { _, _ -> }
+            val controller = createController()
+            try {
+                controller.updateServerUrl(server.url)
+
+                controller.connectForStatus()
+
+                waitUntil { controller.state.value.isConnected }
+                waitUntil { controller.state.value.sessionToken == sessionToken.value }
+
+                val state = controller.state.value
+                assertEquals("", state.playerName)
+                assertEquals(sessionToken.value, state.sessionToken)
+                assertNull(state.errorText)
+            } finally {
+                controller.close()
+                server.close()
+            }
+        }
+    }
+
+    @Test
     fun `join lobby should reject non numeric lobby code`() {
         val controller = createController()
         try {
@@ -3939,6 +3967,7 @@ class LobbyControllerTest {
                 assertNull(controller.state.value.sessionToken)
                 assertNull(controller.state.value.activeLobbyCode)
                 assertFalse(controller.state.value.isConnected)
+                waitUntil { server.activeSessionCount() == 0 }
                 assertEquals(0, server.activeSessionCount())
                 assertEquals(
                     lobbyCode,

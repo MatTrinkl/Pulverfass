@@ -1990,6 +1990,7 @@ private fun BoxScope.ReinforcementPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2013,6 +2014,7 @@ private fun BoxScope.AttackPanelHost(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(ACTION_PANEL_Z_INDEX)
+                        .navigationBarsPadding()
                         .padding(bottom = BottomBarHeight + 8.dp),
             )
         }
@@ -2060,6 +2062,7 @@ private fun BoxScope.AttackPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
@@ -2101,6 +2104,7 @@ private fun BoxScope.FortifyPanelHost(
             Modifier
                 .align(Alignment.BottomCenter)
                 .zIndex(ACTION_PANEL_Z_INDEX)
+                .navigationBarsPadding()
                 .padding(bottom = BottomBarHeight + 8.dp),
     )
 }
