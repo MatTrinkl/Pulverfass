@@ -21,8 +21,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -1004,7 +1004,11 @@ class ScreenComposableTest {
         ) { setProgress ->
             setProgress(4f)
         }
-        composeTestRule.onNodeWithTag("attack_submit_button").assertIsEnabled().performScrollTo().performClick()
+        composeTestRule
+            .onNodeWithTag("attack_submit_button")
+            .assertIsEnabled()
+            .performScrollTo()
+            .performClick()
         composeTestRule.onNodeWithTag("end_round_button").assertIsEnabled().performClick()
 
         assertEquals(1, attackAdjustment)
